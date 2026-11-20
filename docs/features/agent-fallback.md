@@ -66,8 +66,8 @@ Read from the ACP answer: the JSON-RPC code, the adapter's category (Claude's `d
 | `outOfCredits` | Claude `billing_error`, `account_on_hold` | 6 h |
 | `rateLimited`, `overloaded` | Claude `rate_limit`, `overloaded`, `server_error`; codex-acp `rateLimitExceeded`, `serverOverloaded` | 1, 5, 25, then 60 min for failures in a row |
 | `signedOut` | ACP `-32000`, `authentication_failed`, CodeBuddy's `auth` category | Until it's signed in, looking again after 1 h; an agent Codync can't sign in to (no sign-in card): 10 min. The chat of each bot that moves past it gets the agent's sign-in card (holding no message: the fallback answers it), and signing in there brings the bot back |
-| `notStarting` | `FailureKind::NotSetUp`, `Timeout`, `Exited` | 5 min |
-| `modelMissing` | `model_not_found`, or the agent refusing the step's model (`FailureKind::NoModel`) | None: it's the bot's setup, not the agent's. The bot skips that step until its settings change |
+| `notStarting` | `FailureKind::NotSetUp`, `Timeout`, `Exited`. An ACP agent silent for 5 min while its session is opened is ended with "did not answer in time", so the start fails and queued work is freed; agents with one process per session (Mistral, Antigravity) keep their behavior (OpenBot 0.75.0, #12871) | 5 min |
+| `modelMissing` | `model_not_found`, HTTP 410 Gone or a retired model ("model … is no longer available/supported", "models/<id> is not found"), or the agent refusing the step's model (`FailureKind::NoModel`) (OpenBot 0.75.0, #12998) | None: it's the bot's setup, not the agent's. The bot skips that step until its settings change |
 
 Stop, refusal, output or step limits, a routine's time limit, compactions and uncategorized internal errors don't move
 on. CodeBuddy's CLI (CodeBuddy Code, WorkBuddy) answers a failed prompt as a refusal with the error in
@@ -75,11 +75,20 @@ on. CodeBuddy's CLI (CodeBuddy Code, WorkBuddy) answers a failed prompt as a ref
 signed-out WorkBuddy moves on. codex-acp still sends its 429s and overloads as reply text ([codex-acp#647](https://github.com/agentclientprotocol/codex-acp/issues/647)),
 so only its usage limit moves a Codex bot on today.
 
+Following OpenBot's nightly rules, a completed turn in the bot's own chat that ends with no answer text also uses this
+chain: if it did steps, the work stays and a notice asks the person to check what it did before repeating the request;
+if it did nothing, the message goes to the next agent in the list (a backup model) and the chat says the agent ended
+its turn with no answer. A turn that started background work says nothing, because its agent answers when that work
+ends (`host/src/agent/bot/turn_rules.rs`).
+
 **Rests** (`fallback::rest`, `kv` `rest.<account>`: the agent, or a custom command's own) are the computer's: once one
 bot finds Claude Code out of usage, every bot skips it until it resets. A rest ends at its time, when any turn on that agent ends normally, or with Switch back.
 A signed-out rest also ends when the agent is signed in (`agent_sign_in::agent_signed_in`: the card, Extensions, a turn of it
 finishing, a re-check), for each of its accounts; a usage rest stays.
 Usage windows only time a usage limit's rest; they never skip an agent on their own (extra usage can go past 100%).
+A read with no data (an idle process was stopped, the read waited, failed or timed out) keeps the reset time of the
+last real reading, so a backup model isn't sent back to its main account before the limit resets; a fresh reading
+with its own reset replaces it (OpenBot 0.75.0, #13018).
 
 ## Carrying the turn over
 

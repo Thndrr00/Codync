@@ -223,6 +223,16 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   start resumes that session with a hidden "you were interrupted, don't repeat finished steps" prompt. If the
   session can't be resumed, or the turn started over an hour ago, it does nothing.
 
+OpenBot's nightly turn rules (pure decisions in `host/src/agent/bot/turn_rules.rs`) tighten the lifecycle. A final
+answer ends the working line at once even when a steered message is still waiting for its steering answer, so the next
+message starts instead of waiting behind a stale timer. A turn that stopped everywhere but is still counted active is
+marked interrupted and releases the queue. A long task (research, a delegation or a pipeline) ends the turn instead of
+offering a continuation that would redo the work. While a downloaded update's restart waits for idle agents, an
+ordinary open question is detached — its card stays open, a later answer arrives as a new message — while choice
+cards, secret questions and routine-thread questions still wait. A completed turn with steps but no text says so and
+keeps its work; one that did nothing hands the message to a backup model when the bot has one, and a turn that started
+background work gets no notice. All of this runs on the same session and queue; none of it replays the transcript.
+
 Following OpenBot 0.74.0, a finished turn in the bot's own chat that used tools and gave an answer gets one short
 hidden prompt on the same session asking the model to compare the request with the work and answer and finish any
 part still missing; the chain is capped at three checks per request and stops at once for a question, approval or

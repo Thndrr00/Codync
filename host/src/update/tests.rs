@@ -1,4 +1,7 @@
-use super::{APP_POLL_TTL_MS, APP_REQUEST_TTL_MS, install, recent, release};
+use super::{
+    APP_POLL_TTL_MS, APP_REQUEST_TTL_MS, clear_restart_waiting, install, recent, release, restart_waiting,
+    restart_would_stop_work,
+};
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use ed25519_dalek::{Signer as _, SigningKey};
 use std::{
@@ -205,4 +208,22 @@ fn app_requests_and_polls_count_only_while_recent() {
         assert_eq!(recent(at, at + ttl, ttl), None, "an app opened later doesn't act on an old request");
         assert_eq!(recent(0, at, ttl), None, "never asked, never polled");
     }
+}
+
+#[test]
+fn a_restart_waits_for_real_work_not_just_start_up() {
+    assert!(restart_would_stop_work(&["working"]), "a running agent is real work");
+    assert!(restart_would_stop_work(&["initialization", "needs-input"]));
+    assert!(!restart_would_stop_work(&[]), "nothing runs: install now");
+    assert!(!restart_would_stop_work(&["initialization"]), "start-up alone stops no task");
+}
+
+#[test]
+fn a_restart_wait_is_bounded() {
+    clear_restart_waiting();
+    assert!(!restart_waiting());
+    super::note_restart_waiting();
+    assert!(restart_waiting(), "an open question may be detached while this waits");
+    clear_restart_waiting();
+    assert!(!restart_waiting());
 }

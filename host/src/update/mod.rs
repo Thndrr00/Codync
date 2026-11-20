@@ -6,7 +6,11 @@ pub(crate) mod release;
 #[cfg(test)]
 mod tests;
 
-use crate::{LockExt as _, hub::Hub, service};
+use crate::{
+    LockExt as _,
+    hub::{BotStatus, Hub},
+    service,
+};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -60,6 +64,86 @@ static APP_REQUESTED: AtomicI64 = AtomicI64::new(0);
 
 /// How long a request waits for the app: one it never saw doesn't update the app days later.
 const APP_REQUEST_TTL_MS: i64 = 10 * 60 * 1000;
+
+/// When a downloaded update's Restart was asked of the app and is waiting for this host to go idle (ms; 0: never).
+/// While it waits, an ordinary open question may be detached so one unanswered card doesn't hold every bot on a
+/// provider (OpenBot nightly triage-12975).
+static RESTART_WAITING: AtomicI64 = AtomicI64::new(0);
+
+/// The app was asked to restart for a downloaded update: open questions may now be detached to let it proceed.
+pub fn note_restart_waiting() {
+    RESTART_WAITING.store(crate::store::now_ms(), Ordering::Release);
+}
+
+/// The restart request is over, so questions hold their turns again.
+pub fn clear_restart_waiting() {
+    RESTART_WAITING.store(0, Ordering::Release);
+}
+
+/// Whether a downloaded update's restart is waiting for idle agents right now.
+pub fn restart_waiting() -> bool {
+    recent(RESTART_WAITING.load(Ordering::Acquire), crate::store::now_ms(), APP_REQUEST_TTL_MS).is_some()
+}
+
+/// Whether a restart would stop real agent work. A wait for start-up initialization alone stops nothing, so it does
+/// not hold a restart (OpenBot nightly triage-12828).
+pub fn restart_would_stop_work(reasons: &[&str]) -> bool {
+    reasons.iter().any(|reason| *reason != "initialization")
+}
+
+/// What a downloaded update's restart is waiting for, so the apps can say why and offer Cancel restart.
+#[derive(Debug, Serialize)]
+pub struct RestartReadiness {
+    pub idle: bool,
+    pub reasons: Vec<String>,
+}
+
+/// The agents and setup terminals still running that a restart would stop.
+pub fn restart_readiness(hub: &Hub) -> RestartReadiness {
+    let mut reasons = Vec::new();
+    if let Ok(bots) = hub.store.bots() {
+        for row in bots {
+            if row.deleted {
+                continue;
+            }
+            let id = row.config.id;
+            let runtime = hub.runtime(&id);
+            if matches!(runtime.status, BotStatus::Working | BotStatus::NeedsInput) {
+                let activity = if runtime.activity.is_empty() { "working".to_owned() } else { runtime.activity };
+                reasons.push(format!("{id}: {activity}"));
+            }
+        }
+    }
+    if hub.terms.busy() {
+        reasons.push("a setup terminal is still running".into());
+    }
+    RestartReadiness { idle: reasons.is_empty(), reasons }
+}
+
+/// The last readiness snapshot, kept for `status()` so a client can show what the restart waits for.
+static RESTART_REASONS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Refreshes what the waiting restart is held by. Nothing holding it means the app can install now.
+pub fn note_restart_readiness(hub: &Hub) {
+    if !restart_waiting() {
+        *RESTART_REASONS.locked() = Vec::new();
+        return;
+    }
+    let readiness = restart_readiness(hub);
+    let reasons: Vec<&str> = readiness.reasons.iter().map(String::as_str).collect();
+    let holding = !readiness.idle && restart_would_stop_work(&reasons);
+    *RESTART_REASONS.locked() = if holding { readiness.reasons } else { Vec::new() };
+}
+
+/// Cancels the wait: the restart request is dropped and no agent is interrupted.
+pub fn cancel_restart_wait() {
+    clear_restart_waiting();
+    *RESTART_REASONS.locked() = Vec::new();
+}
+
+fn waiting_for() -> Vec<String> {
+    RESTART_REASONS.locked().clone()
+}
 
 /// `at` (ms; 0: never) when it was less than `ttl` ms before `now`.
 fn recent(at: i64, now: i64, ttl: i64) -> Option<i64> {
@@ -148,6 +232,8 @@ pub fn request_install(port: u16, force: bool) -> Result<()> {
     match route(&service::current_exe()?)? {
         Route::App => {
             APP_REQUESTED.store(crate::store::now_ms(), Ordering::Release);
+            // The app decides when to install; until it does, an ordinary open question needn't hold the waiting bots.
+            note_restart_waiting();
             Ok(())
         }
         Route::Worker => spawn_worker(port, force, None),
@@ -205,10 +291,14 @@ pub fn status() -> Result<Value> {
 fn status_at(executable: &Path) -> Result<Value> {
     let state: State = read("update-state.json")?;
     let config: Config = read("update-config.json")?;
-    Ok(json!({
+    let mut status = json!({
         "currentVersion": env!("CARGO_PKG_VERSION"), "method": install::method(executable),
         "automatic": config.automatic && require_self_updating(executable).is_ok(), "state": state,
-    }))
+    });
+    if restart_waiting() {
+        status["waitingFor"] = json!(waiting_for());
+    }
+    Ok(status)
 }
 
 pub fn set_automatic(enabled: bool) -> Result<Value> {
@@ -324,6 +414,8 @@ pub fn spawn_worker(port: u16, force: bool, target: Option<&str>) -> Result<()> 
         write("update-state.json", &state)?;
         return Err(error);
     }
+    // The worker owns the restart now: no more waiting on these agents, and no question is detached any more.
+    cancel_restart_wait();
     Ok(())
 }
 
@@ -401,6 +493,9 @@ pub async fn automatic_loop(hub: Arc<Hub>) {
     let mut last_check = None;
     loop {
         tokio::time::sleep(Duration::from_mins(1)).await;
+        // A downloaded update's Restart waits for idle agents: keep saying what holds it until nothing does, so the
+        // apps can show the reason and offer Cancel restart (OpenBot nightly triage-12828).
+        note_restart_readiness(&hub);
         let enabled = read::<Config>("update-config.json").is_ok_and(|c| c.automatic);
         // A cloud computer's updates come from the cloud (`remote::managed`).
         if !enabled || hub.busy() || crate::remote::managed::is_managed(&hub.store) {

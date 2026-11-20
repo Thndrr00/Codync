@@ -146,6 +146,16 @@ impl Actor {
         }
         self.turn_text = from_user.then(|| text.to_owned());
         self.turn_entries = if from_user { entry_ids.to_vec() } else { Vec::new() };
+        // Whether the messages this turn answers came from a chat app, so a teammate's internal result is not posted
+        // to the contact (OpenBot nightly triage-13131).
+        self.external_chat = entry_ids.iter().any(|id| {
+            self.hub.store.entry(id).is_some_and(|e| {
+                matches!(
+                    e.data["source"].as_str(),
+                    Some("slack" | "discord" | "whatsapp" | "telegram" | "native-channel")
+                )
+            })
+        });
         // A room turn answers the user's message in the room; another turn, the messages it was given.
         let answered = self.active_group.as_ref().map_or(self.turn_entries.as_slice(), |g| g.answers.as_slice());
         let opens = self.prompt_call.take().filter(|call| crate::chat::calls::is_live(&self.hub.store, call));
@@ -170,6 +180,8 @@ impl Actor {
         self.tools.clear();
         self.watchdog.reset();
         self.loop_guard = super::stall::LoopGuard::default();
+        self.task_started = false;
+        self.no_answer_empty = false;
         self.plan_entry = None;
         self.last_text = None;
         self.sent.clear();
@@ -301,6 +313,43 @@ impl Actor {
         Ok(())
     }
 
+    /// Whether this turn has written anything the user can read. A text bubble, a `send_message`, a file card or a
+    /// kept reaction all count; narration left in the trace does not.
+    fn has_written_answer(&self) -> bool {
+        if !self.sent.is_empty() || self.files.summary.is_some() || !matches!(self.reacted, Reacted::No) {
+            return true;
+        }
+        self.last_text.as_ref().is_some_and(|id| {
+            self.hub.store.entry(id).is_some_and(|e| e.data["text"].as_str().is_some_and(|t| !t.trim().is_empty()))
+        })
+    }
+
+    /// The no-answer rule for a completed turn in the bot's own chat that wrote no text (OpenBot nightly
+    /// triage-13142). Rooms, requests, routines, hidden and host turns keep their own rules.
+    pub(super) async fn no_answer_decision(&self, done: &Done) -> Option<super::turn_rules::NoAnswer> {
+        if self.turn.is_none()
+            || self.active_group.is_some()
+            || self.active_request.is_some()
+            || self.active_routine.is_some()
+            || self.proactive_turn
+            || self.stop_requested
+            || self.compacting.is_some()
+        {
+            return None;
+        }
+        let Ok(value) = done else { return None };
+        if value["stopReason"].as_str() != Some("end_turn") || self.has_written_answer() {
+            return None;
+        }
+        let background = self.task_started
+            && match &self.conn {
+                Some(conn) => super::background_work::background_work(&conn.acp).await,
+                None => false,
+            };
+        let has_backup = crate::agent::fallback::steps(&self.base) > 1;
+        Some(super::turn_rules::no_answer_action(self.watchdog.tool_calls(), background, has_backup))
+    }
+
     pub(super) fn finish_turn(&mut self, done: &Result<Value>) {
         if self.turn.is_none() {
             return;
@@ -371,6 +420,7 @@ impl Actor {
         if !grouped
             && !delegated
             && !self.proactive_turn
+            && !self.task_started
             && super::self_check::may_check(
                 self.watchdog.tool_calls() > 0,
                 has_answer,
@@ -408,12 +458,19 @@ impl Actor {
                 awaiting_sign_in = self.invite_sign_in(e);
                 if !awaiting_sign_in {
                     let detail = tail.map(|t| format!("\n\n{}", acp::truncate(&t, 1200))).unwrap_or_default();
-                    self.failure_notice(e, &format!("The agent failed: {e}{detail}"));
+                    let text = if std::mem::take(&mut self.no_answer_empty) {
+                        super::turn_rules::NO_ANSWER_EMPTY.to_owned()
+                    } else {
+                        format!("The agent failed: {e}{detail}")
+                    };
+                    self.failure_notice(e, &text);
                 }
             }
             (_, "cancelled") | (Err(_), _) => self.notice("Stopped.", NoticeStyle::Info),
-            // Half done is not done: a card says so and offers to go on.
-            _ if verdict.unfinished() => self.pause_card(verdict),
+            // Half done is not done: a card says so and offers to go on — unless the turn started a long task,
+            // whose own work carries on and would be redone by a continuation (OpenBot nightly triage-13050).
+            _ if verdict.unfinished() && !self.task_started => self.pause_card(verdict),
+            _ if verdict.unfinished() => {}
             (_, "refusal") => self.notice("The agent declined to continue.", NoticeStyle::Info),
             (Ok(_), "end_turn") if !stopped => crate::market::agent_sign_in::answered(&self.hub, &self.cfg.backend),
             _ => {}

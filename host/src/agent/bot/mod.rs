@@ -49,8 +49,10 @@ mod skill_use;
 mod spend;
 mod stall;
 mod steer;
+mod team_rules;
 mod tool_entry;
 mod turn;
+mod turn_rules;
 mod updates;
 mod user_input;
 mod verdict;
@@ -185,6 +187,12 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         idle_checked: Instant::now(),
         loop_guard: stall::LoopGuard::default(),
         relay: fallback::Relay::default(),
+        task_started: false,
+        external_chat: false,
+        request_attempts: HashMap::new(),
+        request_last_result: HashMap::new(),
+        detached_questions: HashMap::new(),
+        no_answer_empty: false,
     };
     let task = tokio::spawn(actor.run(rx, interrupted));
     BotHandle { tx, task }
@@ -415,6 +423,23 @@ struct Actor {
     loop_guard: stall::LoopGuard,
     /// The running turn's place in the fallback chain (see `fallback`).
     relay: fallback::Relay,
+    /// The running turn started a long task that does its own work, so its end needs no continuation note.
+    task_started: bool,
+    /// The messages this turn answers came from an external chat (WhatsApp, Slack, Telegram, Discord…).
+    external_chat: bool,
+    /// Teammate requests already tried, by request id, so a brief failure is retried once and no more.
+    request_attempts: HashMap<String, u32>,
+    /// The last result of a teammate request, by request id, to recognize a repeated identical result.
+    request_last_result: HashMap<String, team_rules::ResultFingerprint>,
+    /// Questions detached while a provider update or restart waited: the card stays open and the answer later arrives
+    /// as a new message (OpenBot nightly triage-12975).
+    detached_questions: HashMap<String, DetachedQuestion>,
+    /// The turn is being handed to a backup because it wrote no answer: say that, not a generic failure.
+    no_answer_empty: bool,
+}
+
+struct DetachedQuestion {
+    question: String,
 }
 
 struct RoutineCompletion {
@@ -435,6 +460,32 @@ impl Actor {
         // Updates sent before the prompt response are already queued; apply them first.
         while let Some(inc) = self.conn.as_mut().and_then(|c| c.rx.try_recv().ok()) {
             self.on_incoming(Some(inc)).await;
+        }
+        // OpenBot nightly triage-13142: a completed own-chat turn with steps but no text says so and keeps its work;
+        // one that did nothing is handed to the backup model; a turn that started background work is left alone.
+        let done = match self.no_answer_decision(&done).await {
+            Some(turn_rules::NoAnswer::BackupTakesOver) => {
+                self.no_answer_empty = true;
+                Err(acp::Failure::error(acp::FailureKind::Exited, "the agent ended its turn with no answer"))
+            }
+            Some(action @ (turn_rules::NoAnswer::CheckSteps | turn_rules::NoAnswer::EndedWithNoAnswer)) => {
+                let text = if action == turn_rules::NoAnswer::CheckSteps {
+                    turn_rules::NO_ANSWER_AFTER_STEPS
+                } else {
+                    turn_rules::NO_ANSWER_EMPTY
+                };
+                self.notice(text, NoticeStyle::Info);
+                done
+            }
+            _ => done,
+        };
+        // A brief provider failure on a teammate's request is retried once before reporting it as blocked
+        // (OpenBot nightly triage-13054).
+        if let Err(error) = &done
+            && self.active_request.is_some()
+            && self.retry_teammate_request(error, done_tx).await
+        {
+            return;
         }
         if let Err(error) = &done
             && self.fall_back(error, done_tx).await
@@ -498,6 +549,7 @@ impl Actor {
                         if let Some(c) = self.conn.take() { c.acp.kill().await; }
                     }
                     self.check_stall();
+                    self.settle_stale_turn(&done_tx).await;
                     self.release_idle().await;
                     // The idle check may have queued a compaction.
                     if self.turn.is_none() && !self.queue.is_empty() {
@@ -534,6 +586,14 @@ impl Actor {
     fn add(&self, kind: EntryKind, turn: i64, mut data: Value) -> Option<Entry> {
         data["author"] = self.cfg.id.clone().into();
         if self.proactive_turn && proactive::internal_step(kind) {
+            data["internal"] = true.into();
+        }
+        // An internal result between teammates is never a message for a contact in an external chat. Only text the
+        // agent wrote for that contact is posted; a teammate-only turn gets no public bubble or working line here
+        // (OpenBot nightly triage-13131).
+        if team_rules::internal_teammate_result(self.external_chat, self.active_request.is_some())
+            && matches!(kind, EntryKind::Agent | EntryKind::Notice)
+        {
             data["internal"] = true.into();
         }
         if matches!(kind, EntryKind::Agent) && data["final"] == true && self.lane.thread.is_some() {

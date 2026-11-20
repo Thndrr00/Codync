@@ -145,8 +145,14 @@ impl Actor {
     }
 
     /// The agent ended the running turn. Its answer to a steer travels apart from this, and a message it took belongs
-    /// to this turn, so the end waits for every answer (at most `STEER_ANSWER`).
+    /// to this turn, so the end normally waits for every answer (at most `STEER_ANSWER`). A final answer ends the
+    /// working line at once: a steer still waiting for the agent's answer stays queued for the next turn instead of
+    /// keeping the bot busy and holding that next message (triage-12470).
     pub(super) async fn turn_ended(&mut self, done: Done, done_tx: &mpsc::UnboundedSender<Done>) {
+        if super::turn_rules::final_answer_ends_turn(&done) {
+            self.steers_in_flight.clear();
+            self.held_done = None;
+        }
         if self.steers_in_flight.is_empty() {
             self.on_turn_done(done, done_tx).await;
         } else {

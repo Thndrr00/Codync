@@ -130,6 +130,9 @@ impl Actor {
                 mark_bookkeeping(&self.cfg, &mut data);
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &data);
                 let title = data["title"].as_str().unwrap_or("Tool").to_owned();
+                if super::tool_entry::starts_background_task(&title) {
+                    self.task_started = true;
+                }
                 let status = data["status"].as_str().unwrap_or_default().to_owned();
                 self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
                 let working = activity(&data).to_owned();
@@ -307,12 +310,28 @@ impl Actor {
         self.show_card(title, data, Answer::Codync(reply));
     }
 
-    /// Posts an approval card in the turn's lane and tells the user it needs them.
+    /// Posts an approval card in the turn's lane and tells the user it needs them. While a downloaded update's
+    /// restart waits for the provider to go idle, an ordinary question is detached instead: the card stays open,
+    /// the agent ends its turn, and the later answer arrives as a new message (OpenBot nightly triage-12975).
     fn show_card(&mut self, title: &str, data: Value, answer: Answer) {
+        let question = super::turn_rules::Question {
+            choice: data["choices"].is_array()
+                || data["options"].as_array().is_some_and(|options| {
+                    options.iter().any(|o| matches!(o["kind"].as_str(), Some("choice" | "answer")))
+                }),
+            secret: data["secret"].as_bool() == Some(true) || data["vault"].is_object(),
+            routine_thread: self.active_routine.is_some() || self.lane.thread.is_some(),
+            saving: false,
+        };
+        let detach = crate::update::restart_waiting() && super::turn_rules::detachable_question(&question);
         let turn = self.turn.unwrap_or(0);
         self.close_seg();
         let created = self.add(EntryKind::Permission, turn, data);
         if let Some(e) = &created {
+            if detach {
+                self.detach_question(&e.id, answer, title);
+                return;
+            }
             self.perms.insert(e.id.clone(), answer);
             self.waiting.asked(&e.id, Instant::now());
         }
@@ -332,6 +351,27 @@ impl Actor {
             AlertKind::NeedsInput,
             approval,
         );
+    }
+
+    /// Lets the agent's turn end while the card stays open: the waiting update or routine can go on, and answering
+    /// the card later starts a new message with the answer (OpenBot nightly triage-12975).
+    fn detach_question(&mut self, entry_id: &str, answer: Answer, question: &str) {
+        if let Answer::Agent(rpc_id) = answer
+            && let Some(conn) = &self.conn
+        {
+            let acp = conn.acp.clone();
+            let result = json!({"outcome": {"outcome": "cancelled"}});
+            tokio::spawn(async move {
+                let _ = acp.respond(rpc_id, result).await;
+            });
+        }
+        if let Some(mut e) = self.hub.store.entry(entry_id) {
+            e.data["status"] = "detached".into();
+            e.data["detached"] = true.into();
+            self.hub.set_entry(entry_id, &e.data);
+        }
+        self.detached_questions.insert(entry_id.to_owned(), super::DetachedQuestion { question: question.to_owned() });
+        tracing::info!(bot = %self.cfg.id, entry = entry_id, "detached an open question so a provider update can proceed");
     }
 
     /// Answers permission request `rpc_id` with its first option of one of `kinds`, in that order

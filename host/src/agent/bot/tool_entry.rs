@@ -78,6 +78,15 @@ fn searches_history(title: &str) -> bool {
         .any(|name| title.starts_with(name))
 }
 
+/// A call that starts work which does the job on its own, so this turn ends instead of offering a continuation that
+/// would make the agent do the same work again (OpenBot nightly triage-13050). Research is the common case; a
+/// delegation, a batch or a pipeline runs in turns of their own too.
+pub(super) fn starts_background_task(title: &str) -> bool {
+    ["research_sources", "start_task", "start_research", "delegate", "delegate_batch", "run_pipeline"]
+        .iter()
+        .any(|name| title == *name || title.ends_with(&format!("__{name}")) || title.ends_with(&format!(".{name}")))
+}
+
 /// Keeping the bot's memory: a call of the `memory` MCP server, or one that names a file in a memory folder the
 /// bot sees (in its `locations` or diffs, as `chat::memory::turns::touched` reads them).
 fn keeps_memory(cfg: &BotConfig, data: &Value) -> bool {
@@ -170,6 +179,18 @@ mod tests {
         assert_eq!(activity(&marked(json!({"title": "mcp__memory__edit_memory"}))), "Thinking…");
         assert_eq!(activity(&marked(json!({"title": "Read src/memory.rs"}))), "Read src/memory.rs");
         assert_eq!(activity(&marked(json!({"title": "Terminal"}))), "Terminal");
+    }
+
+    #[test]
+    fn a_task_tool_starts_work_that_outlives_the_turn() {
+        for title in
+            ["research_sources", "mcp__chat__research_sources", "chat.delegate_batch", "run_pipeline", "start_task"]
+        {
+            assert!(starts_background_task(title), "{title} does its own work");
+        }
+        for title in ["read_file", "mcp__chat__send_message", "Terminal", "memory.search_history"] {
+            assert!(!starts_background_task(title), "{title} is not a long task");
+        }
     }
 
     #[test]

@@ -109,7 +109,11 @@ impl Actor {
                 let _ = reply.send(self.post_artifact(data));
             }
             Cmd::Stop => self.stop().await,
-            Cmd::Permission { entry_id, option_id } => self.answer_permission(&entry_id, option_id).await,
+            Cmd::Permission { entry_id, option_id } => {
+                if !self.answer_detached(&entry_id, option_id.as_deref(), done_tx).await {
+                    self.answer_permission(&entry_id, option_id).await;
+                }
+            }
             Cmd::Approve { title, detail, reply } => self.ask_approval(&title, &detail, reply),
             Cmd::NewSession => {
                 if self.turn.is_some() {
@@ -347,6 +351,77 @@ impl Actor {
         }
     }
 
+    /// A turn that stopped in every place that matters but is still counted active only holds the queue. End it as
+    /// interrupted and let the waiting messages start, rather than leaving the bot working until a restart
+    /// (triage-12968). A turn a provider or a detached child still runs stays, even before its start was seen.
+    pub(super) async fn settle_stale_turn(&mut self, done_tx: &mpsc::UnboundedSender<Done>) {
+        if self.turn.is_none() || self.routine_completion.is_some() {
+            return;
+        }
+        let presence = super::turn_rules::TurnPresence {
+            ended: self.held_done.is_some(),
+            stopped: self.stop_requested,
+            started_at: self.hub.runtime(&self.id()).started_at,
+            running_children: self.cancel_deadline.is_some(),
+        };
+        if !presence.stale() {
+            return;
+        }
+        tracing::warn!(bot = %self.cfg.id, "a stopped turn held the queue; ending it as interrupted");
+        self.record_user_result("interrupted", None, "host_restart");
+        self.close_attempt(true);
+        self.held_done = None;
+        self.steers_in_flight.clear();
+        if self.active_routine.is_some() {
+            self.finish_routine(
+                crate::routines::Status::Interrupted,
+                Some("The agent's turn stopped before it answered".into()),
+                None,
+            );
+        }
+        self.complete_request(Err(anyhow!("the agent's turn stopped before it answered")), false);
+        self.complete_group(Err(anyhow!("the agent's turn stopped before it answered")));
+        self.turn = None;
+        self.reply_hops = None;
+        self.active_prompt = false;
+        self.stop_requested = false;
+        self.cancel_deadline = None;
+        if self.routine_completion.is_none() {
+            self.set_inflight(false);
+        }
+        self.hub.team.end_turn(&self.cfg.id);
+        memory::turns::drop_turn(&self.cfg.id);
+        self.hub.set_runtime(&self.id(), |r| {
+            r.status = BotStatus::Idle;
+            r.activity = String::new();
+            r.started_at = None;
+            r.lane = None;
+            r.message = None;
+            r.session = None;
+        });
+        self.next_in_queue(done_tx).await;
+    }
+
+    /// A detached question's answer is a new message to the agent, not a reply into a turn that already ended.
+    /// Whether `entry_id` was one of those cards.
+    pub(super) async fn answer_detached(
+        &mut self,
+        entry_id: &str,
+        option_id: Option<&str>,
+        done_tx: &mpsc::UnboundedSender<Done>,
+    ) -> bool {
+        let Some(detached) = self.detached_questions.remove(entry_id) else { return false };
+        let answer = option_id.unwrap_or("No answer");
+        let text = format!("{} — {answer}", detached.question);
+        if let Some(mut e) = self.hub.store.entry(entry_id) {
+            e.data["status"] = "answered".into();
+            e.data["selected"] = option_id.into();
+            self.hub.set_entry(entry_id, &e.data);
+        }
+        self.enqueue(Queued::Prompt { text, call: None }, done_tx).await;
+        true
+    }
+
     pub(super) fn start_failed(&mut self, e: &anyhow::Error) {
         if self.turn.is_some() {
             self.report_turn(false, Some(e), "start_failed");
@@ -414,10 +489,84 @@ impl Actor {
             .is_ok()
     }
 
+    /// The repeat and retry ledgers outlive a turn but not the bot's whole life: keep them bounded.
+    fn bound_request_history(&mut self) {
+        const MAX: usize = 64;
+        while self.request_attempts.len() > MAX {
+            let Some(oldest) = self.request_attempts.keys().next().cloned() else { break };
+            self.request_attempts.remove(&oldest);
+        }
+        while self.request_last_result.len() > MAX {
+            let Some(oldest) = self.request_last_result.keys().next().cloned() else { break };
+            self.request_last_result.remove(&oldest);
+        }
+    }
+
     pub(super) fn complete_request(&mut self, result: Result<String>, cancelled: bool) {
         if let Some(request) = self.active_request.take() {
+            if let Ok(text) = &result {
+                let fingerprint = super::team_rules::ResultFingerprint {
+                    agent: self.cfg.id.clone(),
+                    text: text.clone(),
+                    files: Vec::new(),
+                };
+                if super::team_rules::repeats_result(self.request_last_result.get(request.id()), &fingerprint) {
+                    // The teammate sent the same result again. End quietly: its message stays in the chat, but it
+                    // must not wake the requester with a new answer and start the loop over (triage-13130).
+                    tracing::info!(bot = %self.cfg.id, request = request.id(), "a teammate repeated a result; ending quietly");
+                    return;
+                }
+                self.request_last_result.insert(request.id().to_owned(), fingerprint);
+                self.bound_request_history();
+            }
             request.complete(result, cancelled);
         }
+    }
+
+    /// A teammate request whose turn failed because the provider briefly stopped answering goes out once more.
+    /// Whether the request was taken and retried (the caller must not also report the failure).
+    pub(super) async fn retry_teammate_request(
+        &mut self,
+        error: &anyhow::Error,
+        done_tx: &mpsc::UnboundedSender<Done>,
+    ) -> bool {
+        let Some(request) = self.active_request.take() else { return false };
+        let temporary = error.chain().any(|cause| {
+            matches!(cause.downcast_ref::<crate::agent::acp::Failure>(), Some(failure)
+                if matches!(failure.kind, crate::agent::acp::FailureKind::Timeout | crate::agent::acp::FailureKind::Exited))
+        });
+        let kind = if temporary {
+            super::team_rules::FailureKind::Temporary
+        } else {
+            super::team_rules::FailureKind::Permanent
+        };
+        let attempts = self.request_attempts.get(request.id()).copied().unwrap_or(0);
+        if !super::team_rules::retry_once(kind, attempts) {
+            self.active_request = Some(request);
+            return false;
+        }
+        self.request_attempts.insert(request.id().to_owned(), attempts + 1);
+        self.bound_request_history();
+        self.record_user_result("failed", None, "error");
+        self.close_attempt(true);
+        self.turn = None;
+        self.reply_hops = None;
+        if self.routine_completion.is_none() {
+            self.set_inflight(false);
+        }
+        self.hub.team.end_turn(&self.cfg.id);
+        memory::turns::drop_turn(&self.cfg.id);
+        self.hub.set_runtime(&self.id(), |r| {
+            r.status = BotStatus::Idle;
+            r.activity = String::new();
+            r.started_at = None;
+            r.lane = None;
+            r.message = None;
+            r.session = None;
+        });
+        self.queue.push_front(Queued::BotRequest(request));
+        self.next_in_queue(done_tx).await;
+        true
     }
 
     pub(super) fn complete_group(&mut self, result: Result<Option<String>>) {
