@@ -8,6 +8,7 @@ use crate::hub::Hub;
 use crate::routines::{Routine, Run, Status, Trigger, local_zone};
 use crate::store::{FlowLink, FlowStep, NewStep, StepStatus};
 use anyhow::{Context, Result};
+use futures::future::Either;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -561,6 +562,49 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
     }
 }
 
+/// Pictures connected to a Sunra step, read from the file paths earlier steps handed on in their
+/// result text (`name (path)` lines). The first becomes the start frame, the last the end frame of a
+/// video, and the rest are references; Sunra still works with none when the step only has a prompt.
+fn sunra_frames(body: &str, kind: crate::media::Kind) -> crate::media::sunra::Frames {
+    let mut images: Vec<crate::media::sunra::Image> = Vec::new();
+    for line in body.lines() {
+        let Some(open) = line.rfind('(') else { continue };
+        let Some(path) = line.rfind(')').filter(|close| *close > open).map(|close| &line[open + 1..close]) else {
+            continue;
+        };
+        if !path.contains(std::path::MAIN_SEPARATOR) && !path.starts_with('/') {
+            continue;
+        }
+        let mime = match path.rsplit('.').next().unwrap_or_default().to_ascii_lowercase().as_str() {
+            "jpg" | "jpeg" => "image/jpeg",
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            _ => continue,
+        };
+        let path = std::path::Path::new(path);
+        if !path.is_file() {
+            continue;
+        }
+        images
+            .push(crate::media::sunra::Image { path: path.to_string_lossy().into_owned(), mime_type: mime.to_owned() });
+    }
+    let mut frames = crate::media::sunra::Frames::default();
+    if !images.is_empty() {
+        let last = images.pop().expect("images is not empty");
+        let first = images.pop().unwrap_or_else(|| last.clone());
+        frames.first = Some(first);
+        if kind == crate::media::Kind::Video {
+            frames.last = Some(last);
+            frames.references = images;
+        } else {
+            frames.references.insert(0, last);
+            frames.references.extend(images);
+        }
+    }
+    frames
+}
+
 /// Makes a media step's file, keeps it in the routine's own bot and hands what was made on.
 async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watch::Receiver<bool>) -> Outcome {
     let step = pending.step.id.clone();
@@ -568,15 +612,35 @@ async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watc
         settle(hub, &step, StepStatus::Failed, None, Some("The routine's bot is gone"));
         return Outcome::Nothing;
     };
-    let request = match crate::media::request(&pending.node) {
-        Ok(request) => request,
-        Err(error) => {
-            settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
-            return Outcome::Nothing;
-        }
-    };
     let mut cancel = cancel;
-    let work = crate::media::flow::generate(hub, &owner.config, &request, &pending.body, start.timeout);
+    // A Sunra model is generated through the installed Sunra MCP connector, not the user's own
+    // agent CLI (OpenBot nightly's Sunra media provider). Everything else keeps the CLI path.
+    let sunra = crate::media::sunra::is_model(&pending.node.model);
+    let work = if sunra {
+        let mut request = match crate::media::sunra::Request::from_node(&pending.node) {
+            Ok(request) => request,
+            Err(error) => {
+                settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
+                return Outcome::Nothing;
+            }
+        };
+        request.frames = sunra_frames(&pending.body, request.kind);
+        let owner = owner.config.clone();
+        let timeout = start.timeout;
+        Either::Left(async move { crate::media::sunra::generate(hub, &owner, &request, timeout).await })
+    } else {
+        let request = match crate::media::request(&pending.node) {
+            Ok(request) => request,
+            Err(error) => {
+                settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
+                return Outcome::Nothing;
+            }
+        };
+        let owner = owner.config.clone();
+        let body = pending.body.clone();
+        let timeout = start.timeout;
+        Either::Right(async move { crate::media::flow::generate(hub, &owner, &request, &body, timeout).await })
+    };
     tokio::pin!(work);
     let made = tokio::select! {
         made = &mut work => made,

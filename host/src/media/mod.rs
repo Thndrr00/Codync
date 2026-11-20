@@ -20,12 +20,13 @@ pub mod command;
 pub mod flow;
 pub mod output;
 pub mod size;
+pub mod sunra;
 
 pub use output::{Output, decode_base64, display_name, kind, output};
 
 use anyhow::{Result, bail, ensure};
 use command::{Frames, Request};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 /// The aspect ratios a model makes when it names none; the first is the default. Ported from
 /// `OpenBot` 0.73.0, which added 4:5 for a social post and 5:4 for a print.
@@ -60,13 +61,13 @@ impl Kind {
 
 /// What a model makes, as the clients list it: a model never offers a flag it ignores.
 pub fn capabilities(model: &catalog::Model) -> Value {
-    json!({
-        "aspects": catalog::aspects(model),
-        "durations": catalog::durations(model),
-        "resolutions": catalog::resolutions(model),
-        "transparent": model.transparent,
-        "voices": model.voices.then_some(VOICES.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>()),
-    })
+    catalog::capabilities_view(
+        catalog::aspects(model),
+        catalog::durations(model),
+        catalog::resolutions(model),
+        model.transparent,
+        model.voices,
+    )
 }
 
 /// The nearest value of `choices` to `asked`, or the first choice: a setting kept from another

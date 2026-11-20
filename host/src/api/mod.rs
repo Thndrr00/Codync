@@ -126,6 +126,8 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
             return island_queue::cancel(hub, str_arg(&b, "botId")?, str_arg(&b, "entryId")?).await;
         }
         "mediaModels" => return media::models(hub, &b),
+        "sunraModels" => return media::sunra_models(hub, &b).await,
+        "sunraCredits" => return media::sunra_credits(hub, &b).await,
         _ => {}
     }
     if custom_provider::METHODS.contains(&method) {

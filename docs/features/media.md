@@ -107,10 +107,31 @@ file is left behind without a row. The kept media of one number is also capped a
 2 GB: once the files pass that, the oldest are removed first and only their rows'
 `file` paths are cleared, so the messages and their text stay.
 
+## Sunra
+
+Sunra models (Nano Banana, Seedream, FLUX, Seedance, Kling, Veo and others) are a second kind of
+media model (`host/src/media/sunra.rs`). They are paid with the person's Sunra credits, not with an
+agent subscription. The **Sunra** app in the marketplace installs a remote MCP connector at
+`https://mcp.sunra.ai`; the person signs in to it in Extensions. With no installed, signed-in
+connector, Sunra is simply unavailable: the model list is empty, `sunraCredits` answers `null`, and
+a flow that does not use Sunra behaves as before.
+
+The host reads Sunra's live `list_models` into the same catalog shape as the fixed models, with ids
+`sunra-<id>` and the model's aspects, durations, resolutions and transparency. It also reads
+`get_balance`: a team member's `memberQuota.effectiveQuota` gives the available credits and quota,
+and a personal account's `availableBalance` gives the available credits with no quota. The methods
+`sunraModels` and `sunraCredits` return `{available, models}` and `{available, credits}`; no token,
+address or description is ever returned or logged.
+
+A generation uploads each reference picture through `get_upload_url`, creates the image or video with
+`auto_confirm`, polls `get_job`, and downloads the file only from `cdn.sunra.ai`, `cdn.ponpon.ai` or
+`assets.sunra.ai` through the egress allowlist. Every hop must be https, every call has a timeout,
+and the result is kept as a bot file named `sunra-image.png` (or the matching extension). The model's
+live capabilities say how many references it takes and whether it takes frames or a clear
+background; a last frame is only sent with a first one.
+
 ## Not ported
 
-- **Sunra** models (Nano Banana Pro, GPT Image 2, Seedream, FLUX, Seedance, Kling, Veo) need the
-  marketplace sign-in and a credits balance; they wait for a Sunra connector.
 - **Canvas assets and pictures dropped on a step**, and the video player with its bar in a flow card:
   the clients show the shipped file through the ordinary file view.
 - **Multiplayer** is already covered by Codync groups and channels, so it was not rebuilt from

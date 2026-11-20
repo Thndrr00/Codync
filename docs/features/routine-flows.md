@@ -83,7 +83,11 @@ Rules the host enforces:
   (`external::is_external`), not hidden or deleted. The same check applies when connecting, when placing a bot and when running.
 - **Media steps** are link ends like bots: a picture can be handed on, and a bot's reply can be handed
   to a step. A step's settings are checked against its model before it runs (frame, length, resolution,
-  voice, transparency, and the backend that makes the kind).
+  voice, transparency, and the backend that makes the kind). A step whose model id starts with
+  `sunra-` runs through the installed, signed-in Sunra connector instead of an agent: the host spends
+  that sign-in's credits, polls the job, and keeps the file like any other media step. Without the
+  connector the step fails with a sign-in message; flows that use other models are unchanged. See
+  [media](media.md#sunra) for the model list, credits and transfer rules.
 - **Connecting rules** (`graph.rs`): not to itself, never into the routine's own bot, only from a bot the flow
   already reaches, no duplicate link between the same two bots, no loop, no deeper than the limit.
 - **A link applies to runs that began after it was made.**

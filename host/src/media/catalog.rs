@@ -16,6 +16,26 @@ pub fn thinking_levels(backend: &str) -> &'static [&'static str] {
     if backend.eq_ignore_ascii_case("mistral") { &MISTRAL_THINKING_LEVELS } else { &[] }
 }
 
+/// The choices a client shows for a model, whether its values are fixed here or read from a live
+/// provider list at run time (Sunra). Both catalogs answer the one shape.
+pub fn capabilities_view(
+    aspects: &[&str],
+    durations: &[u32],
+    resolutions: &[&str],
+    transparent: bool,
+    voices: bool,
+) -> Value {
+    json!({
+        "aspects": aspects,
+        "durations": durations,
+        "resolutions": resolutions,
+        "transparent": transparent,
+        "voices": voices.then_some(
+            super::VOICES.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>()
+        ),
+    })
+}
+
 /// One model a bot may ask for.
 #[derive(Debug)]
 pub struct Model {

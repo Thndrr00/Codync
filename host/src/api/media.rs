@@ -5,6 +5,7 @@ use super::str_arg;
 use crate::hub::Hub;
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
+use std::sync::Arc;
 
 pub fn models(hub: &Hub, body: &Value) -> Result<Value> {
     let bot = str_arg(body, "botId")?;
@@ -20,6 +21,28 @@ pub fn models(hub: &Hub, body: &Value) -> Result<Value> {
         "installed": crate::agent::backends::installed(backend),
         "models": crate::media::catalog::models(backend, None).map(crate::media::catalog::json).collect::<Vec<_>>(),
     }))
+}
+
+/// The models of the installed, signed-in Sunra connector. An unreadable list is empty: a client
+/// without Sunra gets the old answer and no token or promise of one.
+pub async fn sunra_models(hub: &Arc<Hub>, _body: &Value) -> Result<Value> {
+    if !crate::media::sunra::available(&hub.store) {
+        return Ok(json!({"available": false, "models": []}));
+    }
+    let models = crate::media::sunra::list_models(&hub.store).await.unwrap_or_default();
+    Ok(json!({
+        "available": true,
+        "models": models.iter().map(crate::media::sunra::model_json).collect::<Vec<_>>(),
+    }))
+}
+
+/// The credits the Sunra sign-in can spend. A failed read shows none, without failing the call.
+pub async fn sunra_credits(hub: &Arc<Hub>, _body: &Value) -> Result<Value> {
+    if !crate::media::sunra::available(&hub.store) {
+        return Ok(json!({"available": false, "credits": Value::Null}));
+    }
+    let credits = crate::media::sunra::credits(&hub.store).await.ok().flatten();
+    Ok(json!({"available": true, "credits": credits}))
 }
 
 #[cfg(test)]

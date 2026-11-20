@@ -1290,6 +1290,41 @@
       ]
     },
     {
+      "id": "sunra",
+      "name": "Sunra",
+      "tagline": "AI images, videos, audio and 3D",
+      "description": "Sunra lets agents make images, videos, audio and 3D models with models such as GPT Image, Nano Banana, Seedream, FLUX, Seedance, Kling and Veo, check the credit balance, and read the results. Results go to a project in the user's Sunra account. Each user signs in to their own Sunra account through the browser. Sunra first quotes the cost of each generation, and spends credits of that account only after it is confirmed.",
+      "category": "design",
+      "creator": "Sunra",
+      "version": "1.0.0",
+      "updated": "2026-11-20",
+      "icon": "https://sunra.ai/apple-icon.png",
+      "website": "https://sunra.ai",
+      "featured": false,
+      "setup": "link",
+      "server": {
+        "name": "sunra",
+        "transport": "http",
+        "url": "https://mcp.sunra.ai"
+      },
+      "fields": [],
+      "steps": [],
+      "prompts": [
+        {
+          "id": "prompt-balance",
+          "text": "How many Sunra credits do I have?"
+        },
+        {
+          "id": "prompt-poster",
+          "text": "Make a Sunra poster of a night market in the rain, in portrait format."
+        },
+        {
+          "id": "prompt-clip",
+          "text": "Make a 5-second Sunra video of a paper boat on a river. Tell me the cost first."
+        }
+      ]
+    },
+    {
       "id": "supabase",
       "name": "Supabase",
       "tagline": "Databases, logs and edge functions",
