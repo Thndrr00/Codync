@@ -215,15 +215,36 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
     }
     // Authorization and text commands precede audio I/O. A transcript never becomes a transport
     // command such as /detener; it is ordinary message content for this bound bot.
-    let text = if let Some(voice) = voice {
-        let transcript = async {
+    let from = super::history::sender(message);
+    let remember = |text: &str, file: Option<&str>| {
+        if let Err(error) = super::history::remember(
+            &hub.store,
+            &super::history::Incoming {
+                connector: name,
+                chat,
+                group: false,
+                sender: from.as_str(),
+                title: message["chat"]["title"].as_str(),
+                text,
+                file,
+                at: crate::store::now_ms(),
+            },
+        ) {
+            tracing::warn!(telegram = name, error = format!("{error:#}"), "Telegram history was not saved");
+        }
+    };
+    let (text, file) = if let Some(voice) = voice {
+        let fetched = async {
             let id = voice["file_id"].as_str().ok_or_else(|| anyhow::anyhow!("Telegram voice note has no file id"))?;
             let bytes = client::voice_note(ep, &bot.token, id).await?;
-            crate::voice::transcription::note(&hub.store, &bytes).await
+            // OpenBot 0.75.0: the file that arrived is kept beside the text it carried.
+            let file = super::history::save_file(&bytes, "ogg").await.ok();
+            let transcript = crate::voice::transcription::note(&hub.store, &bytes).await;
+            Ok::<_, anyhow::Error>((transcript, file))
         }
         .await;
-        match transcript {
-            Ok(transcript) => format!("{text}\n\n[Voice note transcript]\n{transcript}").trim().to_owned(),
+        let (transcript, file) = match fetched {
+            Ok(pair) => pair,
             Err(error) => {
                 tracing::warn!(
                     telegram = name,
@@ -232,10 +253,26 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
                 );
                 return say(ep, &bot, chat, "Could not transcribe that voice note. Check the speech provider in Codync call settings, or send the message as text.").await;
             }
+        };
+        match transcript {
+            Ok(transcript) => (format!("{text}\n\n[Voice note transcript]\n{transcript}").trim().to_owned(), file),
+            Err(error) => {
+                tracing::warn!(
+                    telegram = name,
+                    error = format!("{error:#}"),
+                    "Telegram voice note could not be transcribed"
+                );
+                // The file already arrived: keep it with the text instead of leaving it orphaned.
+                remember(text, file.as_deref());
+                return say(ep, &bot, chat, "Could not transcribe that voice note. Check the speech provider in Codync call settings, or send the message as text.").await;
+            }
         }
     } else {
-        text.to_owned()
+        (text.to_owned(), None)
     };
+    // OpenBot 0.75.0: keep what arrived before it becomes a bot event, so an agent can read the
+    // conversation back after a restart. A voice note keeps its file with its text.
+    remember(&text, file.as_deref());
     if current(hub, name).is_none_or(|active| fingerprint(&active) != expected || !active.allowed.contains(&user)) {
         return;
     }

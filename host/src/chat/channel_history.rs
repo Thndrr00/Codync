@@ -86,8 +86,9 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
             break;
         }
     }
-    // Ported from `OpenBot` 0.72.0: the number keeps what it received for 90 days, so older lines and
-    // the group messages that never reached the bot are only in that store.
+    // Ported from `OpenBot` 0.72.0 and 0.75.0: the number and the Telegram bot each keep what they
+    // received for 90 days, so older lines and the group messages that never reached the bot are
+    // only in those stores. Both answer to the same `query` and `since` arguments.
     if source.is_empty() || source == "whatsapp" {
         let kept = crate::whatsapp::history::search(&hub.store, &query, since, i64::MAX, limit).unwrap_or_default();
         for hit in kept {
@@ -103,10 +104,26 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
             }
             messages.push(message);
         }
-        messages.sort_by_key(|message| std::cmp::Reverse(message["at"].as_i64().unwrap_or_default()));
-        messages.dedup_by(|a, b| a["at"] == b["at"] && a["text"] == b["text"]);
-        messages.truncate(limit);
     }
+    if source.is_empty() || source == "telegram" {
+        let kept = crate::telegram::history::search(&hub.store, &query, since, i64::MAX, limit).unwrap_or_default();
+        for hit in kept {
+            let mut message = json!({
+                "source": "telegram",
+                "at": hit["at"].clone(),
+                "from": hit["from"].clone(),
+                "text": hit["text"].clone(),
+            });
+            // The file saved with a voice note that arrived, when it had one (OpenBot 0.75.0).
+            if let Some(file) = hit.get("file") {
+                message["file"] = file.clone();
+            }
+            messages.push(message);
+        }
+    }
+    messages.sort_by_key(|message| std::cmp::Reverse(message["at"].as_i64().unwrap_or_default()));
+    messages.dedup_by(|a, b| a["at"] == b["at"] && a["text"] == b["text"]);
+    messages.truncate(limit);
     Ok(json!({"messages": messages}))
 }
 

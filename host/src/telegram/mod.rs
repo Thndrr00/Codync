@@ -8,6 +8,7 @@
 
 mod client;
 mod commands;
+pub(crate) mod history;
 mod inbox;
 mod input;
 pub(crate) use input::claim_prompt;
@@ -190,6 +191,8 @@ async fn call_with(hub: &Arc<Hub>, ep: &Endpoint, method: &str, body: Value) -> 
             config.bots.retain(|b| b.name != name);
             save(&hub.store, &config)?;
             inbox::forget(&hub.store, name)?;
+            // OpenBot 0.75.0: disconnecting a chat deletes the messages and files it kept.
+            history::forget(&hub.store, name)?;
             for key in ["pair", "offset", "seen", "state"] {
                 hub.store.kv_delete(&format!("telegram.{key}.{name}"))?;
             }

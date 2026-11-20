@@ -97,3 +97,9 @@ their newest items, and dragging an item onto a tile, onto **New folder** or ont
 or unfiles it with an **Undo** notice. Starred folders are kept in this browser only. A bot can organize its own chat's
 folders with the `library` chat tools (deleting a folder needs approval under Ask); libraries with no folders read as
 before.
+
+A connected Telegram or WhatsApp chat also keeps a copy of what it received on the computer for 90 days, including
+group lines that never reached the bot (OpenBot 0.72.0/0.75.0). A Telegram voice note that arrives is saved in the
+host's data folder and remembered with its text; the bot's `read_channel_messages` tool reads that history back with
+the same `query` and `since` filters, and returns the kept file beside the line. Disconnecting the channel deletes its
+kept messages and files; the oldest messages and files go first at the 90-day and size limits.

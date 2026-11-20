@@ -5,7 +5,9 @@
 //! line that never reached the bot still has what was sent with it.
 //!
 //! The table is made on first use, indexed by time, and pruned on every write, so it never needs a
-//! migration or a background sweep.
+//! migration or a background sweep. Telegram reuses exactly this store (the same retention, files and
+//! trim); only the table, media folder and source label differ ([`Channel`]). WhatsApp's own
+//! resend handling stays WhatsApp-only.
 
 use crate::LockExt;
 use crate::store::Store;
@@ -17,10 +19,42 @@ use std::fmt::Write as _;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 
+/// The channel a kept message came from. The two channels share this store; only these three names
+/// differ, so a WhatsApp row can never land in Telegram's table or the other way around.
+#[derive(Clone, Copy)]
+pub(crate) enum Channel {
+    WhatsApp,
+    Telegram,
+}
+
+impl Channel {
+    fn table(self) -> &'static str {
+        match self {
+            Self::WhatsApp => "whatsapp_history",
+            Self::Telegram => "telegram_history",
+        }
+    }
+
+    /// The folder under the data directory where this channel's kept files live.
+    pub(crate) fn media(self) -> &'static str {
+        match self {
+            Self::WhatsApp => "whatsapp-media",
+            Self::Telegram => "telegram-media",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::WhatsApp => "WhatsApp",
+            Self::Telegram => "Telegram",
+        }
+    }
+}
+
 /// How long a message is kept.
 pub(crate) const KEEP_MS: i64 = 90 * 24 * 60 * 60 * 1000;
-/// Most messages one number keeps; the oldest go first.
-const MAX_KEPT: i64 = 20_000;
+/// Most messages one channel keeps; the oldest go first.
+pub(crate) const MAX_KEPT: i64 = 20_000;
 /// Most media one number keeps, in bytes. Beyond this the oldest files go first (their messages keep
 /// their text, just no file path), so one number can't fill the data folder.
 pub(crate) const MAX_MEDIA_BYTES: i64 = 2 * 1024 * 1024 * 1024;
@@ -99,9 +133,11 @@ fn cutoff(at: i64) -> i64 {
 }
 
 /// Makes the table and its index, and adds `file` to a table kept before the column existed.
-fn open(c: &rusqlite::Connection) -> Result<()> {
-    c.execute_batch(
-        "CREATE TABLE IF NOT EXISTS whatsapp_history(
+/// `table` only ever comes from [`Channel`], so it cannot be SQL from a caller.
+fn open(c: &rusqlite::Connection, channel: Channel) -> Result<()> {
+    let table = channel.table();
+    c.execute_batch(&format!(
+        "CREATE TABLE IF NOT EXISTS {table}(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat TEXT NOT NULL,
             sender TEXT NOT NULL,
@@ -109,15 +145,15 @@ fn open(c: &rusqlite::Connection) -> Result<()> {
             text TEXT NOT NULL,
             file TEXT,
             at INTEGER NOT NULL);
-         CREATE INDEX IF NOT EXISTS whatsapp_history_at ON whatsapp_history(at);",
-    )?;
+         CREATE INDEX IF NOT EXISTS {table}_at ON {table}(at);"
+    ))?;
     let file: bool = c.query_row(
-        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('whatsapp_history') WHERE name='file')",
+        &format!("SELECT EXISTS(SELECT 1 FROM pragma_table_info('{table}') WHERE name='file')"),
         [],
         |row| row.get(0),
     )?;
     if !file {
-        c.execute("ALTER TABLE whatsapp_history ADD COLUMN file TEXT", [])?;
+        c.execute(&format!("ALTER TABLE {table} ADD COLUMN file TEXT"), [])?;
     }
     Ok(())
 }
@@ -125,6 +161,12 @@ fn open(c: &rusqlite::Connection) -> Result<()> {
 /// Keeps one message the number received. One with neither text nor a file is not kept. Returns
 /// whether a row was kept, so an ordinary duplicate can stop before it reaches a bot again.
 pub(crate) fn remember(store: &Store, message: &Message<'_>) -> Result<bool> {
+    remember_in(Channel::WhatsApp, store, message)
+}
+
+/// Keeps one message for `channel`. The WhatsApp resend handling only applies when an id is given,
+/// so Telegram (which passes an empty id, having no such resends) gets the same store without it.
+pub(crate) fn remember_in(channel: Channel, store: &Store, message: &Message<'_>) -> Result<bool> {
     let text = message.text.trim();
     let file = message.file.and_then(relative);
     if (text.is_empty() && file.is_none()) || message.chat.is_empty() {
@@ -144,46 +186,51 @@ pub(crate) fn remember(store: &Store, message: &Message<'_>) -> Result<bool> {
     if first == Some(false) {
         return Ok(false);
     }
+    let table = channel.table();
     let pruned = store.with_connection(|c| {
-        open(c)?;
+        open(c, channel)?;
         c.execute(
-            "INSERT INTO whatsapp_history(chat, sender, name, text, file, at) VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+            &format!("INSERT INTO {table}(chat, sender, name, text, file, at) VALUES(?1, ?2, ?3, ?4, ?5, ?6)"),
             params![message.chat, message.sender, message.name, text, file, message.at],
         )?;
-        trim(c, message.at)
+        trim(c, channel, message.at)
     })?;
-    remove_files(&pruned);
+    remove_files(channel, &pruned);
     Ok(true)
 }
 
 /// Deletes the rows the 90-day limit and the row count remove, and the oldest files past the media
 /// cap, answering the files the caller must delete. Rows trimmed for media keep their text: only their
 /// `file` path is cleared, so no row still needs a file that is about to go.
-fn trim(c: &rusqlite::Connection, at: i64) -> Result<Vec<String>> {
+fn trim(c: &rusqlite::Connection, channel: Channel, at: i64) -> Result<Vec<String>> {
+    let table = channel.table();
     let mut files = {
-        let mut statement = c.prepare(
-            "SELECT file FROM whatsapp_history WHERE file IS NOT NULL
-             AND (at < ?1 OR id NOT IN (SELECT id FROM whatsapp_history ORDER BY id DESC LIMIT ?2))",
-        )?;
+        let mut statement = c.prepare(&format!(
+            "SELECT file FROM {table} WHERE file IS NOT NULL
+             AND (at < ?1 OR id NOT IN (SELECT id FROM {table} ORDER BY id DESC LIMIT ?2))"
+        ))?;
         let rows = statement.query_map(params![cutoff(at), MAX_KEPT], |row| row.get::<_, String>(0))?;
         rows.collect::<rusqlite::Result<Vec<String>>>()?
     };
     c.execute(
-        "DELETE FROM whatsapp_history WHERE at < ?1
-         OR id NOT IN (SELECT id FROM whatsapp_history ORDER BY id DESC LIMIT ?2)",
+        &format!(
+            "DELETE FROM {table} WHERE at < ?1
+             OR id NOT IN (SELECT id FROM {table} ORDER BY id DESC LIMIT ?2)"
+        ),
         params![cutoff(at), MAX_KEPT],
     )?;
-    files.extend(trim_media(c, MAX_MEDIA_BYTES)?);
+    files.extend(trim_media(c, channel, MAX_MEDIA_BYTES)?);
     Ok(files)
 }
 
-/// Clears the `file` path of the oldest rows whose files push the number over `cap`, oldest first, and
-/// answers those paths for `remove_files`. A file already gone has size zero and is never picked.
-fn trim_media(c: &rusqlite::Connection, cap: i64) -> Result<Vec<String>> {
+/// Clears the `file` path of the oldest rows whose files push the channel over `cap`, oldest first,
+/// and answers those paths for `remove_files`. A file already gone has size zero and is never picked.
+fn trim_media(c: &rusqlite::Connection, channel: Channel, cap: i64) -> Result<Vec<String>> {
+    let table = channel.table();
     let root = crate::service::data_dir();
     let rows: Vec<(i64, String, i64)> = {
         let mut statement =
-            c.prepare("SELECT id, file FROM whatsapp_history WHERE file IS NOT NULL ORDER BY id ASC")?;
+            c.prepare(&format!("SELECT id, file FROM {table} WHERE file IS NOT NULL ORDER BY id ASC"))?;
         let found = statement.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?;
         let mut kept = Vec::new();
         for row in found {
@@ -201,8 +248,8 @@ fn trim_media(c: &rusqlite::Connection, cap: i64) -> Result<Vec<String>> {
     let mut files = Vec::new();
     for (id, file, _) in rows.iter().take(media_to_prune(&sizes, cap)) {
         // Clear every row naming this path before the caller deletes the file, so no row needs it.
-        c.execute("UPDATE whatsapp_history SET file = NULL WHERE id = ?1", params![id])?;
-        c.execute("UPDATE whatsapp_history SET file = NULL WHERE file = ?1", params![file])?;
+        c.execute(&format!("UPDATE {table} SET file = NULL WHERE id = ?1"), params![id])?;
+        c.execute(&format!("UPDATE {table} SET file = NULL WHERE file = ?1"), params![file])?;
         if !files.contains(file) {
             files.push(file.clone());
         }
@@ -213,10 +260,22 @@ fn trim_media(c: &rusqlite::Connection, cap: i64) -> Result<Vec<String>> {
 /// The kept messages holding every word of `words` (already lowercased), at or after `since` and at
 /// or before `before`, newest first.
 pub(crate) fn search(store: &Store, words: &[String], since: i64, before: i64, limit: usize) -> Result<Vec<Value>> {
+    search_in(Channel::WhatsApp, store, words, since, before, limit)
+}
+
+/// The kept messages for `channel` holding every word of `words`, newest first.
+pub(crate) fn search_in(
+    channel: Channel,
+    store: &Store,
+    words: &[String],
+    since: i64,
+    before: i64,
+    limit: usize,
+) -> Result<Vec<Value>> {
     store.with_connection(|c| {
-        open(c)?;
+        open(c, channel)?;
         let mut sql =
-            String::from("SELECT chat, sender, name, text, file, at FROM whatsapp_history WHERE at >= ?1 AND at <= ?2");
+            format!("SELECT chat, sender, name, text, file, at FROM {} WHERE at >= ?1 AND at <= ?2", channel.table());
         let mut bound: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(since), Box::new(before)];
         for word in words {
             // The word is matched as text: its own `%` and `_` must not become wildcards.
@@ -249,17 +308,44 @@ pub(crate) fn search(store: &Store, words: &[String], since: i64, before: i64, l
 
 /// Deletes everything kept for the number, when it is unlinked, and the files those rows named.
 pub(crate) fn forget(store: &Store) -> Result<()> {
+    forget_in(Channel::WhatsApp, store)
+}
+
+/// Deletes everything kept for `channel`, and the files those rows named.
+pub(crate) fn forget_in(channel: Channel, store: &Store) -> Result<()> {
+    let table = channel.table();
     let files = store.with_connection(|c| {
-        open(c)?;
+        open(c, channel)?;
         let files = {
-            let mut statement = c.prepare("SELECT file FROM whatsapp_history WHERE file IS NOT NULL")?;
+            let mut statement = c.prepare(&format!("SELECT file FROM {table} WHERE file IS NOT NULL"))?;
             let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
             rows.collect::<rusqlite::Result<Vec<String>>>()?
         };
-        c.execute("DELETE FROM whatsapp_history", [])?;
+        c.execute(&format!("DELETE FROM {table}"), [])?;
         Ok(files)
     })?;
-    remove_files(&files);
+    remove_files(channel, &files);
+    Ok(())
+}
+
+/// Deletes the rows of one connector's chats, when it is disconnected, and their files. A row's
+/// `chat` is stored as `connector:chat-id`; connector names only hold a-z, 0-9 and '-', so the
+/// `LIKE` pattern cannot match another connector and has no wildcard of its own.
+pub(crate) fn forget_prefix(store: &Store, channel: Channel, connector: &str) -> Result<()> {
+    let table = channel.table();
+    let pattern = format!("{connector}:%");
+    let files = store.with_connection(|c| {
+        open(c, channel)?;
+        let files = {
+            let mut statement =
+                c.prepare(&format!("SELECT file FROM {table} WHERE file IS NOT NULL AND (chat = ?1 OR chat LIKE ?2)"))?;
+            let rows = statement.query_map(params![connector, pattern], |row| row.get::<_, String>(0))?;
+            rows.collect::<rusqlite::Result<Vec<String>>>()?
+        };
+        c.execute(&format!("DELETE FROM {table} WHERE chat = ?1 OR chat LIKE ?2"), params![connector, pattern])?;
+        Ok(files)
+    })?;
+    remove_files(channel, &files);
     Ok(())
 }
 
@@ -286,14 +372,14 @@ fn kept_file(root: &Path, file: &str) -> Option<PathBuf> {
 }
 
 /// Deletes the files those rows named. One already gone is not a failure.
-fn remove_files(files: &[String]) {
+fn remove_files(channel: Channel, files: &[String]) {
     let root = crate::service::data_dir();
     for file in files {
         let Some(path) = kept_file(&root, file) else { continue };
         if let Err(error) = std::fs::remove_file(&path)
             && error.kind() != std::io::ErrorKind::NotFound
         {
-            tracing::warn!(%error, path = %path.display(), "couldn't delete a kept WhatsApp file");
+            tracing::warn!(%error, path = %path.display(), "couldn't delete a kept {} file", channel.label());
         }
     }
 }
@@ -303,7 +389,7 @@ fn remove_files(files: &[String]) {
 /// folder, so the same traversal guard and NotFound handling as a row's file apply.
 pub(crate) fn remove_queued_file(path: &str) {
     if let Some(relative) = relative(path) {
-        remove_files(&[relative]);
+        remove_files(Channel::WhatsApp, &[relative]);
     }
 }
 
@@ -396,9 +482,9 @@ mod tests {
         remember(&store, &message("chat", "recent", Some(recent_shown.as_str()), now + 1)).unwrap();
 
         // Two four-byte files with a six-byte cap: the older one goes, its row keeps the text.
-        let pruned = store.with_connection(|c| trim_media(c, 6)).unwrap();
+        let pruned = store.with_connection(|c| trim_media(c, Channel::WhatsApp, 6)).unwrap();
         assert_eq!(pruned.len(), 1);
-        remove_files(&pruned);
+        remove_files(Channel::WhatsApp, &pruned);
         assert!(!old.exists(), "the oldest file over budget goes");
         assert!(recent.exists(), "the kept file stays");
 

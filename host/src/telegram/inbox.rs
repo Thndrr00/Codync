@@ -114,6 +114,13 @@ impl Inbox {
         }
         let message = &update["message"];
         if message["chat"]["type"] != "private" {
+            // OpenBot 0.75.0: keep the group line so an agent can read the conversation back after a
+            // restart, even though a group never reaches the bot itself.
+            if message.is_object()
+                && let Err(error) = super::history::remember_update(&hub.store, name, message)
+            {
+                tracing::warn!(telegram = name, error = format!("{error:#}"), "Telegram group history was not saved");
+            }
             return Ok(());
         }
         let text = message["text"].as_str().or_else(|| message["caption"].as_str()).unwrap_or_default().trim();
