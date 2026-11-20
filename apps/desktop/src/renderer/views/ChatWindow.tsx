@@ -247,26 +247,56 @@ function ChatSplitView() {
   const [palette, setPalette] = useState(false)
   const [cheatsheet, setCheatsheet] = useState(false)
   const [statusBot, setStatusBot] = useState<BotTarget | null>(null)
-  // Command palette: Ctrl+K (⌘K on a Mac) anywhere in the window; `?` opens the shortcut sheet.
-  // Neither fires from a text field, where those keys belong to typing.
+  // The window-wide shortcuts: the palette and `?` sheet, plus the shell actions below. None of
+  // them fires from a text field, where the same keys belong to typing (and to IME composition).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey) return
+      if (e.defaultPrevented || e.altKey || e.isComposing) return
       const target = e.target
       const typing = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
       const mod = e.metaKey || e.ctrlKey
-      if (mod && e.key.toLowerCase() === 'k') {
+      const key = e.key.toLowerCase()
+      if (mod && key === 'k') {
         if (typing) return // never steal ⌘K from a text field
         e.preventDefault()
         setPalette(true)
-      } else if (!mod && (e.key === '?' || (e.key === '/' && e.shiftKey)) && !typing) {
+      } else if (typing) {
+        return // every shortcut below belongs to the window, not the field being typed in
+      } else if (!mod && (e.key === '?' || (e.key === '/' && e.shiftKey))) {
         e.preventDefault()
         setCheatsheet(true)
+      } else if (mod && !e.shiftKey && key === 'b') {
+        e.preventDefault()
+        prefs.sidebarCompact.set(!prefs.sidebarCompact.get())
+      } else if (mod && !e.shiftKey && key === ',') {
+        e.preventDefault()
+        setSettings('general')
+      } else if (mod && e.shiftKey && key === 'f') {
+        e.preventDefault()
+        setSearching(true)
+      } else if (mod && e.shiftKey && key === 'm') {
+        e.preventDefault()
+        const selected = app.selection
+        if (!selected) return
+        const store = app.store(selected.computerId)
+        const bot = store?.bots.get(selected.botId)
+        if (store && bot) store.setMuted(bot, bot.notify !== false)
+      } else if (mod && key === 'j') {
+        e.preventDefault()
+        // The unread bots in roster order, skipping computers hidden by the filter.
+        const shown = new Set(computerSelection(app.computers.map((c) => c.id), prefs.hiddenComputers.get()).shown)
+        const unread = app.roster.filter((item) => shown.has(item.ref.computerId) && item.bot.unread > 0)
+        if (!unread.length) return
+        const current = app.selection
+        const at = current ? unread.findIndex((item) => sameRef(item.ref, current)) : -1
+        const step = e.shiftKey ? -1 : 1
+        const next = unread[at < 0 ? (step > 0 ? 0 : unread.length - 1) : (at + step + unread.length) % unread.length]!
+        app.select(next.ref)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [app])
   const [creating, setCreating] = useState<CreateTarget | null>(null)
   const [importing, setImporting] = useState(false)
   const [newMenu, setNewMenu] = useState(false)
