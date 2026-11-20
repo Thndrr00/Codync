@@ -48,6 +48,13 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             b["from"].as_i64().context("from is required")?,
             b["to"].as_i64().context("to is required")?,
         )?,
+        // The Schedule view spans every bot: one call returns each routine's concrete moments.
+        "scheduleCalendar" => hub.routines.schedule_calendar(
+            b["from"].as_i64().context("from is required")?,
+            b["to"].as_i64().context("to is required")?,
+        )?,
+        // A click on an empty day or hour creates a one-off routine at that wall-clock time.
+        "scheduleCreateAt" => hub.routines.schedule_create_at(hub, str_arg(&b, "botId")?, &b)?,
         "saveRoutine" => hub.routines.save(hub, str_arg(&b, "botId")?, &b)?,
         "saveRoutineWithOutputs" => {
             if b.get("outputs").is_none() && b.get("outputText").is_none() {

@@ -23,6 +23,15 @@ A saved webhook routine's form shows its public URL and key (copy, reveal, repla
 with confirmation; TUI `w` copies a curl command and `W` replaces the
 key). Creation/update notices open the routine.
 
+The desktop's **Schedule** tab, beside a bot's routines in its details, shows a month, week or day
+calendar of every bot's scheduled routines. The host's `scheduleCalendar` turns each routine's cron,
+one-time and interval triggers into concrete moments (`{id, name, at, timezone, trigger, botId,
+kind}`, at most 500 per trigger in a window) through the pure `occurrences_in_range` helper, reusing
+the scheduler's cron parser. Right-clicking an empty day or clicking an empty hour opens the shared
+creation dialog with that date and time already set; `scheduleCreateAt` converts the wall-clock time
+in the chosen IANA zone and saves an ordinary one-time routine through `Routines::save`, so the new
+routine appears on the calendar as soon as it is created.
+
 ## Apple setup interface
 
 The editor keeps task fields first, then a When to run type menu and its settings.

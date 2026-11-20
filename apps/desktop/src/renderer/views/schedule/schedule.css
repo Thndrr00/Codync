@@ -1,0 +1,227 @@
+/* The Schedule view: one CSS grid for month/week, hour rows for day. Nothing here is a system
+   picker; every control comes from the shared components. Motion uses the theme's --morph token,
+   which Reduce Motion already sets to 0s, with an explicit override below as a second guard. */
+
+.schedule {
+  padding: 2px 4px 8px;
+}
+
+.schedule-toolbar {
+  flex-wrap: wrap;
+}
+
+.schedule-range {
+  min-width: 120px;
+}
+
+.schedule-fade {
+  animation: schedule-appear var(--morph) both;
+}
+
+@keyframes schedule-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .schedule-fade {
+    animation: none;
+  }
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  align-content: start;
+}
+
+.schedule-weekday {
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.schedule-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 84px;
+  padding: 5px;
+  border-radius: 8px;
+  background: var(--group);
+  overflow: hidden;
+}
+
+.schedule-grid[data-view="week"] .schedule-cell {
+  min-height: 220px;
+}
+
+.schedule-cell.outside {
+  opacity: 0.42;
+}
+
+.schedule-cell.today {
+  background: var(--chip-on);
+}
+
+.schedule-cell.open {
+  transition: background var(--hover);
+}
+
+.schedule-cell.open:hover {
+  background: var(--field);
+}
+
+.schedule-day-button {
+  align-self: flex-start;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.schedule-day-button:hover {
+  background: var(--chip-on);
+}
+
+.schedule-cell-items,
+.schedule-hour-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.schedule-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--field);
+  font-size: var(--text-caption);
+  line-height: 1.3;
+  cursor: default;
+}
+
+.schedule-chip-time {
+  flex: none;
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-chip.cron {
+  box-shadow: inset 2px 0 0 var(--secondary);
+}
+
+.schedule-chip.once {
+  box-shadow: inset 2px 0 0 var(--text);
+}
+
+.schedule-chip.interval {
+  box-shadow: inset 2px 0 0 var(--secondary);
+  opacity: 0.85;
+}
+
+.schedule-more {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--secondary);
+  font: inherit;
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+
+.schedule-hours {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.schedule-day-title {
+  padding: 4px 2px 8px;
+}
+
+.schedule-hour {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.schedule-hour.open {
+  transition: background var(--hover);
+  cursor: pointer;
+}
+
+.schedule-hour.open:hover {
+  background: var(--group);
+}
+
+.schedule-hour-label {
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-empty {
+  padding: 14px;
+}
+
+.schedule-hint {
+  flex-wrap: wrap;
+}
+
+.schedule-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, 70vw);
+}
+
+.schedule-create .dialog-field {
+  width: 100%;
+}
+
+.schedule-instructions {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.schedule-create-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-create-row > .text:first-child {
+  min-width: 64px;
+}
+
+.schedule-minute {
+  width: 64px;
+  text-align: center;
+}

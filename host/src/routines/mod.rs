@@ -21,9 +21,11 @@ pub use outputs::Output;
 mod retry;
 mod runner;
 mod schedule;
+mod schedule_calendar;
 mod watch;
 pub use runner::start;
 pub use schedule::{Trigger, local_zone};
+pub use schedule_calendar::occurrences_in_range;
 
 use crate::{
     LockExt,

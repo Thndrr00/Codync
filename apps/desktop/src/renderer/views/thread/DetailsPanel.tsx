@@ -19,6 +19,7 @@ import { DocumentsCard } from '../bots/DocumentsView'
 import { ThreadsCard } from './ThreadsCard'
 import { ComputerPanel } from '../bots/ComputerPanel'
 import { RoutinesView } from '../routines/RoutinesView'
+import { ScheduleView } from '../schedule/ScheduleView'
 import { LibraryView } from '../library/LibraryView'
 import { DevServersSection } from './DevServersSection'
 import { MacChatButton } from './MacChatButton'
@@ -28,10 +29,11 @@ import '../bots/documents.css'
 import { useTr } from '../../lib/use-language'
 
 
-export type DetailsTab = 'details' | 'library' | 'apps' | 'memory' | 'documents' | 'threads' | 'computer' | 'settings'
+export type DetailsTab = 'details' | 'schedule' | 'library' | 'apps' | 'memory' | 'documents' | 'threads' | 'computer' | 'settings'
 
 const TABS: { id: DetailsTab; label: string }[] = [
   { id: 'details', label: 'Details' },
+  { id: 'schedule', label: 'Schedule' },
   { id: 'apps', label: 'Apps' },
   { id: 'library', label: 'Library' },
   { id: 'memory', label: 'Memory' },
@@ -78,6 +80,11 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
                   {bot ? <ComputerUse bot={bot} /> : null}
                   <RoutinesView botId={botId} initialId={routineId} />
                 </>
+              ) : tab === 'schedule' ? (
+                <ScheduleView
+                  botId={botId}
+                  bots={[...store.bots.values()].filter((candidate) => !isGroup(candidate)).map((candidate) => ({ id: candidate.id, name: candidate.name }))}
+                />
               ) : tab === 'apps' ? (
                 <BotAppsCard botId={botId} />
               ) : tab === 'library' ? (
