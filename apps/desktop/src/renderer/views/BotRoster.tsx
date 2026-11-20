@@ -15,6 +15,7 @@ import type { BotStore } from '../store/bot-store'
 import type { useComputerRoster } from '../store/computer-roster'
 import { StoreContext, useApp } from '../store/context'
 import { BotRow } from './BotRow'
+import { RosterNameEditor } from './RosterNameEditor'
 import { ComputerHeadingLabel, ComputerRosterSection } from './ComputerRosterSection'
 import { AppFloorCard, UpdateNeededCard } from './UpdateNeededCard'
 import { RosterControls, RosterPreview } from './RosterControls'
@@ -59,6 +60,10 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
   const validPreview = preview && roster.allItems.some((item) => item.store === preview.store && sameRef(item.ref, preview.ref)) ? preview : null
   useEffect(() => { if (preview && !validPreview) setPreview(null) }, [preview, validPreview])
   const [revealed, setRevealed] = useState<string | null>(null)
+  // Double-clicking a bot's name renames it in place. Never while filtered or mid-drag: a filter
+  // would move the row under the caret and a drag would start on the same pointer gesture.
+  const [renaming, setRenaming] = useState<{ item: RosterItem; store: BotStore } | null>(null)
+  const renameKey = renaming ? refKey(renaming.item.ref) : null
   // One expanded row at a time; threads stay folded with their row and with its computer section.
   const [expandedThreads, setExpandedThreads] = useState<string | null>(null)
   const [threadOpen, setThreadOpen] = useState<{ botId: string; store: BotStore; threadId: string } | null>(null)
@@ -236,9 +241,17 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
         lifted={held && lift !== null}
         onPreview={() => setPreview(item)}
         onReveal={() => setRevealed((value) => value === key ? null : key)}
+        onRename={() => {
+          if (compact || roster.filtered || botDrag || sectionDrag) return
+          setRenaming({ item, store: item.store })
+        }}
         drag={item.bot.lead ? undefined : pointerDrag({ start: (from) => liftRow(item, siblings, from), over: dragOver, drop, cancel: endDrag })}
       >
-        <RosterBotRow item={item} compact={compact} agent={agent} />
+        {renameKey === key && renaming ? (
+          <RosterNameEditor bot={renaming.item.bot} store={renaming.store} onDone={() => setRenaming(null)} />
+        ) : (
+          <RosterBotRow item={item} compact={compact} agent={agent} />
+        )}
       </RosterRow>
       {!compact ? <button className="roster-thread-disclosure press" aria-expanded={expanded}
         aria-label={`${expanded ? 'Hide' : 'Show'} threads for ${item.bot.name}`}
@@ -362,7 +375,7 @@ function RosterBotRow({ item, compact, agent }: { item: RosterItem; compact: boo
 }
 
 /** One roster button: drags to reorder, and slides when the others move. */
-function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, onHover, onClick, onContext, onPreview, onReveal, drag, children }: {
+function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, onHover, onClick, onContext, onPreview, onReveal, onRename, drag, children }: {
   hovered: boolean
   /** Its copy is under the pointer: the row keeps its slot empty. */
   lifted: boolean
@@ -376,6 +389,7 @@ function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, 
   onContext: (x: number, y: number) => void
   onPreview: () => void
   onReveal: () => void
+  onRename: () => void
   drag?: ReturnType<typeof pointerDrag>
   children: ReactNode
 }) {
@@ -397,6 +411,7 @@ function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, 
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
       onClick={(event) => { if (didPreview.current) { event.preventDefault(); didPreview.current = false } else onClick() }}
+      onDoubleClick={(event) => { event.preventDefault(); onRename() }}
       onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); onReveal() } if (event.key === ' ') { event.preventDefault(); onPreview() } }}
       onPointerDownCapture={(event) => {
         if (event.button !== 0) return

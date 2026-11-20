@@ -50,10 +50,18 @@ export function ComposerAttachment({ file, remove }: { file: OutgoingFile; remov
     <span className="file-chip">
       <Icon name={attachmentSymbol(file.name)} size={10} color="var(--secondary)" />
       <Text size="footnote" tone="text" truncate className="file-chip-name">{file.name}</Text>
+      <Text size="caption2" tone="secondary" tabular>{fileSize(file.data.length)}</Text>
       {percent !== undefined ? <Text size="caption2" tone="secondary" tabular>{`${percent}%`}</Text> : null}
       <button className="file-chip-remove" aria-label={`Remove ${file.name}`} title="Remove" onClick={remove}>
         <Icon name="xmark" size={10} weight="bold" color="var(--secondary)" />
       </button>
     </span>
   )
+}
+
+/** A short, readable size for a chip (bytes, KB, MB). */
+function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

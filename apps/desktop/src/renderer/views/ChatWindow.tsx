@@ -38,6 +38,9 @@ import { SignInCodeDialog } from './marketplace/ConnectorSheets'
 import { SettingsView, type SettingsPage } from './settings/SettingsView'
 import { ApprovalSheet } from './settings/ApprovalSheet'
 import { SearchPalette } from './SearchPalette'
+import { CommandPalette, type Command } from '../components/CommandPalette'
+import { KeyboardCheatsheet } from '../components/KeyboardCheatsheet'
+import { BotStatusDetail, BOT_STATUS_DETAIL_TITLE } from './BotStatusDetail'
 import { AccountWelcomeView, useWelcomeGate } from './AccountWelcomeView'
 import { ComputerAccessView } from './computer-access/ComputerAccessView'
 import { AccessOnboarding } from './computer-access/AccessOnboarding'
@@ -240,12 +243,25 @@ function ChatSplitView() {
   const [sidebarWidth, setSidebarWidth] = usePref(prefs.sidebarWidth)
   const [hidden, setHidden] = usePref(prefs.hiddenComputers)
   const [searching, setSearching] = useState(false)
-  // Command palette: Ctrl+K (⌘K on a Mac) from anywhere in the window.
+  const [palette, setPalette] = useState(false)
+  const [cheatsheet, setCheatsheet] = useState(false)
+  const [statusBot, setStatusBot] = useState<BotTarget | null>(null)
+  // Command palette: Ctrl+K (⌘K on a Mac) anywhere in the window; `?` opens the shortcut sheet.
+  // Neither fires from a text field, where those keys belong to typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k') return
-      e.preventDefault()
-      setSearching(true)
+      if (e.defaultPrevented || e.altKey) return
+      const target = e.target
+      const typing = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key.toLowerCase() === 'k') {
+        if (typing) return // never steal ⌘K from a text field
+        e.preventDefault()
+        setPalette(true)
+      } else if (!mod && (e.key === '?' || (e.key === '/' && e.shiftKey)) && !typing) {
+        e.preventDefault()
+        setCheatsheet(true)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -384,6 +400,7 @@ function ChatSplitView() {
 
   // One plain list. The lead stays in sight: no hide.
   const botActions = (bot: Bot, store: BotStore): MenuItem[] => [
+    { title: BOT_STATUS_DETAIL_TITLE, icon: 'info.circle', action: () => setStatusBot({ bot, store }) },
     { title: bot.pinned ? 'Unpin' : 'Pin', icon: 'pin', action: () => store.setPinned(bot, !bot.pinned) },
     ...moveToSectionItems(bot, store, setNaming),
     { title: 'Tasks', icon: 'checklist', action: () => setTasksBot({ bot, store }) },
@@ -432,6 +449,37 @@ function ChatSplitView() {
   const mismatchStores = stores.filter((s) => shown.has(s.computer.id) && s.mismatch)
   const selected = app.selection
   const selectedBot = selected && selectedStore?.bots.get(selected.botId)
+
+  // One list feeds the command palette: bots to select, settings pages and common actions. Each
+  // action calls the store/app method the rest of the window already uses.
+  const commands: Command[] = [
+    ...visibleRoster.map((item) => ({
+      id: `bot:${refKey(item.ref)}`,
+      title: item.bot.name,
+      group: 'Bots',
+      icon: item.bot.kind === 'group' ? 'person.2' : 'terminal',
+      keywords: item.bot.description,
+      run: () => app.select(item.ref),
+    })),
+    ...(onlineStores.length ? [
+      { id: 'new-bot', title: 'New bot', group: 'Actions', icon: 'plus', run: () => create('bot') },
+      { id: 'new-group', title: 'New group', group: 'Actions', icon: 'person.2', run: () => create('group') },
+    ] : []),
+    { id: 'search', title: 'Search bots and history', group: 'Actions', icon: 'magnifyingglass', shortcutId: 'commandPalette', run: () => setSearching(true) },
+    { id: 'shortcuts', title: 'Keyboard shortcuts', group: 'Actions', icon: 'info.circle', shortcutId: 'keyboardShortcuts', run: () => setCheatsheet(true) },
+    { id: 'account', title: 'Account', group: 'Actions', icon: 'person.crop.circle', run: () => setShowAccount(true) },
+    { id: 'extensions', title: 'Extensions', group: 'Actions', icon: 'square.grid.2x2', run: () => openMarketplace() },
+    { id: 'channels', title: 'Channels', group: 'Actions', icon: 'bubble.left.and.bubble.right', run: () => openMarketplace('channels') },
+    { id: 'agents', title: 'Agents', group: 'Actions', icon: 'terminal', run: () => openMarketplace('agents') },
+    { id: 'skills', title: 'Skills', group: 'Actions', icon: 'book.pages', run: () => openMarketplace('skills') },
+    { id: 'settings-general', title: 'Settings: General', group: 'Settings', icon: 'gearshape', run: () => setSettings('general') },
+    { id: 'settings-computers', title: 'Settings: Computers', group: 'Settings', icon: 'desktopcomputer', run: () => setSettings('computers') },
+    { id: 'settings-network', title: 'Settings: Network', group: 'Settings', icon: 'network', run: () => setSettings('network') },
+    { id: 'settings-access', title: 'Settings: Computer access', group: 'Settings', icon: 'lock.shield', run: () => setSettings('access') },
+    { id: 'settings-voice', title: 'Settings: Voice chat', group: 'Settings', icon: 'waveform', run: () => setSettings('voice') },
+    { id: 'settings-usage', title: 'Settings: Usage', group: 'Settings', icon: 'gauge.with.dots.needle.33percent', run: () => setSettings('usage') },
+    { id: 'settings-updates', title: 'Settings: Updates', group: 'Settings', icon: 'arrow.down.circle', run: () => setSettings('updates') },
+  ]
 
   let detail: ReactNode
   if (selected && selectedStore && selectedBot) {
@@ -508,6 +556,7 @@ function ChatSplitView() {
           <Spacer />
           <HStack gap={6} className="no-drag">
             <ComputerFilterHeader hidden={hidden} setHidden={setHidden} manage={() => setSettings('computers')} compact />
+            <IconButton title="Keyboard shortcuts" icon="info.circle" size={32} className="sidebar-header-action" onClick={() => setCheatsheet(true)} />
             <IconButton title="Search" icon="magnifyingglass" size={32} className="sidebar-header-action" onClick={() => setSearching(true)} />
             <IconButton title="New" icon="plus" size={32} className="sidebar-header-action" buttonRef={newButton} menuOpen={newMenu} onClick={() => setNewMenu((o) => !o)} disabled={!onlineStores.length} />
             {/* The sidebar toggle shares the side-panel toggle's button (icon size, shape and hover fill),
@@ -596,6 +645,16 @@ function ChatSplitView() {
         { id: 'updates', title: 'Updates', icon: 'arrow.down.circle', run: () => { setSearching(false); setSettings('updates') } },
         { id: 'access', title: 'Computer access', icon: 'lock.shield', run: () => { setSearching(false); setSettings('access') } },
       ]} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      <Sheet open={cheatsheet} onClose={() => setCheatsheet(false)} width={520}>
+        <KeyboardCheatsheet onClose={() => setCheatsheet(false)} />
+      </Sheet>
+      <Sheet open={statusBot !== null} onClose={() => setStatusBot(null)} width={460}>
+        {statusBot ? <VStack gap={8} className="bot-status-sheet">
+          <ModalHeader icon="info.circle" title={`${tr('Status')} · ${statusBot.bot.name}`} onClose={() => setStatusBot(null)} />
+          <BotStatusDetail bot={statusBot.bot} store={statusBot.store} />
+        </VStack> : null}
+      </Sheet>
       <Sheet open={editing !== null} onClose={() => setEditing(null)} width={520} height={Math.min(680, sheetHeight)}>
         {editing ? (
           <StoreContext.Provider value={editing.store}>

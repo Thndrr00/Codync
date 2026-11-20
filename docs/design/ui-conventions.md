@@ -81,7 +81,7 @@ No scroll bars: scroll indicators never show (`.scrollIndicators(.never)` on the
 
 Anything with a background fill gets no extra drawn border. Use `Palette` and `Motion`; visibility changes animate and honor Reduce Motion. Icon-only actions have an accessibility label and desktop help where applicable. Reserve text for actions an icon cannot clearly express.
 
-On the desktop, the settings page's Close is a plain X (`ModalCloseButton`): no grey pad or tooltip, filling only on hover. The sidebar and side-panel toggles share `ChromeIconButton` (one icon size, shape and hover fill; the sidebar toggle sits at the end of the open sidebar). Tab strips (`TabStrip`) keep each tab one width, show the X on the selected or hovered tab, scroll with an overflow menu for hidden tabs, close on middle click, keep the next X under the pointer after a close, and scroll the row while a tab is dragged to an end.
+On the desktop, the settings page's Close is a plain X (`ModalCloseButton`): no grey pad or tooltip, filling only on hover. The sidebar and side-panel toggles share `ChromeIconButton` (one icon size, shape and hover fill; the sidebar toggle sits at the end of the open sidebar). Tab strips (`TabStrip`) keep each tab one width, show the X on the selected or hovered tab, scroll with an overflow menu for hidden tabs, close on middle click, keep the next X under the pointer after a close, and scroll the row while a tab is dragged to an end. The command palette (`CommandPalette`, ⌘/Ctrl+K) and keyboard cheatsheet (`KeyboardCheatsheet`, `?`) are shared Sheet-based overlays: grouped fuzzy-filtered commands with ↑/↓/Enter/Escape and a single `KEYBOARD_SHORTCUTS` list that both render. Neither intercepts ⌘/Ctrl+K or `?` inside a text field.
 
 ## Motion and status
 

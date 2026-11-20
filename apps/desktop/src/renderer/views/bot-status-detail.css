@@ -1,0 +1,8 @@
+/* The roster menu's Status panel: a few label/value rows, no separate fetch. */
+.bot-status-detail {
+  padding: 0 24px 24px;
+  min-width: 340px;
+}
+.bot-status-sheet {
+  padding-bottom: 12px;
+}

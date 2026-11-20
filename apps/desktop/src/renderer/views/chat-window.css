@@ -242,6 +242,19 @@ html[data-platform="win32"] .sidebar.compact .sidebar-header {
   width: 0;
   opacity: 0;
 }
+/* Double-click a bot's name to replace the row's text with an inline field. */
+.roster-name-editor {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: calc(24px * var(--scale));
+  padding: 0 6px;
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-body);
+  outline: 1px solid var(--accent);
+}
 .unread-badge {
   display: grid;
   place-items: center;
