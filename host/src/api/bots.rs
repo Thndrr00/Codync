@@ -78,6 +78,25 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "proposedAgent" => Ok(crate::chat::proposed_agent::proposal(
+            str_arg(&b, "by")?,
+            str_arg(&b, "name")?,
+            b["agent"].as_str().unwrap_or(""),
+            str_arg(&b, "instructions")?,
+        )?),
+        "sharedSetup" => Ok(crate::chat::shared_setup::patch(&b["source"])),
+        "resourceful" => Ok(crate::chat::resourceful::keep_going(
+            b["failures"].as_u64().unwrap_or(0) as usize,
+            b["evidenced"].as_bool().unwrap_or(false),
+            b["userStopped"].as_bool().unwrap_or(false),
+        )),
+        "liveBlock" => Ok(crate::chat::live_block::block(
+            b["kind"].as_str().unwrap_or("choice"),
+            str_arg(&b, "title")?,
+            &b["payload"],
+        )?),
+        "uiAction" => Ok(crate::chat::ui_action::action(str_arg(&b, "method")?, &b["arguments"])),
+        "personalMode" => Ok(crate::chat::personal_mode::mode(b["members"].as_u64().unwrap_or(1) as usize)),
         "agentPass" => Ok(crate::chat::pass::outcome(str_arg(&b, "reply")?)),
         "contextWindow" => Ok(crate::chat::context_window::should_compact(
             b["used"].as_u64().unwrap_or(0),

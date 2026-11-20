@@ -59,6 +59,13 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | Several accounts per connector (ADR 0099) | A reply uses the account its message named, never a wrong one, through `connectorAccount` | `chat/connector_accounts.rs`, `api/bots.rs` |
 | Sign-in per connection (ADR 0150) | The chosen sign-in method is per connection and the secret is never echoed, through `signInMethod` | `chat/signin_method.rs`, `api/bots.rs` |
 
+| Agents propose agents (ADR 0081) | An agent proposes a bounded bot card; a person creates it, through `proposedAgent` | `chat/proposed_agent.rs`, `api/bots.rs` |
+| One setup, many agents (ADR 0094) | A setup copies only its shared fields onto a target, keeping its identity, through `sharedSetup` | `chat/shared_setup.rs`, `api/bots.rs` |
+| Resourceful agents (ADR 0109) | A single failure is retried; giving up needs repeated, evidenced failure, through `resourceful` | `chat/resourceful.rs`, `api/bots.rs` |
+| Live blocks (ADR 0113) | An agent shows a small non-persistent block to act on, through `liveBlock` | `chat/live_block.rs`, `api/bots.rs` |
+| Agents start UI actions (ADR 0129) | An app action is also a host tool, named as a host call, through `uiAction` | `chat/ui_action.rs`, `api/bots.rs` |
+| Personal mode (ADR 0159) | One member hides team surfaces without adding a team model, through `personalMode` | `chat/personal_mode.rs`, `api/bots.rs` |
+
 The clients reach all of these through typed bridges that only call the host and decode its answer:
 `apps/desktop/src/renderer/client/agentes-chat.ts`, `CodyncKit/Client/HostClient+AgentesChat.swift`,
 `core/.../AgentesChat.kt` and `host/src/tui/net/agentes_chat.rs`. The host still owns the logic.
