@@ -226,6 +226,21 @@ export function islandRect(frame: { width: number; height: number }, windowWidth
   return { x: (windowWidth - frame.width) / 2, y: 0, width: frame.width, height: frame.height }
 }
 
+/**
+ * The agent dock is a sibling of the island inside the same transparent window, pinned to the
+ * window's left or right edge (8px inset), 52px wide and vertically centered, with its height a
+ * percent of the window. This returns its local rect so the window can take the mouse over it and
+ * pass it as a second region to `setShape`. With no dock shown the rect is empty.
+ */
+export function dockRect(dock: { shown: boolean; edge: 'left' | 'right'; sizePercent: number }, windowWidth: number, windowHeight: number): IslandRect {
+  if (!dock.shown) return { x: 0, y: 0, width: 0, height: 0 }
+  const width = Math.min(60, windowWidth)
+  const height = Math.round(Math.min(windowHeight, Math.max(0, windowHeight * dock.sizePercent / 100)))
+  const x = dock.edge === 'left' ? 8 : Math.max(0, windowWidth - width - 8)
+  const y = Math.max(0, Math.floor((windowHeight - height) / 2))
+  return { x, y, width, height }
+}
+
 /** The part of the window that takes the mouse: the shape with `HIT_MARGIN` around it, inside the window. */
 export function hitRect(rect: IslandRect): IslandRect {
   if (rect.width <= 0 && rect.height <= 0) return { x: 0, y: 0, width: 0, height: 0 }

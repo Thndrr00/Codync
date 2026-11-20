@@ -247,6 +247,8 @@ export interface CodyncBridge {
     /** The pointer reached or left the shape. */
     onHover(cb: (inside: boolean) => void): () => void
     setShape(rect: IslandRect): void
+    /** The agent dock's second input region inside the island window. */
+    setDockShape(rect: IslandRect): void
     /** Explicit input and control interaction can focus the island until it closes. */
     setFocusable(on: boolean): void
     /** ⌥Y / ⌥N answer the approval on screen, from any app, while it shows. */

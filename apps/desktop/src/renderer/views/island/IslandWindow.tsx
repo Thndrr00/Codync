@@ -6,6 +6,7 @@ import { useModel } from '../../lib/observable'
 import { useTr } from '../../lib/use-language'
 import { PINNED_LEAVE_MS, type IslandModel } from './island-model'
 import { useCrossFade } from './island-motion'
+import { AgentDock } from './AgentDock'
 import { Approval, Empty, Message, Notice, Overview, Wings } from './IslandViews'
 import { UsageMeter, UsageView } from './IslandUsage'
 import { IntegrationsView } from './IslandIntegrations'
@@ -47,6 +48,7 @@ export function IslandWindow({ model }: { model: IslandModel }) {
     if (paths.length) window.codync.island.dropFiles(target, paths)
   }
   return (
+    <>
     <div
       className={`island ${model.growing ? 'growing' : 'shrinking'} ${model.screen.notch ? '' : 'edge'} ${dropping ? 'dropping' : ''}`}
       data-mode={mode}
@@ -94,6 +96,8 @@ export function IslandWindow({ model }: { model: IslandModel }) {
         {open && model.closing ? <span className="island-countdown" style={{ animationDuration: `${PINNED_LEAVE_MS}ms` }} /> : null}
       </div>
     </div>
+    <AgentDock model={model} />
+    </>
   )
 }
 

@@ -111,6 +111,7 @@ const bridge: CodyncBridge = {
     onScreen: none,
     onHover: none,
     setShape() {},
+  setDockShape() {},
     setFocusable() {},
     setKeys() {},
     onKey: none,

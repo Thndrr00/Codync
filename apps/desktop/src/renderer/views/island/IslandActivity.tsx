@@ -36,7 +36,8 @@ export function ActivityView({ model }: { model: IslandModel }) {
   </IslandPanel>
 }
 
-function RunRow({ model, run }: { model: IslandModel; run: IslandRun }) {
+/** One finished or running report; the dock's result cards reuse this row. */
+export function RunRow({ model, run }: { model: IslandModel; run: IslandRun }) {
   const tr = useTr()
   const workspace = model.summary.workspace?.ref === run.ref ? model.summary.workspace : null
   const estimate = workspace?.timings.find((timing) => timing.routineId === run.routineId && timing.samples >= 5 && Number.isFinite(timing.estimateMs) && timing.estimateMs > 0)

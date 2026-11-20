@@ -136,6 +136,7 @@ const bridge: CodyncBridge = {
     onScreen: (cb) => listen('island:screen', cb),
     onHover: (cb) => listen('island:hover', cb),
     setShape: (rect) => ipcRenderer.send('island:shape', rect),
+    setDockShape: (rect) => ipcRenderer.send('island:dockShape', rect),
     setFocusable: (on) => ipcRenderer.send('island:focusable', on),
     setKeys: (on) => ipcRenderer.send('island:keys', on),
     onKey: (cb) => listen('island:key', cb),

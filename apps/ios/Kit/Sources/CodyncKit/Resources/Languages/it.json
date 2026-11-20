@@ -2705,5 +2705,14 @@
   "Create a bot to schedule a routine.": "Create a bot to schedule a routine.",
   "Creating…": "Creating…",
   "What should this routine do?": "What should this routine do?",
-  "Minute": "Minute"
+  "Minute": "Minute",
+  "Agent dock": "Agent dock",
+  "Hide agent dock": "Hide agent dock",
+  "Chat with {name}": "Chat with {name}",
+  "Toggle agent dock": "Toggle agent dock",
+  "A strip of agent seats beside the island. Each seat opens a compact chat with its bot.": "A strip of agent seats beside the island. Each seat opens a compact chat with its bot.",
+  "Dock edge": "Dock edge",
+  "Dock size": "Dock size",
+  "Auto-hide dock": "Auto-hide dock",
+  "With auto-hide, the dock tucks into its edge until the pointer reaches it or a chat opens.": "With auto-hide, the dock tucks into its edge until the pointer reaches it or a chat opens."
 }

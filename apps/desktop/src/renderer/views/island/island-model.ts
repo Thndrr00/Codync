@@ -1,5 +1,5 @@
 import {
-  FINISHED_MS, focusOf, isActive, islandFrame, islandMode, othersOf, stopsDictation, transitions,
+  dockRect, FINISHED_MS, focusOf, isActive, islandFrame, islandMode, othersOf, stopsDictation, transitions,
   type IslandBot, type IslandNotice, type IslandPermission, type IslandScreen, type IslandSummary, type IslandTab,
 } from '@shared/island'
 import { VOICE_SHORTCUT_KEYS, type VoiceKey, type VoiceShortcut } from '@shared/voice-shortcut'
@@ -11,6 +11,7 @@ import { defaultIslandControls, dockFor, localIslandRect, type IslandControls, t
 import { usageNotice, type IslandAction } from '@shared/island-activity'
 import { normalizeIslandHistory, updateIslandHistory, type IslandHistory } from '@shared/island-workspace'
 import { islandUsage } from './island-preferences'
+import { agentDockPreference, dockSeats as agentDockSeats, type AgentDockPreference } from './agent-dock-preference'
 import type { IslandShortcutAction } from '@shared/island-shortcuts'
 
 /** The bare notch peeks at once and opens after a rest; the compact island opens sooner. */
@@ -46,6 +47,8 @@ export class IslandModel extends Observable {
   /** The shape grew on its last change: open with a spring, close without one. */
   growing = true
   selectedRef: string | null = null
+  /** The bot whose compact chat is open in the agent dock. It is not an island tab. */
+  dockChatRef: string | null = null
   approvalId: string | null = null
   configurationError: string | null = null
   actionError: string | null = null
@@ -58,9 +61,12 @@ export class IslandModel extends Observable {
   private hoverTimer: ReturnType<typeof setTimeout> | undefined
   private noticeTimer: ReturnType<typeof setTimeout> | undefined
   private shape = { x: 0, y: 0, width: 0, height: 0 }
+  private dockShape = { x: 0, y: 0, width: 0, height: 0 }
   private keys = false
   /** Manual controls can take the keyboard; it returns when the island closes. */
   private keyboard = false
+  /** The dock chat takes the keyboard until it closes; the island follows the same window flag. */
+  private dockKeyboard = false
 
   start() {
     const island = window.codync.island
@@ -113,6 +119,8 @@ export class IslandModel extends Observable {
 
   get controls() { return this.screen.controls ?? defaultIslandControls }
   get rect() { return localIslandRect(this.frame, window.innerWidth, window.innerHeight, this.screen.edge ?? 'top') }
+  get dockPreference(): AgentDockPreference { return agentDockPreference.get() }
+  get dockSeats() { return agentDockSeats(this.dockPreference, this.summary.bots.map((bot) => bot.ref)) }
 
   selectFocus(ref: string) { this.update(() => { this.selectedRef = ref }) }
 
@@ -156,6 +164,7 @@ export class IslandModel extends Observable {
 
   private invokeShortcut(action: IslandShortcutAction) {
     if (action === 'toggle') { if (this.open) this.close(); else this.openNow() }
+    else if (action === 'toggleDock') this.toggleDock()
     else if (action !== 'quiet') this.setTab(action === 'search' ? 'workspace' : action)
   }
 
@@ -173,6 +182,49 @@ export class IslandModel extends Observable {
     if (id === undefined) return
     const dock = dockFor(this.controls, id)
     void this.configure({ docks: { ...this.controls.docks, [id]: { ...dock, edge } } })
+  }
+
+  /** Device-local dock settings; hiding it also puts its compact chat away. */
+  setDockPreference(patch: Partial<AgentDockPreference>) {
+    agentDockPreference.set(patch)
+    if (!agentDockPreference.get().shown) this.closeDockChat()
+    else this.update(() => {})
+  }
+
+  /** The dock's global shortcut: the same switch as Options, without opening the island. */
+  toggleDock() {
+    this.setDockPreference({ shown: !this.dockPreference.shown })
+  }
+
+  /**
+   * A seat opens the island's own message view with that bot already picked. The dock keeps the
+   * room; the conversation, draft and send still go through the chat window's store.
+   */
+  openDockChat(ref: string) {
+    if (!this.bot(ref)) return
+    clearTimeout(this.hoverTimer)
+    this.update(() => {
+      this.dockChatRef = ref
+      this.messageRef = ref
+      this.open = false
+      this.pinned = false
+      this.peek = false
+      this.closing = false
+      this.tab = 'auto'
+    })
+    this.setDockKeyboard(true)
+  }
+
+  closeDockChat() {
+    if (!this.dockChatRef) return
+    this.setDockKeyboard(false)
+    this.update(() => { this.dockChatRef = null })
+  }
+
+  private setDockKeyboard(on: boolean) {
+    if (this.dockKeyboard === on) return
+    this.dockKeyboard = on
+    window.codync.island.setFocusable(on)
   }
 
   drag(on: boolean, snap = false) {
@@ -210,6 +262,7 @@ export class IslandModel extends Observable {
 
   /** A click on the closed island opens it and keeps it open. */
   openNow() {
+    if (this.dockChatRef) this.closeDockChat()
     this.keyboard = true
     window.codync.island.setFocusable(true)
     this.update(() => {
@@ -222,6 +275,8 @@ export class IslandModel extends Observable {
 
   /** The header's tabs. Bots puts the approvals on screen off until another arrives. */
   setTab(tab: IslandTab) {
+    // An island tab and the dock's chat are different surfaces; only one holds the keyboard.
+    if (this.dockChatRef) this.closeDockChat()
     if (stopsDictation(this.tab, tab, this.dictation.busy)) this.dictation.finish()
     this.update(() => {
       if (tab === 'bots') for (const p of this.summary.permissions) this.deferred.add(p.entryId)
@@ -299,7 +354,9 @@ export class IslandModel extends Observable {
       this.peek = false
       this.closing = false
       this.tab = 'auto'
+      this.dockChatRef = null
     })
+    this.setDockKeyboard(false)
     if (this.keyboard) window.codync.island.setFocusable(false)
     this.keyboard = false
   }
@@ -401,6 +458,12 @@ export class IslandModel extends Observable {
       this.growing = frame.width * frame.height >= this.shape.width * this.shape.height
       this.shape = rect
       window.codync.island.setShape(rect)
+    }
+    // The dock is a second input region in the window; report it whenever it changes.
+    const dock = dockRect(this.dockPreference, window.innerWidth, window.innerHeight)
+    if (dock.x !== this.dockShape.x || dock.y !== this.dockShape.y || dock.width !== this.dockShape.width || dock.height !== this.dockShape.height) {
+      this.dockShape = dock
+      window.codync.island.setDockShape(dock)
     }
     const keys = this.mode === 'approval'
     if (keys !== this.keys) {

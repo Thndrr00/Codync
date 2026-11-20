@@ -1,16 +1,17 @@
-export type IslandShortcutAction = 'toggle' | 'search' | 'activity' | 'message' | 'usage' | 'quiet'
+export type IslandShortcutAction = 'toggle' | 'search' | 'activity' | 'message' | 'usage' | 'quiet' | 'toggleDock'
 export type IslandShortcutBindings = Record<IslandShortcutAction, string>
 
 export interface IslandShortcutState {
-  bindings: IslandShortcutBindings
+  /** `normalizeBindings` fills every action; an older or demo state may predate a new one. */
+  bindings: Partial<IslandShortcutBindings>
   errors: Record<string, string>
 }
 
-export const islandShortcutActions: readonly IslandShortcutAction[] = ['toggle', 'search', 'activity', 'message', 'usage', 'quiet']
+export const islandShortcutActions: readonly IslandShortcutAction[] = ['toggle', 'search', 'activity', 'message', 'usage', 'quiet', 'toggleDock']
 
 /** Global shortcuts are opt-in; enabling the island never takes a new key combination. */
 export const defaultIslandBindings: IslandShortcutBindings = {
-  toggle: '', search: '', activity: '', message: '', usage: '', quiet: '',
+  toggle: '', search: '', activity: '', message: '', usage: '', quiet: '', toggleDock: '',
 }
 
 export function normalizeBindings(input: unknown): IslandShortcutBindings {

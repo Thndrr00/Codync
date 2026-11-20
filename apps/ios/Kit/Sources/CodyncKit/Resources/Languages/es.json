@@ -2705,5 +2705,14 @@
   "Create a bot to schedule a routine.": "Crea un bot para programar una rutina.",
   "Creating…": "Creando…",
   "What should this routine do?": "¿Qué debe hacer esta rutina?",
-  "Minute": "Minuto"
+  "Minute": "Minuto",
+  "Agent dock": "Muelle de agentes",
+  "Hide agent dock": "Ocultar muelle de agentes",
+  "Chat with {name}": "Chatear con {name}",
+  "Toggle agent dock": "Alternar muelle de agentes",
+  "A strip of agent seats beside the island. Each seat opens a compact chat with its bot.": "Una franja de asientos de agentes junto a la isla. Cada asiento abre un chat compacto con su bot.",
+  "Dock edge": "Borde del muelle",
+  "Dock size": "Tamaño del muelle",
+  "Auto-hide dock": "Ocultar muelle automáticamente",
+  "With auto-hide, the dock tucks into its edge until the pointer reaches it or a chat opens.": "Con ocultado automático, el muelle se recoge en su borde hasta que el puntero llega o se abre un chat."
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { BotStatus } from './models.ts'
 import {
-  focusOf, hitRect, hits, islandFrame, islandMode, islandRect, notchOf, othersOf, pageOf, stopsDictation, transitions,
+  dockRect, focusOf, hitRect, hits, islandFrame, islandMode, islandRect, notchOf, othersOf, pageOf, stopsDictation, transitions,
   type IslandBot, type IslandNotice, type IslandPermission, type IslandSummary, type IslandTab,
 } from './island.ts'
 
@@ -122,4 +122,18 @@ test('the Usage tab shows two providers a page, and a page past the end is the l
   assert.deepEqual(pageOf(four, -3).page, 0)
   assert.deepEqual(pageOf([], 0), { items: [], page: 0, pages: 1 }, 'no providers is one empty page, not zero')
   assert.deepEqual(pageOf(['a', 'b'], 0, 1), { items: ['a'], page: 0, pages: 2 }, 'the page size can change')
+})
+
+test('the agent dock rect sits on the chosen window edge and is empty when hidden', () => {
+  assert.deepEqual(dockRect({ shown: false, edge: 'right', sizePercent: 40 }, 420, 600), { x: 0, y: 0, width: 0, height: 0 })
+  const right = dockRect({ shown: true, edge: 'right', sizePercent: 40 }, 420, 600)
+  assert.equal(right.width, 60)
+  assert.equal(right.height, 240)
+  assert.equal(right.x + right.width, 412, 'the right dock keeps its 8px inset')
+  assert.equal(right.y, 180, 'vertically centered')
+  const left = dockRect({ shown: true, edge: 'left', sizePercent: 40 }, 420, 600)
+  assert.equal(left.x, 8, 'the left dock keeps its 8px inset')
+  const small = dockRect({ shown: true, edge: 'left', sizePercent: 200 }, 50, 100)
+  assert.equal(small.y, 0, 'an oversized dock is clamped inside the window')
+  assert.equal(small.height, 100)
 })

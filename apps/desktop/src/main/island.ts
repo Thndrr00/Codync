@@ -81,6 +81,8 @@ export class Island {
   private placedOn = -1
   private watch: NodeJS.Timeout | null = null
   private shaped: IslandRect = { x: 0, y: 0, width: 0, height: 0 }
+  /** The agent dock's region inside the same window, reported by the renderer when it is shown. */
+  private dockRect: IslandRect = { x: 0, y: 0, width: 0, height: 0 }
   private unfocus: NodeJS.Timeout | undefined
   private placing = 0
   private dragging = false
@@ -166,6 +168,10 @@ export class Island {
     })
     ipcMain.on('island:shape', (_e, rect: IslandRect) => {
       this.rect = rect
+      if (shapedWindow) this.shape()
+    })
+    ipcMain.on('island:dockShape', (_e, rect: IslandRect) => {
+      this.dockRect = rect
       if (shapedWindow) this.shape()
     })
     ipcMain.on('island:respond', (_e, ref: string, entryId: string, optionId: string) =>
@@ -404,12 +410,15 @@ export class Island {
     if (!win) return
     const hit = hitRect(this.rect)
     const bounds = win.getBounds()
-    const next = { x: Math.min(hit.x, bounds.width), y: Math.min(hit.y, bounds.height), width: Math.max(0, Math.min(hit.width, bounds.width - hit.x)), height: Math.max(0, Math.min(hit.height, bounds.height - hit.y)) }
-    const grows = next.width * next.height >= this.shaped.width * this.shaped.height
+    const clip = (r: IslandRect) => ({ x: Math.min(r.x, bounds.width), y: Math.min(r.y, bounds.height), width: Math.max(0, Math.min(r.width, bounds.width - r.x)), height: Math.max(0, Math.min(r.height, bounds.height - r.y)) })
+    const next = clip(hit)
+    // The dock is a second input region in the same window (OpenBot-style agent dock).
+    const dock = this.dockRect.width > 0 && this.dockRect.height > 0 ? clip(hitRect(this.dockRect)) : null
+    const grows = next.width * next.height >= this.shaped.width * this.shaped.height || !!dock
     if (this.timer) clearTimeout(this.timer)
     const apply = () => {
       this.shaped = next
-      if (!win.isDestroyed()) win.setShape([next])
+      if (!win.isDestroyed()) win.setShape(dock ? [next, dock] : [next])
     }
     if (grows) apply()
     else this.timer = setTimeout(apply, SHRINK_MS)
@@ -423,7 +432,7 @@ export class Island {
     const bounds = win.getBounds()
     const x = point.x - bounds.x
     const y = point.y - bounds.y
-    const inside = hits(this.rect, x, y)
+    const inside = hits(this.rect, x, y) || (this.dockRect.width > 0 && hits(this.dockRect, x, y))
     if (!this.dragging && inside !== this.inside) {
       this.inside = inside
       win.setIgnoreMouseEvents(!inside)

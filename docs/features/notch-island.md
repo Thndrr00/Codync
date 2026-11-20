@@ -57,6 +57,28 @@ black shape: the next view cross-fades over the last. When another bot takes the
 springs in out of a blur, a bot joining the pills or the column does the same, and the others
 slide to their new places.
 
+## Agent dock
+
+Options → **Agent dock** adds a vertical strip of agent seats at the chosen edge of the island
+window. Its preference is device-local (`islandAgentDockPreference`): shown or hidden, left or
+right edge, size as a percent of the window's height, auto-hide, and an ordered list of bot refs.
+Saved values are validated on load — a malformed or older preference falls back field by field.
+At most five seats are kept; until an order is saved, the first three visible roster bots take
+one.
+
+A seat shows the same live bot data the island draws: avatar, working or needs-you state and
+unread count. Clicking it opens the island's existing message view with that bot already
+selected, so the draft and the send still go through the chat window's store rather than a second
+chat implementation. Finished reports from the island's activity store appear beside the seat
+of the agent that produced them, reusing the Activity tab's run row.
+
+With **Auto-hide** on, the dock tucks into its edge after about a second without use. A pointer on
+the dock, an open chat, or the pointer reaching the thin edge strip keeps it out and brings it
+back. Opening, closing and tucking animate with the island's motion helpers and stop under
+Reduce Motion. **Toggle agent dock** is an opt-in global shortcut, listed with the other island
+keyboard shortcuts in Options; it flips the same switch. The phone apps and the terminal have no
+floating dock and keep their existing roster and conversation screens.
+
 ## Workspace and focused controls
 
 Workspace searches bots by name, backend, status or project path and searches existing island
@@ -87,9 +109,9 @@ The daily summary is explicitly Last 24 hours, not a calendar-day count.
 Options has independent text size (11–18), high contrast, and an optional Quiet profile. Quiet
 suppresses automatic hover opening and completion/error popups, preserving approvals and manual
 controls. Fullscreen quiet detects other Codync windows only; use manual Quiet for other apps.
-Global shortcuts are opt-in for show/hide, search, activity, message, usage and Quiet. Approval,
-editing and existing application shortcuts are reserved. Unavailable bindings show errors;
-disabling the island unregisters only its own keys.
+Global shortcuts are opt-in for show/hide, search, activity, message, usage, Quiet and toggling
+the agent dock. Approval, editing and existing application shortcuts are reserved. Unavailable
+bindings show errors; disabling the island unregisters only its own keys.
 
 The notice history is local device UI state: at most 50 grouped items and 200 active keys.
 Unchanged polling does not increment counts; a notice recurring after recovery does. Clear

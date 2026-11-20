@@ -1,0 +1,148 @@
+/* The dock lives in the island window but outside the island shape, so it repeats the island's
+   dark tokens instead of borrowing them from a sibling. No new colors, no borders on fills. */
+.agent-dock {
+  --text: #f5f6f8;
+  --secondary: #8e939c;
+  --tertiary: #5f646d;
+  --accent-fill: #f5f6f8;
+  --accent: #f5f6f8;
+  --on-accent: #0b0c0e;
+  --danger: #ff8d97;
+  --warning: #f0a030;
+  --island-card: #141518;
+  --island-shape: #000000;
+  --island-raised: #22242a;
+  --island-fill: rgba(255, 255, 255, 0.08);
+  --island-spring: cubic-bezier(0.32, 1.22, 0.42, 1);
+  --island-fold: cubic-bezier(0.45, 0, 0.2, 1);
+  position: fixed;
+  top: 50%;
+  z-index: 5;
+  width: 52px;
+  /* Five seats fit without scrolling, so a result card can sit beside its seat unclipped. */
+  min-height: 280px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  border-radius: 26px;
+  background: var(--island-card);
+  color: var(--text);
+  font-size: calc(12px * var(--island-text-scale, 1));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.34s var(--island-fold), opacity 0.2s var(--ease);
+}
+.agent-dock.right { right: 8px; }
+.agent-dock.left { left: 8px; }
+.agent-dock.right:not(.shown) { transform: translate(120%, -50%); }
+.agent-dock.left:not(.shown) { transform: translate(-120%, -50%); }
+.agent-dock.shown { opacity: 1; pointer-events: auto; }
+.agent-dock.right.shown { transform: translate(0, -50%); }
+.agent-dock.left.shown { transform: translate(0, -50%); }
+.agent-dock.right.shown.tucked { transform: translate(calc(100% - 6px), -50%); opacity: 0.75; }
+.agent-dock.left.shown.tucked { transform: translate(calc(-100% + 6px), -50%); opacity: 0.75; }
+
+/* A thin wake strip at the chosen edge keeps a hidden dock reachable. */
+.agent-dock-strip {
+  position: fixed;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  z-index: 4;
+}
+.agent-dock-strip.right { right: 0; }
+.agent-dock-strip.left { left: 0; }
+
+.agent-dock-top {
+  flex: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+}
+.agent-dock-top .island-subtitle { font-size: calc(10px * var(--island-text-scale, 1)); }
+.agent-dock-top .island-tab { width: 20px; height: 20px; }
+
+.agent-dock-seats {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  overflow: visible;
+}
+.agent-dock-seat-wrap { position: relative; flex: none; }
+.agent-dock-seat {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 19px;
+  background: transparent;
+  color: var(--text);
+  transition: background-color var(--hover), transform var(--hover);
+}
+.agent-dock-seat:hover { background: var(--island-fill); }
+.agent-dock-seat.active { background: var(--island-raised); transform: scale(1.04); }
+.agent-dock-seat .island-badge { position: absolute; top: 0; right: 1px; }
+.agent-dock-seat .island-status-dot { position: absolute; bottom: 3px; right: 3px; }
+.agent-dock-unread {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+}
+
+/* Finished work sits beside the seat of the agent that produced it. */
+.agent-dock-results,
+.agent-dock-chat {
+  position: absolute;
+  top: 0;
+  z-index: 6;
+}
+.agent-dock.right .agent-dock-results,
+.agent-dock.right .agent-dock-chat { right: calc(100% + 10px); }
+.agent-dock.left .agent-dock-results,
+.agent-dock.left .agent-dock-chat { left: calc(100% + 10px); }
+.agent-dock-results {
+  width: 280px;
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.agent-dock-result {
+  height: auto;
+  padding: 10px;
+  flex: none;
+  border-radius: var(--radius-s);
+}
+.agent-dock-chat { width: 360px; height: 240px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-dock,
+  .agent-dock-seat {
+    transition: none;
+  }
+  .agent-dock-seat.island-swap {
+    animation: none;
+  }
+}
