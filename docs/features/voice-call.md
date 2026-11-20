@@ -16,7 +16,9 @@ heard. Holding pauses a reply being read aloud; what you say stops it, and a sho
 Pressing another key (or a second finger) while holding cancels the send, and a cancelled hold resumes a paused
 reply. The call bar's mode switch changes to the original **open microphone**, which listens all the time and sends
 at a pause; both choices are kept on the device, and the same recognizers, realtime engines and transcript path are
-used either way. The desktop talk key is a fixed binding because no key-picker component exists; the phone apps use
+used either way. The desktop's **Settings → Voice chat → Talk key** has a recorder: press the pencil, then hold a
+chord of at least two modifiers and press another key to keep it; a bare Escape cancels. The stored chord stays on
+this device and keeps the defaults (Control + Option on macOS, Ctrl + Windows elsewhere). The phone apps use
 the talk button only, and Android's on-device text to speech stops instead of pausing a reply when the button is held.
 
 ## On-device voice

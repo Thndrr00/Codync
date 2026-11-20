@@ -16,6 +16,13 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
     Ok(ControlFlow::Break(match method {
         "openaiKeys" | "openaiCreateKey" | "openaiRevokeKey" => super::openai_keys::call(hub, method, &b).await?,
         "hostUpdateStatus" => crate::update::status()?,
+        // Drops a downloaded update's wait for idle agents; the caller sees the fresh wait reasons.
+        "cancelHostRestartWait" => {
+            crate::update::cancel_restart_wait();
+            crate::update::status()?
+        }
+        // The client's own dialog is the approval for a public report.
+        "sendFeedback" => super::feedback::send(hub, &b).await?,
         "hostHealth" => crate::health::value(hub),
         "channelActivity" => {
             let limit = b["limit"].as_u64().and_then(|n| usize::try_from(n).ok()).unwrap_or(30);

@@ -13,6 +13,14 @@ fn status_reaction_allowed(on: bool, emoji: &str) -> bool {
     on || !STATUS_REACTIONS.contains(&emoji)
 }
 
+/// Whether an arriving message deserves the "Working on it…" line. A result meant for a teammate
+/// is internal to this computer (OpenBot nightly triage-13131): the contact never asked for it, so
+/// no working line goes out. The number's owner and ordinary contact messages still get one.
+/// Pure so the decision can be tested without a link or a bot actor.
+fn working_line_allowed(internal_result: bool, owner: bool) -> bool {
+    owner || !internal_result
+}
+
 impl WhatsApp {
     pub(super) async fn on_message(&self, hub: &Arc<Hub>, event: &Value, expected: &str) {
         let text = event["text"].as_str().unwrap_or_default().trim().to_owned();
@@ -95,6 +103,10 @@ impl WhatsApp {
                 .await;
             return;
         };
+        // A message routed to a bot that is waiting on a teammate is an internal result, not a
+        // request from the contact: it must not post a working line (triage-13131).
+        let internal_result = hub.team.pending_for(&bot).iter().any(|request| request["from"] == bot);
+        let post_working_line = working_line_allowed(internal_result, own);
         let mut attached = Vec::new();
         let note = if let Some(m) = media {
             if let Some(path) = &saved {
@@ -203,6 +215,7 @@ impl WhatsApp {
                 group,
                 event["fromMe"].as_bool().unwrap_or(false),
                 event["id"].as_str().unwrap_or_default(),
+                post_working_line,
             )
             .await;
         }
@@ -212,7 +225,16 @@ impl WhatsApp {
     /// number's owner turned it off, a "Working on it…" line. The answer itself follows. The 👀 is
     /// a status reaction (OpenBot 0.74.0), so the number's switch can drop it without dropping the
     /// working line or the answer.
-    async fn acknowledge(&self, hub: &Hub, chat: &str, sender: &str, group: bool, from_me: bool, message_id: &str) {
+    async fn acknowledge(
+        &self,
+        hub: &Hub,
+        chat: &str,
+        sender: &str,
+        group: bool,
+        from_me: bool,
+        message_id: &str,
+        post_working_line: bool,
+    ) {
         if message_id.is_empty() {
             return;
         }
@@ -229,7 +251,7 @@ impl WhatsApp {
                 return;
             }
         }
-        if !crate::whatsapp::working_message(&hub.store) {
+        if !post_working_line || !crate::whatsapp::working_message(&hub.store) {
             return;
         }
         if let Err(error) = self.send_bound_text(&hub.store, account, &binding, chat, "Trabajando en ello…").await {
@@ -254,5 +276,13 @@ mod tests {
             assert!(status_reaction_allowed(true, emoji));
             assert!(status_reaction_allowed(false, emoji), "{emoji} is not a status reaction");
         }
+    }
+
+    #[test]
+    fn only_an_internal_teammate_result_loses_the_working_line() {
+        assert!(working_line_allowed(false, false), "a contact's message gets an acknowledgement");
+        assert!(!working_line_allowed(true, false), "a teammate's result is internal");
+        assert!(working_line_allowed(true, true), "the owner still gets one");
+        assert!(working_line_allowed(false, true));
     }
 }

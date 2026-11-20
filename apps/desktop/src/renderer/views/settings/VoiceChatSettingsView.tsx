@@ -1,5 +1,5 @@
 import { audioType, onDeviceUnavailableReason, voiceSettingsClosed } from '../call/voice'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { fromBase64, LoopbackTransport, type HostClient } from '../../client/host-client'
 import { Button, CardForm, CardSection, ChoicePicker, IconButton, Reveal, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -35,8 +35,24 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
   const dictationProvider = voice.isVoiceProvider(dictationEngine) && dictationEngine !== provider ? dictationEngine : null
   const [mode, setMode] = usePref(voice.mode(provider ?? 'openai'))
   const [input, setInput] = usePref(voice.inputMode)
-  const [key] = usePref(voice.talkKey)
+  const [key, setKey] = usePref(voice.talkKey)
   const [speechOutput, setSpeechOutput] = usePref(voice.speechOutput)
+  const [recordingTalkKey, setRecordingTalkKey] = useState(false)
+  const recorder = useRef<HTMLDivElement>(null)
+  // The recorder needs the keyboard focus to hear a chord; leaving it cancels the recording.
+  useEffect(() => {
+    if (recordingTalkKey) recorder.current?.focus()
+  }, [recordingTalkKey])
+  const recordTalkKey = (event: KeyboardEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const result = voice.talkChordFrom(event)
+    if (result.cancelled) return setRecordingTalkKey(false)
+    if (result.chord) {
+      setKey(result.chord)
+      setRecordingTalkKey(false)
+    }
+  }
   // Closing hands a running call to a different engine picked here.
   useEffect(() => () => voiceSettingsClosed.ring(), [])
   const footer = provider
@@ -66,9 +82,33 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
                 />
               </ValueRow>,
               ...(input === 'pushToTalk' ? [
-                <ValueRow key="talkkey" label="Talk key" detail="Fixed on this device; press and hold both keys while you speak. Pressing another key cancels the send.">
-                  <Text size="caption" tone="secondary">{voice.talkKeyName(key)}</Text>
+                <ValueRow key="talkkey" label="Talk key" detail="Held on this device; press and hold the chord while you speak. Pressing another key cancels the send.">
+                  <HStack as="span" gap={8}>
+                    <Text size="caption" tone="secondary">{voice.talkKeyName(key)}</Text>
+                    <IconButton
+                      title={recordingTalkKey ? 'Cancel recording' : 'Change talk key'}
+                      icon={recordingTalkKey ? 'xmark' : 'pencil'}
+                      onClick={() => setRecordingTalkKey(!recordingTalkKey)}
+                    />
+                  </HStack>
                 </ValueRow>,
+                ...(recordingTalkKey
+                  ? [
+                      <div key="talkkey-record" className="settings-appear">
+                        <div
+                          ref={recorder}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={tr('Recording talk key')}
+                          className="settings-talk-recorder"
+                          onKeyDown={recordTalkKey}
+                          onBlur={() => setRecordingTalkKey(false)}
+                        >
+                          <Text size="footnote" tone="secondary">{tr('Press a chord with at least two modifiers, or Escape to cancel.')}</Text>
+                        </div>
+                      </div>,
+                    ]
+                  : []),
               ] : []),
               ...(provider
                 ? [

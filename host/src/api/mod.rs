@@ -10,6 +10,7 @@ mod computer_activity;
 pub mod devices;
 mod documents;
 mod events;
+mod feedback;
 mod files;
 mod folders;
 mod host;

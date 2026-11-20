@@ -18,3 +18,6 @@ the sender's message when it arrives and a ✅, ❌ or 🫡 when the request end
 Turning it off stops only those reactions: the answers and the error messages still go out, and
 the separate "Working on it…" message keeps its own switch. The setting belongs to the number and
 is saved on the computer; changing it in any client takes effect there for every client.
+A result routed to a bot that is waiting on a teammate is internal to the computer (OpenBot nightly
+triage-13131), so it gets no "Working on it…" line; the 👀 reaction is unchanged, and the owner's own
+messages and ordinary contact messages still get the acknowledgement.

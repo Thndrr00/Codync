@@ -251,6 +251,22 @@
   flex: 1;
   min-width: 0;
 }
+/* The talk-key recorder: a focusable strip that listens for the next chord. */
+.settings-talk-recorder {
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--accent-fill);
+}
+.settings-talk-recorder:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* The feedback dialog's longer fields (DialogField's sibling). */
+.dialog-textarea {
+  min-height: 68px;
+  resize: vertical;
+  font: inherit;
+}
 .settings-key-result {
   font-size: var(--text-caption);
   font-weight: 400;

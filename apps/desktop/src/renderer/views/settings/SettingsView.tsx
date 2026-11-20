@@ -38,6 +38,7 @@ import { AgentImportSection } from './AgentImportSection'
 import { ChannelsSection } from './ChannelsSection'
 import { GitHubSection } from './GitHubSection'
 import { DemoSection } from './DemoSection'
+import { SendFeedbackButton } from './FeedbackSheet'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 
@@ -276,6 +277,11 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         </Switch>
       </CardSection>
       <PrivacySettings />
+      <CardSection title="Support" footer="Bug reports and ideas become public GitHub issues after you send them.">
+        <ValueRow label="Feedback">
+          <SendFeedbackButton />
+        </ValueRow>
+      </CardSection>
       {window.codync.platform === 'win32' ? <ResearchSettingsSection /> : null}
       <ChannelsSection onExtensions={onExtensions} />
       <GitHubSection />

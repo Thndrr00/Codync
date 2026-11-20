@@ -198,6 +198,11 @@ working (`apps/desktop/src/main/updates.ts`). The host refuses while a bot is wo
 the call passes `force`. The TUI keeps **Check for updates** only: it runs on the computer
 or reaches it through `ssh -L`, so `codync-host update` there is the direct fix.
 
+While that request waits for idle agents, `hostUpdateStatus` gains a `waitingFor` array naming the
+bots and setup terminals holding it, and the desktop's update UI shows the reason beside the
+restart action. `cancelHostRestartWait` (local connections only) drops the wait without interrupting
+any agent; the app refreshes the status and hides the reason.
+
 Installed services schedule the updater as an independent launchd job or systemd
 user unit, so stopping the daemon does not kill its updater. The CLI returns after
 scheduling; inspect progress with `--status`. A lock prevents concurrent updates.

@@ -37,6 +37,9 @@ const LOCAL_ONLY: &[&str] = &[
     "openaiRevokeKey",
     "channelActivity",
     "hostUpdateStatus",
+    "cancelHostRestartWait",
+    // A public report posts under this computer's GitHub account; keep it to the computer.
+    "sendFeedback",
     "diagnostics",
     "checkHostUpdate",
     "setHostAutomaticUpdates",

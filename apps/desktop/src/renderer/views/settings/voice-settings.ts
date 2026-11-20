@@ -100,19 +100,59 @@ export const language = pref('callLanguage', '')
 export type VoiceInputMode = 'pushToTalk' | 'openMic'
 export const inputMode = pref<VoiceInputMode>('callInputMode', 'pushToTalk')
 
-/** The modifier pair held to talk, when push-to-talk is on. Kept on this device; no picker yet. */
-export type TalkKey = 'ctrlOption' | 'ctrlWindows'
+/** The modifiers held to talk. The key pressed with them only confirms the recording. */
+export interface TalkModifiers {
+  ctrl: boolean
+  alt: boolean
+  meta: boolean
+  shift: boolean
+}
+/** Old defaults stay valid preferences; a recorded chord is kept as the modifier set. */
+export type TalkKey = 'ctrlOption' | 'ctrlWindows' | TalkModifiers
 export const talkKey = pref<TalkKey>('callTalkKey', window.codync?.platform === 'darwin' ? 'ctrlOption' : 'ctrlWindows')
+
+/** Resolves a stored value, old or recorded, to its modifiers. */
+export function talkModifiers(key: TalkKey): TalkModifiers {
+  if (key === 'ctrlOption') return { ctrl: true, alt: true, meta: false, shift: false }
+  if (key === 'ctrlWindows') return { ctrl: true, alt: false, meta: true, shift: false }
+  return key
+}
+
 /** The talk key's label, for the settings row and the pill's tooltip. */
-export const talkKeyName = (key: TalkKey) => key === 'ctrlOption' ? 'Control + Option' : 'Ctrl + Windows'
+export function talkKeyName(key: TalkKey) {
+  const m = talkModifiers(key)
+  const mac = window.codync.platform === 'darwin'
+  return ([
+    [m.ctrl, mac ? 'Control' : 'Ctrl'],
+    [m.alt, mac ? 'Option' : 'Alt'],
+    [m.shift, 'Shift'],
+    [m.meta, mac ? 'Command' : 'Windows'],
+  ] as [boolean, string][]).filter(([on]) => on).map(([, name]) => name).join(' + ')
+}
+
 /** Whether a keyboard event's modifiers are exactly the talk key (and only it). */
 export function isTalkModifiers(e: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey'>, key: TalkKey) {
-  return key === 'ctrlOption'
-    ? e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey
-    : e.ctrlKey && e.metaKey && !e.altKey && !e.shiftKey
+  const m = talkModifiers(key)
+  return e.ctrlKey === m.ctrl && e.altKey === m.alt && e.metaKey === m.meta && e.shiftKey === m.shift
 }
 /** True for the modifier keys themselves: pressing one while holding isn't "another key". */
 export const isModifierKey = (key: string) => ['Control', 'Alt', 'Meta', 'Shift', 'AltGraph', 'CapsLock'].includes(key)
+
+type KeyModifiers = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey'>
+const modifiersOf = (e: KeyModifiers): TalkModifiers => ({ ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey, shift: e.shiftKey })
+
+/**
+ * Reads a keypress while the recorder is on. A bare Escape cancels; a lone modifier or a chord
+ * with fewer than two modifiers isn't a usable talk key. The pressed key only confirms the chord:
+ * the call holds the modifiers, so only their set is kept.
+ */
+export function talkChordFrom(e: KeyModifiers): { cancelled: boolean; chord: TalkModifiers | null } {
+  const chord = modifiersOf(e)
+  const held = [chord.ctrl, chord.alt, chord.meta, chord.shift].filter(Boolean).length
+  if (e.key === 'Escape' && held === 0) return { cancelled: true, chord: null }
+  if (isModifierKey(e.key) || held < 2) return { cancelled: false, chord: null }
+  return { cancelled: false, chord }
+}
 
 /** Picker options: the system's language, then every language the recognizer supports, by name. */
 export function languageOptions(supported: string[]) {
