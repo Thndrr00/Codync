@@ -281,6 +281,37 @@
   animation: fade-in var(--layout) both;
 }
 
+/* Appearance: the custom accent's curated swatches and hex field. */
+.accent-swatches { padding: 2px 0; }
+.accent-swatch {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  transition: transform var(--hover), box-shadow var(--hover);
+}
+.accent-swatch:hover { transform: scale(1.08); }
+.accent-swatch.chosen { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--text); }
+.accent-swatch.default {
+  position: relative;
+  background: var(--field);
+}
+.accent-swatch.default::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 45%, var(--text) 46% 54%, transparent 55%);
+}
+.accent-hex-field {
+  width: 120px;
+  padding: 5px 8px;
+  font-family: var(--mono);
+  font-size: var(--text-caption);
+  color: var(--text);
+  background: var(--field);
+  border-radius: var(--radius-xs);
+}
+
 /* The n8n instance's state: quiet until it needs a look. */
 .n8n-dot {
   flex: none;

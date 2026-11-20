@@ -3,7 +3,7 @@
 **Settings → Try demo mode** (desktop and Android) or **Demo mode: try it, or leave it** in the terminal's command list shows
 sample data in place of the computer's: three bots (Scout, Pacer, Scribe), a session with steps and a diff, an approval
 waiting for you, and a routine ("Morning check"). A badge ("Demo mode · sample bots, nothing here is real") stays on screen
-with an **Exit demo** button.
+with an **Exit demo** button. **Settings → Demo mode → Load sample data** (desktop only, shown only while the demo is on) seeds extra bots, chat messages, a thread, artifacts and Library folders into the in-memory host so the UI can be explored further; it never writes to real data.
 
 - **Nothing real is touched.** The demo reads and writes nothing on the device, sends nothing over the network and calls no
   host. Anything that would change something (sending, creating, answering an approval) is refused with "Demo mode: nothing

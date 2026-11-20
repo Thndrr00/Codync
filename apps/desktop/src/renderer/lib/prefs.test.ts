@@ -9,6 +9,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
     ['sidebarCompact', '"yes"'],
     ['desktopSidebarWidth', '300'],
     ['computerAccessSetup', '"ready"'],
+    ['accentColor', '"#1084FE"'],
   ])
   const events = new EventTarget()
   setMaxListeners(0, events)
@@ -23,4 +24,28 @@ test('A stored preference of another kind reads as the fallback', async () => {
   assert.equal(prefs.sidebarCompact.get(), false)
   assert.equal(prefs.sidebarWidth.get(), 300)
   assert.equal(prefs.computerAccessSetup.get(), 'ready')
+  assert.equal(prefs.accentColor.get(), '#1084FE')
+})
+
+test('a custom accent writes the accent variables and clearing it removes them', async () => {
+  const props = new Map<string, string>()
+  const style = {
+    setProperty: (name: string, value: string) => void props.set(name, value),
+    removeProperty: (name: string) => void props.delete(name),
+  }
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { documentElement: { style } },
+  })
+  const { applyAccentColor } = await import('./prefs.ts')
+  applyAccentColor('#2B2B2B')
+  assert.equal(props.get('--accent'), '#2B2B2B')
+  assert.equal(props.get('--accent-fill'), '#2B2B2B')
+  assert.equal(props.get('--on-accent'), '#ffffff', 'white ink reads on a dark fill')
+  applyAccentColor('#F8F8F8')
+  assert.equal(props.get('--on-accent'), '#141414', 'near-black ink reads on a near-white fill')
+  applyAccentColor(null)
+  assert.equal(props.has('--accent'), false)
+  assert.equal(props.has('--accent-fill'), false)
+  assert.equal(props.has('--on-accent'), false)
 })

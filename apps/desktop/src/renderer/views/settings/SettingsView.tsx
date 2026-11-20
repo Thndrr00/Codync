@@ -41,6 +41,8 @@ import { DemoSection } from './DemoSection'
 import { SendFeedbackButton } from './FeedbackSheet'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
+import { AccentColorRow } from './AccentColorRow'
+import { SettingsIOSection } from './SettingsIOSection'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
 export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
@@ -205,6 +207,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <ValueRow label="Theme">
           <ChoicePicker selection={appearance} options={[...APPEARANCES]} onChange={(value) => void window.codync.app.setAppearance(value).then(setAppearance)} />
         </ValueRow>
+        <AccentColorRow />
         <ValueRow label="Text size">
           <ChoicePicker
             selection={textSize}
@@ -286,6 +289,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <ChannelsSection onExtensions={onExtensions} />
       <GitHubSection />
       <AgentImportSection />
+      <SettingsIOSection />
       <DemoSection />
       <HiddenBotsSection />
     </CardForm>

@@ -1,7 +1,11 @@
+import type { Artifact, LibraryItem } from '@shared/artifacts'
+import { FILE_CHUNK_SIZE } from '@shared/files'
 import type { CallError } from '@shared/ipc'
 import { isChat, isReplyable, normalizeBot, quoteOf, type N8nState, type Bot, type BotDraft, type Entry, type GroupDraft } from '@shared/models'
 import type { PinnedMessage, Pinner } from '@shared/pins'
 import type { MediaAnswer, MediaModel } from '@shared/media'
+import type { LibraryFolder } from '../lib/library-folders.ts'
+import { buildSampleData, sampleEntries } from './sample-data.ts'
 import * as story from './story'
 
 // An in-memory codync-host for the website demo: the methods the renderer calls, with the
@@ -38,6 +42,11 @@ export class FakeHost {
   private steerWhileWorking = true
   private n8nWorkflows = [{ id: '1', name: 'Daily report', active: true }, { id: '2', name: 'New leads to the sheet', active: false }]
   private n8n: N8nState = { enabled: false, state: 'stopped', error: null, url: null, port: 5679, path: null, mcp: false, auth: null }
+  /** The extra story from Settings' "Load sample data", all in memory like everything else here. */
+  private artifacts = new Map<string, { meta: Artifact; html: string }>()
+  private libraryItems: LibraryItem[] = []
+  private folders: LibraryFolder[] = []
+  private sampleLoaded = false
 
   constructor(
     readonly version: string,
@@ -52,6 +61,40 @@ export class FakeHost {
       this.refreshPreview(b)
       b.rev = ++this.rev
     }
+  }
+
+  /**
+   * Settings › Demo mode's "Load sample data": adds a few bots, messages, a thread and a Library with
+   * artifacts and folders to this in-memory host. Nothing outside the demo is read or written.
+   */
+  async loadSampleData() {
+    if (this.sampleLoaded) return { added: 0 }
+    const sample = await buildSampleData()
+    const now = Date.now()
+    for (const seed of sample.bots) {
+      const bot = normalizeBot({ ...seed, cwd: story.cwd, createdAt: now - 3_600_000, permission: seed.permission ?? 'auto' })
+      this.bots.set(bot.id, bot)
+      this.emitBot(bot)
+    }
+    for (const entry of sampleEntries(sample, now)) {
+      const full: Entry = { ...entry, seq: ++this.seq, rev: ++this.rev }
+      this.entries.push(full)
+      this.emit({ type: 'entry', rev: full.rev, entry: full })
+      // A thread reply belongs to the thread, not the chat's preview or unread count.
+      if (!full.threadId) {
+        const bot = this.bots.get(full.botId)
+        if (bot && isChat(full)) {
+          this.refreshPreview(bot)
+          if (full.kind !== 'user') bot.unread++
+          this.emitBot(bot)
+        }
+      }
+    }
+    for (const artifact of sample.artifacts) this.artifacts.set(artifact.meta.id, artifact)
+    this.libraryItems = sample.items
+    this.folders = sample.folders
+    this.sampleLoaded = true
+    return { added: sample.bots.length + sample.entries.length + sample.artifacts.length }
   }
 
   get hostId() {
@@ -425,6 +468,29 @@ export class FakeHost {
         this.n8n = { ...this.n8n, port, url: this.n8n.path ? `http://127.0.0.1:${port}` : null }
         this.emitN8n()
         return this.n8n
+      }
+      // The Library and artifacts of the extra "Load sample data" story.
+      case 'loadSampleData':
+        return this.loadSampleData()
+      case 'library':
+        return { items: this.libraryItems }
+      case 'libraryFolders':
+        return { folders: this.folders }
+      case 'renameArtifact': {
+        const found = this.artifacts.get(str('artifactId'))
+        if (!found) throw fail('That artifact is not in the demo.')
+        const artifact = { ...found.meta, title: str('title').trim() || found.meta.title }
+        this.artifacts.set(artifact.id, { ...found, meta: artifact })
+        this.libraryItems = this.libraryItems.map((item) => item.kind === 'artifact' && item.artifact.id === artifact.id ? { ...item, artifact } : item)
+        return { artifact }
+      }
+      case 'readArtifact': {
+        const found = this.artifacts.get(str('artifactId'))
+        if (!found) throw fail('That artifact is not in the demo.')
+        const bytes = new TextEncoder().encode(found.html)
+        const offset = Math.max(0, Number(b.offset) || 0)
+        const chunk = bytes.subarray(offset, offset + FILE_CHUNK_SIZE)
+        return { artifact: found.meta, size: found.meta.size, data: btoa(String.fromCharCode(...chunk)) }
       }
       default:
         throw fail(DEMO_UNAVAILABLE)

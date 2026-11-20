@@ -5,6 +5,7 @@ import type { StarAsk } from './star-ask'
 import type { KofiInvite } from './kofi-invite'
 import type { YourBubbles } from './theme'
 import { NO_ROSTER_VIEW_FILTER, type RosterViewFilter } from './roster-view-filter.ts'
+import { inkOn } from './bubble-colors.ts'
 
 /** A stored value, or the fallback when it's missing, unreadable or of another kind (a `null` where a string
  * belongs crashed the chat window). A `null` fallback takes any value. */
@@ -100,6 +101,8 @@ export const prefs = {
   /** The roster marks each bot with its agent's logo while the bots run more than one agent. */
   agentLogos: pref('showAgentLogos', true),
   onboardingDone: pref('macAccountOnboardingCompleted', false),
+  /** Setup-checklist steps this device chose to dismiss; they stay hidden on later launches. */
+  onboardingChecklistDismissed: pref<string[]>('onboardingChecklistDismissed', []),
   /** Chose to go on without signing in; signing in ends it. A choice saved under the old key (`accountWelcomeSkipped`) still counts. */
   withoutAccount: pref('withoutAccount', savedChoice('accountWelcomeSkipped')),
   computerAccessSetup: pref<'ready' | 'later' | null>('computerAccessSetup', null),
@@ -113,6 +116,8 @@ export const prefs = {
   extensionsMovedTipSeen: pref('extensionsMovedTipSeen', false),
   /** The version this device last opened on, for What's new; `null` before it ever recorded one. */
   whatsNewSeen: pref<string | null>('whatsNewSeen', null),
+  /** A hand-picked accent for Settings › Appearance; `null` keeps the theme's own black/white accent. */
+  accentColor: pref<string | null>('accentColor', null),
 }
 
 /** The Mac preference supplies one scale for conversation text and app chrome. */
@@ -139,6 +144,26 @@ export function applyBackgroundBlur(on: boolean) {
 
 prefs.backgroundBlur.subscribe(() => applyBackgroundBlur(prefs.backgroundBlur.get()))
 applyBackgroundBlur(prefs.backgroundBlur.get())
+
+/**
+ * A custom accent is written on the root as inline CSS variables, so it wins over both colour schemes
+ * in `theme.css`. The ink on an accent fill is picked for contrast, so it reads in light and dark; `null`
+ * removes the override and restores the curated accent. The curated swatches themselves are untouched.
+ */
+export function applyAccentColor(hex: string | null) {
+  if (typeof document === 'undefined') return
+  const style = document.documentElement.style
+  if (!hex) {
+    for (const name of ['--accent', '--accent-fill', '--on-accent']) style.removeProperty(name)
+    return
+  }
+  style.setProperty('--accent', hex)
+  style.setProperty('--accent-fill', hex)
+  style.setProperty('--on-accent', inkOn(hex))
+}
+
+prefs.accentColor.subscribe(() => applyAccentColor(prefs.accentColor.get()))
+applyAccentColor(prefs.accentColor.get())
 
 /** The window mirrors for Arabic; paragraphs still follow their own text. */
 export function applyDirection(language: AppLanguage) {

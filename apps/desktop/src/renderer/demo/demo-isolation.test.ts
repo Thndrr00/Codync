@@ -7,7 +7,7 @@ import { AnalyticsQueue } from '../lib/analytics-queue.ts'
 // The demo runs on sample data in memory. These tests fail if anything it is made of reaches for the network, the disk or
 // the real host: the files that make up the demo are read as text and must not contain the ways to do so.
 
-const FILES = ['fake-host.ts', 'story.ts', 'demo-transport.ts', '../store/demo-mode.ts', '../lib/memory-storage.ts']
+const FILES = ['fake-host.ts', 'story.ts', 'sample-data.ts', 'demo-transport.ts', '../store/demo-mode.ts', '../lib/memory-storage.ts']
 const FORBIDDEN: [string, RegExp][] = [
   ['the network (fetch)', /\bfetch\s*\(/],
   ['the network (XMLHttpRequest)', /XMLHttpRequest/],
