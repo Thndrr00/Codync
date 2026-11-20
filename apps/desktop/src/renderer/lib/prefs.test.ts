@@ -10,6 +10,8 @@ test('A stored preference of another kind reads as the fallback', async () => {
     ['desktopSidebarWidth', '300'],
     ['computerAccessSetup', '"ready"'],
     ['accentColor', '"#1084FE"'],
+    ['restoreLastWorkspace', '"yes"'],
+    ['openTabsByChat', '[]'],
   ])
   const events = new EventTarget()
   setMaxListeners(0, events)
@@ -25,6 +27,8 @@ test('A stored preference of another kind reads as the fallback', async () => {
   assert.equal(prefs.sidebarWidth.get(), 300)
   assert.equal(prefs.computerAccessSetup.get(), 'ready')
   assert.equal(prefs.accentColor.get(), '#1084FE')
+  assert.equal(prefs.restoreLastWorkspace.get(), true, 'a non-boolean switch reads as its default')
+  assert.deepEqual(prefs.openTabsByChat.get(), {}, 'an array is not a tab map')
 })
 
 test('a custom accent writes the accent variables and clearing it removes them', async () => {

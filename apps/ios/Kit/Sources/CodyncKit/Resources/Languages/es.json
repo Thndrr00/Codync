@@ -2691,5 +2691,19 @@
   "No connectors found": "No se encontraron conectores",
   "No agents found": "No se encontraron bots",
   "No skills found": "No se encontraron skills",
-  "Write a short instruction file and give it to a bot to follow.": "Escribe un archivo de instrucciones breve y dáselo a un bot para que lo siga."
+  "Write a short instruction file and give it to a bot to follow.": "Escribe un archivo de instrucciones breve y dáselo a un bot para que lo siga.",
+  "Restore the last workspace on launch": "Restaurar el último espacio de trabajo al iniciar",
+  "Reopen the files and artifacts you had open in each chat. Only changes this device.": "Vuelve a abrir los archivos y artefactos que tenías abiertos en cada chat. Solo cambia este dispositivo.",
+  "Month": "Mes",
+  "Week": "Semana",
+  "Previous week": "Semana anterior",
+  "Next week": "Semana siguiente",
+  "Previous day": "Día anterior",
+  "Next day": "Día siguiente",
+  "No routines are scheduled yet. Right-click a day, or click an hour in Day view, to create one.": "Aún no hay rutinas programadas. Haz clic derecho en un día o clic en una hora en la vista Día para crear una.",
+  "Time zone: {zone}": "Zona horaria: {zone}",
+  "Create a bot to schedule a routine.": "Crea un bot para programar una rutina.",
+  "Creating…": "Creando…",
+  "What should this routine do?": "¿Qué debe hacer esta rutina?",
+  "Minute": "Minuto"
 }

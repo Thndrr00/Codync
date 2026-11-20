@@ -15,6 +15,7 @@ import { Sheet, usePresence } from '../../components/Overlay'
 import { HStack, IconSlot, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { prefs, usePref } from '../../lib/prefs'
+import { capTabs, chatKey, markWindowActive, restoreSavedTabs, safeArtifactTab, safeFileTab, sameTab, windowToken, type ChatRef } from '../../lib/open-tabs'
 import { connectedThrough } from '../../lib/relay-copy'
 import { useTr } from '../../lib/use-language'
 import { useScreenViewed } from '../../store/analytics'
@@ -69,6 +70,34 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   const tr = useTr()
   const store = useStore()
   const bot = store.bots.get(botId) ?? null
+  // Tabs saved for this chat on this device come back on launch only while the switch is on, and
+  // only for this computer and window (OpenBot 0.75.0). The store snapshot is loaded before a chat
+  // is shown, so ids that are already gone are simply dropped instead of restoring foreign data.
+  const chatRef = useMemo<ChatRef>(() => ({ computerId: store.computer.id, botId }), [store.computer.id, botId])
+  const windowId = useMemo(() => windowToken(), [])
+  const restored = useMemo(() => restoreSavedTabs(prefs.openTabsByChat.get(), chatRef, windowId, prefs.restoreLastWorkspace.get()), [chatRef, windowId])
+  const initialTabs = useMemo(() => {
+    const files: OpenFile[] = []
+    const artifacts: string[] = []
+    for (const tab of restored?.tabs ?? []) {
+      if (tab.kind === 'artifact') {
+        artifacts.push(tab.artifactId)
+        continue
+      }
+      const entry = store.entries.get(botId)?.find((item) => item.id === tab.entryId && item.botId === botId)
+      const file = entry?.data.files?.find((item) => item.id === tab.fileId)
+      if (entry && file) files.push({ entry, file, entryId: entry.id })
+    }
+    const active = restored?.active
+    return {
+      files,
+      artifacts,
+      activeFile: active?.kind === 'file'
+        ? (files.some((item) => item.file.id === active.fileId) ? active.fileId : null)
+        : (active ? null : files[0]?.file.id ?? null),
+      activeArtifact: active?.kind === 'artifact' && artifacts.includes(active.artifactId) ? active.artifactId : null,
+    }
+  }, [restored, store, botId])
   const [showTrace, setShowTrace] = useState(false)
   /** The chat's pin list. */
   const [showPins, setShowPins] = useState(false)
@@ -81,8 +110,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   /** The message the forward picker is sending on. */
   const [forwardEntry, setForwardEntry] = useState<Entry | null>(null)
   /** Shared files open over the chat, each its own tab, and the one shown. */
-  const [files, setFiles] = useState<OpenFile[]>([])
-  const [activeFile, setActiveFile] = useState<string | null>(null)
+  const [files, setFiles] = useState<OpenFile[]>(initialTabs.files)
+  const [activeFile, setActiveFile] = useState<string | null>(initialTabs.activeFile)
   const [editingGroup, setEditingGroup] = useState(false)
   const [templateDraft, setTemplateDraft] = useState<BotDraft | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -97,8 +126,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   const [activeApp, setActiveApp] = useState<BotApp | null>(null)
   const [routineRequest, setRoutineRequest] = useState(0)
   // The artifacts shown over the chat (a card or the Library opened them), each its own tab.
-  const [artifacts, setArtifacts] = useState<string[]>([])
-  const [activeArtifact, setActiveArtifact] = useState<string | null>(null)
+  const [artifacts, setArtifacts] = useState<string[]>(initialTabs.artifacts)
+  const [activeArtifact, setActiveArtifact] = useState<string | null>(initialTabs.activeArtifact)
   const root = useRef<HTMLDivElement>(null)
   const dock = useRef<HTMLDivElement>(null)
   // The width is measured, not rendered: resizing re-renders only when `wide` flips, or while the
@@ -198,6 +227,38 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       return next
     })
   }, [])
+
+  // While a chat is open this window beats its heartbeat, so a window opened beside it cannot adopt
+  // the same workspace. After a restart there is no heartbeat and the last workspace is adopted.
+  useEffect(() => {
+    markWindowActive(windowId)
+    const timer = setInterval(() => markWindowActive(windowId), 5_000)
+    return () => clearInterval(timer)
+  }, [windowId])
+
+  // Every open, close or tab switch writes this chat's safe tab ids back to the device pref.
+  useEffect(() => {
+    const tabs = capTabs([
+      ...files.flatMap((item) => {
+        const tab = safeFileTab(item, chatRef)
+        return tab ? [tab] : []
+      }),
+      ...artifacts.flatMap((id) => {
+        const tab = safeArtifactTab(id)
+        return tab ? [tab] : []
+      }),
+    ])
+    const shown = activeArtifact
+      ? safeArtifactTab(activeArtifact)
+      : activeFile
+        ? files.find((item) => item.file.id === activeFile) && safeFileTab(files.find((item) => item.file.id === activeFile)!, chatRef)
+        : null
+    const active = shown && tabs.some((tab) => sameTab(tab, shown)) ? shown : tabs[tabs.length - 1] ?? null
+    const next = { ...prefs.openTabsByChat.get() }
+    if (tabs.length) next[chatKey(chatRef)] = { window: windowId, ...chatRef, tabs, active }
+    else delete next[chatKey(chatRef)]
+    prefs.openTabsByChat.set(next)
+  }, [files, artifacts, activeFile, activeArtifact, chatRef, windowId])
 
   const presentRoutine = useCallback((id: string | null) => {
     setRoutineId(id)

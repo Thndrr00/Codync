@@ -49,6 +49,11 @@ struct Live {
 
 static LIVE: LazyLock<AsyncMutex<HashMap<String, Live>>> = LazyLock::new(|| AsyncMutex::new(HashMap::new()));
 
+/// Whether a person has a live view of this bot's tab. The idle watcher never freezes one of these.
+pub(super) async fn is_watched(bot: &str) -> bool {
+    LIVE.lock().await.contains_key(bot)
+}
+
 /// Whether another frame is due after `elapsed` since the last one. Kept pure for the rate test.
 fn frame_due(elapsed: Duration, interval: Duration) -> bool {
     elapsed >= interval

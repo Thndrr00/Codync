@@ -6,6 +6,7 @@ import type { KofiInvite } from './kofi-invite'
 import type { YourBubbles } from './theme'
 import { NO_ROSTER_VIEW_FILTER, type RosterViewFilter } from './roster-view-filter.ts'
 import { inkOn } from './bubble-colors.ts'
+import type { SavedTabsByChat } from './open-tabs.ts'
 
 /** A stored value, or the fallback when it's missing, unreadable or of another kind (a `null` where a string
  * belongs crashed the chat window). A `null` fallback takes any value. */
@@ -118,6 +119,10 @@ export const prefs = {
   whatsNewSeen: pref<string | null>('whatsNewSeen', null),
   /** A hand-picked accent for Settings › Appearance; `null` keeps the theme's own black/white accent. */
   accentColor: pref<string | null>('accentColor', null),
+  /** "Restore the last workspace on launch": brings back a chat's open file and artifact tabs. */
+  restoreLastWorkspace: pref('restoreLastWorkspace', true),
+  /** Open tabs of each chat, keyed by computer and bot; ids only, kept on this device. */
+  openTabsByChat: pref<SavedTabsByChat>('openTabsByChat', {}),
 }
 
 /** The Mac preference supplies one scale for conversation text and app chrome. */

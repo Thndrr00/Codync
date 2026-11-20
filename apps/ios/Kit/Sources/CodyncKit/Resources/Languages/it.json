@@ -2691,5 +2691,19 @@
   "No connectors found": "No connectors found",
   "No agents found": "No agents found",
   "No skills found": "No skills found",
-  "Write a short instruction file and give it to a bot to follow.": "Write a short instruction file and give it to a bot to follow."
+  "Write a short instruction file and give it to a bot to follow.": "Write a short instruction file and give it to a bot to follow.",
+  "Restore the last workspace on launch": "Restore the last workspace on launch",
+  "Reopen the files and artifacts you had open in each chat. Only changes this device.": "Reopen the files and artifacts you had open in each chat. Only changes this device.",
+  "Month": "Month",
+  "Week": "Week",
+  "Previous week": "Previous week",
+  "Next week": "Next week",
+  "Previous day": "Previous day",
+  "Next day": "Next day",
+  "No routines are scheduled yet. Right-click a day, or click an hour in Day view, to create one.": "No routines are scheduled yet. Right-click a day, or click an hour in Day view, to create one.",
+  "Time zone: {zone}": "Time zone: {zone}",
+  "Create a bot to schedule a routine.": "Create a bot to schedule a routine.",
+  "Creating…": "Creating…",
+  "What should this routine do?": "What should this routine do?",
+  "Minute": "Minute"
 }

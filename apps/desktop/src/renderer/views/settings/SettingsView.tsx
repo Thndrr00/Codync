@@ -160,6 +160,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   const [agentLogos, setAgentLogos] = usePref(prefs.agentLogos)
   const [backgroundBlur, setBackgroundBlur] = usePref(prefs.backgroundBlur)
   const [movingAgentFaces, setMovingAgentFaces] = usePref(prefs.movingAgentFaces)
+  const [restoreLastWorkspace, setRestoreLastWorkspace] = usePref(prefs.restoreLastWorkspace)
   const [thinkingDetails, setThinkingDetails] = usePref(prefs.thinkingDetails)
   const [showInDock, setShowInDock] = useState(true)
   useEffect(() => void window.codync.app.showInDock().then(setShowInDock), [])
@@ -239,6 +240,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <SwitchRow title="Show agent logos" detail="Marks each bot with its agent's logo when your bots use more than one agent." on={agentLogos} onChange={setAgentLogos} />
         <SwitchRow title="Background blur" detail="Frosts what sits behind the sidebar and floating controls. Turn it off to save power or if text under them reads better sharp. Only changes this device." on={backgroundBlur} onChange={setBackgroundBlur} />
         <SwitchRow title="Moving agent faces" detail="Bot faces look around, blink and breathe. Turn it off to keep them still. Only changes this device." on={movingAgentFaces} onChange={setMovingAgentFaces} />
+        <SwitchRow title="Restore the last workspace on launch" detail="Reopen the files and artifacts you had open in each chat. Only changes this device." on={restoreLastWorkspace} onChange={setRestoreLastWorkspace} />
       </CardSection>
       <EnterpriseSection />
       <ThemePaletteSection />

@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 mod action;
 #[cfg(windows)]
 mod cdp;
+mod idle;
 #[cfg(windows)]
 mod live;
 mod snapshot;
@@ -53,10 +54,13 @@ pub fn tools() -> Vec<Value> {
 }
 
 /// Runs one browser tool for `bot`.
-pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
+pub async fn call(hub: &std::sync::Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
     // Browser tools drive the same computer capability, so a channel turn needs the bot's opt-in
     // before the capability gate below. No page content is read or logged on a refused call.
     super::channel_gate::ensure_allowed(hub, bot)?;
+    // The idle-tab watcher shares these sessions; one bounded task starts on the first tool call.
+    #[cfg(windows)]
+    cdp::start_watcher(hub);
     let action = Action::parse(name, args)?;
     // Analytics: which action ran, never the page, the address or the text.
     crate::analytics::browser_tool(hub, bot, name);
@@ -154,9 +158,10 @@ async fn perform(_hub: &Hub, bot: &str, action: &Action) -> Result<Value> {
 
 /// Dispatches a `browserLive*` method for the desktop's live tab. Like `chatCall`, it is local only:
 /// the stream is a picture of this computer's own bot tab, never sent over the phone channel.
-pub async fn live_call(hub: &Hub, method: &str, body: &Value) -> Result<Value> {
+pub async fn live_call(hub: &std::sync::Arc<Hub>, method: &str, body: &Value) -> Result<Value> {
     #[cfg(windows)]
     {
+        cdp::start_watcher(hub);
         live::call(hub, method, body).await
     }
     #[cfg(not(windows))]

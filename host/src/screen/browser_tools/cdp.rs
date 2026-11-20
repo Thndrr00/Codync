@@ -17,10 +17,12 @@
 //!   `type`.
 
 use super::action::{Action, Button, Direction, Key, Kind, Load, Target};
+use super::idle;
 use super::snapshot::{self, format as format_snapshot};
 use super::{cut_at, folder_slug};
 use crate::LockExt as _;
 use crate::agent::process::Process;
+use crate::hub::{BotStatus, Hub};
 use crate::screen::protected_browser::{
     browser_executable,
     pipe::{self, Pipe, rpc},
@@ -29,7 +31,7 @@ use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::{Instant, sleep, timeout};
@@ -70,6 +72,16 @@ struct Session {
     context: String,
     /// The tab every call acts on.
     target: String,
+    /// Last time this tab saw a CDP call (a tool action, a live frame or an input event).
+    last_activity: Instant,
+    /// Whether `Page.setWebLifecycleState('frozen')` is in effect and has not been undone.
+    frozen: bool,
+}
+
+impl Session {
+    fn touch(&mut self) {
+        self.last_activity = Instant::now();
+    }
 }
 
 /// Runs one action against `bot`'s browser, opening the browser for a `navigate` when it has none.
@@ -86,6 +98,8 @@ pub(super) async fn perform(bot: &str, action: &Action) -> Result<Value> {
             bail!("This bot has no browser open yet. Open a page with the navigate tool first.");
         };
         ensure!(!session.process.exited()?, "The browser closed. Open the page again with navigate.");
+        // Any tool use is activity: it pushes the freeze deadline out and wakes a frozen tab.
+        session.touch();
         timeout(action.timeout.saturating_add(HUNG), run(session, action)).await
     };
     match answered {
@@ -189,7 +203,7 @@ async fn spawn(bot: &str) -> Result<Session> {
     )
     .await?;
     let target = target["targetId"].as_str().context("The browser did not open a tab")?.to_owned();
-    Ok(Session { process, folder, pipe: socket, context, target })
+    Ok(Session { process, folder, pipe: socket, context, target, last_activity: Instant::now(), frozen: false })
 }
 
 /// Stops a browser and removes its profile, retrying a profile Chrome still holds. The terminate
@@ -228,8 +242,102 @@ fn remove_folder(folder: &Path) -> Result<()> {
     Ok(())
 }
 
+// --- Idle tab watcher -----------------------------------------------------------------------------
+//
+// OpenBot 0.75: "Unused browser tabs freeze to reduce resource use." Every session records its last
+// CDP activity; one bounded task scans them and freezes the tabs that have been quiet for five
+// minutes. A tab watched live, held by a tool call or owned by a bot on a turn is left alone. The page
+// is woken on the next frame, input event or tool call, so frames and input keep working.
+
+/// Starts the single watcher task on the first browser call. It reads only these sessions and the
+/// hub's bot status; it stops with the host.
+pub(super) fn start_watcher(hub: &Arc<Hub>) {
+    static STARTED: OnceLock<()> = OnceLock::new();
+    if STARTED.set(()).is_err() {
+        return;
+    }
+    let hub = Arc::clone(hub);
+    tokio::spawn(async move {
+        loop {
+            sleep(idle::SCAN_EVERY).await;
+            watch(&hub).await;
+        }
+    });
+}
+
+/// Freezes or wakes this tab through a short-lived CDP session on the bot's own target.
+async fn set_lifecycle(session: &mut Session, state: &'static str) -> Result<()> {
+    let tab = attach(session).await?;
+    let answer = rpc(&mut session.pipe, "Page.setWebLifecycleState", json!({"state": state}), Some(tab.as_str())).await;
+    rpc(&mut session.pipe, "Target.detachFromTarget", json!({"sessionId": tab.as_str()}), None).await.ok();
+    answer.map(|_| ())
+}
+
+/// Wakes a frozen tab before the next CDP action. A failed wake reaches the caller, whose `perform`
+/// closes a browser whose pipe a cancelled read poisoned.
+async fn resume(session: &mut Session) -> Result<()> {
+    if session.frozen {
+        set_lifecycle(session, "active").await?;
+        session.frozen = false;
+    }
+    Ok(())
+}
+
+/// One bounded pass over all sessions. A slot held by a call or a live frame is never frozen.
+async fn watch(hub: &Hub) {
+    let sessions: Vec<(String, Slot)> = {
+        let registry = SESSIONS.locked();
+        registry.iter().map(|(bot, slot)| (bot.clone(), slot.clone())).collect()
+    };
+    for (bot, slot) in sessions {
+        // A held slot means a tool call or live frame owns the tab: the pure rule keeps it awake.
+        let (mut guard, pending) = match slot.try_lock() {
+            Ok(guard) => (Some(guard), false),
+            Err(_) => (None, true),
+        };
+        let live = super::live::is_watched(&bot).await;
+        let turn_running = matches!(hub.runtime(&bot).status, BotStatus::Working | BotStatus::NeedsInput);
+        let known = guard.as_ref().and_then(|held| held.as_ref());
+        let state = idle::Idle {
+            idle_for: known.map(|session| session.last_activity.elapsed()).unwrap_or_default(),
+            live,
+            pending,
+            turn_running,
+            frozen: known.is_some_and(|session| session.frozen),
+        };
+        if !idle::should_freeze(state, idle::IDLE_AFTER) {
+            continue;
+        }
+        // The borrow ends with the await, so the arms below can take the whole session on a timeout.
+        let freeze = {
+            let Some(session) = guard.as_mut().and_then(|held| held.as_mut()) else { continue };
+            if session.process.exited().unwrap_or(true) {
+                continue;
+            }
+            timeout(idle::FREEZE_TIMEOUT, set_lifecycle(session, "frozen")).await
+        };
+        match freeze {
+            Ok(Ok(())) => {
+                if let Some(session) = guard.as_mut().and_then(|held| held.as_mut()) {
+                    session.frozen = true;
+                }
+            }
+            Ok(Err(error)) => tracing::warn!(bot = %bot, %error, "could not freeze an idle bot tab"),
+            Err(_) => {
+                // A cancelled CDP read poisons the pipe; stop this browser instead of reusing it.
+                tracing::warn!(bot = %bot, "an idle bot tab did not freeze in time; closing its browser");
+                let dead = guard.as_mut().and_then(|held| held.take());
+                stop(dead).await;
+            }
+        }
+    }
+}
+
 /// One action on the bot's tab, with a session attached and detached around it.
 async fn run(session: &mut Session, action: &Action) -> Result<Value> {
+    // A frozen page is woken inside the action's own deadline, so a stuck resume is bounded like any
+    // other CDP call here. Live views wake it on their frame and input paths (`live_frame`, `live_input`).
+    resume(session).await?;
     ensure_target(session).await?;
     let tab = attach(session).await?;
     let answer = act(session, &tab, action).await;
@@ -704,6 +812,9 @@ pub(super) async fn live_attach(bot: &str) -> Result<(Slot, String)> {
     let session =
         guard.as_mut().context("This bot has no browser open yet. Open a page with the navigate tool first.")?;
     ensure!(!session.process.exited()?, "The browser closed. Open the page again with navigate.");
+    // Watching is activity: it wakes a frozen tab and keeps it from freezing while frames flow.
+    session.touch();
+    resume(session).await?;
     ensure_target(session).await?;
     let tab = attach(session).await?;
     Ok((slot.clone(), tab))
@@ -714,6 +825,8 @@ pub(super) async fn live_frame(slot: &Slot, session: &str) -> Result<Value> {
     let mut guard = slot.lock().await;
     let state = guard.as_mut().context("The browser closed. Reopen the live tab.")?;
     ensure!(!state.process.exited()?, "The browser closed. Reopen the live tab.");
+    state.touch();
+    resume(state).await?;
     let image = rpc(
         &mut state.pipe,
         "Page.captureScreenshot",
@@ -742,6 +855,8 @@ pub(super) async fn live_input(slot: &Slot, session: &str, event: Input) -> Resu
     let mut guard = slot.lock().await;
     let state = guard.as_mut().context("The browser closed. Reopen the live tab.")?;
     ensure!(!state.process.exited()?, "The browser closed. Reopen the live tab.");
+    state.touch();
+    resume(state).await?;
     match event {
         Input::Move { x, y, buttons } => {
             mouse(state, session, json!({"type": "mouseMoved", "x": x, "y": y, "button": "none", "buttons": buttons})).await

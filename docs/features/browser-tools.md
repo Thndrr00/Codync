@@ -56,6 +56,12 @@ sessions in `browser_tools/cdp.rs` are keyed by bot id, and the live-tab view in
 same bot therefore share one browser context, profile and tab; no separate
 per-thread tab map was needed.
 
+Unused tabs freeze after five minutes without CDP activity (OpenBot 0.75.0): a bounded watcher in
+`browser_tools/idle.rs` + `cdp.rs` calls `Page.setWebLifecycleState('frozen')` on the bot's idle tab,
+and wakes it with `'active'` on the next live frame, input event or tool call. It never freezes a tab
+someone is watching live, one held by a tool call, or one whose bot has a running turn; frames and
+input keep working.
+
 ## Refs and snapshots
 
 `snapshot` numbers the elements of the page and prints one line each:

@@ -36,6 +36,10 @@ Files travel in both directions: users attach inputs, and bots explicitly share 
 - Desktop opens an image in a large panel that fits the window; a large image shrinks to fit
   below the header without cropping, even when the window is resized, and a small one keeps its
   own size. Sent and bot-shared images use the same viewer.
+- Desktop file and artifact tabs opened beside a chat come back after a restart when **Restore the
+  last workspace on launch** is on (OpenBot 0.75.0). Only ids are saved per chat on this device; a
+  file from another computer, another chat or another window is never restored, and the strip is
+  capped at eight tabs.
 - Terminal UI: dragging a file onto the terminal pastes its path, which becomes an attachment (⌫ on
   an empty draft removes the last one); sent files show as `▤ name size` lines. It uploads with the
   same `upload` chunks.
