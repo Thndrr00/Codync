@@ -79,6 +79,9 @@ impl Fixture {
             outputs: Vec::new(),
             event: Value::Null,
             root,
+            from_step: None,
+            seed: BTreeMap::new(),
+            run_time_text: String::new(),
         }
     }
 
@@ -584,6 +587,47 @@ async fn testing_a_flow_runs_the_links_without_the_routine() {
     })
     .await;
     assert!(f.step(&run, "b").input.contains("Sample"));
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_run_from_a_step_reuses_the_answers_before_it_and_runs_only_what_follows() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    for (from, to) in [("a", "b"), ("b", "c")] {
+        f.call("connectRoutineFlow", json!({"routineId": r, "fromBotId": from, "toBotId": to})).await.unwrap();
+    }
+    let first = f.call("testRoutineFlow", json!({"botId": "a", "routineId": r, "input": "Seed answer"})).await.unwrap()
+        ["runId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    f.until(|| {
+        f.hub.store.flow_run_steps(&first).unwrap().iter().any(|s| s.bot_id == "c" && s.status == StepStatus::Succeeded)
+    })
+    .await;
+    assert_eq!(f.prompts_of("b").len(), 1, "the full run asked b once");
+    assert!(f.step(&first, "b").output.is_some(), "b left a stored answer");
+
+    let second = f
+        .call("runRoutineFlowFromStep", json!({"botId": "a", "routineId": r, "nodeKey": "bot:b"}))
+        .await
+        .unwrap()["runId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    f.until(|| {
+        f.hub
+            .store
+            .flow_run_steps(&second)
+            .unwrap()
+            .iter()
+            .any(|s| s.bot_id == "c" && s.status == StepStatus::Succeeded)
+    })
+    .await;
+    assert_eq!(f.prompts_of("b").len(), 2, "b ran again from the chosen step");
+    assert_eq!(f.prompts_of("c").len(), 2, "what hangs below b ran again too");
+    assert!(f.step(&second, "b").input.contains("Seed answer"), "b was handed the stored answer of the step before it");
     f.shutdown().await;
 }
 

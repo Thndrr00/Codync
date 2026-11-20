@@ -5,11 +5,11 @@ use super::graph;
 use crate::chat::team::ModelOverride;
 use crate::chat::team::flow::{FlowCancelled, Handoff, handoff, recipient};
 use crate::hub::Hub;
-use crate::routines::{Routine, Run, Status};
+use crate::routines::{Routine, Run, Status, Trigger, local_zone};
 use crate::store::{FlowLink, FlowStep, NewStep, StepStatus};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -44,6 +44,62 @@ pub enum Root {
     Cancelled(String),
 }
 
+/// One input a step read, and the link instruction that led to it. Kept with the result so the
+/// canvas can show what the step actually saw, even if the link has since changed.
+#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StepInput {
+    #[serde(default)]
+    pub from: String,
+    #[serde(default)]
+    pub text: String,
+    #[serde(default)]
+    pub instruction: String,
+    /// A picture or clip handed on by a media step, as opposed to a bot's text reply.
+    #[serde(default)]
+    pub picture: bool,
+}
+
+/// The prompt, model and other fields a step ran with, plus the inputs it read. Kept as JSON on the
+/// step row, so runs saved before this field existed stay readable with no settings shown.
+#[derive(Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StepSettings {
+    /// `bot` or `media` (`image`/`video` media steps are distinguished by `kind`).
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub model_options: BTreeMap<String, String>,
+    #[serde(default)]
+    pub instruction: String,
+    #[serde(default)]
+    pub prompt: String,
+    #[serde(default)]
+    pub aspect: String,
+    #[serde(default)]
+    pub duration: Option<u32>,
+    #[serde(default)]
+    pub resolution: String,
+    #[serde(default)]
+    pub transparent: Option<bool>,
+    #[serde(default)]
+    pub voice: Option<String>,
+    #[serde(default)]
+    pub inputs: Vec<StepInput>,
+}
+
+/// One stored step of the run a "run from this step" branches from: its answer and its settings.
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SeededStep {
+    #[serde(default)]
+    pub output: Option<String>,
+    #[serde(default)]
+    pub settings: Option<serde_json::Value>,
+}
+
 /// One routine run whose flow should run.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Start {
@@ -68,6 +124,16 @@ pub struct Start {
     /// The delivery that started the run, for outputs that answer it.
     pub event: serde_json::Value,
     pub root: Root,
+    /// Set when the run begins at one step instead of at the routine's own bot: that step and what
+    /// hangs below it run again; the stored answers of the steps before it are handed on as they are.
+    #[serde(default)]
+    pub from_step: Option<String>,
+    /// Those stored answers and settings, keyed by the step's node key (bot id or `media:<id>`).
+    #[serde(default)]
+    pub seed: BTreeMap<String, SeededStep>,
+    /// The run's start time in UTC and the schedule's zone, for steps that compute a time window.
+    #[serde(default)]
+    pub run_time_text: String,
 }
 
 /// What a bot's step left for the bots after it.
@@ -123,6 +189,24 @@ pub(super) fn record(hub: &Hub, new: &NewStep) -> Result<Option<FlowStep>> {
             None => (None, None),
         })
     })
+}
+
+/// Keeps what a step actually ran with on its row, so "Settings" can show it later. A failure here
+/// doesn't undo the step: the settings are a record of the run, not the run itself.
+fn record_settings(hub: &Hub, step: &str, settings: &StepSettings) {
+    if let Err(error) = hub.store.flow_set_step_settings(step, serde_json::to_value(settings).ok()) {
+        tracing::warn!(step, error = format!("{error:#}"), "couldn't save a routine flow step's settings");
+    }
+}
+
+/// Copies a stored step's settings into the new step of a "run from this step" run, so reused steps
+/// show what they ran with earlier too.
+fn copy_settings(hub: &Hub, from: Option<&serde_json::Value>, to: &str) {
+    if let Some(settings) = from
+        && let Err(error) = hub.store.flow_set_step_settings(to, Some(settings.clone()))
+    {
+        tracing::warn!(step = to, error = format!("{error:#}"), "couldn't copy a routine flow step's settings");
+    }
 }
 
 fn settle(hub: &Hub, id: &str, status: StepStatus, output: Option<&str>, error: Option<&str>) {
@@ -210,12 +294,40 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
         let reached = graph::reached(&start.owner, &links);
         return skip_all(hub, &start, reached.iter().map(String::as_str), "Skipped: the routine's links form a loop");
     };
-    let mut results = HashMap::from([(start.owner.clone(), Outcome::Replied(reply.clone()))]);
+    // "Run from this step" seeds the answers of the steps before it and re-runs only that step and
+    // what hangs below it. A full run starts from the routine's own bot as it always has.
+    let rerun = start.from_step.as_deref().map(|step| graph::downstream(step, &links));
+    let mut results: HashMap<String, Outcome> = if let Some(rerun) = &rerun {
+        start
+            .seed
+            .iter()
+            .map(|(bot, saved)| (bot.clone(), saved_outcome(saved.output.as_deref(), saved.output.is_some())))
+            .collect()
+    } else {
+        HashMap::from([(start.owner.clone(), Outcome::Replied(reply.clone()))])
+    };
+    if !results.contains_key(&start.owner) {
+        results.insert(start.owner.clone(), Outcome::Replied(reply.clone()));
+    }
     let order = graph::order(&depths);
     let deepest = order.last().map_or(0, |(_, depth)| *depth);
     for depth in 1..=deepest {
         let mut tasks = JoinSet::new();
         for (bot, _) in order.iter().filter(|(_, d)| *d == depth) {
+            // A step before the start keeps its stored answer; its work is never sent again. The
+            // new run still gets a step for it, so the canvas shows the whole path it continued.
+            if let Some(rerun) = &rerun
+                && !rerun.contains(*bot)
+            {
+                if let Some(saved) = start.seed.get(*bot) {
+                    let mut reused = new_step(&start, bot, "", StepStatus::Succeeded);
+                    reused.output = saved.output.as_deref();
+                    if let Some(step) = record(hub, &reused)? {
+                        copy_settings(hub, saved.settings.as_ref(), &step.id);
+                    }
+                }
+                continue;
+            }
             match begin(hub, &start, &links, &results, bot, depth, &running.cancel)? {
                 Begin::Done(outcome) => {
                     results.insert((*bot).to_owned(), outcome);
@@ -277,7 +389,7 @@ fn begin(
     if !*cancel.borrow()
         && let Some(step) = hub.store.flow_run_steps(&start.run_id)?.into_iter().find(|step| step.bot_id == bot)
     {
-        return Ok(Begin::Done(saved_outcome(step)));
+        return Ok(Begin::Done(step_outcome(step)));
     }
     let inputs: Vec<(&FlowLink, &str)> = links
         .iter()
@@ -317,21 +429,47 @@ fn begin(
     let Some(from) = hub.store.bot(from_id(&first.from_bot_id, &start.owner))?.filter(|b| !b.deleted) else {
         return end(StepStatus::Failed, "The bot that handed work on is gone");
     };
-    let names: Vec<(String, &str, &str)> = inputs
+    let names: Vec<StepInput> = inputs
         .iter()
-        .map(|(link, text)| (node_name(hub, &link.from_bot_id), *text, link.instruction.as_str()))
+        .map(|(link, text)| StepInput {
+            from: node_name(hub, &link.from_bot_id),
+            text: (*text).to_owned(),
+            instruction: link.instruction.clone(),
+            picture: is_picture_node(&link.from_bot_id),
+        })
         .collect();
-    let body = handoff_body(&start.routine_name, &names, start.case_text.as_deref(), depth);
+    let include_run_time = depth == 1 || start.from_step.is_some();
+    let body = handoff_body(
+        &start.routine_name,
+        &names,
+        start.case_text.as_deref(),
+        depth,
+        include_run_time.then_some(start.run_time_text.as_str()).filter(|text| !text.is_empty()),
+    );
     // A fan-in is one step: the first incoming link's model and options win, as its instruction leads the task.
     let model = inputs.iter().find_map(|(link, _)| override_of(link));
+    let settings = StepSettings {
+        kind: "bot".to_owned(),
+        model: model.as_ref().and_then(|override_| override_.model.clone()),
+        model_options: model.as_ref().map(|override_| override_.options.clone()).unwrap_or_default(),
+        instruction: inputs.first().map(|(link, _)| link.instruction.clone()).unwrap_or_default(),
+        inputs: names,
+        ..StepSettings::default()
+    };
     match record(hub, &new_step(start, bot, &body, StepStatus::Running))? {
         Some(step) => {
+            record_settings(hub, &step.id, &settings);
             let hops = u8::try_from(depth).unwrap_or(u8::MAX);
             Ok(Begin::Send(Box::new(Pending { step, from: from.config, bot: bot.to_owned(), body, model, hops })))
         }
         // A retry of the run finds the step the first attempt made, and doesn't send it twice.
         None => Ok(Begin::Done(earlier_outcome(hub, &start.run_id, bot)?)),
     }
+}
+
+/// Whether a link's start is a media step, whose file the next step should read as a picture.
+fn is_picture_node(id: &str) -> bool {
+    id.starts_with(crate::store::flow_media::PREFIX)
 }
 
 /// The bot a step's sender stands for: a media step speaks as the routine's own bot.
@@ -352,14 +490,18 @@ fn node_name(hub: &Hub, id: &str) -> String {
 
 fn earlier_outcome(hub: &Hub, run_id: &str, bot: &str) -> Result<Outcome> {
     let step = hub.store.flow_run_steps(run_id)?.into_iter().find(|s| s.bot_id == bot).context("the step is gone")?;
-    Ok(saved_outcome(step))
+    Ok(step_outcome(step))
 }
 
-fn saved_outcome(step: FlowStep) -> Outcome {
-    match (step.status, step.output) {
-        (StepStatus::Succeeded, Some(text)) => Outcome::Replied(text),
+fn saved_outcome(output: Option<&str>, succeeded: bool) -> Outcome {
+    match (succeeded, output) {
+        (true, Some(text)) => Outcome::Replied(text.to_owned()),
         _ => Outcome::Nothing,
     }
+}
+
+fn step_outcome(step: FlowStep) -> Outcome {
+    saved_outcome(step.output.as_deref(), step.status == StepStatus::Succeeded)
 }
 
 /// Decides a media step: the description it was saved with, plus whatever was handed on.
@@ -368,15 +510,40 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
         record_ended(hub, start, &crate::store::flow_media::key(id), StepStatus::Failed, "The media step is gone")?;
         return Ok(Begin::Done(Outcome::Nothing));
     };
-    let body = inputs
+    let read: Vec<StepInput> = inputs
+        .iter()
+        .map(|(link, text)| StepInput {
+            from: node_name(hub, &link.from_bot_id),
+            text: (*text).to_owned(),
+            instruction: link.instruction.clone(),
+            picture: is_picture_node(&link.from_bot_id),
+        })
+        .collect();
+    let mut body = inputs
         .iter()
         .map(|(_, text)| text.trim())
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n---\n\n");
+    body.push_str(&picture_note(&read));
+    let settings = StepSettings {
+        kind: node.kind.clone(),
+        model: Some(node.model.clone()),
+        prompt: node.prompt.clone(),
+        aspect: node.aspect.clone(),
+        duration: Some(node.duration),
+        resolution: node.resolution.clone(),
+        transparent: Some(node.transparent),
+        voice: node.voice.clone(),
+        inputs: read,
+        ..StepSettings::default()
+    };
     let key = crate::store::flow_media::key(id);
     match record(hub, &new_step(start, &key, &body, StepStatus::Running))? {
-        Some(step) => Ok(Begin::Make(Box::new(MediaPending { step, node, body }))),
+        Some(step) => {
+            record_settings(hub, &step.id, &settings);
+            Ok(Begin::Make(Box::new(MediaPending { step, node, body })))
+        }
         None => Ok(Begin::Done(earlier_outcome(hub, &start.run_id, &key)?)),
     }
 }
@@ -469,34 +636,93 @@ pub(super) fn override_of(link: &FlowLink) -> Option<ModelOverride> {
         .then(|| ModelOverride { model: link.model.clone(), options: link.model_options.clone() })
 }
 
-/// What a bot is asked: the replies before it and what the links say to do with them.
-fn handoff_text(routine: &str, inputs: &[(String, &str, &str)]) -> String {
+/// What a bot is asked: the replies before it and what the links say to do with them. A picture
+/// handed on by a media step is passed with its file path and an instruction to use it as given;
+/// a model that can't read pictures is told to stop with a clear message instead of inventing one.
+fn handoff_text(routine: &str, inputs: &[StepInput]) -> String {
     let answers: Vec<String> = inputs
         .iter()
-        .map(|(from, answer, _)| {
-            format!("{from} answered:\n\n{}", if answer.is_empty() { "(no answer text)" } else { answer })
+        .map(|input| {
+            format!(
+                "{} answered:\n\n{}",
+                input.from,
+                if input.text.is_empty() { "(no answer text)" } else { &input.text }
+            )
         })
         .collect();
-    let mut instructions: Vec<&str> = inputs.iter().map(|(_, _, i)| i.trim()).filter(|i| !i.is_empty()).collect();
+    let mut instructions: Vec<&str> =
+        inputs.iter().map(|input| input.instruction.trim()).filter(|i| !i.is_empty()).collect();
     instructions.dedup();
     let task = if instructions.is_empty() {
         "Do your part of the routine with this.".to_owned()
     } else {
         instructions.join("\n\n")
     };
-    format!("The routine \"{routine}\" continues with you.\n\n{}\n\n{task}", answers.join("\n\n---\n\n"))
+    format!(
+        "The routine \"{routine}\" continues with you.\n\n{}\n{}\n{task}",
+        answers.join("\n\n---\n\n"),
+        picture_note(inputs),
+    )
+}
+
+/// The extra instruction a step gets when pictures reach it through a picture connection. Empty
+/// when no picture is connected, so a text-only flow reads exactly as it did before.
+fn picture_note(inputs: &[StepInput]) -> String {
+    let pictures: Vec<&str> = inputs
+        .iter()
+        .filter(|input| input.picture)
+        .map(|input| input.text.trim())
+        .filter(|text| !text.is_empty())
+        .collect();
+    if pictures.is_empty() {
+        return String::new();
+    }
+    format!(
+        "Pictures connected to this step (use them as given, together, and don't invent a substitute subject):\n{}\n\
+         If your model cannot read pictures, stop here and reply that this step needs a model that can read pictures, \
+         or that the picture connection must be removed.",
+        pictures.join("\n"),
+    )
 }
 
 /// OpenBot 0.74.0: a one-off run can carry the text of the one case it is for (a document, an
 /// order…). Only the first steps, the ones next to the routine's own bot, get it; later steps read
 /// only what those steps handed on. The routine's saved instruction and links stay as they are.
-fn handoff_body(routine: &str, inputs: &[(String, &str, &str)], case: Option<&str>, depth: usize) -> String {
+fn handoff_body(
+    routine: &str,
+    inputs: &[StepInput],
+    case: Option<&str>,
+    depth: usize,
+    run_time: Option<&str>,
+) -> String {
     let body = handoff_text(routine, inputs);
     let case = case.map(str::trim).filter(|case| !case.is_empty());
-    match (depth, case) {
-        (1, Some(case)) => format!("Case for this run:\n\n{case}\n\n{body}"),
+    let when = |body: String| match run_time {
+        Some(time) if !time.is_empty() => format!("{time}\n\n{body}"),
         _ => body,
+    };
+    match (depth, case) {
+        (1, Some(case)) => when(format!("Case for this run:\n\n{case}\n\n{body}")),
+        _ => when(body),
     }
+}
+
+/// A schedule trigger hands its run time to the following steps: the instant in UTC and the IANA
+/// zone of the trigger, so a model can compute a window ("the 24 hours before this run"). A manual
+/// run has no cron zone, so it uses this computer's zone.
+pub fn run_time_text(run_at: i64, triggers: &[Trigger]) -> String {
+    let fallback = local_zone();
+    let zone = triggers
+        .iter()
+        .find_map(|trigger| match trigger {
+            Trigger::Cron { time_zone, .. } => Some(time_zone.as_str()),
+            _ => None,
+        })
+        .unwrap_or(fallback.as_str());
+    let utc = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(run_at)
+        .map(|at| at.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+        .unwrap_or_else(|| "an unknown time".to_owned());
+    format!("Run time: {utc} (trigger time zone: {zone}).")
 }
 
 /// The case text an agent gave the `run_routine` call for one run, if any.
@@ -533,6 +759,9 @@ pub fn start_for(
         outputs: routine.outputs.clone(),
         event: run.event.clone(),
         root,
+        from_step: None,
+        seed: BTreeMap::new(),
+        run_time_text: run_time_text(run.created_at, &routine.triggers),
     })
 }
 
@@ -549,19 +778,61 @@ mod tests {
 
     #[test]
     fn a_one_case_run_gives_its_case_text_to_the_first_steps_only() {
-        let inputs = [("a".to_owned(), "a's answer", "Do the next part")];
-        let first = handoff_body("Digest", &inputs, Some(" order 42 "), 1);
+        let inputs = [StepInput {
+            from: "a".to_owned(),
+            text: "a's answer".to_owned(),
+            instruction: "Do the next part".to_owned(),
+            picture: false,
+        }];
+        let first = handoff_body("Digest", &inputs, Some(" order 42 "), 1, None);
         assert!(first.contains("Case for this run:\n\norder 42"), "{first}");
         assert!(first.contains("a answered:\n\na's answer"), "the saved handoff is still there");
         assert!(first.contains("Do the next part"), "the link's instruction is unchanged");
 
         // Later steps see only what the first step handed on, never the case text again.
-        let later = handoff_body("Digest", &inputs, Some("order 42"), 2);
+        let later = handoff_body("Digest", &inputs, Some("order 42"), 2, None);
         assert_eq!(later, handoff_text("Digest", &inputs));
         assert!(!later.contains("order 42"));
         // No case text, or a blank one, changes nothing at any depth.
-        assert_eq!(handoff_body("Digest", &inputs, None, 1), handoff_text("Digest", &inputs));
-        assert_eq!(handoff_body("Digest", &inputs, Some("  "), 1), handoff_text("Digest", &inputs));
+        assert_eq!(handoff_body("Digest", &inputs, None, 1, None), handoff_text("Digest", &inputs));
+        assert_eq!(handoff_body("Digest", &inputs, Some("  "), 1, None), handoff_text("Digest", &inputs));
+        // The schedule's time goes to the following steps, ahead of the case text and the handoff.
+        let with_time = handoff_body("Digest", &inputs, Some("order 42"), 1, Some("Run time: 10:00 UTC."));
+        assert!(with_time.starts_with("Run time: 10:00 UTC.\n\nCase for this run:"), "{with_time}");
+    }
+
+    #[test]
+    fn a_connected_picture_is_passed_with_an_instruction_to_use_it_as_given() {
+        let inputs = [
+            StepInput {
+                from: "the picture step".to_owned(),
+                text: "pic.png (/files/pic.png)".to_owned(),
+                picture: true,
+                ..StepInput::default()
+            },
+            StepInput { from: "a".to_owned(), text: "a's answer".to_owned(), picture: false, ..StepInput::default() },
+        ];
+        let text = handoff_text("Digest", &inputs);
+        assert!(text.contains("pic.png (/files/pic.png)"), "the connected picture is handed on");
+        assert!(text.contains("use them as given"), "{text}");
+        assert!(text.contains("don't invent a substitute subject"), "{text}");
+        assert!(text.contains("cannot read pictures, stop here"), "{text}");
+        // A text-only step gets no picture instruction at all.
+        let plain = handoff_text("Digest", &inputs[1..]);
+        assert!(!plain.contains("Pictures connected to this step"), "{plain}");
+    }
+
+    #[test]
+    fn a_schedule_step_gets_the_run_time_in_utc_and_the_triggers_zone() {
+        // 2026-01-02 03:04:05 UTC.
+        let at = 1_767_323_045_000;
+        let cron = Trigger::Cron { expression: "0 9 * * *".to_owned(), time_zone: "Asia/Taipei".to_owned() };
+        let text = run_time_text(at, &[cron]);
+        assert!(text.contains("2026-01-02 03:04:05 UTC"), "{text}");
+        assert!(text.contains("trigger time zone: Asia/Taipei"), "{text}");
+        // A manual run has no cron trigger, so it names this computer's zone instead.
+        let manual = run_time_text(at, &[]);
+        assert!(manual.contains(&format!("trigger time zone: {}", local_zone())), "{manual}");
     }
 
     #[test]

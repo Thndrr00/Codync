@@ -34,6 +34,7 @@ pub const METHODS: &[&str] = &[
     "saveRoutineFlow",
     "resolveRoutineFlowConflict",
     "testRoutineFlow",
+    "runRoutineFlowFromStep",
 ];
 
 fn str_arg<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
@@ -357,12 +358,13 @@ fn test(hub: &Arc<Hub>, routine: &Routine, reply: String) -> Result<String> {
         bail!("this routine has no flow: connect it to a bot first");
     }
     let run_id = format!("flow-test-{}", uuid::Uuid::new_v4());
+    let now = now_ms();
     let start = engine::Start {
         run_id: run_id.clone(),
         routine_id: routine.id.clone(),
         routine_name: routine.name.clone(),
         owner: routine.bot_id.clone(),
-        run_at: now_ms(),
+        run_at: now,
         timeout: Duration::from_secs(if routine.timeout_seconds == 0 {
             default_timeout()
         } else {
@@ -378,6 +380,68 @@ fn test(hub: &Arc<Hub>, routine: &Routine, reply: String) -> Result<String> {
             json!({"source":"test"})
         },
         root: engine::Root::Replied(reply),
+        from_step: None,
+        seed: BTreeMap::new(),
+        run_time_text: engine::run_time_text(now, &routine.triggers),
+    };
+    hub.routines.stage_flow(&hub.store, start.clone())?;
+    tokio::spawn(engine::execute(hub.clone(), start));
+    Ok(run_id)
+}
+
+/// Starts a new run at `step` (a bot id or a `media:<id>` key), using the answers and settings of
+/// the routine's latest run for every step before it. Those steps are recorded again with their
+/// stored answers but are never sent or made again.
+fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String> {
+    if hub.store.flow_links(&routine.id)?.is_empty() {
+        bail!("this routine has no flow: connect it to a bot first");
+    }
+    // The newest run that actually has this step: a newer test run may have stopped before it.
+    let last = hub
+        .store
+        .flow_runs()?
+        .into_iter()
+        .filter(|run| run.routine_id == routine.id)
+        .find(|run| {
+            hub.store
+                .flow_run_steps(&run.run_id)
+                .map(|steps| steps.iter().any(|saved| saved.bot_id == step))
+                .unwrap_or(false)
+        })
+        .with_context(|| format!("this routine has no run with a saved answer for {step}"))?;
+    let seed: BTreeMap<String, engine::SeededStep> = hub
+        .store
+        .flow_run_steps(&last.run_id)?
+        .into_iter()
+        .map(|saved| {
+            let settings = hub.store.flow_step_settings(&saved.id)?;
+            Ok((saved.bot_id, engine::SeededStep { output: saved.output, settings }))
+        })
+        .collect::<Result<_>>()?;
+    let root =
+        seed.get(&routine.bot_id).and_then(|saved| saved.output.clone()).unwrap_or_else(|| SAMPLE_REPLY.to_owned());
+    let now = now_ms();
+    let run_id = format!("flow-step-{}", uuid::Uuid::new_v4());
+    let start = engine::Start {
+        run_id: run_id.clone(),
+        routine_id: routine.id.clone(),
+        routine_name: routine.name.clone(),
+        owner: routine.bot_id.clone(),
+        run_at: now,
+        timeout: Duration::from_secs(if routine.timeout_seconds == 0 {
+            default_timeout()
+        } else {
+            routine.timeout_seconds
+        }),
+        max_depth: super::max_depth(),
+        instruction: routine.instruction.clone(),
+        case_text: None,
+        outputs: routine.outputs.clone(),
+        event: json!({"source":"test"}),
+        root: engine::Root::Replied(root),
+        from_step: Some(step.to_owned()),
+        seed,
+        run_time_text: engine::run_time_text(now, &routine.triggers),
     };
     hub.routines.stage_flow(&hub.store, start.clone())?;
     tokio::spawn(engine::execute(hub.clone(), start));
@@ -524,6 +588,18 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
                 document::save_pending(&hub.store, bot, &waiting)?;
                 json!({"conflicts": waiting.conflicts, "document": waiting.document})
             }
+        }
+        "runRoutineFlowFromStep" => {
+            let (bot, routine_id, key) = (id_arg(b, "botId")?, id_arg(b, "routineId")?, id_arg(b, "nodeKey")?);
+            if !hub.routines.owns(bot, routine_id) {
+                bail!("routine not found among this bot's routines");
+            }
+            let step = match key.split_once(':') {
+                Some(("bot", id)) if !id.is_empty() => id.to_owned(),
+                Some(("media", id)) if !id.is_empty() => format!("media:{id}"),
+                _ => bail!("nodeKey must name a bot or a media step"),
+            };
+            json!({"runId": run_from_step(hub, &routine(hub, routine_id)?, &step)?})
         }
         _ => {
             let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);

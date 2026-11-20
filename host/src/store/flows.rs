@@ -75,7 +75,7 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             id TEXT PRIMARY KEY, run_id TEXT NOT NULL, routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL,
             bot_id TEXT NOT NULL, delivery_id TEXT, input TEXT NOT NULL, output TEXT,
             status TEXT NOT NULL CHECK(status IN ('running','succeeded','failed','skipped','cancelled')),
-            error TEXT, files TEXT, run_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+            error TEXT, files TEXT, settings TEXT, run_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
             UNIQUE(run_id, bot_id));
          CREATE INDEX IF NOT EXISTS routine_flow_steps_routine ON routine_flow_steps(routine_id, run_at DESC);
          CREATE INDEX IF NOT EXISTS routine_flow_steps_status ON routine_flow_steps(status);
@@ -95,6 +95,16 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL);
          CREATE INDEX IF NOT EXISTS routine_flow_media_routine ON routine_flow_media(routine_id);",
     )?;
+    // A database built before a step kept its settings has the table but not the column. `open` runs
+    // on every start, so this keeps older databases readable without a schema version bump here.
+    let has_settings: bool = c.query_row(
+        "SELECT count(*) > 0 FROM pragma_table_info('routine_flow_steps') WHERE name = 'settings'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_settings {
+        c.execute_batch("ALTER TABLE routine_flow_steps ADD COLUMN settings TEXT;")?;
+    }
     Ok(())
 }
 
@@ -187,6 +197,25 @@ impl Store {
         self.with_connection(|c| {
             let mut st = c.prepare(&format!("SELECT {LINK_COLUMNS} FROM routine_flow_links WHERE id = ?1"))?;
             Ok(st.query_map([id], row_link)?.next().transpose()?)
+        })
+    }
+
+    /// The settings and inputs a step actually ran with. Runs saved before steps kept them have no
+    /// row here, which a client reads as "no saved settings" rather than an error.
+    pub fn flow_step_settings(&self, step_id: &str) -> Result<Option<serde_json::Value>> {
+        self.with_connection(|c| {
+            let raw: Option<String> =
+                c.query_row("SELECT settings FROM routine_flow_steps WHERE id = ?1", [step_id], |row| row.get(0))?;
+            Ok(raw.and_then(|raw| serde_json::from_str(&raw).ok()))
+        })
+    }
+
+    /// Saves what a step ran with. A null (older run, or no settings) clears the column.
+    pub fn flow_set_step_settings(&self, step_id: &str, settings: Option<serde_json::Value>) -> Result<()> {
+        let value = settings.map(|value| value.to_string());
+        self.with_connection(|c| {
+            c.execute("UPDATE routine_flow_steps SET settings = ?2 WHERE id = ?1", params![step_id, value])?;
+            Ok(())
         })
     }
 

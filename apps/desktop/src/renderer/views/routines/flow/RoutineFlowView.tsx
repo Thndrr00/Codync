@@ -3,13 +3,14 @@ import type { MediaKind } from '@shared/media'
 import { isGroup, type Bot } from '@shared/models'
 import { Button, ChoicePicker, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
 import { Dialog, DialogField, ModalHeader, Sheet } from '../../../components/Overlay'
-import { AnchoredMenu } from '../../../components/Menu'
+import { AnchoredMenu, type MenuItem } from '../../../components/Menu'
+import { Icon } from '../../../components/Icon'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
 import {
-  NODE_WIDTH, canvasBotIds, connectProblem, layoutNodes, mediaKey, mediaTitle,
-  type FlowCanvas, type FlowLink, type FlowMedia,
+  NODE_WIDTH, botKey, canvasBotIds, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle,
+  type FlowCanvas, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
 } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
@@ -21,6 +22,7 @@ import {
 import { groupsOf, groupSpot, newGroupId, outputType, parsePort, type CanvasWithGroups, type FlowGroup } from './flow-groups'
 import { FlowInspector, type FlowTarget, type MediaSettings } from './FlowInspector'
 import { FlowList } from './FlowList'
+import { clipped, hasMore, leftmostNode, settingsOf, type FlowStepSettings } from './flow-settings'
 import { RoutineEditorView } from '../RoutineEditorView'
 import './routine-flow.css'
 
@@ -33,6 +35,79 @@ const canTakeWork = (bot: Bot) => !bot.hidden && !isGroup(bot) && bot.backend !=
 function freeSpot(canvas: FlowCanvas) {
   const nodes = layoutNodes(canvas)
   return { x: Math.max(0, ...nodes.map((n) => n.x + NODE_WIDTH + 90)), y: Math.min(0, ...nodes.map((n) => n.y)) }
+}
+
+/** One saved piece of a step's settings, with a copy button and Show more for long text. */
+function SettingsText({ label, value }: { label: string; value: string }) {
+  const tr = useTr()
+  const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+  return (
+    <VStack gap={2} className="flow-setting-text">
+      <HStack gap={6} align="center">
+        <Text size="caption" tone="secondary" grow>{tr(label)}</Text>
+        <IconButton
+          title={tr(copied ? 'Copied' : 'Copy')}
+          icon={copied ? 'checkmark' : 'doc.on.doc'}
+          onClick={() => {
+            void navigator.clipboard.writeText(value).then(() => setCopied(true))
+          }}
+        />
+      </HStack>
+      <Text size="callout" className={expanded ? '' : 'flow-clamp'}>{clipped(value, expanded)}</Text>
+      {hasMore(value) ? (
+        <Button kind="secondary" onClick={() => setExpanded(!expanded)}>{tr(expanded ? 'Show less' : 'Show more')}</Button>
+      ) : null}
+    </VStack>
+  )
+}
+
+/** The settings a step ran with, read from the run record; an older run simply has none. */
+function SavedSettings({ settings }: { settings: FlowStepSettings | null }) {
+  const tr = useTr()
+  if (!settings) {
+    return <Text size="callout" tone="secondary">{tr('This run was saved before steps kept their settings.')}</Text>
+  }
+  return (
+    <VStack gap={10}>
+      <Text size="caption" tone="secondary" weight="semibold">{tr('Settings used')}</Text>
+      {settings.kind === 'bot' ? (
+        <>
+          {settings.instruction ? <SettingsText label="Instruction" value={settings.instruction} /> : null}
+          {settings.model ? <SettingsText label="Model" value={settings.model} /> : null}
+          {Object.entries(settings.modelOptions ?? {}).map(([key, value]) => (
+            <SettingsText key={key} label={key} value={value} />
+          ))}
+        </>
+      ) : (
+        <>
+          {settings.prompt ? <SettingsText label="What to make" value={settings.prompt} /> : null}
+          {settings.model ? <SettingsText label="Model" value={settings.model} /> : null}
+          {settings.aspect ? <SettingsText label="Aspect ratio" value={settings.aspect} /> : null}
+          {settings.duration !== null && settings.duration !== undefined ? (
+            <SettingsText label="Length" value={`${settings.duration}s`} />
+          ) : null}
+          {settings.resolution ? <SettingsText label="Resolution" value={settings.resolution} /> : null}
+          {settings.transparent !== null && settings.transparent !== undefined ? (
+            <SettingsText label="Transparent background" value={settings.transparent ? 'Yes' : 'No'} />
+          ) : null}
+          {settings.voice ? <SettingsText label="Voice" value={settings.voice} /> : null}
+        </>
+      )}
+      <Text size="caption" tone="secondary" weight="semibold">{tr('Inputs read')}</Text>
+      {settings.inputs.length === 0 ? (
+        <Text size="callout" tone="secondary">{tr('No earlier step handed anything to this one.')}</Text>
+      ) : (
+        settings.inputs.map((input, index) => (
+          <VStack key={`${input.from}-${index}`} gap={2} className="flow-setting-input">
+            <Text size="caption" tone="secondary">{input.from}</Text>
+            {input.instruction ? <SettingsText label="Instruction" value={input.instruction} /> : null}
+            <SettingsText label="Answer" value={input.text} />
+          </VStack>
+        ))
+      )}
+    </VStack>
+  )
 }
 
 /** A bot's routine flow: its canvas (or the same flow as a list), and an inspector for the selection. */
@@ -49,6 +124,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   /** A save found fields both people changed: the merged document and the choices still needed. */
   const [conflict, setConflict] = useState<{ document: FlowDocument; conflicts: FlowConflict[] } | null>(null)
   const [choices, setChoices] = useState<Record<string, FlowChoice>>({})
+  /** The step whose saved settings are open in the sheet. */
+  const [shownSettings, setShownSettings] = useState<{ card: FlowRoutineCard; step: FlowStep } | null>(null)
   const [creating, setCreating] = useState(false)
   const [choose, setChoose] = useState<{ from: string; to: string; at: { x: number; y: number }; routines: { id: string; name: string }[] } | null>(null)
   /** Keys being grouped, waiting for a name (Ctrl/Cmd+G). */
@@ -260,6 +337,122 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }])
   }
 
+  /** The newest step a canvas node left in a run, and the routine it belongs to. */
+  const stepOfNode = (key: string): { card: FlowRoutineCard; step: FlowStep } | null => {
+    const [kind, id] = key.split(':')
+    if (!id) return null
+    const target = kind === 'media' ? mediaKey(id) : botKey(id)
+    for (const card of canvas.routines) {
+      const step = card.steps.find((candidate) => candidate.botId === target)
+      if (step) return { card, step }
+    }
+    return null
+  }
+
+  /** Starts a new run at this step; the steps before it hand on their stored answers. */
+  const runFromStep = async (key: string) => {
+    if (offline) return
+    const [kind, id] = key.split(':')
+    if (!id) return
+    const nodeKey = kind === 'media' ? mediaKey(id) : botKey(id)
+    const card = stepOfNode(key)?.card
+      ?? canvas.routines.find((candidate) =>
+        canvas.links.some((link) => link.routineId === candidate.routine.id && (link.fromBotId === id || link.toBotId === id)))
+    if (!card) {
+      setNote(tr('That step is not part of a routine on this canvas.'))
+      return
+    }
+    setNote(null)
+    try {
+      await (await store.ready()).call('runRoutineFlowFromStep', { botId, routineId: card.routine.id, nodeKey })
+      setSelection({ kind: 'node', key })
+      await flow.load()
+    } catch (error) {
+      setNote(`${tr('Could not run from this step.')} ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /** Restores a step's saved settings so the same step can be run again with them. */
+  const restoreSettings = async (target: { card: FlowRoutineCard; step: FlowStep }) => {
+    const { card, step } = target
+    const settings = settingsOf(canvas.stepSettings, step.id)
+    if (!settings) return
+    const mediaId = mediaEnd(step.botId)
+    if (mediaId !== null) {
+      const media = canvas.mediaNodes.find((node) => node.id === mediaId)
+      if (!media) {
+        setNote(tr('That picture step is gone.'))
+        return
+      }
+      await flow.updateMedia(media.id, {
+        model: settings.model,
+        prompt: settings.prompt ?? '',
+        aspect: settings.aspect ?? '1:1',
+        duration: settings.duration ?? 6,
+        resolution: settings.resolution ?? '480p',
+        transparent: settings.transparent ?? false,
+        voice: settings.voice ?? null,
+      })
+    } else {
+      const link = canvas.links.find((item) => item.routineId === card.routine.id && item.toBotId === step.botId)
+      if (!link) {
+        setNote(tr('The link to this step is gone; add it again first.'))
+        return
+      }
+      await flow.updateLink(link.id, settings.instruction ?? link.instruction, settings.model ?? null, settings.modelOptions ?? {})
+    }
+    setShownSettings(null)
+    setSelection({ kind: 'node', key: mediaId !== null ? mediaKey(mediaId) : botKey(step.botId) })
+  }
+
+  /** Duplicates a picture step with its settings and the connections that fed it. The copy is selected and raised. */
+  const duplicateMedia = async (media: FlowMedia) => {
+    const places = new Map(layoutNodes(canvas).map((node) => [node.key, node]))
+    const copy = await flow.addMedia(media.routineId, media.kind)
+    if (!copy) return
+    await flow.updateMedia(copy.id, {
+      model: media.model,
+      prompt: media.prompt,
+      aspect: media.aspect,
+      duration: media.duration,
+      resolution: media.resolution,
+      transparent: media.transparent,
+      voice: media.voice,
+    })
+    for (const link of canvas.links.filter((item) => item.routineId === media.routineId && item.toBotId === mediaKey(media.id))) {
+      await flow.connect(link.routineId, link.fromBotId, mediaKey(copy.id), link.instruction)
+    }
+    const at = places.get(mediaKey(media.id))
+    if (at) await flow.move(mediaKey(copy.id), at.x + 40, at.y + 40)
+    setSelection({ kind: 'node', key: mediaKey(copy.id) })
+  }
+
+  /** The menu a step's button opens: run from it, see its settings, duplicate a picture, or start at the first step. */
+  const menuItems = (key: string): MenuItem[] => {
+    const found = stepOfNode(key)
+    const rows: MenuItem[] = []
+    if (found) {
+      rows.push({ title: 'Run from this step', icon: 'play.fill', action: () => void runFromStep(key) })
+      rows.push({ title: 'Settings', icon: 'gearshape', action: () => setShownSettings(found) })
+      // A deterministic retry start: the leftmost node of this routine, or the topmost in one column.
+      const members = new Set<string>([found.card.routine.botId])
+      for (const link of canvas.links) {
+        if (link.routineId === found.card.routine.id) {
+          members.add(link.fromBotId)
+          members.add(link.toBotId)
+        }
+      }
+      const first = leftmostNode(layoutNodes(canvas).filter((node) => node.kind !== 'routine' && members.has(node.id)))
+      if (first && first.key !== key) {
+        rows.push({ title: 'Run from the first step', icon: 'arrow.uturn.backward', action: () => void runFromStep(first.key) })
+      }
+    }
+    const mediaId = key.startsWith('media:') ? key.slice(6) : null
+    const media = mediaId ? canvas.mediaNodes.find((node) => node.id === mediaId) : null
+    if (media) rows.push({ title: 'Duplicate', icon: 'doc.on.doc', action: () => void duplicateMedia(media) })
+    return rows
+  }
+
   return (
     <VStack gap={8} className="routine-flow">
       <HStack gap={8} wrap>
@@ -281,7 +474,19 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       {note ? <Text size="caption" tone="danger">{note}</Text> : null}
       {mergeNote ? <Text size="caption" tone="attention" className="flow-merge-note">{tr('Someone else edited this flow; their changes were merged in.')}</Text> : null}
       {canvas.routines.length === 0 ? (
-        <Text as="div" size="callout" tone="secondary" className="outlined-card flow-state">{tr('No routines yet. Ask the bot for one, then connect it to other bots here.')}</Text>
+        <VStack gap={10} align="center" className="outlined-card flow-state flow-empty">
+          <Icon name="sparkles" size={28} />
+          <Text size="callout" weight="semibold">{tr('No workflows yet')}</Text>
+          <Text size="callout" tone="secondary">{note ?? tr('A workflow starts with a routine and hands its answer on to other bots.')}</Text>
+          <div className="flow-sample" aria-hidden="true">
+            <span className="flow-sample-node"><Icon name="clock.arrow.circlepath" size={16} />{tr('Routine')}</span>
+            <span className="flow-sample-line" />
+            <span className="flow-sample-node"><Icon name="bubble.left" size={16} />{tr('Bot')}</span>
+            <span className="flow-sample-line" />
+            <span className="flow-sample-node"><Icon name="photo" size={16} />{tr('Picture')}</span>
+          </div>
+          <Button disabled={offline} onClick={() => setCreating(true)}>{tr('New workflow')}</Button>
+        </VStack>
       ) : (
         <HStack gap={8} align="stretch" className="flow-body">
           <div className="flow-main">
@@ -299,6 +504,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 onUngroup={(id) => void ungroup(id)}
                 onToggleGroup={(id) => void toggleGroup(id)}
                 onFiles={(files) => void addFiles(files)}
+                menuItems={menuItems}
                 onRun={(id) => {
                   setSelection({ kind: 'node', key: `routine:${id}` })
                   void flow.test(id)
@@ -326,6 +532,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
             onAddMedia={(id, kind) => void addMedia(id, kind)}
             onSaveMedia={saveMedia}
             onRemoveMedia={(media) => void removeMedia(media)}
+            onShowSettings={(card, step) => setShownSettings({ card, step })}
+            onDuplicateMedia={(media) => void duplicateMedia(media)}
             onRenameGroup={(id, name) => void renameGroup(id, name)}
             onToggleGroup={(id) => void toggleGroup(id)}
             onUngroup={(id) => void ungroup(id)}
@@ -416,6 +624,26 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
           </VStack>
         ) : null}
       </Dialog>
+      <Sheet open={shownSettings !== null} onClose={() => setShownSettings(null)} width={520} height={620}>
+        {shownSettings ? (
+          <VStack gap={14} className="routine-flow-sheet flow-settings-sheet">
+            <ModalHeader icon="gearshape" title={tr('Step settings')} onClose={() => setShownSettings(null)} />
+            <VStack gap={8}>
+              <Text weight="semibold">{shownSettings.step.botId}</Text>
+              <SavedSettings settings={settingsOf(canvas.stepSettings, shownSettings.step.id)} />
+            </VStack>
+            <HStack gap={8}>
+              <Spacer />
+              <Button
+                disabled={offline || !settingsOf(canvas.stepSettings, shownSettings.step.id)}
+                onClick={() => void restoreSettings(shownSettings)}
+              >
+                {tr('Use these settings')}
+              </Button>
+            </HStack>
+          </VStack>
+        ) : null}
+      </Sheet>
     </VStack>
   )
 }

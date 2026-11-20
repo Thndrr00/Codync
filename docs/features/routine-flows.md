@@ -93,6 +93,17 @@ Rules the host enforces:
 - **Disconnecting** a link does not remove links that hang below it; they stay but are not reached until the
   flow reaches them again.
 
+A step's menu can start a **run from this step**: the host begins a new run there, recording the stored answers
+and settings of the steps before it (and reusing picture answers as given) instead of asking those bots again; it
+re-runs only the chosen step and what hangs below it. Each step now also keeps the prompt, model, options and
+inputs it actually ran with, so **Settings** shows what made a result and **Use these settings** puts them back
+into the link or picture step for a rerun (older runs simply show no saved settings). A bot step shows its agent's
+model as text — set a model on the link for a different one, or add a picture/clip step for generated media — and
+pictures connected to a step are handed on with an instruction to use them as given, or to stop with a clear
+message if the model cannot read pictures. A schedule trigger adds its run time in UTC and its zone to the steps
+that follow so a model can compute a time window. Duplicating a picture step keeps its settings and the links
+that fed it, and selects and raises the copy; an empty canvas shows a sample workflow and **New workflow**.
+
 ## Host API
 
 All methods use the usual authenticated API (`POST /api/<method>`) and the E2E channel with a device that has the
@@ -116,6 +127,7 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `saveRoutineFlow` | `botId`, `baseRev`, `document` (`nodes`, `links`, `settings`, `groups` as id → version maps, optional `rev`) | `{"saved": document, "merged": bool}` or `{"conflicts": [...], "document": merged}` |
 | `resolveRoutineFlowConflict` | `botId`, `field`, `key`, `choice` (`local`/`incoming`) | `{"saved": document}` or the remaining `{"conflicts": [...], "document": merged}` |
 | `testRoutineFlow` | `botId` (the routine's owner), `routineId`, optional `input` | `{"runId": "flow-test-…"}` |
+| `runRoutineFlowFromStep` | `botId`, `routineId`, `nodeKey` (`bot:` or `media:`) | `{"runId": "flow-step-…"}` |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`
 (a sample sentence by default), so a link can be tried without spending a run. Its steps carry the returned
@@ -132,7 +144,8 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
                  "createdAt": 0, "updatedAt": 0 },
     "recentRuns": [ /* the newest 10 routine runs, newest first, as in `routines` */ ],
     "upcomingRuns": [1730000000000],
-    "steps": [ /* the steps of the routine's newest run that has any, oldest first */ ]
+    "steps": [ /* the steps of the routine's newest run that has any, oldest first */ ],
+    "stepSettings": { /* step id → the settings and inputs it ran with; absent for older runs */ }
   }],
   "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
   "mediaNodes": [ { "id": "…", "routineId": "…", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],

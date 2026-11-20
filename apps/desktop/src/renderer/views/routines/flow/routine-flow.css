@@ -103,6 +103,7 @@
   position: absolute;
   left: 50%;
   bottom: 12px;
+  z-index: 3;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -287,7 +288,47 @@
 .flow-run-dot[data-status='skipped'] { background: var(--secondary); }
 .flow-node[data-selected='true'],
 .flow-node:focus-visible {
+  z-index: 2;
   box-shadow: 0 0 0 2px var(--accent), var(--shadow-m);
+}
+
+/* A step's menu lives inside the canvas, clamped to its bounds: never under the tools or header. */
+.flow-node-menu-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(var(--text-rgb), 0.09);
+  color: var(--text);
+  cursor: pointer;
+}
+.flow-node-menu-button:hover {
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+}
+.flow-node-menu-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.flow-node-menu {
+  position: absolute;
+  z-index: 4;
+  overflow: hidden;
+  border-radius: var(--radius-m);
+  background: var(--sheet);
+  box-shadow: var(--shadow-m);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity var(--morph), transform var(--morph);
+}
+.flow-node-menu.shown {
+  opacity: 1;
+  transform: translateY(0);
 }
 .flow-node[data-target='true'] {
   box-shadow: 0 0 0 2px var(--added), var(--shadow-m);
@@ -477,6 +518,54 @@
 /* A quiet note when another person's edit was folded into ours (motion through the theme tokens). */
 .flow-merge-note {
   transition: opacity var(--morph);
+}
+
+/* Saved step settings, with a copy button and Show more for long text. */
+.flow-setting-text {
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  background: rgba(var(--text-rgb), 0.05);
+}
+.flow-setting-input {
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+}
+.flow-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.flow-settings-sheet .flow-instruction {
+  min-height: 0;
+}
+
+/* The empty canvas shows what a workflow looks like, and a way to make one. */
+.flow-empty {
+  align-items: center;
+  padding: 28px 16px;
+}
+.flow-sample {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+.flow-sample-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--bubble-user);
+  font-size: var(--text-caption);
+}
+.flow-sample-line {
+  width: 18px;
+  height: 1px;
+  background: var(--chrome-stroke);
 }
 
 /* The two versions of each field both people changed, inside the shared conflict Dialog. */

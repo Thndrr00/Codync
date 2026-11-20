@@ -7,7 +7,7 @@ import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
 import {
   botKey, latestStep, mediaKey, statusLabel, stepOf,
-  type FlowCanvas, type FlowLink, type FlowMedia, type FlowRoutineCard,
+  type FlowCanvas, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
 } from '../../../lib/routine-flow.ts'
 import { useStore } from '../../../store/context'
 import { useAgentModels } from '../../bots/agent-models'
@@ -63,6 +63,10 @@ interface Props {
   onAddMedia: (routineId: string, kind: MediaKind) => void
   onSaveMedia: (media: FlowMedia, settings: MediaSettings) => void
   onRemoveMedia: (media: FlowMedia) => void
+  /** Shows the settings and inputs a step actually ran with. */
+  onShowSettings: (card: FlowRoutineCard, step: FlowStep) => void
+  /** Duplicates a picture step with its settings and connected reference pictures. */
+  onDuplicateMedia: (media: FlowMedia) => void
   onRenameGroup: (groupId: string, name: string) => void
   onToggleGroup: (groupId: string) => void
   onUngroup: (groupId: string) => void
@@ -174,7 +178,7 @@ function LinkPanel({ link, bots, busy, offline, onSaveInstruction, onDisconnect 
   )
 }
 
-function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled, onAddMedia }: Props & { card: FlowRoutineCard }) {
+function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled, onAddMedia, onShowSettings }: Props & { card: FlowRoutineCard }) {
   const tr = useTr()
   const { routine } = card
   const last = card.recentRuns[0]
@@ -196,14 +200,14 @@ function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled, onAdd
         <Button kind="secondary" disabled={busy || offline} onClick={() => onAddMedia(routine.id, 'image')}>{tr('Add a picture step')}</Button>
         <Button kind="secondary" disabled={busy || offline} onClick={() => onAddMedia(routine.id, 'video')}>{tr('Add a clip step')}</Button>
       </HStack>
-      <Steps card={card} />
+      <Steps card={card} onShowSettings={onShowSettings} />
       <History card={card} />
     </VStack>
   )
 }
 
 /** The steps of the latest run, one line each, with a bot's error or the start of its answer. */
-function Steps({ card }: { card: FlowRoutineCard }) {
+function Steps({ card, onShowSettings }: { card: FlowRoutineCard; onShowSettings: (card: FlowRoutineCard, step: FlowStep) => void }) {
   const tr = useTr()
   if (card.steps.length === 0) return null
   return (
@@ -218,6 +222,10 @@ function Steps({ card }: { card: FlowRoutineCard }) {
           </HStack>
           {step.error ? <Text size="caption" tone="danger" lines={3}>{step.error}</Text> : null}
           {step.output ? <Text size="caption" tone="secondary" lines={3}>{step.output}</Text> : null}
+          <HStack gap={6}>
+            <Spacer />
+            <Button kind="secondary" onClick={() => onShowSettings(card, step)}>{tr('Settings')}</Button>
+          </HStack>
         </VStack>
       ))}
     </VStack>
@@ -249,7 +257,8 @@ function BotPanel({ botId, bot, canvas, busy, offline, targets, onConnectFrom, o
   return (
     <VStack gap={10} className="flow-inspector">
       <Text weight="semibold">{bot?.name ?? tr('Unknown bot')}</Text>
-      <Text size="callout" tone="secondary">{bot?.model || bot?.backend || ''}</Text>
+      <Text size="callout" tone="secondary">{tr('Model')}: {bot?.model || bot?.backend || tr('Default')}</Text>
+      <Text size="caption" tone="secondary">{tr('This step uses its agent’s model. Set a model on the link that reaches it to use a different one for a single step.')}</Text>
       <HStack gap={8}>
         <StatusChip status={step?.status ?? null} />
         <Text size="caption" tone="secondary">{tr(statusLabel(step?.status ?? null))}</Text>
@@ -272,7 +281,7 @@ function BotPanel({ botId, bot, canvas, busy, offline, targets, onConnectFrom, o
  * model offers, plus what it may hand the file on to (host/src/media).
  * Ported from OpenBot 0.70.0 `WorkflowImageNode.tsx`'s inspector.
  */
-function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSaveMedia, onRemoveMedia }: Props & { media: FlowMedia }) {
+function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSaveMedia, onRemoveMedia, onDuplicateMedia }: Props & { media: FlowMedia }) {
   const tr = useTr()
   const store = useStore()
   const nodeKey = mediaKey(media.id)
@@ -423,6 +432,7 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
       <HStack gap={8}>
         <Button disabled={busy || offline || !changed} onClick={() => onSaveMedia(media, draft)}>{tr('Save')}</Button>
         <Spacer />
+        <Button kind="secondary" disabled={busy || offline} onClick={() => onDuplicateMedia(media)}>{tr('Duplicate')}</Button>
         <Button kind="secondary" disabled={busy || offline} onClick={() => onRemoveMedia(media)}>{tr('Remove the step')}</Button>
       </HStack>
       <DropdownMenu

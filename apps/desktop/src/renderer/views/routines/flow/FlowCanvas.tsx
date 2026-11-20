@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import type { Bot } from '@shared/models'
 import { IconButton } from '../../../components/Controls'
 import { Icon } from '../../../components/Icon'
+import { MenuPanel, type MenuItem } from '../../../components/Menu'
+import { useEscape, usePresence } from '../../../components/Overlay'
 import { useTr } from '../../../lib/use-language'
 import {
   NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, isUnconnected, latestStep, mediaOf, mediaTitle, nodeAt, stepOf, zoomAt,
@@ -13,6 +15,7 @@ import {
 } from './flow-groups'
 import { FlowGroupCard, type GroupPreview } from './FlowGroupCard'
 import { FlowNodeCard } from './FlowNodeCard'
+import { flowMenuPoint } from './flow-settings'
 
 export type FlowSelection = { kind: 'node'; key: string } | { kind: 'edge'; id: string } | { kind: 'group'; id: string } | null
 
@@ -38,6 +41,8 @@ interface Props {
   onToggleGroup: (groupId: string) => void
   /** Two or more files were pasted or dropped; the view makes a node per file in one group. */
   onFiles: (files: { name: string }[]) => void
+  /** The step menu's rows: Run from this step, Settings and (for a picture step) Duplicate. */
+  menuItems: (nodeKey: string) => MenuItem[]
 }
 
 const NUDGE = 20
@@ -94,7 +99,7 @@ function MiniMap({ nodes, view, box, onCenter }: {
 }
 
 /** The canvas: routine and bot nodes, their edges, groups, pan, zoom (wheel and buttons) and gestures. */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onRun, onStop }: Props) {
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onRun, onStop, menuItems }: Props) {
   const tr = useTr()
   const groups = groupsOf(canvas)
   const nodes = useMemo(() => groupedNodes(canvas), [canvas])
@@ -103,6 +108,11 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
   const [live, setLive] = useState<{ key: string; x: number; y: number } | null>(null)
   const [wire, setWire] = useState<{ from: string; x: number; y: number } | null>(null)
   const [multi, setMulti] = useState<Set<string>>(new Set())
+  /** A step's menu, anchored to its button but kept inside the canvas (never under the tools). */
+  const [menu, setMenu] = useState<{ key: string; x: number; top: number; bottom: number } | null>(null)
+  const menuPresence = usePresence(menu !== null, 120)
+  const menuLayer = useRef<HTMLDivElement>(null)
+  useEscape(menu !== null, () => setMenu(null), menuLayer)
   const viewport = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 800, height: 500 })
   const fitted = useRef(false)
@@ -161,6 +171,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
     if (event.target !== event.currentTarget && !(event.target as Element).classList.contains('flow-layer')) return
     onSelect(null)
     setMulti(new Set())
+    setMenu(null)
     let last = { x: event.clientX, y: event.clientY }
     track(
       (e) => {
@@ -262,6 +273,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
   }
 
   const pick = (key: string, event: PointerEvent, id?: string) => {
+    setMenu(null)
     if (event.ctrlKey || event.metaKey || event.shiftKey) {
       setMulti((prev) => {
         const next = new Set(prev)
@@ -422,10 +434,32 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               onKey={(e) => keyOnNode(raw, e)}
               onRun={raw.kind === 'routine' ? () => onRun(raw.id) : undefined}
               onStop={raw.kind === 'routine' ? () => onStop(raw.id) : undefined}
+              onMenu={raw.kind === 'routine' ? undefined : (anchor) => setMenu({ key: raw.key, ...anchor })}
             />
           )
         })}
       </div>
+      {menu && menuPresence.mounted ? (() => {
+        const rows = menuItems(menu.key)
+        if (rows.length === 0) return null
+        const rect = size()
+        const at = flowMenuPoint(
+          { x: menu.x - rect.left, top: menu.top - rect.top, bottom: menu.bottom - rect.top },
+          box,
+          { width: 220, height: rows.length * 34 + 12 },
+        )
+        const maxHeight = Math.max(120, box.height - at.y - 8)
+        return (
+          <div
+            ref={menuLayer}
+            className={`flow-node-menu ${menuPresence.shown ? 'shown' : ''}`}
+            style={{ left: at.x, top: at.y, maxWidth: 220, maxHeight }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <MenuPanel items={rows} dismiss={() => setMenu(null)} maxHeight={maxHeight} />
+          </div>
+        )
+      })() : null}
       <MiniMap
         nodes={nodes.map(placed)}
         view={view}

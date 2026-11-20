@@ -28,11 +28,21 @@ impl Routines {
             .take(RECENT_RUNS)
             .cloned()
             .collect();
+        let steps = store.flow_last_steps(&r.id)?;
+        // What each step actually ran with, keyed by step id. Older runs have no settings, so a
+        // client can show "no saved settings" rather than treating the field as missing.
+        let mut step_settings = serde_json::Map::new();
+        for step in &steps {
+            if let Some(settings) = store.flow_step_settings(&step.id)? {
+                step_settings.insert(step.id.clone(), settings);
+            }
+        }
         Ok(json!({
             "routine": public(r),
             "recentRuns": runs,
             "upcomingRuns": if r.enabled { upcoming(r, now) } else { vec![] },
-            "steps": store.flow_last_steps(&r.id)?,
+            "steps": steps,
+            "stepSettings": step_settings,
         }))
     }
 

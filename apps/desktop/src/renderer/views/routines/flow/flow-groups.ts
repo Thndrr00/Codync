@@ -7,6 +7,7 @@ import {
   flowEdges, layoutNodes, mediaOf, NODE_WIDTH,
   type FlowCanvas, type FlowEdge, type FlowNode,
 } from '../../../lib/routine-flow.ts'
+import type { StepSettingsMap } from './flow-settings'
 
 export interface FlowGroup {
   id: string
@@ -19,8 +20,8 @@ export interface FlowGroup {
   y: number
 }
 
-/** A canvas as loaded, with the optional groups field an older host may leave out. */
-export type CanvasWithGroups = FlowCanvas & { groups?: FlowGroup[] }
+/** A canvas as loaded; `groups` and `stepSettings` are optional for an older host. */
+export type CanvasWithGroups = FlowCanvas & { groups?: FlowGroup[]; stepSettings?: StepSettingsMap }
 
 export const groupsOf = (canvas: CanvasWithGroups): FlowGroup[] => canvas.groups ?? []
 export const groupKey = (id: string) => `group:${id}`

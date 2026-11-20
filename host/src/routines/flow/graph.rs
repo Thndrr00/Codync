@@ -92,6 +92,21 @@ pub fn reached(owner: &str, links: &[FlowLink]) -> Vec<String> {
     reachable(owner, links).into_iter().filter(|b| *b != owner).map(str::to_owned).collect()
 }
 
+/// The step a run starts at and every step it hands work on to, `start` included. The other steps of
+/// the run keep their stored answers instead of being sent again. Stored links are acyclic, so the
+/// walk always ends; a stray cycle only repeats nodes already seen.
+pub fn downstream<'a>(start: &'a str, links: &'a [FlowLink]) -> BTreeSet<&'a str> {
+    let mut seen = BTreeSet::new();
+    let mut queue = vec![start];
+    while let Some(node) = queue.pop() {
+        if !seen.insert(node) {
+            continue;
+        }
+        queue.extend(links.iter().filter(|l| l.from_bot_id == node).map(|l| l.to_bot_id.as_str()));
+    }
+    seen
+}
+
 /// Why `from` can't hand work to `to` in this routine, or `None` when it can.
 pub fn connect_problem(owner: &str, links: &[FlowLink], from: &str, to: &str, max_depth: usize) -> Option<Problem> {
     if from == to {
@@ -210,5 +225,17 @@ mod tests {
         let links = [link("a", "b"), link("a", "x"), link("x", "y"), link("y", "z")];
         assert_eq!(connect_problem("a", &links, "b", "x", 3), Some(Problem::TooDeep(3)));
         assert_eq!(connect_problem("a", &links, "b", "x", 4), None);
+    }
+
+    #[test]
+    fn a_run_from_a_step_reaches_only_that_step_and_what_hangs_below_it() {
+        // a → b → d, a → c → d. Starting at b re-runs b and d; c keeps its stored answer.
+        let links = [link("a", "b"), link("b", "d"), link("a", "c"), link("c", "d")];
+        assert_eq!(downstream("b", &links), BTreeSet::from(["b", "d"]));
+        assert_eq!(downstream("c", &links), BTreeSet::from(["c", "d"]));
+        assert_eq!(downstream("d", &links), BTreeSet::from(["d"]));
+        // A step that hangs below a media step is reached the same way.
+        let media = [link("a", "media:1"), link("media:1", "b")];
+        assert_eq!(downstream("media:1", &media), BTreeSet::from(["media:1", "b"]));
     }
 }

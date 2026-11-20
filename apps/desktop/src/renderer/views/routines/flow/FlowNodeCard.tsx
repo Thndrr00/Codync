@@ -96,10 +96,12 @@ interface Props {
   /** Runs this routine's flow; only routine cards have it. */
   onRun?: () => void
   onStop?: () => void
+  /** Opens this step's menu (Run from this step, Settings, Duplicate); not on routine cards. */
+  onMenu?: (anchor: { x: number; top: number; bottom: number }) => void
 }
 
 /** One node of the canvas: a routine with its week and last runs, a bot with its latest step, or a step that makes a picture or a clip. */
-export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun, onStop }: Props) {
+export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun, onStop, onMenu }: Props) {
   const tr = useTr()
   const title = node.kind === 'routine' ? (routine?.routine.name ?? '') : node.kind === 'media' ? tr(mediaTitle(media ?? null)) : (bot?.name ?? tr('Unknown bot'))
   const kindName = node.kind === 'routine' ? tr('Routine') : node.kind === 'media' ? tr(media?.kind === 'video' ? 'Clip step' : 'Picture step') : tr('Bot')
@@ -140,6 +142,23 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
             <Text size="caption" tone="secondary" truncate>{routine?.routine.triggerDescriptions.join(' · ')}</Text>
           )}
         </VStack>
+        {node.kind !== 'routine' && onMenu ? (
+          <button
+            type="button"
+            className="flow-node-menu-button"
+            title={tr('Step menu')}
+            aria-label={tr('Step menu')}
+            disabled={disabled}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              const rect = event.currentTarget.getBoundingClientRect()
+              onMenu({ x: rect.left, top: rect.top, bottom: rect.bottom })
+            }}
+          >
+            <Icon name="ellipsis" size={14} />
+          </button>
+        ) : null}
         {node.kind === 'routine' && routine?.routine.running && onStop ? (
           <button
             type="button"
