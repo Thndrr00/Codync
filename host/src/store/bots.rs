@@ -242,7 +242,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::model::{BotKind, EntryKind, Lane, Permission, ProactiveSettings};
+    use crate::store::model::{BotKind, CustomProviderMode, EntryKind, Lane, Permission, ProactiveSettings};
     use crate::store::tests::temp_store;
 
     #[test]
@@ -260,6 +260,7 @@ mod tests {
             avatar_photo: None,
             backend: "claude".into(),
             command: None,
+            custom_provider_mode: CustomProviderMode::Cli,
             cwd: "/tmp".into(),
             permission: Permission::Ask,
             action_rules: std::collections::BTreeMap::new(),

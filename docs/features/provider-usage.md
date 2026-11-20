@@ -67,6 +67,19 @@ the compatible endpoint. Both the tools and the effort stay in the request; a
 keyless or other endpoint keeps the compatible adapter, and the key is only a
 header, never part of the body or a log.
 
+Codync's `custom` backend normally runs the command the user saved, so the HTTP
+path is **opt-in per bot**: `setCustomProviderMode` stores `openai-compatible`
+on that bot (the old `cli` default keeps every existing setup unchanged), and
+`customProviderMode` reads it back. Only a bot whose saved `OPENAI_BASE_URL` is
+exactly `https://api.openai.com/v1` **with** a saved `OPENAI_API_KEY` takes the
+HTTP path; the host posts one bounded, egress-checked request built by
+`agent::config::custom_request` to `/v1/responses`, with the key only in the
+`Authorization` header. Every other case — mode off, a keyless or different
+URL, a keeper-proxied key — leaves the bot's CLI as the launch path. The mode
+exists because the OpenAI v1 fix belongs to the request, while a custom bot's
+default is its own CLI: switching the transport has to be a deliberate choice,
+and analytics reports only the fixed mode name, never a URL or a key.
+
 Source tests cover version gating, invalid/missing quota, conversion and model
 groups, distinct account identities, Codex app-server parsing, Grok's proto3
 billing periods, the saved reading and Android decoding of unavailable

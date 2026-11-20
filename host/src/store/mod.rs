@@ -50,8 +50,8 @@ pub use flow_media::FlowMedia;
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
 pub use model::{
-    AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
-    Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
+    AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, CustomProviderMode, Entry, EntryKind,
+    Fallback, Lane, Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
 };
 pub use pins::{LIST_LIMIT, PINS_LIMIT};
 pub use week::Week;

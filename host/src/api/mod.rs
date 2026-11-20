@@ -7,6 +7,7 @@ pub mod apps_runtime;
 mod bots;
 mod catalog;
 mod computer_activity;
+mod custom_provider;
 pub mod devices;
 mod documents;
 mod events;
@@ -124,6 +125,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         }
         "mediaModels" => return media::models(hub, &b),
         _ => {}
+    }
+    if custom_provider::METHODS.contains(&method) {
+        return custom_provider::call(hub, caller, method, &b).await;
     }
     if matches!(method, "savedSearches" | "saveSearch" | "deleteSavedSearch") {
         return saved_searches::call(hub, caller, method, &b);

@@ -38,6 +38,39 @@ pub enum ActionClass {
     Routines,
 }
 
+/// How a custom backend's bot sends a turn. Codync's `custom` backend runs a CLI the user chose, so
+/// the CLI is the default and the OpenAI-compatible request is an opt-in (see the caller in
+/// `agent::backends::openai_compatible`). The wire names are fixed: a URL, a key or any other text
+/// is never accepted as a mode.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CustomProviderMode {
+    /// Run the bot's saved command over ACP: what a custom bot did before the mode existed.
+    #[default]
+    Cli,
+    /// Post the turn to the saved OpenAI-compatible endpoint instead of the command.
+    OpenaiCompatible,
+}
+
+impl CustomProviderMode {
+    /// The fixed name shown to clients and analytics. Never a URL or a key.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cli => "cli",
+            Self::OpenaiCompatible => "openai-compatible",
+        }
+    }
+
+    /// Only the two fixed names are accepted; anything else (a URL, a key, a typo) is refused.
+    pub fn parse(value: &str) -> anyhow::Result<Self> {
+        match value.trim() {
+            "cli" => Ok(Self::Cli),
+            "openai-compatible" => Ok(Self::OpenaiCompatible),
+            _ => anyhow::bail!("mode must be `cli` or `openai-compatible`"),
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub const ACTION_CLASSES: [&str; 7] = ["files", "shell", "browse", "browser", "apps", "bots", "routines"];
 
@@ -163,6 +196,10 @@ pub struct BotConfig {
     pub backend: String,
     #[serde(default)]
     pub command: Option<String>,
+    /// Opt-in for a `custom` bot: send the turn as an OpenAI-compatible HTTP request instead of
+    /// running `command`. Saved with a default so a bot configured before the mode keeps its CLI.
+    #[serde(default)]
+    pub custom_provider_mode: CustomProviderMode,
     /// Empty for a group.
     #[serde(default)]
     pub cwd: String,
@@ -456,5 +493,32 @@ mod tests {
         assert_eq!(wire["learnSkills"], true, "clients read the setting as learnSkills");
         let back: BotConfig = serde_json::from_value(wire).unwrap();
         assert!(back.learn_skills, "the setting round-trips");
+    }
+
+    #[test]
+    fn a_custom_bot_saved_before_the_mode_runs_its_cli() {
+        let older: BotConfig = serde_json::from_value(serde_json::json!({
+            "id": "b", "name": "Bot", "backend": "custom", "command": "my-agent --acp"
+        }))
+        .unwrap();
+        assert_eq!(older.custom_provider_mode, CustomProviderMode::Cli);
+        assert_eq!(older.custom_provider_mode.as_str(), "cli");
+
+        let mut cfg = older;
+        cfg.custom_provider_mode = CustomProviderMode::OpenaiCompatible;
+        let wire = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(wire["customProviderMode"], "openai-compatible");
+        let back: BotConfig = serde_json::from_value(wire).unwrap();
+        assert_eq!(back.custom_provider_mode, CustomProviderMode::OpenaiCompatible);
+        assert_eq!(back.custom_provider_mode.as_str(), "openai-compatible");
+    }
+
+    #[test]
+    fn the_provider_mode_accepts_only_its_fixed_names() {
+        assert_eq!(CustomProviderMode::parse(" cli ").unwrap(), CustomProviderMode::Cli);
+        assert_eq!(CustomProviderMode::parse("openai-compatible").unwrap(), CustomProviderMode::OpenaiCompatible);
+        for not_a_mode in ["https://api.openai.com/v1", "sk-secret", "OpenAI", ""] {
+            assert!(CustomProviderMode::parse(not_a_mode).is_err(), "accepted {not_a_mode}");
+        }
     }
 }

@@ -16,6 +16,7 @@ use std::path::Path;
 mod catalog;
 mod credentials;
 mod hermes;
+pub(crate) mod openai_compatible;
 mod search_path;
 mod sign_in;
 mod workbuddy;

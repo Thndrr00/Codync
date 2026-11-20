@@ -29,7 +29,6 @@ pub fn claude_check_dir<'a>(home: &'a Path, probe: &'a Path, use_setup: bool) ->
 
 /// A custom endpoint a bot points at, as far as request building is concerned. The key is only a
 /// flag here: it is sent as a header by the agent CLI, never in a request body or a log.
-#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
 pub struct CustomEndpoint<'a> {
     pub base_url: &'a str,
     pub api_key: Option<&'a str>,
@@ -41,21 +40,18 @@ pub struct CustomEndpoint<'a> {
 /// uses the Responses adapter (`/responses`, `store: false`), which accepts both. A keyless or
 /// other endpoint keeps the compatible adapter: the OpenAI adapter would otherwise read an
 /// inherited `OPENAI_API_KEY` and send a key the user never gave this endpoint.
-#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
 pub fn uses_responses_api(endpoint: &CustomEndpoint<'_>) -> bool {
     endpoint.api_key.is_some_and(|key| !key.trim().is_empty())
         && endpoint.base_url.trim().trim_end_matches('/').eq_ignore_ascii_case("https://api.openai.com/v1")
 }
 
 /// The path the agent CLI calls for `endpoint`.
-#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
 pub fn request_path(endpoint: &CustomEndpoint<'_>) -> &'static str {
     if uses_responses_api(endpoint) { "/v1/responses" } else { "/v1/chat/completions" }
 }
 
 /// The request body for one turn on a custom endpoint: function tools and reasoning effort are
 /// both kept, whichever adapter the endpoint uses. The key is not part of the body.
-#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
 pub fn custom_request(endpoint: &CustomEndpoint<'_>, model: &str, effort: Option<&str>, tools: &[Value]) -> Value {
     let mut body = json!({"model": model, "stream": true, "tools": tools});
     if uses_responses_api(endpoint) {
