@@ -78,6 +78,27 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "agentPass" => Ok(crate::chat::pass::outcome(str_arg(&b, "reply")?)),
+        "contextWindow" => Ok(crate::chat::context_window::should_compact(
+            b["used"].as_u64().unwrap_or(0),
+            b["total"].as_u64().unwrap_or(0),
+        )),
+        "teamCoordinator" => {
+            let bots = b["bots"].as_array().cloned().unwrap_or_default();
+            Ok(match crate::chat::coordinator::pick(&bots) {
+                Some(id) => crate::chat::coordinator::hand_back(&id),
+                None => json!({"to": Value::Null}),
+            })
+        }
+        "handoffResult" => {
+            Ok(crate::chat::handback::result(str_arg(&b, "from")?, str_arg(&b, "to")?, str_arg(&b, "text")?))
+        }
+        "connectorAccount" => Ok(crate::chat::connector_accounts::account_for(
+            &b["message"],
+            &b["accounts"].as_array().cloned().unwrap_or_default(),
+            b["default"].as_str(),
+        )),
+        "signInMethod" => Ok(crate::chat::signin_method::method(b["saved"].as_str())),
         "agentTombstone" => Ok(crate::chat::agent_tombstone::tombstone(
             str_arg(&b, "botId")?,
             str_arg(&b, "name")?,

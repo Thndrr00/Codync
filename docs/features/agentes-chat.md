@@ -52,6 +52,13 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | Turn verdicts (ADR 0097) | One vocabulary for how a turn ends — done, stopped, failed, waiting — through `turnVerdict` | `chat/continuation.rs`, `api/bots.rs` |
 | Memory that proves itself (ADR 0167) | A claim is recorded only when a call produced it and names its source, through `claimAdmissible` | `chat/provenance.rs`, `api/bots.rs` |
 
+| Agents may pass (ADR 0049) | Silence is a normal `(pass)` outcome, not a failure, through `agentPass` | `chat/pass.rs`, `api/bots.rs` |
+| Context window (ADR 0086) | The reported used/total tokens map to the existing compaction threshold, through `contextWindow` | `chat/context_window.rs`, `api/bots.rs` |
+| Team coordinator (ADR 0093) | The lead coordinates; members hand results back, chosen from the roster through `teamCoordinator` | `chat/coordinator.rs`, `api/bots.rs` |
+| Hand-offs come back (ADR 0095) | A hand-off result is tagged as from another bot, never a person's words, through `handoffResult` | `chat/handback.rs`, `api/bots.rs` |
+| Several accounts per connector (ADR 0099) | A reply uses the account its message named, never a wrong one, through `connectorAccount` | `chat/connector_accounts.rs`, `api/bots.rs` |
+| Sign-in per connection (ADR 0150) | The chosen sign-in method is per connection and the secret is never echoed, through `signInMethod` | `chat/signin_method.rs`, `api/bots.rs` |
+
 The clients reach all of these through typed bridges that only call the host and decode its answer:
 `apps/desktop/src/renderer/client/agentes-chat.ts`, `CodyncKit/Client/HostClient+AgentesChat.swift`,
 `core/.../AgentesChat.kt` and `host/src/tui/net/agentes_chat.rs`. The host still owns the logic.
