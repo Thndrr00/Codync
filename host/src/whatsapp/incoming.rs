@@ -16,10 +16,16 @@ fn status_reaction_allowed(on: bool, emoji: &str) -> bool {
 impl WhatsApp {
     pub(super) async fn on_message(&self, hub: &Arc<Hub>, event: &Value, expected: &str) {
         let text = event["text"].as_str().unwrap_or_default().trim().to_owned();
+        let Some(chat) = event["chat"].as_str().filter(|c| !c.is_empty()) else { return };
         if text.is_empty() && event["media"].is_null() {
+            // OpenBot 0.70.0: a newly linked number may first get a group message it can't decrypt.
+            // WhatsApp sends it again once it can; remember this empty first copy so the readable
+            // copy reaches the group history and the orchestrator instead of being dropped.
+            if let Some(id) = event["id"].as_str() {
+                super::history::note_unreadable(chat, id, crate::store::now_ms());
+            }
             return;
         }
-        let Some(chat) = event["chat"].as_str().filter(|c| !c.is_empty()) else { return };
         let sender = event["sender"].as_str().unwrap_or_default();
         let group = event["group"].as_bool().unwrap_or(false);
         let media = event["media"].as_object();
@@ -30,10 +36,12 @@ impl WhatsApp {
             None => None,
         };
         // Ported from `OpenBot` 0.72.0: the number keeps what it received for 90 days, also the group
-        // lines that do not mention it, so an agent can read them back later.
-        let _ = super::history::remember(
+        // lines that do not mention it, so an agent can read them back later. OpenBot 0.70.0: a
+        // readable resend of an unreadable first copy is kept; an ordinary duplicate stops here.
+        if !super::history::remember(
             &hub.store,
             &super::history::Message {
+                id: event["id"].as_str().unwrap_or_default().to_owned(),
                 chat,
                 sender,
                 name: event["name"].as_str().unwrap_or_default(),
@@ -41,7 +49,11 @@ impl WhatsApp {
                 file: saved.as_deref(),
                 at: crate::store::now_ms(),
             },
-        );
+        )
+        .unwrap_or(false)
+        {
+            return;
+        }
         if group && !event["mentioned"].as_bool().unwrap_or(false) && !event["quoted"].as_bool().unwrap_or(false) {
             return;
         }

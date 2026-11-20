@@ -22,12 +22,15 @@ pub(super) async fn collect(store: &Store) -> Option<Vec<Window>> {
     collect_with(store, &[]).await
 }
 
-/// The same for an isolated account, launched with its profile environment.
+/// The same for an isolated account, launched with its profile environment. OpenBot 0.70.0: the
+/// CLI fallback obeys "Use my Claude Code setup" (see [`collect`]), so a slow user setup can't time
+/// out the check; the ACP probe already runs in the host's probe folder, away from the user's projects.
 pub(super) async fn collect_with(store: &Store, env: &[(String, String)]) -> Option<Vec<Window>> {
     if let Some(windows) = acp_usage(store, env).await {
         return Some(windows);
     }
-    cli_usage(env).await
+    let use_setup = crate::agent::own_memory::claude_checks_use_setup(&store.bots().unwrap_or_default());
+    cli_usage(env, use_setup).await
 }
 
 async fn acp_usage(store: &Store, env: &[(String, String)]) -> Option<Vec<Window>> {
@@ -157,13 +160,15 @@ fn label_key(label: &str) -> String {
     label.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect()
 }
 
-async fn cli_usage(env: &[(String, String)]) -> Option<Vec<Window>> {
+async fn cli_usage(env: &[(String, String)], use_setup: bool) -> Option<Vec<Window>> {
     let bin = super::command::program("claude")?;
+    let home = dirs::home_dir()?;
+    let probe = crate::service::data_dir().join("probe");
     let out = tokio::time::timeout(
         Duration::from_mins(1),
         tokio::process::Command::new(bin)
             .args(["-p", "/usage", "--output-format", "json", "--no-session-persistence"])
-            .current_dir(dirs::home_dir()?)
+            .current_dir(crate::agent::config::claude_check_dir(&home, &probe, use_setup))
             .envs(env.iter().map(|(key, value)| (key, value)))
             .stdin(std::process::Stdio::null())
             .kill_on_drop(true)

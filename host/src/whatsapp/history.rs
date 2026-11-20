@@ -7,20 +7,59 @@
 //! The table is made on first use, indexed by time, and pruned on every write, so it never needs a
 //! migration or a background sweep.
 
+use crate::LockExt;
 use crate::store::Store;
 use anyhow::Result;
 use rusqlite::params;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
 
 /// How long a message is kept.
 pub(crate) const KEEP_MS: i64 = 90 * 24 * 60 * 60 * 1000;
 /// Most messages one number keeps; the oldest go first.
 const MAX_KEPT: i64 = 20_000;
 
+/// How long a message WhatsApp sends again after a newly linked number couldn't read it at first is
+/// still treated as its first copy (OpenBot 0.70.0), not as an ordinary duplicate.
+pub(crate) const RESEND_WINDOW_MS: i64 = 10 * 60 * 1000;
+
+/// The first copy of each message id (chat and id), with when it arrived and whether it left a row.
+/// Kept in memory: a resend follows its failed first copy within minutes, and a restart needn't
+/// remember one from before.
+static FIRST_COPIES: Mutex<HashMap<String, (i64, bool)>> = Mutex::new(HashMap::new());
+
+/// Pure decision for a copy of a message. `first` is the first copy's time and whether it left a
+/// row; `at` is this copy's time. A copy that arrives within the window of a first copy that left no
+/// row is kept (WhatsApp sends an undecryptable group message again); every other repeat is dropped.
+pub(crate) fn keep_copy(first: Option<(i64, bool)>, at: i64) -> bool {
+    match first {
+        None => true,
+        Some((_, true)) => false,
+        Some((when, false)) => at.saturating_sub(when) <= RESEND_WINDOW_MS,
+    }
+}
+
+fn copy_key(chat: &str, id: &str) -> Option<String> {
+    (!chat.is_empty() && !id.is_empty()).then(|| format!("{chat}\0{id}"))
+}
+
+/// Notes that a message arrived with nothing a history row could hold (it couldn't be decrypted
+/// yet). WhatsApp sends it again once the number can read it; that copy must reach the history and
+/// the orchestrator instead of being dropped as a duplicate.
+pub(crate) fn note_unreadable(chat: &str, id: &str, at: i64) {
+    let Some(key) = copy_key(chat, id) else { return };
+    let mut copies = FIRST_COPIES.locked();
+    copies.retain(|_, (when, _)| at.saturating_sub(*when) <= RESEND_WINDOW_MS);
+    copies.entry(key).or_insert((at, false));
+}
+
 /// One message the number received, as [`remember`] keeps it.
 pub(crate) struct Message<'a> {
+    /// The bridge's message id, used only to tell a resend from an ordinary duplicate.
+    pub id: String,
     pub chat: &'a str,
     pub sender: &'a str,
     pub name: &'a str,
@@ -60,12 +99,27 @@ fn open(c: &rusqlite::Connection) -> Result<()> {
     Ok(())
 }
 
-/// Keeps one message the number received. One with neither text nor a file is not kept.
-pub(crate) fn remember(store: &Store, message: &Message<'_>) -> Result<()> {
+/// Keeps one message the number received. One with neither text nor a file is not kept. Returns
+/// whether a row was kept, so an ordinary duplicate can stop before it reaches a bot again.
+pub(crate) fn remember(store: &Store, message: &Message<'_>) -> Result<bool> {
     let text = message.text.trim();
     let file = message.file.and_then(relative);
     if (text.is_empty() && file.is_none()) || message.chat.is_empty() {
-        return Ok(());
+        return Ok(false);
+    }
+    let first = copy_key(message.chat, &message.id).and_then(|key| {
+        let mut copies = FIRST_COPIES.locked();
+        copies.retain(|_, (when, _)| message.at.saturating_sub(*when) <= RESEND_WINDOW_MS);
+        let first = copies.get(&key).copied();
+        if keep_copy(first, message.at) {
+            copies.insert(key, (message.at, true));
+            true
+        } else {
+            false
+        }
+    });
+    if first == Some(false) {
+        return Ok(false);
     }
     let pruned = store.with_connection(|c| {
         open(c)?;
@@ -76,7 +130,7 @@ pub(crate) fn remember(store: &Store, message: &Message<'_>) -> Result<()> {
         trim(c, message.at)
     })?;
     remove_files(&pruned);
-    Ok(())
+    Ok(true)
 }
 
 /// Deletes the rows the 90-day limit and the row count remove, answering the files they named.
@@ -217,7 +271,39 @@ mod tests {
     }
 
     fn message<'a>(chat: &'a str, text: &'a str, file: Option<&'a str>, at: i64) -> Message<'a> {
-        Message { chat, sender: "sender", name: "Name", text, file, at }
+        Message { id: uuid::Uuid::new_v4().to_string(), chat, sender: "sender", name: "Name", text, file, at }
+    }
+
+    #[test]
+    fn a_resend_of_an_unreadable_message_is_kept_but_ordinary_duplicates_are_not() {
+        let at = 1_800_000_000_000;
+        assert!(keep_copy(None, at), "a first copy is kept");
+        assert!(!keep_copy(Some((at - 1_000, true)), at), "an ordinary repeat is a duplicate");
+        assert!(keep_copy(Some((at - 1_000, false)), at), "the readable resend takes the failed first copy's place");
+        assert!(
+            !keep_copy(Some((at - RESEND_WINDOW_MS - 1, false)), at),
+            "past the window the resend is a duplicate too"
+        );
+    }
+
+    #[test]
+    fn the_readable_copy_of_a_message_that_left_no_row_is_saved_once() {
+        let store = crate::store::tests::temp_store();
+        let at = 1_800_000_000_000;
+        note_unreadable("group", "id-1", at);
+        let resent = Message {
+            id: "id-1".to_owned(),
+            chat: "group",
+            sender: "sender",
+            name: "Name",
+            text: "hola",
+            file: None,
+            at: at + 1_000,
+        };
+        assert!(remember(&store, &resent).expect("the resend is saved"));
+        assert_eq!(search(&store, &[], 0, i64::MAX, 10).unwrap().len(), 1);
+        assert!(!remember(&store, &resent).expect("a normal repeat is dropped"));
+        assert_eq!(search(&store, &[], 0, i64::MAX, 10).unwrap().len(), 1, "only one row is kept");
     }
 
     #[test]

@@ -125,6 +125,16 @@ mod tests {
     }
 
     #[test]
+    fn vowel_tone_and_accent_marks_keep_their_original_names() {
+        // OpenBot 0.70.0: combining marks are safe in file names. Only separators, hidden names and
+        // an overlong name are refused; a mark is never replaced with "-".
+        for name in ["ชุดคำถาม.docx", "प्रश्नपत्रिका.pdf", "كِتاب.docx", "cafe\u{0301}.txt"]
+        {
+            assert_eq!(clean_name(name).expect("a name with vowel, tone or accent marks"), name);
+        }
+    }
+
+    #[test]
     fn chunks_append_and_retries_are_idempotent() {
         let root = std::env::temp_dir().join(format!("codync-uploads-{}", uuid::Uuid::new_v4()));
         let root = root.as_path();

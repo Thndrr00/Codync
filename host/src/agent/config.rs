@@ -19,6 +19,14 @@ pub fn claude_md_excludes(home: &Path, use_setup: bool) -> Option<Value> {
     })
 }
 
+/// OpenBot 0.70.0: the host's Claude usage check is a `claude -p /usage` run. With "Use my Claude
+/// Code setup" on it keeps the home folder, where the user's own setup applies (old behavior). With
+/// it off it runs from the host's probe folder, so a slow user setup can't hold the check to its
+/// deadline. Pure so the cwd decision is testable without starting Claude.
+pub fn claude_check_dir<'a>(home: &'a Path, probe: &'a Path, use_setup: bool) -> &'a Path {
+    if use_setup { home } else { probe }
+}
+
 /// A custom endpoint a bot points at, as far as request building is concerned. The key is only a
 /// flag here: it is sent as a header by the agent CLI, never in a request body or a log.
 #[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
@@ -191,6 +199,14 @@ mod tests {
         let rules = list[1].as_str().unwrap();
         assert!(rules.ends_with("rules/**") || rules.ends_with("rules\\**"), "{rules}");
         assert_eq!(claude_md_excludes(home, true), None, "switch on loads the user's own setup");
+    }
+
+    #[test]
+    fn claude_checks_leave_the_home_folder_when_the_setup_switch_is_off() {
+        let home = Path::new("/home/someone");
+        let probe = Path::new("/data/codync/probe");
+        assert_eq!(claude_check_dir(home, probe, true), home, "switch on keeps the old behavior");
+        assert_eq!(claude_check_dir(home, probe, false), probe, "switch off avoids a slow user setup");
     }
 
     #[test]

@@ -3,7 +3,7 @@
 //! ([design](../../../docs/design/bot-memory.md#instructions-in-every-harness)). Claude Code also gets its settings
 //! through `_meta` (see `agent::bot`).
 
-use crate::store::BotConfig;
+use crate::store::{BotConfig, BotRow};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -54,6 +54,14 @@ pub fn claude_setup_excludes(cfg: &BotConfig) -> Option<Value> {
     }
     let home = dirs::home_dir()?;
     crate::agent::config::claude_md_excludes(&home, kept(cfg))
+}
+
+/// OpenBot 0.70.0: the host's Claude model and usage checks have no bot of their own, so they take
+/// "Use my Claude Code setup" from the Claude bots here: with at least one keeping it on, the checks
+/// load the user's setup as before; with none, a slow setup must not time them out. A joined server
+/// must be on the same version for its agents to get this fix. Pure over the bots.
+pub fn claude_checks_use_setup(bots: &[BotRow]) -> bool {
+    bots.iter().any(|row| !row.deleted && row.config.backend == "claude" && kept(&row.config))
 }
 
 /// Fits the switch to an edited bot: it was turned on for one harness, so another harness (unless the edit sets it
@@ -197,6 +205,23 @@ mod tests {
         let mut off = bot("claude", &own);
         off.harness_memory = false;
         assert!(!kept(&off));
+    }
+
+    #[test]
+    fn the_claude_checks_load_a_setup_only_while_a_claude_bot_keeps_one() {
+        let bot = |backend: &str, memory: bool| -> BotRow {
+            let config: BotConfig = serde_json::from_value(json!({
+                "id": "a", "name": "B", "backend": backend, "cwd": "/work/app", "harnessMemory": memory
+            }))
+            .unwrap();
+            BotRow { config, rev: 0, deleted: false, session_id: None, read_rev: 0 }
+        };
+        assert!(!claude_checks_use_setup(&[]), "no Claude bot: don't load a slow setup");
+        assert!(!claude_checks_use_setup(&[bot("codex", true), bot("claude", false)]));
+        assert!(claude_checks_use_setup(&[bot("claude", true)]));
+        let mut gone = bot("claude", true);
+        gone.deleted = true;
+        assert!(!claude_checks_use_setup(&[gone]), "a deleted bot's switch no longer counts");
     }
 
     #[test]

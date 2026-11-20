@@ -7,7 +7,10 @@ context occupancy, token totals or a billed amount.
 Claude asks its ACP adapter's own `/usage` report first (the account that
 session is signed in to), then the CLI's `/usage` when the adapter cannot
 answer; the status-line ingest and the adapter's rate-limit event still update
-the same windows. Codex asks its app-server
+the same windows. The CLI probe obeys the bot's "Use my Claude Code setup" switch (OpenBot 0.70.0):
+when no Claude bot keeps its own setup on, it runs from the host's probe folder rather than the home
+folder, so a slow user setup can't hold the check to its deadline; with the switch on the old
+behavior stays. The model-list check already probes from that folder. Codex asks its app-server
 (`account/rateLimits/read`) and falls back to the newest local rollout's
 `rate_limits` when the app-server cannot answer. Grok starts its CLI's ACP
 server and calls `_x.ai/billing`; the current period's share used becomes the

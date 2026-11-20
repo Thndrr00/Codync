@@ -16,6 +16,10 @@ Files travel in both directions: users attach inputs, and bots explicitly share 
 - Storage (`host/src/chat/uploads.rs`): `<workspace>/uploads/<uploadId>/<name>` for a personal
   workspace (so reading needs no extra approval), otherwise
   `~/.codync/bots/<bot>/uploads/<uploadId>/<name>`. Only UUID ids and plain file names are accepted.
+  Vowel signs, tone marks and accents stay as they were sent (OpenBot 0.70.0): Thai, Hindi and
+  Arabic names, and names with decomposed accents, are never rewritten with `-`; only separators,
+  hidden names, control characters and overlong names are refused. Files attached earlier keep the
+  names they already had.
 - The agent gets the message text plus an "Attached files" list of absolute paths and reads them with
   its own tools (Claude and Codex read images too). The entry keeps `attachments: [{id, name, size}]`
   for display.
