@@ -8,9 +8,12 @@ use serde_json::{Value, json};
 /// The pass text the host uses when an agent has nothing to say.
 pub const PASS: &str = "(pass)";
 
-/// Whether a reply is a pass, comparing case-insensitively and ignoring surrounding spaces.
+/// Whether a reply is a pass: the parenthesized `(pass)` or the bare `pass`, case-insensitively,
+/// ignoring surrounding spaces and trailing punctuation. This is the single rule rooms and chains
+/// both use (ADR 0049).
 pub fn is_pass(text: &str) -> bool {
-    text.trim().eq_ignore_ascii_case(PASS)
+    let t = text.trim().trim_matches(|c: char| matches!(c, '"' | '.' | '*' | '(' | ')')).trim();
+    t.eq_ignore_ascii_case("pass") || text.trim().eq_ignore_ascii_case(PASS)
 }
 
 /// The outcome recorded for a turn, marking a pass as normal rather than failed.

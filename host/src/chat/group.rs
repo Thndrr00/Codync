@@ -442,8 +442,10 @@ fn line(hub: &Hub, group: &BotConfig, e: &Entry, me: &BotConfig) -> String {
 
 /// A member's final text is a pass (the room doesn't see it).
 pub fn is_pass(text: &str) -> bool {
-    let t = text.trim().trim_matches(|c: char| c == '"' || c == '.' || c == '*').to_lowercase();
-    t.is_empty() || t == PASS || t == "pass"
+    // The shared rule (agentes.chat ADR 0049): a pass is normal silence, not a failure. Keeping the
+    // room's extra trimming here, since messages may be quoted or padded.
+    let t = text.trim().trim_matches(|c: char| c == '"' || c == '.' || c == '*');
+    t.is_empty() || super::pass::is_pass(t)
 }
 
 #[cfg(test)]

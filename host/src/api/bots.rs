@@ -78,73 +78,73 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
-        "proposedAgent" => Ok(crate::chat::proposed_agent::proposal(
+        "proposedAgent" => crate::chat::proposed_agent::proposal(
             str_arg(&b, "by")?,
             str_arg(&b, "name")?,
             b["agent"].as_str().unwrap_or(""),
             str_arg(&b, "instructions")?,
-        )?),
-        "sharedSetup" => Ok(crate::chat::shared_setup::patch(&b["source"])),
-        "resourceful" => Ok(crate::chat::resourceful::keep_going(
-            b["failures"].as_u64().unwrap_or(0) as usize,
+        )?,
+        "sharedSetup" => crate::chat::shared_setup::patch(&b["source"]),
+        "resourceful" => crate::chat::resourceful::keep_going(
+            usize::try_from(b["failures"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),
             b["evidenced"].as_bool().unwrap_or(false),
             b["userStopped"].as_bool().unwrap_or(false),
-        )),
-        "liveBlock" => Ok(crate::chat::live_block::block(
+        ),
+        "liveBlock" => crate::chat::live_block::block(
             b["kind"].as_str().unwrap_or("choice"),
             str_arg(&b, "title")?,
             &b["payload"],
-        )?),
-        "uiAction" => Ok(crate::chat::ui_action::action(str_arg(&b, "method")?, &b["arguments"])),
-        "personalMode" => Ok(crate::chat::personal_mode::mode(b["members"].as_u64().unwrap_or(1) as usize)),
-        "agentPass" => Ok(crate::chat::pass::outcome(str_arg(&b, "reply")?)),
-        "contextWindow" => Ok(crate::chat::context_window::should_compact(
+        )?,
+        "uiAction" => crate::chat::ui_action::action(str_arg(&b, "method")?, &b["arguments"]),
+        "personalMode" => {
+            crate::chat::personal_mode::mode(usize::try_from(b["members"].as_u64().unwrap_or(1)).unwrap_or(1))
+        }
+        "agentPass" => crate::chat::pass::outcome(str_arg(&b, "reply")?),
+        "contextWindow" => crate::chat::context_window::should_compact(
             b["used"].as_u64().unwrap_or(0),
             b["total"].as_u64().unwrap_or(0),
-        )),
+        ),
         "teamCoordinator" => {
             let bots = b["bots"].as_array().cloned().unwrap_or_default();
-            Ok(match crate::chat::coordinator::pick(&bots) {
+            match crate::chat::coordinator::pick(&bots) {
                 Some(id) => crate::chat::coordinator::hand_back(&id),
                 None => json!({"to": Value::Null}),
-            })
+            }
         }
         "handoffResult" => {
-            Ok(crate::chat::handback::result(str_arg(&b, "from")?, str_arg(&b, "to")?, str_arg(&b, "text")?))
+            crate::chat::handback::result(str_arg(&b, "from")?, str_arg(&b, "to")?, str_arg(&b, "text")?)
         }
-        "connectorAccount" => Ok(crate::chat::connector_accounts::account_for(
+        "connectorAccount" => crate::chat::connector_accounts::account_for(
             &b["message"],
             &b["accounts"].as_array().cloned().unwrap_or_default(),
             b["default"].as_str(),
-        )),
-        "signInMethod" => Ok(crate::chat::signin_method::method(b["saved"].as_str())),
-        "agentTombstone" => Ok(crate::chat::agent_tombstone::tombstone(
+        ),
+        "signInMethod" => crate::chat::signin_method::method(b["saved"].as_str()),
+        "agentTombstone" => crate::chat::agent_tombstone::tombstone(
             str_arg(&b, "botId")?,
             str_arg(&b, "name")?,
-            b["memory"].as_u64().unwrap_or(0) as usize,
-            b["files"].as_u64().unwrap_or(0) as usize,
-            b["routines"].as_u64().unwrap_or(0) as usize,
-        )),
-        "burstRequest" => Ok(crate::chat::burst::request(
+            usize::try_from(b["memory"].as_u64().unwrap_or(0)).unwrap_or(0),
+            usize::try_from(b["files"].as_u64().unwrap_or(0)).unwrap_or(0),
+            usize::try_from(b["routines"].as_u64().unwrap_or(0)).unwrap_or(0),
+        ),
+        "burstRequest" => crate::chat::burst::request(
             &b["messages"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect())
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect::<Vec<_>>())
                 .unwrap_or_default(),
-        )),
-        "catchUpCheck" => {
-            Ok(crate::chat::catchup_check::may_catch_up(b["pausedUntil"].as_i64(), crate::store::now_ms()))
-        }
-        "resumeAnchor" => Ok(crate::chat::latest::anchor(b["newest"].as_i64().unwrap_or(0), b["since"].as_i64())),
-        "turnVerdict" => Ok(crate::chat::continuation::verdict(
+        ),
+        "catchUpCheck" => crate::chat::catchup_check::may_catch_up(b["pausedUntil"].as_i64(), crate::store::now_ms()),
+        "resumeAnchor" => crate::chat::latest::anchor(b["newest"].as_i64().unwrap_or(0), b["since"].as_i64()),
+        "turnVerdict" => crate::chat::continuation::verdict(
             b["stopped"].as_bool().unwrap_or(false),
             b["failed"].as_bool().unwrap_or(false),
             b["waiting"].as_bool().unwrap_or(false),
-        )),
-        "claimAdmissible" => Ok(crate::chat::provenance::admissible(
+        ),
+        "claimAdmissible" => crate::chat::provenance::admissible(
             str_arg(&b, "claim")?,
             b["produced"].as_bool().unwrap_or(false),
             b["source"].as_str(),
-        )),
+        ),
         "botPresence" => match b["status"].as_str() {
             Some(status) => {
                 crate::chat::presence::set(&hub.store, str_arg(&b, "botId")?, Some(status), b["until"].as_i64())?

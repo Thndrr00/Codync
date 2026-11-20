@@ -6,15 +6,16 @@
 
 use serde_json::{Value, json};
 
-/// The fraction of the window left below which the host compacts.
-pub const COMPACT_AT: f64 = 0.2;
+/// The fraction of the window left below which the host compacts, in percent (ADR 0086).
+pub const COMPACT_AT_PERCENT: u64 = 20;
 
 /// Whether a window should be compacted, from used/total tokens reported by the agent.
 pub fn should_compact(used: u64, total: u64) -> Value {
     let free = total.saturating_sub(used);
-    let ratio = if total == 0 { 1.0 } else { free as f64 / total as f64 };
-    let compact = total > 0 && ratio <= COMPACT_AT;
-    json!({"compact": compact, "freePercent": (ratio * 100.0).round() as u64})
+    // Integer math: free% = free*100/total, compared to COMPACT_AT*100. No float casts.
+    let free_percent = free.saturating_mul(100).checked_div(total).unwrap_or(100);
+    let compact = total > 0 && free_percent <= COMPACT_AT_PERCENT;
+    json!({"compact": compact, "freePercent": free_percent})
 }
 
 #[cfg(test)]

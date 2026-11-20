@@ -4,7 +4,7 @@
 //! cloning a setup onto a target without touching the source: the target keeps its own id, name
 //! and session; only the shared parts are copied.
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 /// The fields a setup carries from one bot to another.
 pub const SHARED: [&str; 4] = ["instructions", "approvalRules", "connectors", "recallChars"];
@@ -23,6 +23,7 @@ pub fn patch(source: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn a_setup_copies_only_the_shared_fields() {
