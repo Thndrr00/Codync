@@ -105,6 +105,15 @@ con tests propios y sin dependencias de cliente, base de datos ni modelo:
 
 Son una biblioteca de apoyo: todas llevan `#[allow(dead_code)]` hasta que una pantalla las conecte.
 
+## Pantalla de insights
+
+Los helpers puros ya tienen una superficie real: el método de solo lectura `botInsights {botId}`
+(`host/src/api/bot_insights.rs`) devuelve los horarios descritos con `describe_cron`, el modelo y su
+proveedor con `provider_of`, el uso diario con `compact_count` y los skills. La pantalla se añadió
+a las cuatro clients: pestaña **Insights** en el inspector de Desktop, en los detalles de iPhone y
+de Android, y página **Insights** en el TUI (`shift+←→`). Cada cliente solo renderiza lo que el host
+calcula; el método no se reporta a analítica porque es una lectura.
+
 ## Verificación
 
 - Desktop: `npm run typecheck` limpio; `npm test` → 834 tests, 806 pasan, 4 fallan, 24 omitidos.

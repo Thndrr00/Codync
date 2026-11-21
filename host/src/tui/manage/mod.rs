@@ -17,6 +17,7 @@ mod fields;
 mod flow;
 mod hermes_routes;
 pub(super) mod hermes_runtime;
+mod insights;
 mod library;
 mod market;
 pub(in crate::tui) mod mcp_tools;
@@ -77,6 +78,8 @@ pub enum Reply {
     RoutineSaved,
     /// A bot's Library (`library {botId}`).
     Library(String),
+    /// A bot's bdots-inspired insights (`botInsights {botId}`).
+    Insights(String),
     /// A routine's webhook URL and key: copied as a ready-to-run curl.
     Webhook,
     /// A bot conversation's fetched history.
@@ -205,6 +208,12 @@ impl ThreadsSheet {
     pub fn current(&self) -> Option<&Value> {
         self.items.as_ref()?.get(self.cursor)
     }
+}
+
+/// A bot's Insights tab: the host-computed summary of its routines, model and daily use.
+pub struct Insights {
+    pub bot: String,
+    pub data: Option<Value>,
 }
 
 /// A bot's Library tab: its artifacts and the files shared in its chat, newest first.

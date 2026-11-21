@@ -88,6 +88,10 @@ internal suspend fun AppStore.botUsage(botId: String): kotlinx.serialization.jso
 internal suspend fun AppStore.botTasks(botId: String): kotlinx.serialization.json.JsonObject =
     hostQuery("botTasks", body("botId" to botId)).jsonObject
 
+/** A read-only summary of a bot's routines, model and daily use. */
+internal suspend fun AppStore.botInsights(botId: String): com.codync.android.core.BotInsights =
+    WireJson.decodeFromJsonElement(hostQuery("botInsights", body("botId" to botId)))
+
 
 /** One folder of a bot's workspace: its files and folders, confined by the host. */
 suspend fun AppStore.listFiles(botId: String, path: String): kotlinx.serialization.json.JsonArray =

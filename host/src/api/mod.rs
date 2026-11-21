@@ -4,6 +4,7 @@
 
 mod apps_bridge;
 pub mod apps_runtime;
+mod bot_insights;
 mod bots;
 mod catalog;
 mod computer_activity;
@@ -102,6 +103,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return crate::native_channels::call(hub, method, &b);
     }
     match method {
+        "botInsights" => return bot_insights::read(hub, str_arg(&b, "botId")?),
         "islandRuntime" => return island_runtime::read(hub, &b),
         "islandResources" => return island_resources::read(hub, str_arg(&b, "botId")?),
         "islandGit" => return island_git::read(hub, &b).await,
