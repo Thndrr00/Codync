@@ -69,6 +69,8 @@ Read from the ACP answer: the JSON-RPC code, the adapter's category (Claude's `d
 | `notStarting` | `FailureKind::NotSetUp`, `Timeout`, `Exited`. An ACP agent silent for 5 min while its session is opened is ended with "did not answer in time", so the start fails and queued work is freed; agents with one process per session (Mistral, Antigravity) keep their behavior (OpenBot 0.75.0, #12871) | 5 min |
 | `modelMissing` | `model_not_found`, HTTP 410 Gone or a retired model ("model … is no longer available/supported", "models/<id> is not found"), or the agent refusing the step's model (`FailureKind::NoModel`) (OpenBot 0.75.0, #12998) | None: it's the bot's setup, not the agent's. The bot skips that step until its settings change |
 
+An opt-in [OpenAI-compatible custom endpoint](provider-usage.md#starting-a-provider-again-and-custom-endpoints) that answers 410 carries the status as an ACP error, so a retired model moves the turn to the next backup model just the same — including when that request carried `reasoning_effort`.
+
 Stop, refusal, output or step limits, a routine's time limit, compactions and uncategorized internal errors don't move
 on. CodeBuddy's CLI (CodeBuddy Code, WorkBuddy) answers a failed prompt as a refusal with the error in
 `_meta["codebuddy.ai/errorMessage"]`: that one counts as the error it holds (`acp::codebuddy::prompt_result`), so a

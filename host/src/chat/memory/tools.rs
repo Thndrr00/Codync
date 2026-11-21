@@ -237,3 +237,65 @@ async fn read_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result<V
     .await??;
     Ok(json!({"messages": messages}))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::remote::identity::Identity;
+    use crate::store::Store;
+
+    struct Fixture {
+        hub: Arc<Hub>,
+        id: String,
+        dir: std::path::PathBuf,
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn fixture() -> Fixture {
+        let dir = std::env::temp_dir().join(format!("codync-bg-memory-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let store = Store::open(&dir.join("test.db")).expect("store");
+        let hub =
+            Hub::new(store, "bg-memory-test".into(), Identity::load_or_create(&dir).expect("identity"), "t".into(), 0);
+        let id = uuid::Uuid::new_v4().to_string();
+        let cfg: BotConfig = serde_json::from_value(json!({
+            "id": id, "name": "Sub", "backend": "claude", "command": "x", "cwd": dir,
+        }))
+        .expect("config");
+        hub.store.save_bot(&cfg).expect("bot");
+        // A background subagent keeps acting in the turn the user started, even after the main
+        // assistant reply has been sent: memory cites that message and may change or forget lines.
+        hub.set_runtime(&id, |runtime| runtime.message = Some("remember this".into()));
+        Fixture { hub, id, dir }
+    }
+
+    #[tokio::test]
+    async fn a_background_subagents_memory_save_and_delete_apply_after_the_main_turn_ends() {
+        let f = fixture();
+        // Codync writes memory as the tool is called; there is no flush at the end of a turn, so
+        // a subagent's save and delete are on disk by the time the tool answers.
+        let saved =
+            call(&f.hub, &f.id, "edit_memory", &json!({"file": MAIN, "append": "- Prefers tea"})).await.expect("save");
+        assert_eq!(saved["status"], "saved");
+        let read = call(&f.hub, &f.id, "read_memory", &json!({"file": MAIN})).await.expect("read");
+        assert!(read["content"].as_str().unwrap_or_default().contains("Prefers tea"), "the save is already on disk");
+
+        let note = "---\ndescription: Background notes\n---\nThe subagent was here.\n";
+        call(&f.hub, &f.id, "edit_memory", &json!({"file": "bg_notes.md", "content": note})).await.expect("note");
+        let read = call(&f.hub, &f.id, "read_memory", &json!({"file": "bg_notes.md"})).await.expect("read note");
+        assert!(read["content"].as_str().unwrap_or_default().contains("The subagent was here."));
+
+        let deleted =
+            call(&f.hub, &f.id, "edit_memory", &json!({"file": "bg_notes.md", "delete": true})).await.expect("delete");
+        assert_eq!(deleted["status"], "saved");
+        assert!(
+            call(&f.hub, &f.id, "read_memory", &json!({"file": "bg_notes.md"})).await.is_err(),
+            "the delete is already on disk"
+        );
+    }
+}

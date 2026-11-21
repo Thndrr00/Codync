@@ -445,11 +445,11 @@ async fn reply(ep: &Endpoint, bot: &TgBot, route: &mut Route, entry: &Value) -> 
     }
     match route.live.as_mut().filter(|l| l.entry == id) {
         None => {
-            let message = client::message(ep, &bot.token, route.chat, text, None).await?;
+            let message = client::reply(ep, &bot.token, route.chat, text).await?;
             route.live = Some(Live { entry: id.into(), message, sent: text.into(), at: Instant::now() });
         }
         Some(live) if live.sent != text && (finished || live.at.elapsed() >= ep.edit_every) => {
-            client::edit(ep, &bot.token, route.chat, live.message, text).await?;
+            client::edit_reply(ep, &bot.token, route.chat, live.message, text).await?;
             live.sent = text.into();
             live.at = Instant::now();
         }

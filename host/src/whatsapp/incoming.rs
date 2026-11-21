@@ -21,6 +21,13 @@ fn working_line_allowed(internal_result: bool, owner: bool) -> bool {
     owner || !internal_result
 }
 
+/// The agent-facing prompt for one message. `place` already carries the group-name fallback from
+/// [`super::place_name`], so a group whose name is missing still reads as "WhatsApp group" here.
+/// Pure so the fallback reaching the prompt is testable without a link or a bot actor.
+fn prompt(place: &str, note: &str) -> String {
+    format!("WhatsApp message from {place}:\n\n{note}")
+}
+
 impl WhatsApp {
     pub(super) async fn on_message(&self, hub: &Arc<Hub>, event: &Value, expected: &str) {
         let text = event["text"].as_str().unwrap_or_default().trim().to_owned();
@@ -186,8 +193,7 @@ impl WhatsApp {
             return;
         }
         let id = entry_id(&["message", chat, event["id"].as_str().unwrap_or_default()]);
-        let prompt =
-            format!("WhatsApp message from {}:\n\n{note}", super::place_name(event["name"].as_str(), group, sender));
+        let prompt = prompt(super::place_name(event["name"].as_str(), group, sender), &note);
         let lane = crate::store::Lane::in_thread(&bot, &root);
         let Ok((entry, _)) = hub.add_entry_once(
             &id,
@@ -284,5 +290,28 @@ mod tests {
         assert!(!working_line_allowed(true, false), "a teammate's result is internal");
         assert!(working_line_allowed(true, true), "the owner still gets one");
         assert!(working_line_allowed(false, true));
+    }
+
+    #[test]
+    fn a_group_with_no_name_is_named_in_the_agent_prompt() {
+        // The prompt takes the same fallback as the chat list and history, so an agent never sees
+        // an empty group name (OpenBot 0.74.0).
+        let note = "Please review the PR";
+        assert_eq!(
+            prompt(super::super::place_name(None, true, "sender"), note),
+            "WhatsApp message from WhatsApp group:\n\nPlease review the PR"
+        );
+        assert_eq!(
+            prompt(super::super::place_name(Some("   "), true, "sender"), note),
+            "WhatsApp message from WhatsApp group:\n\nPlease review the PR"
+        );
+        assert_eq!(
+            prompt(super::super::place_name(Some("Family"), true, "sender"), note),
+            "WhatsApp message from Family:\n\nPlease review the PR"
+        );
+        assert_eq!(
+            prompt(super::super::place_name(None, false, "sender"), note),
+            "WhatsApp message from sender:\n\nPlease review the PR"
+        );
     }
 }

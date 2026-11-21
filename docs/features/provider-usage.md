@@ -95,6 +95,11 @@ check waits for idle agents, using the same readiness gate as a host update's
 restart, for at most ten minutes; an always-busy computer is never held. A CLI
 the person installed, a bot pinned to a custom command path and a provider no
 bot runs still show **Update available** in Settings › Providers but are never
-auto-updated. A version the person cancels is not retried until the host
-restarts. **Update all** applies every eligible provider at once on this
-computer; there is no joined-server part because providers belong to a computer.
+auto-updated. Once a build is installed the host remembers its version beside
+its other update state, so the hourly check does not offer that same build
+again until the registry serves a newer one (a changed nightly tag counts as a
+new build). A version the person cancels is kept per provider and version for
+the life of the host process: that exact build is not started again until the
+host restarts, while a newer version is still eligible. **Update all** applies
+every eligible provider at once on this computer; there is no joined-server
+part because providers belong to a computer.

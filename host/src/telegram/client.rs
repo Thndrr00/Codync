@@ -105,9 +105,89 @@ pub(super) async fn updates(ep: &Endpoint, token: &str, offset: i64) -> Result<V
     Ok(result.as_array().cloned().unwrap_or_default())
 }
 
+/// The well-formed Markdown span at the start of `rest`, if any. The combined marker is checked
+/// **before** bold and italic: `***bold italic***` must not be read as a bold span with a stray
+/// asterisk, which would drop the italic and leave a `*` in the message.
+fn span(rest: &str) -> Option<(&'static str, &str, &str)> {
+    for marker in ["***", "**", "*"] {
+        if let Some(after) = rest.strip_prefix(marker)
+            && let Some((inner, tail)) = after.split_once(marker)
+            && !inner.is_empty()
+            && !inner.contains('\n')
+            && !inner.starts_with(' ')
+            && !inner.ends_with(' ')
+        {
+            return Some((marker, inner, tail));
+        }
+    }
+    None
+}
+
+/// The Markdown link at the start of `rest`: `[label](url)`. Kept whole so a link never has its
+/// label read as bold or italic, and Telegram's `parse_mode` still turns it into a real link.
+fn link(rest: &str) -> Option<(&str, &str, &str)> {
+    let after = rest.strip_prefix('[')?;
+    let (label, after_label) = after.split_once("](")?;
+    let (url, tail) = after_label.split_once(')')?;
+    (!label.is_empty() && !label.contains('\n') && !url.is_empty() && !url.contains('\n')).then_some((label, url, tail))
+}
+
+/// Converts the Markdown an agent writes into Telegram's `Markdown` parse mode. Bold (`**…**`)
+/// becomes `*…*`, italic (`*…*`) becomes `_…_`, and the combined `***…***` and `[text](url)` links
+/// are kept. Pure so the combined marker and links can be tested without the Bot API.
+pub(super) fn markdown(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while !rest.is_empty() {
+        if let Some((marker, inner, tail)) = span(rest) {
+            match marker {
+                "***" => {
+                    out.push_str("***");
+                    out.push_str(&markdown(inner));
+                    out.push_str("***");
+                }
+                "**" => {
+                    out.push('*');
+                    out.push_str(&markdown(inner));
+                    out.push('*');
+                }
+                _ => {
+                    out.push('_');
+                    out.push_str(&markdown(inner));
+                    out.push('_');
+                }
+            }
+            rest = tail;
+            continue;
+        }
+        if let Some((label, url, tail)) = link(rest) {
+            out.push('[');
+            out.push_str(&markdown(label));
+            out.push_str("](");
+            out.push_str(url);
+            out.push(')');
+            rest = tail;
+            continue;
+        }
+        if let Some(ch) = rest.chars().next() {
+            out.push(ch);
+            rest = &rest[ch.len_utf8()..];
+        }
+    }
+    out
+}
+
+fn text_body(chat: i64, text: &str, formatted: bool) -> Value {
+    if formatted {
+        json!({"chat_id": chat, "text": clip(&markdown(text)), "parse_mode": "Markdown", "link_preview_options": {"is_disabled": true}})
+    } else {
+        json!({"chat_id": chat, "text": clip(text), "link_preview_options": {"is_disabled": true}})
+    }
+}
+
 /// Sends text and returns the id of the message it made. Text beyond Telegram's limit is cut.
 pub(super) async fn message(ep: &Endpoint, token: &str, chat: i64, text: &str, keyboard: Option<Value>) -> Result<i64> {
-    let mut body = json!({"chat_id": chat, "text": clip(text), "link_preview_options": {"is_disabled": true}});
+    let mut body = text_body(chat, text, false);
     if let Some(keyboard) = keyboard {
         body["reply_markup"] = json!({"inline_keyboard": keyboard});
     }
@@ -115,9 +195,25 @@ pub(super) async fn message(ep: &Endpoint, token: &str, chat: i64, text: &str, k
     sent["message_id"].as_i64().context("Telegram sent no message id")
 }
 
+/// Sends an agent's reply, keeping its bold, italic and links (and `***bold italic***`).
+pub(super) async fn reply(ep: &Endpoint, token: &str, chat: i64, text: &str) -> Result<i64> {
+    let sent = call(ep, token, "sendMessage", &text_body(chat, text, true)).await?;
+    sent["message_id"].as_i64().context("Telegram sent no message id")
+}
+
 /// Replaces a message's text (and drops its buttons).
 pub(super) async fn edit(ep: &Endpoint, token: &str, chat: i64, message: i64, text: &str) -> Result<()> {
-    let body = json!({"chat_id": chat, "message_id": message, "text": clip(text), "link_preview_options": {"is_disabled": true}});
+    edit_text(ep, token, chat, message, text, false).await
+}
+
+/// Replaces an agent's streamed reply, keeping the same formatting as [`reply`].
+pub(super) async fn edit_reply(ep: &Endpoint, token: &str, chat: i64, message: i64, text: &str) -> Result<()> {
+    edit_text(ep, token, chat, message, text, true).await
+}
+
+async fn edit_text(ep: &Endpoint, token: &str, chat: i64, message: i64, text: &str, formatted: bool) -> Result<()> {
+    let mut body = text_body(chat, text, formatted);
+    body["message_id"] = json!(message);
     match call(ep, token, "editMessageText", &body).await {
         Ok(_) => Ok(()),
         // Editing to the same text is not a failure worth reporting.
@@ -167,5 +263,25 @@ mod tests {
         let long = "é".repeat(MAX_TEXT + 10);
         assert_eq!(clip(&long).chars().count(), MAX_TEXT);
         assert_eq!(clip("short"), "short");
+    }
+
+    #[test]
+    fn markdown_keeps_bold_italic_and_links_for_telegram() {
+        // The combined marker is checked before bold, so `***…***` is not read as a bold span
+        // with a stray asterisk and its italic is kept.
+        assert_eq!(markdown("***bold italic***"), "***bold italic***");
+        assert_eq!(markdown("**bold**"), "*bold*");
+        assert_eq!(markdown("*italic*"), "_italic_");
+        assert_eq!(markdown("_italic_"), "_italic_");
+        assert_eq!(markdown("`code`"), "`code`");
+        assert_eq!(
+            markdown("See [the docs](https://example.com/a_b) and ***really*** *matter*"),
+            "See [the docs](https://example.com/a_b) and ***really*** _matter_"
+        );
+        // A marker inside a link's label is converted, but the URL is left untouched.
+        assert_eq!(markdown("[**bold** link](https://x.dev)"), "[*bold* link](https://x.dev)");
+        // Unpaired markers stay literal rather than being swallowed into a span.
+        assert_eq!(markdown("2 * 3 ** four"), "2 * 3 ** four");
+        assert_eq!(markdown("plain text"), "plain text");
     }
 }

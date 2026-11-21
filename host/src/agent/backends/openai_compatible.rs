@@ -6,6 +6,7 @@
 //! [`crate::agent::config::custom_request`]. Everything else keeps the CLI path, so no existing
 //! provider changes.
 
+use crate::agent::acp::RpcError;
 use crate::agent::auth;
 use crate::agent::config::{CustomEndpoint, custom_request, request_path, uses_responses_api};
 use crate::egress::Policy;
@@ -18,6 +19,25 @@ use std::time::Duration;
 const MAX_ANSWER: usize = 256 * 1024;
 /// One turn is a single request, not a long-lived stream.
 const TIMEOUT: Duration = Duration::from_secs(60);
+/// HTTP 410 Gone: the provider retired the model this turn asked for. OpenBot nightly's
+/// reasoning-effort turns failed here with a plain status error, so the fallback chain never
+/// moved to the next backup model.
+const GONE: u16 = 410;
+
+/// The error a non-success status produces. 410 is carried as an ACP [`RpcError`] with the same
+/// code so `fallback::reason::of` reads it as `modelMissing` and moves the turn to the next
+/// backup — whether or not this request carried a reasoning effort. No URL or key is included.
+pub(crate) fn status_error(status: u16) -> anyhow::Error {
+    if status == GONE {
+        return RpcError {
+            code: i64::from(GONE),
+            message: format!("the endpoint answered {status} (the model was retired)"),
+            kind: None,
+        }
+        .into();
+    }
+    anyhow::anyhow!("the endpoint answered {status}")
+}
 
 /// The saved endpoint's values, kept together so [`CustomEndpoint`] can borrow them. Deliberately
 /// has no `Debug`: the key must never reach a log.
@@ -112,7 +132,7 @@ pub async fn send(
     let response = request.send().await?;
     let status = response.status();
     if !status.is_success() {
-        bail!("the endpoint answered {}", status.as_u16());
+        return Err(status_error(status.as_u16()));
     }
     let body: Value = serde_json::from_slice(&crate::egress::body(response, MAX_ANSWER).await?)?;
     Ok(json!({"path": request_path(endpoint), "text": answer(&body)}))
@@ -170,6 +190,24 @@ mod tests {
 
         let other = CustomEndpoint { base_url: "https://llm.example.com/v1", api_key: Some("sk-test") };
         assert_eq!(request_url(&other), "https://llm.example.com/v1/chat/completions");
+    }
+
+    #[test]
+    fn a_retired_model_410_with_reasoning_effort_routes_to_the_next_backup() {
+        use crate::agent::fallback::{Reason, reason::of};
+
+        // This turn carried a reasoning effort, just like the nightly failure that was missed.
+        let openai = CustomEndpoint { base_url: "https://api.openai.com/v1", api_key: Some("sk-test") };
+        let request = body(&openai, "gpt-6-astra", Some("high"), &[], &[]);
+        assert_eq!(request["reasoning_effort"], "high");
+
+        // 410 is a retired model: the fallback decision moves the turn to the next agent's model.
+        let gone = status_error(GONE);
+        assert_eq!(of(&gone), Some(Reason::ModelMissing), "a 410 moves on even with reasoning effort");
+        // Other failures keep their old behavior: a plain status error, no fallback by itself.
+        assert_eq!(of(&status_error(429)), None);
+        assert_eq!(of(&status_error(404)), None);
+        assert_eq!(of(&status_error(500)), None);
     }
 
     #[test]
