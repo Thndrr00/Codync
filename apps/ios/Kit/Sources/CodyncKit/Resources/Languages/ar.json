@@ -703,5 +703,12 @@
   "Needs your input": "Needs your input",
   "{count} unread messages": "{count} unread messages",
   "Opens the quoted message": "Opens the quoted message",
-  "Couldn't load the message.": "Couldn't load the message."
+  "Couldn't load the message.": "Couldn't load the message.",
+  "Copy sign-in link": "Copy sign-in link",
+  "Search older messages": "Search older messages",
+  "Older messages are still searchable": "Older messages are still searchable",
+  "Older messages": "Older messages",
+  "Copy result": "Copy result",
+  "Learn skills": "Learn skills",
+  "Stop learning skills": "Stop learning skills"
 }

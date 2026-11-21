@@ -8,6 +8,7 @@ import { ThinkingOrb } from '../../components/ThinkingOrb'
 import { prefs, usePref } from '../../lib/prefs'
 import { useTr } from '../../lib/use-language'
 import { useStore } from '../../store/context'
+import { activityLine } from './activity-line'
 import { useFollowEnd } from './follow-end'
 import { TraceRow } from './TraceView'
 
@@ -25,7 +26,7 @@ export function WorkingIndicator({ bot, steps }: { bot: Bot; steps: Entry[] }) {
   const status = (
     <HStack as="span" gap={8}>
       <ThinkingOrb state={waiting ? 'listening' : 'working'} size={16} color={waiting ? 'var(--warning)' : 'var(--secondary)'} />
-      <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} truncate grow>{tr(live.activity || 'Working…')}</Text>
+      <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} truncate grow>{tr(activityLine(live))}</Text>
       {live.startedAt ? <Timer since={live.startedAt} /> : null}
       {details ? (
         <span className={`disclosure-chevron${open ? ' open' : ''}`}>

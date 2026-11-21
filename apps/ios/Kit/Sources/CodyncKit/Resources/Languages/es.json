@@ -2741,5 +2741,12 @@
   "Needs your input": "Necesita tu intervención",
   "{count} unread messages": "{count} mensajes sin leer",
   "Opens the quoted message": "Abre el mensaje citado",
-  "Couldn't load the message.": "No se pudo cargar el mensaje."
+  "Couldn't load the message.": "No se pudo cargar el mensaje.",
+  "Copy sign-in link": "Copiar enlace de inicio de sesión",
+  "Search older messages": "Buscar mensajes anteriores",
+  "Older messages are still searchable": "Los mensajes anteriores se pueden seguir buscando",
+  "Older messages": "Mensajes anteriores",
+  "Copy result": "Copiar resultado",
+  "Learn skills": "Aprender skills",
+  "Stop learning skills": "Dejar de aprender skills"
 }

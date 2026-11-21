@@ -4,7 +4,6 @@ import { isGroup, type Bot } from '@shared/models'
 import { Button, ChoicePicker, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
 import { Dialog, DialogField, ModalHeader, Sheet } from '../../../components/Overlay'
 import { AnchoredMenu, type MenuItem } from '../../../components/Menu'
-import { Icon } from '../../../components/Icon'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
@@ -21,6 +20,7 @@ import {
 } from './flow-merge'
 import { groupsOf, groupSpot, newGroupId, outputType, parsePort, type CanvasWithGroups, type FlowGroup } from './flow-groups'
 import { FlowInspector, type FlowTarget, type MediaSettings } from './FlowInspector'
+import { FlowEmptyState } from './FlowEmptyState'
 import { FlowList } from './FlowList'
 import { clipped, hasMore, leftmostNode, settingsOf, type FlowStepSettings } from './flow-settings'
 import { RoutineEditorView } from '../RoutineEditorView'
@@ -503,20 +503,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       {model.error ? <Text size="caption" tone="danger">{model.error}</Text> : null}
       {note ? <Text size="caption" tone="danger">{note}</Text> : null}
       {mergeNote ? <Text size="caption" tone="attention" className="flow-merge-note">{tr('Someone else edited this flow; their changes were merged in.')}</Text> : null}
-      {canvas.routines.length === 0 ? (
-        <VStack gap={10} align="center" className="outlined-card flow-state flow-empty">
-          <Icon name="sparkles" size={28} />
-          <Text size="callout" weight="semibold">{tr('No workflows yet')}</Text>
-          <Text size="callout" tone="secondary">{note ?? tr('A workflow starts with a routine and hands its answer on to other bots.')}</Text>
-          <div className="flow-sample" aria-hidden="true">
-            <span className="flow-sample-node"><Icon name="clock.arrow.circlepath" size={16} />{tr('Routine')}</span>
-            <span className="flow-sample-line" />
-            <span className="flow-sample-node"><Icon name="bubble.left" size={16} />{tr('Bot')}</span>
-            <span className="flow-sample-line" />
-            <span className="flow-sample-node"><Icon name="photo" size={16} />{tr('Picture')}</span>
-          </div>
-          <Button disabled={offline} onClick={() => setCreating(true)}>{tr('New workflow')}</Button>
-        </VStack>
+      {canvas.routines.length === 0 && mode === 'canvas' ? (
+        <FlowEmptyState note={note} disabled={offline} onNew={() => setCreating(true)} />
       ) : (
         <HStack gap={8} align="stretch" className="flow-body">
           <div className="flow-main">
@@ -551,7 +539,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 onStop={() => void store.stop(botId)}
               />
             ) : (
-              <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} query={query} />
+              <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} query={query} note={note} disabled={offline} onNew={() => setCreating(true)} />
             )}
           </div>
           <FlowInspector

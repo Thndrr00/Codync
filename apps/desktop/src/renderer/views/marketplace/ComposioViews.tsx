@@ -12,6 +12,7 @@ import {
 import { AppLogo, ErrorText, Field, WebLink, filled } from './pieces'
 import { useTr } from '../../lib/use-language'
 import { fill } from '../../lib/fill.ts'
+import { safeSignInUrl } from './sign-in-url'
 
 
 /**
@@ -103,6 +104,8 @@ export function ComposioConnectSheet({ app, requestId, done }: { app: ComposioAp
   }
 
   const needsFields = plan?.status === 'needsFields'
+  // A plain https sign-in link can also be copied; one carrying a token never reaches the clipboard.
+  const copyUrl = plan?.status === 'redirect' ? safeSignInUrl(plan.url) : null
   const trailing = connected
     ? <IconButton title="Done" icon="checkmark" onClick={dismiss} />
     : needsFields
@@ -150,12 +153,18 @@ export function ComposioConnectSheet({ app, requestId, done }: { app: ComposioAp
         ) : plan?.status === 'redirect' ? (
           <CardSection footer="Sign in on the page that opened. This updates by itself when you're done.">
             {plan.url && URL.canParse(plan.url) ? (
-              <div>
+              <HStack gap={8}>
                 <Button kind="secondary" onClick={() => window.codync.app.openExternal(plan.url!)}>
                   <Icon name="safari" size={11} />
                   Open the sign-in page
                 </Button>
-              </div>
+                {copyUrl ? (
+                  <Button kind="secondary" title="Copy sign-in link" onClick={() => void window.codync.app.copy(copyUrl)}>
+                    <Icon name="doc.on.clipboard" size={11} />
+                    Copy
+                  </Button>
+                ) : null}
+              </HStack>
             ) : null}
             {waitingRow('Waiting for you to finish signing in…')}
           </CardSection>

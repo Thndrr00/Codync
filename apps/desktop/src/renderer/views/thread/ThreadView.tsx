@@ -11,7 +11,7 @@ import { BotAvatar, GroupAvatar } from '../../components/Avatar'
 import { BotAppPanel } from '../../components/BotAppPanel'
 import { Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
-import { Sheet, usePresence } from '../../components/Overlay'
+import { ModalHeader, Sheet, SheetPage, usePresence } from '../../components/Overlay'
 import { HStack, IconSlot, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { prefs, usePref } from '../../lib/prefs'
@@ -21,6 +21,7 @@ import { useTr } from '../../lib/use-language'
 import { useScreenViewed } from '../../store/analytics'
 import { useStore } from '../../store/context'
 import { UpdateNeededCard } from '../UpdateNeededCard'
+import { RosterHistory } from '../RosterControls'
 import { buildChat, rowIn, useArrivals, type ChatItem } from './chat-items'
 import { newestHealthNotices } from './health-notices'
 import { BotConversationView, BotMessageRow } from './BotConversation'
@@ -39,6 +40,7 @@ import { outsideQueue } from './queued-messages'
 import { ChatSidePanel } from './ChatSidePanel'
 import { DetailsPanel, type DetailsTab } from './DetailsPanel'
 import { useNewMessageCount } from './new-message-counter'
+import { activityLine } from './activity-line'
 import { TraceView } from './TraceView'
 import { workingSteps } from './trace-turns'
 import { useReading } from './reading'
@@ -99,6 +101,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
     }
   }, [restored, store, botId])
   const [showTrace, setShowTrace] = useState(false)
+  /** "New chat" only hides the old messages from this view; the palette's history search still finds them. */
+  const [showOlder, setShowOlder] = useState(false)
   /** The chat's pin list. */
   const [showPins, setShowPins] = useState(false)
   const [replyTo, setReplyTo] = useState<Entry | null>(null)
@@ -302,6 +306,12 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
           <TopFade />
           <div className="top-chrome-row">
             {!store.mismatch ? <MacChatButton className="ringed" title="Pinned messages" icon="pin" onClick={() => setShowPins(true)} /> : null}
+            {bot && store.shownConnection.kind === 'online' ? (
+              <button className="older-messages" title={tr('Older messages are still searchable')} onClick={() => setShowOlder(true)}>
+                <Icon name="magnifyingglass" size={10} />
+                <Text size="caption">{tr('Search older messages')}</Text>
+              </button>
+            ) : null}
             <Spacer />
             {(!showSettings || !wide) && !compactDetails ? (
               <ChromeIconButton ringed icon="chevron.left.2" label="Conversation details" onClick={toggleDetails} />
@@ -320,6 +330,9 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
                 <Icon name="chevron.right" size={10} weight="semibold" color="var(--secondary)" />
               </span>
             </HStack>
+            {/* OpenBot nightly: with the island quiet, the chat keeps this small activity line by the
+                avatar until the first text or step, from the host's own status (no new polling). */}
+            {bot && isWorking(bot) ? <Text size="caption2" tone="secondary" truncate className="title-pill-activity">{tr(activityLine(bot))}</Text> : null}
             {store.shownConnection.kind !== 'online' || store.mismatch ? <ConnectionSubtitle /> : null}
           </button>
         </div>
@@ -413,6 +426,18 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       </Sheet>
       <Sheet open={showPins} onClose={() => setShowPins(false)} width={460} height={520}>
         {showPins ? <PinsSheet botId={botId} close={() => setShowPins(false)} openThread={openThread} /> : null}
+      </Sheet>
+      <Sheet open={showOlder} onClose={() => setShowOlder(false)} width={560} height={620} dismissOnDim>
+        <SheetPage>
+          <ModalHeader title={tr('Older messages')} onClose={() => setShowOlder(false)} closeTitle={tr('Close')} />
+          {bot ? (
+            <RosterHistory
+              items={[{ ref: { computerId: store.computer.id, botId }, bot, computer: store.computer, store }]}
+              onPick={() => setShowOlder(false)}
+              onClose={() => setShowOlder(false)}
+            />
+          ) : null}
+        </SheetPage>
       </Sheet>
       <Sheet open={templateDraft !== null} onClose={() => setTemplateDraft(null)}>
         {templateDraft ? <BotTemplateView draft={templateDraft} /> : null}

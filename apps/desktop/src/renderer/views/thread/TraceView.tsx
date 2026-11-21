@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { isWorkingIn, type Entry, type EntryData } from '@shared/models'
-import { CardSection, Disclosure } from '../../components/Controls'
+import { CardSection, Disclosure, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, SheetPage } from '../../components/Overlay'
 import { HStack, IconSlot, VStack } from '../../components/Stack'
@@ -185,7 +185,13 @@ export function ToolRow({ data }: { data: EntryData }) {
     <Disclosure expanded={expanded} onToggle={() => setExpanded((x) => !x)} label={label}>
       <VStack gap={8}>
         {(data.diffs ?? []).map((diff, i) => <DiffView key={i} diff={diff} />)}
-        {data.output ? <CodeBox text={data.output} /> : null}
+        {data.output ? (
+          <VStack gap={4} align="flex-start">
+            {/* The host already redacted this result before it reached the store; copy exactly that text. */}
+            <IconButton title="Copy result" icon="doc.on.clipboard" size={18} onClick={() => void window.codync.app.copy(data.output!)} />
+            <CodeBox text={data.output} />
+          </VStack>
+        ) : null}
       </VStack>
     </Disclosure>
   )

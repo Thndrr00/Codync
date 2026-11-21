@@ -47,6 +47,23 @@
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
+/* The chat header's shortcut to the full history: a quiet chip, not a second search box. */
+.older-messages {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  color: var(--secondary);
+  background: var(--chrome-fill);
+  border-radius: var(--radius-pill);
+  border: none;
+  cursor: pointer;
+  transition: color var(--hover), background var(--hover);
+}
+.older-messages:hover {
+  color: var(--text);
+  background: var(--chrome-fill-hover, var(--chrome-fill));
+}
 .top-fade {
   /* Placed in grid area 1/1 its box would start inside the chrome's padding and leave hard
      edges; auto placement makes it cover the whole chrome. It fades out 24px below the
@@ -112,6 +129,11 @@
   transform: translateY(-8px);
 }
 .title-pill-subtitle {
+  color: var(--secondary);
+}
+/* The quiet-profile activity line under the avatar never widens the pill. */
+.title-pill-activity {
+  max-width: 100%;
   color: var(--secondary);
 }
 

@@ -5,6 +5,7 @@ import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
 import { flowKey, flowRows, isUnconnected, mediaTitle, routineKey, statusLabel, stepNameOf, type FlowCanvas, type FlowMedia } from '../../../lib/routine-flow.ts'
 import type { FlowSelection } from './FlowCanvas'
+import { FlowEmptyState } from './FlowEmptyState'
 import { StatusChip } from './FlowNodeCard'
 
 /**
@@ -12,15 +13,21 @@ import { StatusChip } from './FlowNodeCard'
  * walk (arrows move between rows, Enter selects). It shows the same things as the canvas and the
  * selection is shared, so the inspector works from either.
  */
-export function FlowList({ canvas, bots, selection, onSelect, query }: {
+export function FlowList({ canvas, bots, selection, onSelect, query, note, disabled, onNew }: {
   canvas: FlowCanvas
   bots: ReadonlyMap<string, Bot>
   selection: FlowSelection
   onSelect: (selection: FlowSelection) => void
   query: string
+  /** Host's own reason the flow is empty, when there is one. */
+  note?: string | null
+  disabled?: boolean
+  onNew: () => void
 }) {
   const tr = useTr()
   const rows = flowRows(canvas)
+  // The list shows the same sample-and-New-workflow card the empty canvas does.
+  if (canvas.routines.length === 0) return <FlowEmptyState note={note} disabled={disabled} onNew={onNew} />
   const name = (id: string, media: FlowMedia | null) => {
     const key = media ? `media:${media.id}` : `bot:${id}`
     return stepNameOf(canvas, key) || (media ? tr(mediaTitle(media)) : (bots.get(id)?.name ?? tr('Unknown bot')))
