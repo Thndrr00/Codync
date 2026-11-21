@@ -16,7 +16,6 @@ pub const TOOL: &str = "read_shared_file";
 /// Only this much of the file is read, and only to find header dimensions. It is never returned.
 const MAX_HEADER: usize = 256 * 1024;
 
-#[allow(dead_code)] // added to the Chat MCP server's tool list in mcp.rs, outside this change
 pub fn tools() -> [Value; 1] {
     [json!({
         "name": TOOL,

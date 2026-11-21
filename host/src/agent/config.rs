@@ -9,7 +9,6 @@ use std::path::Path;
 /// ones the user excluded with `claudeMdExcludes`). Codync's switch is the bot's `harnessMemory`
 /// (`agent::own_memory::kept`); when it is off these are the exclusions the launch's Claude Code
 /// settings need. Turn the switch on to load the files, with the user's own exclusions applying.
-#[allow(dead_code, reason = "the Claude launch that merges these settings is outside this change")]
 pub fn claude_md_excludes(home: &Path, use_setup: bool) -> Option<Value> {
     (!use_setup).then(|| {
         json!([

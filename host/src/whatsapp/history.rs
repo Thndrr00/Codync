@@ -104,7 +104,6 @@ pub(crate) fn keep_copy(first: Option<(i64, bool)>, at: i64) -> bool {
 
 /// What a bridge's delete-for-everyone or edit report does to a message it kept. A deletion drops
 /// the row; an edit with new text replaces the kept text; an edit with no text changes nothing.
-#[allow(dead_code)] // the bridge's edit/delete reports call `change_for`, wired outside this file
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Change<'a> {
     Edit(&'a str),
@@ -113,7 +112,6 @@ pub(crate) enum Change<'a> {
 
 /// Pure edit/delete decision, so it is testable without a store. The bridge event handlers own
 /// calling it; until they do, this is reached from its regression test.
-#[allow(dead_code)]
 /// A copy of a message the bridge resent under the same id with different text is an edit: apply it
 /// to the kept row and skip the ordinary insert. A delete report drops the row. Other copies are
 /// ordinary messages. Pure so the decision is testable.
