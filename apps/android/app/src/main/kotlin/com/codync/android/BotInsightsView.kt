@@ -30,6 +30,9 @@ import com.codync.android.design.*
             row { Text("Loading…", style = Type.body, color = Palette.secondary) }
         } else {
             val insights = data!!
+            if (insights.description.isNotBlank()) CardSection("About") {
+                row { Text(insights.description, style = Type.caption, color = Palette.secondary) }
+            }
             insights.provider?.let { provider ->
                 CardSection("Model") { row { ValueRow("Agent", provider) } }
             }

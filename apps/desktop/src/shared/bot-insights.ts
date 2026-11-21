@@ -12,6 +12,7 @@ export interface InsightRoutine {
 
 export interface BotInsights {
   botId: string
+  description: string
   model: string
   provider: string | null
   recentWork: string[]

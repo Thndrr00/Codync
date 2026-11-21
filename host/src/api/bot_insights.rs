@@ -38,6 +38,7 @@ fn routine_view(r: &crate::routines::Routine, now: i64) -> Value {
 pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
     let row = hub.store.bot(bot)?.filter(|r| !r.deleted).context("Unknown bot")?;
     let now = crate::store::now_ms();
+    let description = crate::bdots_extra::plain_text(&row.config.description);
 
     let model = row.config.model.as_deref().unwrap_or_default();
     let provider = crate::bdots_desk::provider_of(model).map(str::to_owned);
@@ -78,6 +79,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
 
     Ok(json!({
         "botId": bot,
+        "description": description,
         "model": model,
         "provider": provider,
         "recentWork": recent,

@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class BotInsights(
     val botId: String = "",
+    val description: String = "",
     val model: String = "",
     val provider: String? = null,
     val recentWork: List<String> = emptyList(),

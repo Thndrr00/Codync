@@ -34,6 +34,12 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   const { usage, skills } = insights
   return (
     <VStack gap={12}>
+      {insights.description ? (
+        <CardSection title={tr('About')}>
+          <Text size="footnote" tone="secondary">{insights.description}</Text>
+        </CardSection>
+      ) : null}
+
       <CardSection title={tr('Model')}>
         <ValueRow label={tr('Agent')}>{insights.provider ?? tr('Unknown')}</ValueRow>
         {insights.model ? <ValueRow label={tr('Model')}>{insights.model}</ValueRow> : null}

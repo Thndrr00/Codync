@@ -25,6 +25,18 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     };
 
     let provider = data["provider"].as_str().unwrap_or("");
+    let description = data["description"].as_str().unwrap_or("");
+    if !description.is_empty() {
+        put(
+            buf,
+            inner.x,
+            y,
+            inner.width,
+            &crate::tui::md::truncate(description, inner.width as usize),
+            t.secondary.patch(t.panel),
+        );
+        y += 2;
+    }
     let model = data["model"].as_str().unwrap_or("");
     if !provider.is_empty() || !model.is_empty() {
         line(

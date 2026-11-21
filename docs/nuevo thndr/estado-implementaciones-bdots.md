@@ -116,6 +116,14 @@ tiendas (`sized_image`, `store_host`, `checkout_open`), y parsers de skills y mo
 Cada uno con tests; `describe_call` está conectado a la pantalla de Insights de los cuatro clientes
 como «Recent work», así que no son código muerto.
 
+## Tercer lote de helpers (24 funciones)
+
+`bdots_extra.rs` aporta otros 24 helpers puros: `plain_text` (HTML/MD → texto), etiquetas de
+aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `tool_result_error`,
+`lane_for`/`why_of`/`describe_activity` para tarjetas de actividad, `take_submit_slot` (límite de
+formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
+ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
+
 ## Pantalla de insights
 
 Los helpers puros ya tienen una superficie real: el método de solo lectura `botInsights {botId}`

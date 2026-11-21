@@ -14,6 +14,9 @@ struct BotInsightsSection: View {
                 Text(L10n.tr("Could not load insights.")).font(.footnote).foregroundStyle(Palette.secondary)
             } else if let insights {
                 VStack(alignment: .leading, spacing: 10) {
+                    if !insights.description.isEmpty {
+                        Text(insights.description).font(.footnote).foregroundStyle(Palette.secondary)
+                    }
                     if let provider = insights.provider {
                         Label {
                             Text(provider).font(.subheadline).foregroundStyle(Palette.text)

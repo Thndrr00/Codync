@@ -3,6 +3,7 @@ import Foundation
 /// A read-only summary of one bot, computed by the host from its own data and the bdots helpers.
 public struct BotInsights: Decodable, Sendable {
     public let botId: String
+    public let description: String
     public let model: String
     public let provider: String?
     public let recentWork: [String]
