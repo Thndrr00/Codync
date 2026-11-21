@@ -10,6 +10,12 @@ mod apps_access;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 mod audit;
 mod background;
+mod bdots_cron;
+mod bdots_desk;
+mod bdots_links;
+mod bdots_pure;
+mod bdots_spend;
+mod bdots_text;
 mod browser;
 mod budget;
 mod bundle;

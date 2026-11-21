@@ -88,6 +88,23 @@ el `guards.ts` actual usa (`browser_execute`, `browser_markdown`, `browser_extra
 `browser_scrape`, `browser_links`) y el correo con `claim_slug` de `email-directory.ts`, que
 propone `nombre@codync.local` con sufijos `-2`, `-3` si el nombre está tomado.
 
+## Lote de helpers puros (37 funciones)
+
+Del checkout actual de bdots se portaron 37 helpers puros, agrupados en seis módulos de Rust
+con tests propios y sin dependencias de cliente, base de datos ni modelo:
+
+- `bdots_text.rs` (9): `summarize`, `format_span`, `is_noop`, `human_key`, `bare_name`,
+  `choice_key`, `keep_hyphens`, `stat_tone`, `stat_size`.
+- `bdots_pure.rs` (4): `append_fact`, `choice_options`, `same_endpoint`, `missing_tokens`.
+- `bdots_links.rs` (7): `bot_link`, `bot_mention`, `bot_id_from_link`, `link_mentions`,
+  `plain_mentions`, `mention_query`, `option_labels` (con el prefijo `codync://bot/`).
+- `bdots_cron.rs` (4): `parse_cron`, `runs_between`, `next_run`, `describe_cron`.
+- `bdots_desk.rs` (10): `title_of`, `without_title`, `without_trailing_links`, `links_in`,
+  `discount_percent`, `compact_count`, `user_id_for_email`, `resource_kind`, `is_model_id`, `provider_of`.
+- `bdots_spend.rs` (3): `tally`, `new_logs`, `advance`.
+
+Son una biblioteca de apoyo: todas llevan `#[allow(dead_code)]` hasta que una pantalla las conecte.
+
 ## Verificación
 
 - Desktop: `npm run typecheck` limpio; `npm test` → 834 tests, 806 pasan, 4 fallan, 24 omitidos.
