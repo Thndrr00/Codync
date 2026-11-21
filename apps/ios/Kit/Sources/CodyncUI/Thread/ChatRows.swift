@@ -135,21 +135,35 @@ private func pinItem(_ entry: Entry, _ model: BotStore) -> MenuItem {
         : MenuItem("Unpin", icon: "pin.slash") { model.setPinned(entry) }
 }
 
-/// The message a reply quotes, as its first line without Markdown markers.struct QuoteLine: View {
+/// The message a reply quotes, as its first line without Markdown markers. Tapping it opens the
+/// quoted message in its context (OpenBot 0.70.0's message jump).
+struct QuoteLine: View {
     let text: String
     /// Its ink: the bubble's own on a Solid fill, the theme's secondary otherwise.
     var color: Color = Palette.secondary
+    /// Opens the quoted message; nil where no jump is offered.
+    var open: (() -> Void)?
 
     var body: some View {
-        Label {
+        let quote = Label {
             Text(L10n.tr("“\(MessagePreview.text(text))”")).lineLimit(1)
         } icon: {
             Image(systemName: "text.bubble")
         }
         .font(.subheadline)
         .foregroundStyle(color)
+        Group {
+            if let open {
+                Button(action: open) { quote }
+                    .buttonStyle(.plain)
+            } else {
+                quote
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Replying to \(text)")
+        .accessibilityAddTraits(open == nil ? AccessibilityTraits() : .isButton)
+        .accessibilityHint(open == nil ? "" : L10n.tr("Opens the quoted message"))
     }
 }
 
@@ -164,6 +178,8 @@ struct UserBubble: View {
     @AppStorage(YourBubbleStyle.storageKey) private var yourBubbles = YourBubbleStyle.solid
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The quote this message answers, opened in the host's message context.
+    @State private var context: MessageContextRequest?
 
     /// Settings › Appearance › Your bubbles for this chat; nil keeps the Classic look.
     private var look: YourBubbleLook? { yourBubbles.look(for: chat, dark: colorScheme == .dark) }
@@ -179,11 +195,16 @@ struct UserBubble: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, 56)
         .animation(Motion.reduced(Motion.morph, reduceMotion), value: yourBubbles)
+        .codyncSheet(item: $context) { MessageContextView(request: $0) }
     }
 
     private var text: some View {
             VStack(alignment: .leading, spacing: 4) {
-                if let quote = entry.data.replyTo { QuoteLine(text: quote.text, color: look?.secondaryInk ?? Palette.secondary) }
+                if let quote = entry.data.replyTo {
+                    QuoteLine(text: quote.text, color: look?.secondaryInk ?? Palette.secondary) {
+                        context = MessageContextRequest(botId: entry.botId, entryId: quote.id, threadId: entry.threadId)
+                    }
+                }
                 if let text = entry.data.text, !text.isEmpty {
                     Text(text)
                         .font(.body)

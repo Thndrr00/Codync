@@ -87,6 +87,9 @@ pub(crate) const RESEND_WINDOW_MS: i64 = 10 * 60 * 1000;
 /// Kept in memory: a resend follows its failed first copy within minutes, and a restart needn't
 /// remember one from before.
 static FIRST_COPIES: Mutex<HashMap<String, (i64, bool)>> = Mutex::new(HashMap::new());
+/// The text of the last copy of each message id, so a resend with changed text is applied as an edit
+/// to the kept row instead of inserted twice (OpenBot's edited-message handling).
+static SEEN_TEXT: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 
 /// Pure decision for a copy of a message. `first` is the first copy's time and whether it left a
 /// row; `at` is this copy's time. A copy that arrives within the window of a first copy that left no
@@ -111,6 +114,9 @@ pub(crate) enum Change<'a> {
 /// Pure edit/delete decision, so it is testable without a store. The bridge event handlers own
 /// calling it; until they do, this is reached from its regression test.
 #[allow(dead_code)]
+/// A copy of a message the bridge resent under the same id with different text is an edit: apply it
+/// to the kept row and skip the ordinary insert. A delete report drops the row. Other copies are
+/// ordinary messages. Pure so the decision is testable.
 pub(crate) fn change_for(deleted: bool, text: Option<&str>) -> Option<Change<'_>> {
     if deleted { Some(Change::Delete) } else { text.map(str::trim).filter(|text| !text.is_empty()).map(Change::Edit) }
 }
@@ -122,6 +128,22 @@ fn copy_key(chat: &str, id: &str) -> Option<String> {
 /// Notes that a message arrived with nothing a history row could hold (it couldn't be decrypted
 /// yet). WhatsApp sends it again once the number can read it; that copy must reach the history and
 /// the orchestrator instead of being dropped as a duplicate.
+/// Returns true when this id was seen before with different text (an edit), remembering the new
+/// text. A first copy and an identical repeat return false. Bounded in memory, cleared with a restart.
+pub(crate) fn is_edit(chat: &str, id: &str, text: &str) -> bool {
+    if chat.is_empty() || id.is_empty() {
+        return false;
+    }
+    let key = format!("{chat}\0{id}");
+    let mut seen = SEEN_TEXT.locked();
+    if seen.len() > 4_096 {
+        seen.clear();
+    }
+    let edited = seen.get(&key).is_some_and(|old| old != text);
+    seen.insert(key, text.to_owned());
+    edited
+}
+
 pub(crate) fn note_unreadable(chat: &str, id: &str, at: i64) {
     let Some(key) = copy_key(chat, id) else { return };
     let mut copies = FIRST_COPIES.locked();

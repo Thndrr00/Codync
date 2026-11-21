@@ -48,6 +48,13 @@ public struct BotRow: View {
                     preview
                     Spacer(minLength: 4)
                     if bot.unread > 0 { UnreadBadge(count: bot.unread) }
+                    // A small dot beside the count carries attention without taking another row.
+                    if bot.needsInput || bot.status == "error" {
+                        Circle()
+                            .fill(bot.needsInput ? Palette.warning : Palette.danger)
+                            .frame(width: 8, height: 8)
+                            .accessibilityLabel(bot.needsInput ? L10n.tr("Needs your input") : L10n.tr("Error"))
+                    }
                 }
                 if !bot.isGroup {
                     Text([model.backendName(bot.backend), bot.rosterProject, bot.rosterFast].compactMap { $0 }.joined(separator: " · "))
@@ -113,5 +120,6 @@ public struct UnreadBadge: View {
             .padding(.horizontal, 6)
             .frame(minWidth: 18, minHeight: 18)
             .background(Palette.accentFill, in: Capsule())
+            .accessibilityLabel(L10n.tr("{count} unread messages").replacingOccurrences(of: "{count}", with: "\(count)"))
     }
 }

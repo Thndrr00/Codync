@@ -11,6 +11,8 @@ struct AttachmentVideo: View {
     private let load: @MainActor (BotStore) async -> Data?
     @Environment(BotStore.self) private var model
     @State private var url: URL?
+    /// Opens the clip full size, where pinch and double-tap zoom apply like a picture's.
+    @State private var fullscreen = false
 
     init(shared file: SharedFile, entryId: String) {
         name = file.name
@@ -37,7 +39,34 @@ struct AttachmentVideo: View {
         }
         .frame(maxWidth: 340, maxHeight: 280)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            if url != nil {
+                Button { fullscreen = true } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(7)
+                        .background(.black.opacity(0.6), in: Circle())
+                }
+                .buttonStyle(PressScale())
+                .padding(6)
+                .accessibilityLabel(L10n.tr("Full screen"))
+            }
+        }
         .accessibilityLabel(name)
+        .codyncSheet(isPresented: $fullscreen) {
+            VStack(spacing: 0) {
+                ModalHeader(name)
+                if let url {
+                    MediaZoom {
+                        VideoPlayer(player: AVPlayer(url: url))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(12)
+                    }
+                }
+            }
+            .background(Palette.background)
+        }
         // Asked again when the computer comes online: a chat shown from the cache before it connects
         // gets its clips once it does. A loaded clip is never fetched again.
         .task(id: [id, model.connection == .online ? "online" : "waiting"]) {

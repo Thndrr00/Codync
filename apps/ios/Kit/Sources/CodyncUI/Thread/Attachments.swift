@@ -149,6 +149,8 @@ struct AttachmentViewer: View {
     let image: AttachmentImage
     @Environment(BotStore.self) private var model
     @State private var note: String?
+    /// Bumped by the header's Fit button; zoom also returns to fit on a second double-tap.
+    @State private var fitRequest = 0
 
     init(file: Attachment, botId: String) {
         name = file.name
@@ -173,6 +175,7 @@ struct AttachmentViewer: View {
     var body: some View {
         VStack(spacing: 0) {
             ModalHeader(name) {
+                Button(L10n.tr("Fit")) { fitRequest += 1 }
                 Button(L10n.tr("Copy")) { Task { await copy() } }
             }
             if let note {
@@ -181,9 +184,11 @@ struct AttachmentViewer: View {
                     .foregroundStyle(Palette.secondary)
                     .padding(.top, 8)
             }
-            image
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(12)
+            MediaZoom(fitRequest: fitRequest) {
+                image
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(12)
+            }
         }
         .background(Palette.background)
     }

@@ -56,7 +56,15 @@ import com.kyant.shapes.RoundedRectangle
         onDispose { model.dispose() }
     }
     val state = model.state
-    Column(Modifier.fillMaxSize()) {
+    // A hit opens its message in context first, like the desktop and iPhone search sheets.
+    var context by remember { mutableStateOf<MessageContextRequest?>(null) }
+    var contextHit by remember { mutableStateOf<SearchHit?>(null) }
+    val shown = context
+    if (shown != null) {
+        MessageContextSheet(store, shown, { context = null }) {
+            contextHit?.let { model.open(it, close) } ?: run { store.openBot(shown.botId, shown.threadId); close() }
+        }
+    } else Column(Modifier.fillMaxSize()) {
         ModalHeader("Search conversation")
         SearchField(state.query, model::updateQuery, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), prompt = "Search messages")
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
@@ -119,7 +127,12 @@ import com.kyant.shapes.RoundedRectangle
                 state.query.isBlank() -> item { Text("Search this conversation.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
                 state.phase != SearchPhase.Failed && state.hits.isEmpty() -> item { Text("No matches.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
                 else -> {
-                    items(state.hits, key = { it.id }) { hit -> SearchHitRow(hit, state.query.trim()) { model.open(hit, close) } }
+                    items(state.hits, key = { it.id }) { hit ->
+                        SearchHitRow(hit, state.query.trim()) {
+                            contextHit = hit
+                            context = MessageContextRequest(hit.botId, hit.id, hit.threadId)
+                        }
+                    }
                     if (state.opening != null) item { Text("Opening result…", style = Type.caption, color = Palette.secondary) }
                     if (state.next != null) item {
                         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {

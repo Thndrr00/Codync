@@ -355,6 +355,17 @@ struct BotListView: View {
         withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { sectionOrder.set(names, on: computer) }
     }
 
+    /// VoiceOver reads the unread count and attention state the row shows.
+    private func rowAccessibility(name: String, bot: Bot, store: BotStore) -> String {
+        var label = accounts.computers.count > 1 ? "\(name), on \(store.hostName)" : name
+        if bot.needsInput { label += ", \(L10n.tr("Needs your input"))" }
+        else if bot.status == "error" { label += ", \(L10n.tr("Error"))" }
+        if bot.unread > 0 {
+            label += ", \(L10n.tr("{count} unread messages").replacingOccurrences(of: "{count}", with: "\(bot.unread)"))"
+        }
+        return label
+    }
+
     private func row(_ item: RosterItem, store: BotStore) -> some View {
         let bot = item.bot
         let line = RosterLine.bot(item, store)
@@ -374,7 +385,7 @@ struct BotListView: View {
         .contentShape([.dragPreview, .contextMenuPreview], card)
         .padding(.horizontal, -8)
         .itemProvider { lift(line) }
-        .accessibilityLabel(accounts.computers.count > 1 ? "\(name), on \(store.hostName)" : name)
+        .accessibilityLabel(rowAccessibility(name: name, bot: bot, store: store))
         .accessibilityActions {
             if query.isEmpty && filter == .all && !byProject {
                 Button(L10n.tr("Move up")) { withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { store.move(bot.id, by: -1) } }

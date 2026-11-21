@@ -43,6 +43,8 @@ pub(super) struct RequestState {
     pub(super) messages_by_sender: HashMap<String, usize>,
     /// Child turns each bot has started in its current turn, for the `delegate` tool's caps.
     pub(super) delegations: HashMap<String, Budget>,
+    /// First results of tool calls in each bot's current turn, for idempotency.
+    pub(super) tool_results: HashMap<String, super::tool_dedupe::ToolDedupe>,
 }
 
 impl Requests {
@@ -134,6 +136,19 @@ impl Requests {
         let mut state = self.0.locked();
         state.active.insert(bot.to_owned(), turn);
         state.delegations.insert(bot.to_owned(), Budget::default());
+        state.tool_results.insert(bot.to_owned(), super::tool_dedupe::ToolDedupe::new());
+    }
+
+    /// The first result of an identical tool call in this turn, if there is one.
+    pub fn cached_tool(&self, bot: &str, name: &str, args: &serde_json::Value) -> Option<serde_json::Value> {
+        self.0.locked().tool_results.get(bot).and_then(|dedupe| dedupe.cached(name, args)).cloned()
+    }
+
+    /// Keeps the first result of a tool call so a repeat within the turn returns it.
+    pub fn remember_tool(&self, bot: &str, name: &str, args: &serde_json::Value, result: &serde_json::Value) {
+        if let Some(dedupe) = self.0.locked().tool_results.get_mut(bot) {
+            dedupe.remember(name, args, result.clone());
+        }
     }
 
     /// This turn's subagent budget, keyed by the calling bot. Absent means no active turn.
@@ -150,6 +165,7 @@ impl Requests {
         let mut state = self.0.locked();
         state.active.remove(bot);
         state.delegations.remove(bot);
+        state.tool_results.remove(bot);
         for request in state.pending.values().filter(|r| r.from == bot) {
             request.cancel.send_replace(true);
         }

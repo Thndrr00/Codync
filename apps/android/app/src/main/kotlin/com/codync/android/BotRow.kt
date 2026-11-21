@@ -97,7 +97,13 @@ import kotlinx.coroutines.launch
         ) {
             botRosterActions(bot, store, edit, delete) { confirmNewSession = true }
         }.semantics {
-            contentDescription = bot.name
+            // The same unread count and attention state the row draws are read aloud.
+            contentDescription = buildString {
+                append(bot.name)
+                if (bot.status == "needsInput") append(", Needs your input")
+                else if (bot.status == "error") append(", Error")
+                if (bot.unread > 0) append(", ${bot.unread} unread")
+            }
             if (selected) this.selected = true
             customActions = buildList {
                 if (!bot.lead) add(CustomAccessibilityAction(if (bot.pinned) "Unpin" else "Pin") { store.toggleBotPin(bot); true })
@@ -201,6 +207,16 @@ import kotlinx.coroutines.launch
                     ) {
                         Text("${bot.unread}", style = Type.caption2.bold, color = Palette.onAccent)
                     }
+                }
+                // A small attention dot beside the count needs no extra row (OpenBot roster badge).
+                if (bot.status == "needsInput" || bot.status == "error") {
+                    Box(
+                        Modifier.size(8.dp).clip(Capsule())
+                            .background(if (bot.status == "needsInput") Palette.warning else Palette.danger)
+                            .semantics {
+                                contentDescription = if (bot.status == "needsInput") "Needs your input" else "Error"
+                            }
+                    )
                 }
             }
         }

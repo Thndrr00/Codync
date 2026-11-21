@@ -226,7 +226,8 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 16.dp), verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         DropdownMenu({ buildList {
-            add(MenuItem("Photos", icon = "photo.on.rectangle") { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+            // Photos picks clips too (OpenBot 0.70.0); both go through the same capped upload path.
+            add(MenuItem("Photos", icon = "photo.on.rectangle") { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) })
             add(MenuItem("Camera", icon = "camera.fill") {
                 val root = File(context.cacheDir, "shared-attachments").apply { mkdirs() }
                 val file = File(root, "camera-${System.currentTimeMillis()}.jpg")

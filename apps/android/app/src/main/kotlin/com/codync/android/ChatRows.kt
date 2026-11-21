@@ -174,11 +174,14 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
     } else null
     // In the chat itself a reply can start a thread branched from it.
     val branch: (() -> Unit)? = if (thread == null && entry.isReplyable) ({ store.startThread(entry.botId, fromEntryId = entry.id) }) else null
+    // Tapping a quote opens the quoted message in its context (OpenBot 0.70.0's message jump).
+    var quoteContext by remember { mutableStateOf<MessageContextRequest?>(null) }
+    val openQuote: (ReplyQuote) -> Unit = { quote -> quoteContext = MessageContextRequest(entry.botId, quote.id, entry.threadId) }
     when (entry.kind) {
         "user" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) topGroupGap else topSameGap).animateContentSize(Motion.layoutSize),
             horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (groupStart) entry.person?.takeIf { it.key != store.myKey }?.let { PersonLabel(it) }
-            UserBubble(entry, chat, state, store, reply, forward, thread, speeds, branch)
+            UserBubble(entry, chat, state, store, reply, forward, thread, speeds, branch, openQuote)
             ReactionsRow(entry, store)
             ThreadChip(entry, state) { store.openBot(entry.botId, entry.id) }
             RoutineThreadChip(entry, store)
@@ -219,6 +222,9 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
         ForwardSheet(picked, state, store) { forwardEntry = null }
     }
     CodyncSheet(showSpeeds, { showSpeeds = false }) { ReadingSpeedSheet(store) { showSpeeds = false } }
+    CodyncSheet(quoteContext, { quoteContext = null }) { shown ->
+        MessageContextSheet(store, shown, { quoteContext = null })
+    }
 }
 
 /** What a connection request in the chat opens. */
@@ -310,7 +316,8 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         chat?.takeIf { it.kind != "group" && it.avatarPhoto == null }?.avatarColor,
     )
 
-@Composable private fun UserBubble(entry: Entry, chat: Bot?, state: AppState, store: AppStore, reply: (() -> Unit)?, forward: (() -> Unit)?, thread: String?, speeds: (() -> Unit)?, branch: (() -> Unit)?) {
+@Composable private fun UserBubble(entry: Entry, chat: Bot?, state: AppState, store: AppStore, reply: (() -> Unit)?, forward: (() -> Unit)?, thread: String?, speeds: (() -> Unit)?, branch: (() -> Unit)?,
+    openQuote: (ReplyQuote) -> Unit = {}) {
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val attachments = entry.data["attachments"]?.jsonArray?.map { WireJson.decodeFromJsonElement<Attachment>(it) }.orEmpty()
@@ -325,7 +332,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             .contextActions(reactions = reactionPick(entry, store), onClick = { focus.clearFocus() }, preview = { SelectionContainer { UserText(entry.text, quote, look) } }) {
                 messageMenu(context, entry, reply, null, store, quote = { store.quoteMessage(entry, thread) }, forward = forward, speeds = speeds,
                     branch = branch)
-            }) { UserText(entry.text, quote, look) }
+            }) { UserText(entry.text, quote, look, openQuote) }
         SendStatusLine(entry.status, state.bots.firstOrNull { it.id == entry.botId }?.status == "working")
     }
 }
@@ -341,18 +348,21 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     }
 }
 
-@Composable private fun UserText(text: String, quote: ReplyQuote? = null, colors: YourBubbleColors? = null) {
+@Composable private fun UserText(text: String, quote: ReplyQuote? = null, colors: YourBubbleColors? = null, openQuote: (ReplyQuote) -> Unit = {}) {
     val compact = LocalUiDensity.current == UiDensity.Compact
     Column(Modifier.background(colors?.fill ?: Palette.bubbleUser).padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (quote != null) QuoteLine(quote.text, color = colors?.secondaryInk ?: Palette.secondary)
+        if (quote != null) QuoteLine(quote.text, color = colors?.secondaryInk ?: Palette.secondary, open = { openQuote(quote) })
         if (text.isNotEmpty()) Text(text, style = Type.chatBody.copy(textDirection = TextDirection.Content), color = colors?.ink ?: Palette.text)
     }
 }
 
 /** The message a reply quotes, as its first line without Markdown markers: in its bubble, and in the composer while replying. */
-@Composable internal fun QuoteLine(text: String, modifier: Modifier = Modifier, color: Color = Palette.secondary) {
-    Row(modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+@Composable internal fun QuoteLine(text: String, modifier: Modifier = Modifier, color: Color = Palette.secondary, open: (() -> Unit)? = null) {
+    val clickable = if (open != null) Modifier.clickable(role = Role.Button, onClick = open).semantics {
+        contentDescription = "Opens the quoted message"
+    } else Modifier
+    Row(modifier.then(clickable).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Symbol("text.bubble", size = 14.dp, tint = color)
         Text("\u201c${messagePreview(text)}\u201d", style = Type.subheadline, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

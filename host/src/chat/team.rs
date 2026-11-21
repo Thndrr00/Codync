@@ -427,6 +427,17 @@ pub(crate) fn visible_bots(store: &Store) -> Result<Vec<BotConfig>> {
 /// message to a bot on another computer goes over the network; the synchronous tools keep their
 /// bounded request alive. Everything else is [`call`].
 pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) -> Result<Value> {
+    // Idempotency inside one turn: an identical call after the first gets that result back
+    // instead of running a second time. The cache is per bot and reset on each turn.
+    if let Some(first) = hub.team.cached_tool(from, name, args) {
+        return Ok(first);
+    }
+    let result = dispatch_async(hub, from, name, args).await?;
+    hub.team.remember_tool(from, name, args, &result);
+    Ok(result)
+}
+
+async fn dispatch_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "list_bots" => {
             visible_bot(hub, from)?;

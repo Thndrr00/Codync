@@ -151,7 +151,7 @@ struct Composer: View {
             if case .success(let urls) = result { add(urls) }
         }
             .quietPresentation(shown: pickingPhotos) {
-                $0.photosPicker(isPresented: $pickingPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images)
+                $0.photosPicker(isPresented: $pickingPhotos, selection: $photoItems, maxSelectionCount: 10, matching: [.images, .videos])
             }
             .onChange(of: photoItems) { _, items in
                 guard !items.isEmpty else { return }
@@ -381,14 +381,19 @@ struct Composer: View {
         Task { append(await PickedFile.load(providers)) }
     }
 
-        /// Photos go out as JPEG: HEIC isn't something every agent can read.
+        /// Still photos go out as JPEG (HEIC isn't something every agent can read); videos keep
+        /// their own data so a clip can be sent from Photos as on Android.
         private func addPhotos(_ items: [PhotosPickerItem]) async {
             let stamp = Int(Date.now.timeIntervalSince1970)
             var picked: [OutgoingFile] = []
             for (i, item) in items.enumerated() {
-                guard let data = try? await item.loadTransferable(type: Data.self),
-                      let jpeg = ImageData.jpeg(data) else { continue }
-                picked.append(OutgoingFile(name: "photo-\(stamp)-\(i + 1).jpg", data: jpeg))
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                if item.contentType.conforms(to: .movie) {
+                    let ext = item.contentType.preferredFilenameExtension ?? "mov"
+                    picked.append(OutgoingFile(name: "video-\(stamp)-\(i + 1).\(ext)", data: data))
+                } else if let jpeg = ImageData.jpeg(data) {
+                    picked.append(OutgoingFile(name: "photo-\(stamp)-\(i + 1).jpg", data: jpeg))
+                }
             }
             append(picked)
         }
