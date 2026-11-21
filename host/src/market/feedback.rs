@@ -48,8 +48,27 @@ pub fn tool() -> Value {
 /// Codync's own repository, where these reports go.
 const REPO: &str = "Thndrr00/Codync";
 
+/// How the person's answer on the card ended. Ported from OpenBot nightly: dismissing a bug report or
+/// idea card withdraws it before anything is sent, just like denying it or letting it time out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Outcome {
+    /// The person tapped Allow: send the report.
+    Allowed,
+    /// The person tapped Deny or dismissed the card: withdraw the send.
+    Withdrawn,
+    /// Nobody answered before the request timed out or the tool stopped waiting: withdraw the send.
+    Expired,
+}
+
+/// Whether the report may be sent. Pure, so every way of withdrawing it has a test without a host or a
+/// network call: only an explicit Allow sends, everything else leaves the card's report unsent.
+pub(crate) fn may_send(outcome: Outcome) -> bool {
+    outcome == Outcome::Allowed
+}
+
 /// Shows the whole report on a card and opens the public issue only after the person allows it. The
-/// card is asked for even under Auto: a public post is never automatic.
+/// card is asked for even under Auto: a public post is never automatic. Dismissing or letting the card
+/// lapse withdraws the send; this reuses the same `Cmd::Approve` answer/oneshot as any other approval.
 pub async fn perform(hub: &Hub, source: &BotConfig, args: &Value) -> Result<Value> {
     let kind = args["kind"].as_str().filter(|k| *k == "bug" || *k == "idea").context("kind must be bug or idea")?;
     let title = args["title"].as_str().map(str::trim).filter(|t| !t.is_empty()).context("a title is required")?;
@@ -57,9 +76,16 @@ pub async fn perform(hub: &Hub, source: &BotConfig, args: &Value) -> Result<Valu
     let detail = format!("{kind}: {title}\n\n{text}\n\n{}", args["details"].as_str().unwrap_or_default());
     let (reply, answer) = oneshot::channel();
     hub.send_cmd(&source.id, Cmd::Approve { title: "Send a public bug report or idea?".to_owned(), detail, reply })?;
-    let Ok(true) = tokio::time::timeout(APPROVAL_TIMEOUT, answer).await else {
-        bail!("the report was not allowed; nothing was sent");
+    // A dropped oneshot (card withdrawn, tool stopped waiting) and a timeout both withdraw the send,
+    // the same way `manage::approve` treats them as "not allowed".
+    let outcome = match tokio::time::timeout(APPROVAL_TIMEOUT, answer).await {
+        Ok(Ok(true)) => Outcome::Allowed,
+        Ok(Ok(false)) => Outcome::Withdrawn,
+        Ok(Err(_)) | Err(_) => Outcome::Expired,
     };
+    if !may_send(outcome) {
+        bail!("the report was withdrawn; nothing was sent");
+    }
     let token = crate::github::connection(&hub.store)?.context("GitHub is not configured")?.token;
     let url = format!("https://api.github.com/repos/{REPO}/issues");
     let client = crate::egress::client(crate::egress::Policy::Only(&["api.github.com"]), &url).await?;
@@ -96,5 +122,12 @@ mod tests {
             );
         }
         assert_eq!(tool["inputSchema"]["required"], json!(["kind", "title", "text"]));
+    }
+
+    #[test]
+    fn only_an_explicit_allow_sends_a_dismissed_report_is_withdrawn() {
+        assert!(may_send(Outcome::Allowed));
+        assert!(!may_send(Outcome::Withdrawn), "dismissing the card cancels the send");
+        assert!(!may_send(Outcome::Expired), "a lapsed card cancels the send too");
     }
 }

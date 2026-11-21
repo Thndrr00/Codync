@@ -166,22 +166,28 @@ impl Routines {
         timed_out: bool,
     ) -> Result<()> {
         let failed = matches!(status, Status::Failed | Status::Interrupted);
-        let (started, attempt) = {
+        let (started, attempt, quiet) = {
             let s = self.state.locked();
-            s.runs.iter().find(|r| r.id == id).map_or((false, 0), |r| (r.started_at.is_some(), r.attempt))
+            s.runs.iter().find(|r| r.id == id).map_or((false, 0, false), |r| {
+                let quiet = s.routines.iter().find(|x| x.id == r.routine_id).is_some_and(|x| x.quiet);
+                (r.started_at.is_some(), r.attempt, quiet)
+            })
         };
         let acted = failed && retry::acted(hub, id);
-        // A run that hit its time limit could hold the bot that long again.
-        let safe = failed && !timed_out && !acted;
+        // A quiet run has no notice for `acted()` to read; its stored step status decides whether an
+        // automatic retry is safe (a step that began may have done work). A timeout is never retried.
+        let safe = failed && retry::retry_ladder_safe(quiet, started, acted, timed_out);
         // A run that failed before its first step did nothing: a provider that wasn't up, or a
         // timeout in session setup, is transient and gets one more try a few minutes later.
         let start_retry = failed && retry::retry_start(attempt, started, acted);
-        let (bot, withdrawn, flow) = self.change(&hub.store, |s| {
+        let (bot, withdrawn, flow, ended) = self.change(&hub.store, |s| {
             let i = s.runs.iter().position(|r| r.id == id).context("routine run not found")?;
             let mut withdrawn = Vec::new();
             let mut flow = None;
+            let mut ended = false;
             let r = &mut s.runs[i];
             if r.status.active() {
+                ended = true;
                 flow = super::flow::start_for(
                     s.routines.iter().find(|x| x.id == r.routine_id),
                     r,
@@ -210,8 +216,17 @@ impl Routines {
                     s.pending_flows.push(start.clone());
                 }
             }
-            Ok((s.runs[i].bot_id.clone(), withdrawn, flow))
+            Ok((s.runs[i].bot_id.clone(), withdrawn, flow, ended))
         })?;
+        // OpenBot nightly analytics for the new tool: a quiet run's outcome, never its instruction,
+        // steps or result. Reported once, only when this call actually ended the run.
+        if quiet && ended {
+            crate::analytics::capture(
+                hub,
+                crate::analytics::Event::RoutineQuietRun,
+                serde_json::Map::from_iter([("outcome".into(), (if failed { "failed" } else { "succeeded" }).into())]),
+            );
+        }
         retry::withdraw(hub, &withdrawn);
         if let Some(start) = flow {
             super::flow::spawn(hub, start);

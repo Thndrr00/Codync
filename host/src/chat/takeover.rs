@@ -77,6 +77,9 @@ pub async fn sweep_loop(hub: Arc<Hub>) {
     let mut tick = tokio::time::interval(SWEEP_EVERY);
     loop {
         tick.tick().await;
+        // The same sweep closes stale permission and question cards, so a forgotten attention card
+        // stops looking answerable (and blocking) once its request has timed out.
+        crate::chat::attention::sweep(&hub, now_ms());
         let found = hub.clone();
         match tokio::task::spawn_blocking(move || due(&found.store, now_ms())).await {
             Ok(Ok(lapsed)) => {

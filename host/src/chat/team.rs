@@ -27,6 +27,7 @@ pub mod openai;
 mod pipeline;
 pub mod remote;
 mod requests;
+mod side_question;
 mod tool_dedupe;
 pub(crate) use blocking::tool_timeout;
 use blocking::{ASK_TIMEOUT, ask};
@@ -415,7 +416,19 @@ fn visible(row: &BotRow) -> bool {
 }
 
 fn visible_bot(hub: &Hub, id: &str) -> Result<BotConfig> {
-    hub.store.bot(id)?.filter(visible).map(|r| r.config).ok_or_else(|| anyhow!("unknown or hidden bot"))
+    if let Some(row) = hub.store.bot(id)?.filter(visible) {
+        return Ok(row.config);
+    }
+    let agents = visible_bots(&hub.store)?;
+    let hint = near_bot_hint(id, agents.iter().map(|c| (c.id.as_str(), c.name.as_str()))).unwrap_or_default();
+    bail!("unknown or hidden bot{hint}")
+}
+
+/// The near-match hint for a mistyped `botId` in a team message/ask tool, from the bots the caller may
+/// message (OpenBot 0.74.0). Reuses `chat::group::nearest`; pure over the candidates so a typo's
+/// suggestion is testable without a store. No hint for a name that isn't close.
+pub(super) fn near_bot_hint<'a>(id: &str, agents: impl Iterator<Item = (&'a str, &'a str)>) -> Option<String> {
+    crate::chat::group::nearest(id, agents).map(|(near_id, name)| format!(" Did you mean {name} (`{near_id}`)?"))
 }
 
 /// This computer's bots others may see and message.
@@ -430,6 +443,12 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
     // Idempotency inside one turn: an identical call after the first gets that result back
     // instead of running a second time. The cache is per bot and reset on each turn.
     if let Some(first) = hub.team.cached_tool(from, name, args) {
+        // OpenBot nightly: count the repeats a dedupe saved, by the fixed team-tool name only.
+        crate::analytics::capture(
+            hub,
+            crate::analytics::Event::ToolDeduped,
+            serde_json::Map::from_iter([("tool".into(), name.into())]),
+        );
         return Ok(first);
     }
     let result = dispatch_async(hub, from, name, args).await?;

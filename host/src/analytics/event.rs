@@ -48,6 +48,8 @@ pub enum Event {
     MediaMade,
     QueuedMessageRemoved,
     TurnStopped,
+    /// A bot called `interrupt_bot` to stop another bot's turn; never the reason or either bot's name.
+    BotInterrupted,
     TurnFinished,
     /// A turn moved on to the bot's next agent (`agent::fallback`).
     AgentFellBack,
@@ -65,10 +67,14 @@ pub enum Event {
     RoutineDeleted,
     RoutineRun,
     RoutineRetried,
+    /// A routine ran quietly: it kept its steps but posted no notice or alert of its own (`outcome`).
+    RoutineQuietRun,
     /// A person saved the groups of a routine-flow canvas; grouping is drawing only, it runs nothing.
     RoutineFlowGrouped,
     /// A bot called `delegate` to start a subagent child turn (`outcome`, `agent`; never the task).
     SubagentDelegated,
+    /// An identical team-tool call in one turn got the first result back instead of running again (`tool`).
+    ToolDeduped,
     /// A bot's `start_dev_server` ended (`outcome`).
     DevServerStarted,
     /// A dev server ended (`by`).
@@ -102,6 +108,8 @@ pub enum Event {
     BrowserLiveViewed,
     /// A bot's `publish_artifact`.
     ArtifactPublished,
+    /// A bot's `read_shared_file`: only the file's fixed kind, never its name or path.
+    SharedFileRead,
     CredentialSaved,
     AgentSetupStarted,
     AgentSignedIn,
@@ -189,6 +197,7 @@ impl Event {
             Self::MediaMade => "media_made",
             Self::QueuedMessageRemoved => "queued_message_removed",
             Self::TurnStopped => "turn_stopped",
+            Self::BotInterrupted => "bot_interrupted",
             Self::TurnFinished => "turn_finished",
             Self::AgentFellBack => "agent_fell_back",
             Self::AgentRetired => "agent_retired",
@@ -203,8 +212,10 @@ impl Event {
             Self::RoutineDeleted => "routine_deleted",
             Self::RoutineRun => "routine_run",
             Self::RoutineRetried => "routine_retried",
+            Self::RoutineQuietRun => "routine_quiet_run",
             Self::RoutineFlowGrouped => "routine_flow_grouped",
             Self::SubagentDelegated => "subagent_delegated",
+            Self::ToolDeduped => "tool_deduped",
             Self::DevServerStarted => "dev_server_started",
             Self::DevServerStopped => "dev_server_stopped",
             Self::DevServerAction => "dev_server_action",
@@ -228,6 +239,7 @@ impl Event {
             Self::BrowserTool => "browser_tool",
             Self::BrowserLiveViewed => "browser_live_viewed",
             Self::ArtifactPublished => "artifact_published",
+            Self::SharedFileRead => "shared_file_read",
             Self::CredentialSaved => "credential_saved",
             Self::AgentSetupStarted => "agent_setup_started",
             Self::AgentSignedIn => "agent_signed_in",

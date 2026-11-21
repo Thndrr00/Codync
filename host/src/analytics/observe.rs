@@ -124,6 +124,8 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             Event::MessageSent
         }
         "stop" | "cancelTask" => Event::TurnStopped,
+        // A bot's `interrupt_bot` (a team tool): never the reason, the target or either bot's name.
+        "teamCall" if b["name"] == "interrupt_bot" => Event::BotInterrupted,
         "unqueue" => Event::QueuedMessageRemoved,
         "newSession" => Event::SessionReset,
         "respondPermission" => Event::PermissionAnswered,
@@ -201,6 +203,8 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("change".into(), (if update { "update" } else { "new" }).into());
             Event::ArtifactPublished
         }
+        // A bot's `read_shared_file`: only the fixed kind from its answer reaches the event, never the path.
+        "chatCall" if b["name"] == crate::chat::file_reader::TOOL => Event::SharedFileRead,
         "agentSetup" | "agentAuthenticate" => {
             // An agent's catalog id; Node.js setup names none.
             if let Some(agent) = b["backend"].as_str().filter(|a| !a.is_empty()) {
@@ -276,6 +280,10 @@ pub fn answered(event: Event, mut p: Map<String, Value>, answer: &Value) -> Opti
         Event::ArtifactPublished => {
             p.insert("card".into(), answer["card"].is_null().into());
         }
+        // The file reader's own fixed classification, never its name, path or bytes.
+        Event::SharedFileRead => {
+            p.insert("kind".into(), file_kind(&answer["kind"]).into());
+        }
         Event::ConnectorUpdated => {
             p.insert("outcome".into(), if answer["verify"].is_null() { "saved" } else { "ready" }.into());
         }
@@ -333,6 +341,17 @@ fn changed_fields(stored: &BotConfig, patch: &Value) -> Vec<String> {
         .collect();
     fields.sort();
     fields
+}
+
+/// The fixed kind a `read_shared_file` answer carries. Anything else reads as `other`, so no text
+/// derived from a file name or path can reach the event.
+fn file_kind(kind: &Value) -> &'static str {
+    match kind.as_str() {
+        Some("image") => "image",
+        Some("video") => "video",
+        Some("file") => "file",
+        _ => "other",
+    }
 }
 
 /// The fixed mode of a `setAccountRotation` call. An unknown value (which the call itself refuses)

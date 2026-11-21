@@ -105,6 +105,7 @@ host answers and sends it once the host is up.
 | `queued_message_removed` | host | *Remove* on a queued message (`unqueue`) | — |
 | `presence_shown` | host | A chat's first `presence` with somebody else in it, once per chat per host run | `others` (how many), `typing` |
 | `turn_stopped` | host | `stop` | — |
+| `bot_interrupted` | host (`teamCall`, a bot's `interrupt_bot`) | A bot stopped another bot's running turn; only a successful stop is counted | —; never the reason, the target or either bot's name |
 | `turn_finished` | host | An agent's turn ends: once per agent it ran on, so a turn that fell back once and then answered sends a `failed` and a `done` | `agent`, `outcome` (`done`/`stopped`/`failed`/`needs_setup`/`incomplete`; `needs_setup` is a failure whose `error` is `sign_in` or `not_installed`: the user has a step to take, nothing broke), `stop_reason`, `source` (`user`/`routine`/`group`/`bot`/`host`: the lead opening a call), `seconds`; when failed or needs_setup, `error` (`not_installed`/`timeout`/`exited`/`no_model`/`sign_in`/`agent_error`/`io`/`other`) and, for `agent_error`, `rpc_code` and `agent_reason` (the adapter's own category, else one the host reads from the message, which is never sent: `session_ended`/`rate_limit`/`quota`/`overloaded`/`context`/`model`/`network`/`provider`/`unknown`) |
 | `agent_fell_back` | host | A turn moves on to the bot's next agent ([agent fallbacks](../features/agent-fallback.md)) | `agent` (the one that couldn't answer), `reason` (`usageLimit`/`outOfCredits`/`rateLimited`/`overloaded`/`signedOut`/`notStarting`/`modelMissing`) |
 | `agent_retired` | host | A bot's agent stops between turns to give back its processes (`agent/bot/lifecycle.rs`); the next message starts it again | `agent`, `reason` (`idle`: every session unused for 30 minutes; `routine_finished`: a routine run ended with no other session open; `session_not_closed`: a routine run ended and the agent couldn't close its session) |
@@ -119,6 +120,7 @@ host answers and sends it once the host is up.
 | `routine_deleted` | host | `deleteRoutine` | — |
 | `routine_run` | host | `runRoutine` | — |
 | `routine_retried` | host | `retryRoutineRun` (the retry button on a failed run's notice) | — |
+| `routine_quiet_run` | host | A quiet routine run ended; sent once, only when this call actually ended the run | `outcome` (`succeeded`/`failed`); never the instruction, steps or result |
 | `routine_flow_grouped` | host | `saveRoutineFlowGroups`: a person saved a routine-flow canvas's groups; grouping is drawing only and changes no links | — |
 | `dev_server_started` | host | A bot's `start_dev_server` finished | `outcome` (`port`, `no_port`, `exited`, `refused`, `limit`, `failed`) |
 | `dev_server_stopped` | host | A dev server ended | `by` (`user`, `bot`, `restart`, `exited`, `failed`) |
@@ -140,6 +142,7 @@ host answers and sends it once the host is up.
 | `skill_learned` | host | A bot's background review saved or extended a skill by itself | `agent`, `action` (`created`/`updated`); never its name or text |
 | `browser_tool` | host | A bot ran one of its browser tools | `agent`, `tool`; never the page, the address or the typed text |
 | `artifact_published` | host | A bot's `publish_artifact` (`chatCall`) | `change` (`new`/`update`), `card` (whether its card went into the bot's chat), never its title |
+| `shared_file_read` | host | A bot's `read_shared_file` (`chatCall`) | `kind` (`image`/`video`/`file`/`other`, the file reader's own fixed classification); never the name, path, size or bytes |
 | `credential_saved` | host | A key, login or vault is saved (clearing one isn't) | `kind` (`login`/`onepassword`/`connector`/`composio`/`voice`/`agent_env`) |
 | `agent_setup_started` | host | `agentSetup` (an agent's install or sign-in terminal) | `agent` |
 | `agent_signed_in` | host | `agentAuthenticate` | `agent` |
@@ -148,6 +151,7 @@ host answers and sends it once the host is up.
 | `setting_changed` | host `track` (desktop) | The *Your bubbles* style under Appearance is picked | `setting` (`your_bubbles`), `value` (`solid`/`tint`/`classic`; a style the host doesn't know yet reads as `other`), never any message text |
 | `setting_changed` | host (`setAccountRotation`) | The account rotation mode of an agent is set | `setting` (`account_rotation`), `value` (`manual`/`roundRobin`/`onRateLimit`; an unknown mode reads as `other`), never an account id, name or email |
 | `subagent_delegated` | host | A bot called `delegate` to run one bounded child turn; sent with the result, including a refusal before a child starts | `outcome` (`ok`/`depth_limit`/`cap`/`failure`), `agent`; never the task or the reply text |
+| `tool_deduped` | host | An identical team-tool call within one turn got the first result back instead of running again | `tool` (the team tool's own fixed name); never the arguments, text, paths or result |
 | `browser_live_viewed` | host | A person opened a bot's live browser tab or took control | `action` (`opened`/`taken_over`); never the page, title, address or picture |
 | `host_update_installed` | host | `installHostUpdate` | — |
 | `network_joined` | host | `networkCreate` / `networkJoin`: the computer is in a network of the user's computers | `via` (`create`/`invite`), never a name, invite or connector address |

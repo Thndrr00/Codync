@@ -5,6 +5,19 @@ use crate::store::Store;
 use std::path::PathBuf;
 use std::time::Duration;
 
+#[test]
+fn a_typos_bot_id_suggests_the_close_agent() {
+    let agents = [("coder-bot", "Coder"), ("reviewer-bot", "Reviewer"), ("designer", "Designer")];
+    let of = |id: &str| near_bot_hint(id, agents.iter().map(|(id, name)| (*id, *name)));
+    assert_eq!(
+        of("coder-but").as_deref(),
+        Some(" Did you mean Coder (`coder-bot`)?"),
+        "one wrong character names the near agent"
+    );
+    assert_eq!(of("reviewer-bot").as_deref(), None, "an id that already matches is not a typo");
+    assert_eq!(of("totally-other").as_deref(), None, "no close name is no hint");
+}
+
 #[path = "blocking_tests.rs"]
 mod blocking_tests;
 

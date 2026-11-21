@@ -160,6 +160,10 @@ an interrupted action.
 A failed or interrupted run is tried again only when that can't repeat work. The
 host checks the run's turn for a tool call whose ACP kind isn't `read`, `search`,
 `fetch` or `think` (an unknown kind counts as acting; `store::acted_in_turn`).
+A quiet run posts no start notice for that check to read, so its retry decision
+uses its stored step status instead: a quiet run whose first step began is never
+put on the automatic retry ladder, and waits for the user. A quiet run that
+reached no step may still be tried (OpenBot nightly's acted caveat).
 
 - **Failed before the first step** (a provider that wasn't up, or a timeout in session setup):
   tried once more five minutes later on the same `notBefore` delay path, even when the failure was

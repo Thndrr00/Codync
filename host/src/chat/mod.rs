@@ -3,6 +3,7 @@
 
 pub mod apps;
 pub mod artifacts;
+pub mod attention;
 pub mod browser_profile;
 pub mod calls;
 pub mod channel_history;

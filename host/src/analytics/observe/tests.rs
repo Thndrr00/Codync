@@ -365,6 +365,28 @@ fn library_folders_flow_groups_and_account_rotation_report_only_fixed_values() {
 }
 
 #[test]
+fn new_tool_events_carry_only_fixed_properties() {
+    // interrupt_bot is a team tool: the reason and the bots it names never reach the event.
+    let interrupt =
+        json!({"botId": "b1", "name": "interrupt_bot", "arguments": {"botId": "b2", "reason": "secret plan"}});
+    assert_eq!(props("teamCall", &interrupt), Some((Event::BotInterrupted, json!({"client": "local"}))));
+    assert!(props("teamCall", &json!({"name": "ask_bot"})).is_none(), "other team tools aren't events");
+
+    // read_shared_file returns only a fixed kind; the path the agent named stays out of the event.
+    let read = json!({"botId": "b1", "name": crate::chat::file_reader::TOOL,
+        "arguments": {"path": "/secret/salaries.png"}});
+    let (event, p) = observe(&Caller::Local, "chatCall", &read).expect("a shared-file read is tracked");
+    assert_eq!(event, Event::SharedFileRead);
+    assert_eq!(Value::Object(p.clone()), json!({"client": "local"}));
+    let p = answered(event, p, &json!({"kind": "image", "size": 12})).expect("reported");
+    assert_eq!(Value::Object(p.clone()), json!({"kind": "image", "client": "local"}), "only the fixed kind is added");
+    assert!(!p.to_string().contains("secret"), "no path or name in the event");
+    let (_, p) = observe(&Caller::Local, "chatCall", &read).expect("tracked");
+    let other = Value::Object(answered(event, p, &json!({"kind": "made-up"})).unwrap());
+    assert_eq!(other["kind"], json!("other"));
+}
+
+#[test]
 fn a_failed_network_call_reports_what_it_was_and_others_nothing() {
     let failed_call = |method: &str, b: &Value| {
         let (event, p) = observe(&Caller::Local, method, b)?;

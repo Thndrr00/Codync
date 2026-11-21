@@ -24,6 +24,14 @@ pub(crate) fn retry_start(attempt: u32, started: bool, acted: bool) -> bool {
     attempt == 0 && !started && !acted
 }
 
+/// Whether a failed run is safe to retry on the 1/5/15-minute ladder. A quiet run posts no start
+/// notice, so `acted()` can't read its tool steps; use the stored step status (`started_at`) instead —
+/// a step that began may have changed something, so leave that run for the user. Pure so the rule has
+/// a test without a store or a host.
+pub(crate) fn retry_ladder_safe(quiet: bool, started: bool, acted: bool, timed_out: bool) -> bool {
+    !timed_out && !acted && !(quiet && started)
+}
+
 /// Queues that one retry on the same `not_before` delay path as an ordinary failure. The queued run
 /// is marked past the retry ladder so that, if it also fails to start, it waits for the user rather
 /// than looping. Returns earlier failures that no longer offer a retry.
@@ -248,6 +256,17 @@ mod tests {
         assert!(!retry_start(0, true, false), "a step began, so it may have done work");
         assert!(!retry_start(0, false, true), "a tool acted, so work may have been done");
         assert!(!retry_start(1, false, false), "the one automatic retry is not retried again");
+    }
+
+    #[test]
+    fn a_quiet_run_that_began_a_step_waits_for_the_user_instead_of_the_retry_ladder() {
+        // An ordinary run with read-only steps may still be retried (that starts the ladder).
+        assert!(retry_ladder_safe(false, true, false, false));
+        // A quiet run has no notice for `acted()` to read: a stored step means it may have acted.
+        assert!(!retry_ladder_safe(true, true, false, false), "a started quiet run is not auto-retried");
+        assert!(retry_ladder_safe(true, false, false, false), "a quiet run that reached no step may be retried");
+        assert!(!retry_ladder_safe(true, false, true, false), "a tool that acted is never retried");
+        assert!(!retry_ladder_safe(true, false, false, true), "a timeout is never retried on the ladder");
     }
 
     #[test]
