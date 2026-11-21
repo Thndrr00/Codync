@@ -21,11 +21,13 @@ mod batch;
 mod blocking;
 mod directory;
 pub mod flow;
+mod interrupt;
 pub mod members;
 pub mod openai;
 mod pipeline;
 pub mod remote;
 mod requests;
+mod tool_dedupe;
 pub(crate) use blocking::tool_timeout;
 use blocking::{ASK_TIMEOUT, ask};
 pub use requests::{Requests, Turn};
@@ -94,6 +96,7 @@ pub fn tools() -> Value {
         batch::tool(),
         crate::chat::pins::tool(),
         pipeline::tool(),
+        interrupt::tool(),
     ])
 }
 
@@ -461,6 +464,7 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
             let source = visible_bot(hub, from)?;
             crate::chat::subagents::call(hub, &source, args).await
         }
+        interrupt::TOOL => interrupt::perform(hub, from, args).await,
         _ => call(hub, from, name, args),
     }
 }

@@ -65,6 +65,14 @@ history paging is unaffected.
 
 The team tools add no task scheduler or isolated worktrees. Give bots explicit file ownership when they share a working directory.
 
+`interrupt_bot {botId, reason?}` (OpenBot nightly) stops a named bot's running turn through the
+same `hub.stop_bot` the user's Stop uses. A bot may stop itself and the bots it created; stopping a
+bot it doesn't own first shows an owner-only card in the caller's chat with the reason, and only the
+owner can allow it (Full access doesn't substitute). The tool returns a fixed outcome, and the
+recipient's partial work may already have happened — check its chat before retrying. This is a stop,
+not a new request: a short "continue" from the user afterwards carries on the unfinished work with
+the bounded self-check on the same session (`host/src/agent/bot/plan_continuation.rs`).
+
 ## Stops, failures and restart
 
 - Accepted requests survive the sender's completion, Stop, disconnection and deletion. Stop on the sender drops replies still queued for it; a deleted sender's replies are dropped (both notices still show the outcome).

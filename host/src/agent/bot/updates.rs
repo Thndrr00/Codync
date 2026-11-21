@@ -266,10 +266,17 @@ impl Actor {
             Outcome::Rule { pattern, .. } => Some(pattern.clone()),
             _ => None,
         };
-        let allowed = matches!(
+        let mut allowed = matches!(
             evaluation.outcome,
             Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
         );
+        // An opted-in backend can auto-approve its ordinary tools, but never a deletion, secret,
+        // computer-use or public-post card (approval_automation::always_manual).
+        if !allowed {
+            let map = crate::approval_automation::load(&self.hub.store);
+            let card = json!({"title": title, "toolKind": kind});
+            allowed = crate::approval_automation::should_auto_approve(&map, &self.cfg.backend, &card);
+        }
         // Like the bot's automatic setting always did: with no allow option, its first option.
         if allowed
             && !is_hermes_clarification(tool)

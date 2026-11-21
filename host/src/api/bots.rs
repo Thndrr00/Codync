@@ -117,6 +117,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::skills::dispatch(hub, bot, name, &b["arguments"]).await?
             } else if name == crate::chat::channel_history::TOOL {
                 crate::chat::channel_history::read(hub, bot, &b["arguments"])?
+            } else if name == crate::chat::file_reader::TOOL {
+                crate::chat::file_reader::call(hub, bot, &b["arguments"])?
             } else if name == crate::market::feedback::TOOL {
                 let cfg = hub.store.bot(bot)?.context("the bot is gone")?.config;
                 crate::market::feedback::perform(hub, &cfg, &b["arguments"]).await?
@@ -652,6 +654,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             json!({})
         }
+        // Per-agent auto-approve: one host setting maps backend → bool. A paired device or this
+        // computer may change it; the guard in `approval_automation` keeps sensitive cards manual.
+        "setApprovalAutomation" => json!({"automation": crate::approval_automation::save(
+            &hub.store,
+            str_arg(&b, "backend")?,
+            b["enabled"].as_bool().context("enabled must be a boolean")?,
+        )?}),
+        "approvalAutomation" => json!({"automation": crate::approval_automation::load(&hub.store)}),
         // What the bot would do with a command: the same decision a real request gets, so a rule editor tests rules
         // without copying their logic. `rules` tests an unsaved list; without it the bot's saved rules.
         "testApprovalRule" => {

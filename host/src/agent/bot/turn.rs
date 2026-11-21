@@ -431,6 +431,14 @@ impl Actor {
         {
             let request = self.turn_text.clone().unwrap_or_default();
             self.schedule_self_check(request);
+        } else if !grouped && !delegated && !self.proactive_turn && !self.task_started && !stopped && !pending_input {
+            // A short "continue" from the person is not a new request: carry on with the same
+            // bounded self-check instead of a second agent loop (OpenBot nightly).
+            let text = self.turn_text.clone().unwrap_or_default();
+            if super::self_check::continuation_uses_self_check(&text, self.self_checks) {
+                let request = self.self_check_request.clone().unwrap_or(text);
+                self.schedule_self_check(request);
+            }
         }
         // A turn that went well and used several kinds of tool may become a proposed skill (it waits in an inbox).
         if !stopped

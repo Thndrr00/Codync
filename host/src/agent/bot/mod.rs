@@ -33,6 +33,7 @@ mod native_revocation;
 mod outcome;
 pub(crate) mod pause;
 mod pi_tools;
+mod plan_continuation;
 mod proactive;
 #[cfg(test)]
 mod proactive_tests;

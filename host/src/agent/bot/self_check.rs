@@ -42,6 +42,13 @@ pub(super) fn may_check(
     used_tools && has_answer && !stopped && !pending_input && checks_done < MAX_SELF_CHECKS
 }
 
+/// A short "continue" (OpenBot's "keep going"/"go on") is unfinished work, not a new request:
+/// schedule this bounded check on the same session instead of starting another agent loop. The
+/// phrase matcher lives in `plan_continuation` so its tests need no actor I/O.
+pub(super) fn continuation_uses_self_check(text: &str, checks_done: u32) -> bool {
+    super::plan_continuation::continues(text, checks_done)
+}
+
 impl Actor {
     /// Schedules the check for after this turn. The first check fixes the request for the whole chain, so every
     /// later check compares against what the person actually asked, not against a previous check's answer.
@@ -98,6 +105,14 @@ mod tests {
         assert!(!may_check(false, true, false, false, 0), "a turn that used no tools doesn't check");
         assert!(!may_check(true, false, false, false, 0), "a turn with no final answer doesn't check");
         assert!(may_check(true, true, false, false, 0));
+    }
+
+    #[test]
+    fn a_short_continue_reuses_the_bounded_check() {
+        assert!(continuation_uses_self_check("keep going", 0));
+        assert!(continuation_uses_self_check("continue", MAX_SELF_CHECKS - 1));
+        assert!(!continuation_uses_self_check("continue", MAX_SELF_CHECKS), "no fourth check");
+        assert!(!continuation_uses_self_check("continue?", 0), "a question is not a continuation");
     }
 
     #[test]

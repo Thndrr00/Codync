@@ -150,6 +150,18 @@ The card is the effect's key: the first decision is the one that happens.
 Two answers that arrive at the same moment both see a pending card; the bot's actor applies the
 first and drops the second, so only one reaches the agent.
 
+## Auto-approve per agent
+
+A host setting maps an agent backend (`claude`, `codex`, `hermes`…) to a bool, so a person can let
+only the agents they trust skip ordinary approval cards. `setApprovalAutomation {backend, enabled}`
+changes one entry and `approvalAutomation {}` returns the whole map (`host/src/approval_automation.rs`,
+one KV row in the existing store). The decision is pure: `should_auto_approve` is true only for an
+opted-in backend, and `always_manual` keeps four cards manual whatever the preference — deleting
+agents (the `deleteAgents` card from bot deletion), credentials (`secret`/`vault`, as the question
+classifier already marks them), computer use (`toolKind: computer`) and public feedback posts.
+Nothing here changes a bot's own rules or the blocklist, and the per-agent setting never grants
+more than those cards allow.
+
 Ideas from rakazo's `action-approval.ts`, `approval-effect-key.ts` and `answerable-ask.ts`
 (Apache-2.0); no code copied. Rakazo's channel receipts and message commands need messaging
 channels, which Codync doesn't have.
