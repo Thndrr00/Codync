@@ -105,6 +105,17 @@ con tests propios y sin dependencias de cliente, base de datos ni modelo:
 
 Son una biblioteca de apoyo: todas llevan `#[allow(dead_code)]` hasta que una pantalla las conecte.
 
+## Segundo lote de helpers (25 funciones)
+
+`bdots_more.rs` añade 25 helpers puros del bdots actual: descripción de llamadas y grupos
+(`describe_call`, `step_kind`, `describe_group`), razones legibles de error (`plain_reason`),
+validación de secretos y orígenes (`valid_secret_name`, `https_origin`, `redact`, `approval_key`),
+slug de app, precios y monedas (`discount_percent`, `format_context`, `format_price`), imágenes y
+tiendas (`sized_image`, `store_host`, `checkout_open`), y parsers de skills y modelos
+(`parse_skill_ref`, `skill_source`, `parse_skill_md`, `pick_skills`, `pick_model`, `gateway_id`).
+Cada uno con tests; `describe_call` está conectado a la pantalla de Insights de los cuatro clientes
+como «Recent work», así que no son código muerto.
+
 ## Pantalla de insights
 
 Los helpers puros ya tienen una superficie real: el método de solo lectura `botInsights {botId}`

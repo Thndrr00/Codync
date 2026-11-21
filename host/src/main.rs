@@ -13,6 +13,7 @@ mod background;
 mod bdots_cron;
 mod bdots_desk;
 mod bdots_links;
+mod bdots_more;
 mod bdots_pure;
 mod bdots_spend;
 mod bdots_text;

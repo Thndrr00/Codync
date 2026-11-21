@@ -46,6 +46,14 @@ export function BotInsightsCard({ botId }: { botId: string }) {
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
       </CardSection>
 
+      {insights.recentWork.length ? (
+        <CardSection title={tr('Recent work')}>
+          {insights.recentWork.map((line, i) => (
+            <Text key={i} size="footnote" tone="secondary">{line}</Text>
+          ))}
+        </CardSection>
+      ) : null}
+
       <CardSection title={tr('Routines')}>
         {insights.routines.length === 0 ? (
           <Text size="footnote" tone="secondary">{tr('No routines yet.')}</Text>

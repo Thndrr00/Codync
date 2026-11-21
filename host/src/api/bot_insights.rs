@@ -61,10 +61,26 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         *entry = json!(n);
     }
 
+    // What the bot actually did lately, as one plain line per step (bdots' `describeCall`).
+    let recent: Vec<String> = hub
+        .store
+        .history(bot, i64::MAX, 12)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.kind == crate::store::EntryKind::Tool.as_str())
+        .rev()
+        .take(5)
+        .map(|e| {
+            let name = e.data["title"].as_str().unwrap_or("tool");
+            crate::bdots_more::describe_call(name, &e.data["rawInput"])
+        })
+        .collect();
+
     Ok(json!({
         "botId": bot,
         "model": model,
         "provider": provider,
+        "recentWork": recent,
         "routines": routines,
         "usage": {
             "used": used,

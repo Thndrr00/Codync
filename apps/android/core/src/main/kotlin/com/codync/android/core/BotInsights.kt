@@ -8,6 +8,7 @@ data class BotInsights(
     val botId: String = "",
     val model: String = "",
     val provider: String? = null,
+    val recentWork: List<String> = emptyList(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),

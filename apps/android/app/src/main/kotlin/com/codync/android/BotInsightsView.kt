@@ -39,6 +39,11 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            if (insights.recentWork.isNotEmpty()) CardSection("Recent work") {
+                for (line in insights.recentWork) row {
+                    Text(line, style = Type.caption, color = Palette.secondary)
+                }
+            }
             CardSection("Routines") {
                 if (insights.routines.isEmpty()) row {
                     Text("No routines yet.", style = Type.body, color = Palette.secondary)

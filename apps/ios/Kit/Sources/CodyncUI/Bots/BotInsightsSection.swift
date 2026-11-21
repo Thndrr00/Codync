@@ -27,6 +27,12 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    if !insights.recentWork.isEmpty {
+                        Text(L10n.tr("Recent work")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                        ForEach(insights.recentWork, id: \.self) { line in
+                            Text(line).font(.footnote).foregroundStyle(Palette.secondary)
+                        }
+                    }
                     if insights.routines.isEmpty {
                         Text(L10n.tr("No routines yet.")).font(.footnote).foregroundStyle(Palette.tertiary)
                     } else {

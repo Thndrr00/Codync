@@ -14,6 +14,7 @@ export interface BotInsights {
   botId: string
   model: string
   provider: string | null
+  recentWork: string[]
   routines: InsightRoutine[]
   usage: {
     used: number

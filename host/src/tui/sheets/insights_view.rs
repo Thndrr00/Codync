@@ -54,6 +54,16 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let recent: Vec<&str> =
+        data["recentWork"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    if !recent.is_empty() {
+        line(buf, &mut y, tr("Recent work"), t.bold.patch(t.panel));
+        for item in recent {
+            line(buf, &mut y, format!("• {item}"), t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     line(
         buf,
         &mut y,

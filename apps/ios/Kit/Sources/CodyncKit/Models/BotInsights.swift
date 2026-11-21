@@ -5,6 +5,7 @@ public struct BotInsights: Decodable, Sendable {
     public let botId: String
     public let model: String
     public let provider: String?
+    public let recentWork: [String]
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
