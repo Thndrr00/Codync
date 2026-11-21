@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { showsAsImage, showsAsVideo, type Entry, type SharedFile } from '@shared/models'
 import { useStore } from '../../store/context'
 import type { DownloadState } from '../../store/file-downloads'
+import { Button } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { IconButtonBase } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
@@ -36,7 +37,11 @@ export function FileDownloadCard({ entry, file, onOpen }: { entry: Entry; file: 
   const made = entry.data.media?.kind
   const clip = made === 'video' || showsAsVideo(file)
   return <VStack gap={12} className="file-card">
-    {clip ? <SharedVideo file={file} entryId={entry.id} /> : showsAsImage(file) ? <>
+    {clip ? <>
+      <SharedVideo file={file} entryId={entry.id} />
+      <Button kind="secondary" onClick={() => setViewing(true)}>View larger</Button>
+      <AttachmentViewer source={viewing ? image : null} close={() => setViewing(false)} />
+    </> : showsAsImage(file) ? <>
       <button className="file-card-image" aria-label={file.name} onClick={() => setViewing(true)}>
         <AttachmentImage source={image} fit="thumbnail" />
       </button>

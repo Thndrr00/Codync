@@ -18,6 +18,14 @@
 .permission-card-details {
   padding-top: 6px;
 }
+/* Plain words on why this tool asks, so the choice doesn't depend on reading the command. */
+.permission-guidance {
+  align-items: flex-start;
+}
+.permission-guidance > :first-child {
+  flex: none;
+  margin-top: 2px;
+}
 .permission-card-options {
   background: var(--background);
   border-radius: 14px;

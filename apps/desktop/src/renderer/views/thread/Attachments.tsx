@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { isImageName, type Attachment, type SharedFile } from '@shared/models'
+import { isImageName, isVideoName, type Attachment, type SharedFile } from '@shared/models'
 import { Button } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
@@ -61,11 +61,17 @@ export function AttachmentList({ attachments, botId }: { attachments: Attachment
 /** Where a picture's bytes are on the computer: a file sent with a message, or one a bot shared. */
 export type ImageSource = { file: Attachment; botId: string } | { file: SharedFile; entryId: string }
 
-/** A picture full size, in a sheet. */
+/** A picture or a clip full size, in a sheet, with zoom and fit; Escape steps back to fit before closing. */
 export function AttachmentViewer({ source, close }: { source: ImageSource | null; close: () => void }) {
   const store = useStoreRef()
   const tr = useTr()
   const [note, setNote] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(1)
+  useEffect(() => setZoom(1), [source?.file.id])
+  const video = !!source && isVideoName(source.file.name) && 'entryId' in source
+  const step = (delta: number) => setZoom((value) => Math.min(4, Math.max(0.5, Math.round((value + delta) * 100) / 100)))
+  // Sheet owns Escape. Giving it a close that first resets zoom keeps the keyboard useful in the viewer.
+  const onClose = () => { if (zoom !== 1) setZoom(1); else close() }
   const copy = async () => {
     if (!source) return
     try {
@@ -80,13 +86,28 @@ export function AttachmentViewer({ source, close }: { source: ImageSource | null
     }
   }
   return (
-    <Sheet open={source !== null} onClose={close} width={1040} height={800}>
+    <Sheet open={source !== null} onClose={onClose} width={1040} height={800}>
       {source ? (
         <SheetPage>
-          <ModalHeader title={source.file.name} trailing={<Button kind="secondary" onClick={() => void copy()}>{tr('Copy')}</Button>} />
+          <ModalHeader
+            title={source.file.name}
+            trailing={
+              <HStack gap={6}>
+                <Button kind="secondary" title="Zoom out" onClick={() => step(-0.25)}>−</Button>
+                <Text size="caption" tone="secondary" tabular>{Math.round(zoom * 100)}%</Text>
+                <Button kind="secondary" title="Zoom in" onClick={() => step(0.25)}>+</Button>
+                <Button kind="secondary" title="Fit to window" onClick={() => setZoom(1)}>{tr('Fit')}</Button>
+                <Button kind="secondary" onClick={() => void copy()}>{tr('Copy')}</Button>
+              </HStack>
+            }
+          />
           {note ? <Text size="caption" tone="secondary">{note}</Text> : null}
           <div className="attachment-viewer">
-            <AttachmentImage source={source} fit="full" />
+            <div className="attachment-viewer-zoom" style={{ transform: `scale(${zoom})` }}>
+              {video && 'entryId' in source
+                ? <SharedVideo file={source.file} entryId={source.entryId} full />
+                : <AttachmentImage source={source} fit="full" />}
+            </div>
           </div>
         </SheetPage>
       ) : null}
@@ -140,8 +161,8 @@ const videoType = (name: string) => {
   return types[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'video/mp4'
 }
 
-/** A clip a bot made, played in place; its bytes come from the computer like a picture's. */
-export function SharedVideo({ file, entryId }: { file: SharedFile; entryId: string }) {
+/** A clip a bot made, played in place or in the zoomable viewer; its bytes come from the computer like a picture's. */
+export function SharedVideo({ file, entryId, full = false }: { file: SharedFile; entryId: string; full?: boolean }) {
   const store = useStoreRef()
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
@@ -176,5 +197,5 @@ export function SharedVideo({ file, entryId }: { file: SharedFile; entryId: stri
       </div>
     )
   }
-  return <video src={url} className="attachment-video" controls playsInline preload="metadata" />
+  return <video src={url} className={full ? 'attachment-video full' : 'attachment-video'} controls playsInline preload="metadata" />
 }

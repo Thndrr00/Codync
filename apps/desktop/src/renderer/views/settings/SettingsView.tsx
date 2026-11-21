@@ -44,6 +44,7 @@ import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 import { AccentColorRow } from './AccentColorRow'
 import { SettingsIOSection } from './SettingsIOSection'
+import { McpToolPolicySection } from './McpToolPolicySection'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
 export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
@@ -265,6 +266,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         </Switch>
       </CardSection>
       <SendingSettings />
+      <McpToolPolicySection />
       <CardSection title="System">
         {window.codync.platform === 'darwin' ? <Switch on={showInDock} onChange={(on) => void window.codync.app.setShowInDock(on).then(setShowInDock)}>Show in Dock</Switch> : null}
         {window.codync.island.supported ? (

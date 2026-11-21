@@ -50,6 +50,22 @@
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   place-items: center;
+  overflow: hidden;
+}
+/* Zoom scales one stage around its centre; the viewer clips the overflow. */
+.attachment-viewer-zoom {
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center center;
+  transition: transform var(--hover);
+}
+.attachment-video.full {
+  max-width: none;
+  max-height: 100%;
+  width: auto;
+  height: auto;
 }
 
 .file-card {

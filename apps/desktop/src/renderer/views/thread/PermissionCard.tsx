@@ -35,6 +35,36 @@ export const permissionHeadline = (toolKind?: string) => {
   }
 }
 
+/**
+ * Why a sensitive tool asks first, in plain words. A fixed map by tool name (never agent text), so a
+ * person can tell what they're allowing without reading the command. Shown as a small info line.
+ */
+const TOOL_GUIDANCE: Record<string, string> = {
+  execute: 'Runs a command on the computer. It can read, change or delete anything the bot can reach.',
+  shell: 'Runs a command on the computer. It can read, change or delete anything the bot can reach.',
+  bash: 'Runs a command on the computer. It can read, change or delete anything the bot can reach.',
+  edit: 'Writes changes to a file on the computer.',
+  write: 'Writes changes to a file on the computer.',
+  file_write: 'Writes changes to a file on the computer.',
+  delete: 'Deletes files or data on the computer.',
+  move: 'Renames or moves files on the computer.',
+  computer: 'Clicks and types on the computer’s screen.',
+  computer_use: 'Clicks and types on the computer’s screen.',
+  screen: 'Clicks and types on the computer’s screen.',
+  message: 'Sends a message to someone outside this chat.',
+  send: 'Sends a message to someone outside this chat.',
+  external_message: 'Sends a message to someone outside this chat.',
+  fetch: 'Reads a page from the internet.',
+  web: 'Reads a page from the internet.',
+}
+
+/** The guidance line for a tool, matched by its kind or the card's title. */
+export function toolGuidance(kind?: string, title?: string): string | null {
+  const byKind = kind ? TOOL_GUIDANCE[kind.toLowerCase()] : undefined
+  if (byKind) return byKind
+  return title ? TOOL_GUIDANCE[title.toLowerCase()] ?? null : null
+}
+
 /** The host puts this note and one agent name per line in a deletion approval's details. */
 const deletionNote = 'Only the owner can approve this deletion.'
 const isDeletionApproval = (d: Entry['data']) =>
@@ -76,6 +106,7 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
   const [rejectedShake, setRejectedShake] = useState(false)
   const [always, setAlways] = useState<{ option: PermissionOption; proposal: RuleProposal; pattern: string } | null>(null)
   const d = entry.data
+  const guidance = toolGuidance(d.toolKind, d.title)
   const pending = d.status === 'pending'
   const deletion = isDeletionApproval(d)
   const hasDetail = !!d.command || !!d.detail || !!d.diffs?.length
@@ -108,6 +139,12 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
           <Icon name="desktopcomputer" size={10} color="var(--tertiary)" />
           <Text size="caption" tone="tertiary">{fill(tr('Runs on {name}{path}'), { name: hostName, path: cwd })}</Text>
         </HStack>
+        {guidance ? (
+          <HStack gap={6} className="permission-guidance">
+            <Icon name="info.circle" size={10} color="var(--secondary)" />
+            <Text size="caption" tone="secondary" title={tr(guidance)}>{tr(guidance)}</Text>
+          </HStack>
+        ) : null}
         {deletion ? (
           <VStack gap={4}>
             <Text size="caption" tone="secondary">{tr(deletionNote)}</Text>

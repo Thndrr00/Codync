@@ -1,6 +1,6 @@
 import { FileDownloadCard } from './FileDownloadCard'
 import { ArtifactCard } from '../library/ArtifactCard'
-import { memo, useRef, useState, type CSSProperties } from 'react'
+import { memo, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { groupBotReactions, isGroup, isReplyable, type Bot, type BotApp, type Entry, type Person, type ReplyQuote } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { ComputerCard } from '../../components/ComputerCard'
@@ -21,6 +21,7 @@ import { callLength, relativeTime } from './chat-items'
 import { MarkdownText } from './Markdown'
 import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
+import { PagePreviewSheet } from './PagePreview'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { AgentSwitchNotice, HandoffNotice } from './HandoffNotice'
 import { VoiceReceipt } from './VoiceReceipt'
@@ -468,8 +469,15 @@ function UserStatus({ entry, hovering }: { entry: Entry; hovering: boolean }) {
 
 export function AgentBubble({ entry, openTrace, reply, forward, openFile, openArtifact, branch }: { entry: Entry; openTrace: () => void; reply?: () => void; forward?: () => void; openFile?: (e: Entry, file: import('@shared/models').SharedFile) => void; openArtifact?: (artifactId: string) => void; branch?: () => void }) {
   const store = useStore()
+  const tr = useTr()
   const [hovering, setHovering] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const copy = () => entry.data.text && window.codync.app.copy(entry.data.text)
+  // A reply carrying a visual page (an HTML artifact) can show an inert preview before it is opened.
+  const card = entry.data.artifact
+  const html = card ? store.artifacts.html.get(card.id) : null
+  const pageHtml = useMemo(() => (html ? new TextDecoder().decode(html.bytes) : null), [html])
+  const pageTitle = (card && store.artifacts.byId.get(card.id)?.title) || card?.title || ''
   return (
     <div className="message agent" title={fullDate.format(entry.createdAt)} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
       <div className="message-body">
@@ -500,7 +508,18 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
             <MarkdownText text={entry.data.text ?? ''} />
           )}
         </Bubble>
+        {pageHtml && card && openArtifact ? (
+          <button className="page-preview-open press" onClick={() => setPreviewing(true)}>
+            <Icon name="macwindow" size={12} /> {tr('Preview page')}
+          </button>
+        ) : null}
         <MessageActions className="trailing" visible={hovering} reactions={reactionPick(store, entry)} reply={reply} trace={openTrace} copy={copy} />
+        <PagePreviewSheet
+          html={previewing ? pageHtml : null}
+          title={pageTitle}
+          open={() => card && openArtifact?.(card.id)}
+          close={() => setPreviewing(false)}
+        />
       </div>
     </div>
   )

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTr } from '../lib/use-language'
+import { prefs, usePref } from '../lib/prefs'
+import { pushRecentCommand, RECENT_COMMAND_LIMIT } from '../lib/recent-commands'
 import { Icon } from './Icon'
 import { Sheet } from './Overlay'
 import { HStack } from './Stack'
@@ -53,12 +55,13 @@ function PaletteBody({ commands, onClose }: { commands: Command[]; onClose: () =
   const tr = useTr()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  const [recent, setRecent] = usePref(prefs.recentCommands)
   const list = useRef<HTMLDivElement>(null)
 
   // Keep the caller's group order, sort within a group by how well it matches.
   const groups = useMemo(() => {
     const names = [...new Set(commands.map((command) => command.group))]
-    return names.map((name) => ({
+    const built = names.map((name) => ({
       name,
       items: commands
         .filter((command) => command.group === name)
@@ -67,11 +70,27 @@ function PaletteBody({ commands, onClose }: { commands: Command[]; onClose: () =
         .sort((a, b) => b.score - a.score)
         .map((hit) => hit.command),
     })).filter((group) => group.items.length > 0)
-  }, [commands, query])
+    // `recent` is one device pref; its ids are the only thing that changes this grouping. At rest
+    // the last picks lead in their own group and aren't repeated below; a search uses only the fuzzy groups.
+    if (query.trim()) return built
+    const byId = new Map(commands.map((command) => [command.id, command]))
+    const picks = recent.map((id) => byId.get(id)).filter((command): command is Command => !!command).slice(0, RECENT_COMMAND_LIMIT)
+    if (!picks.length) return built
+    const picked = new Set(picks.map((command) => command.id))
+    return [
+      { name: 'Recent', items: picks },
+      ...built.map((group) => ({ ...group, items: group.items.filter((command) => !picked.has(command.id)) })),
+    ].filter((group) => group.items.length > 0)
+  }, [commands, query, recent])
   const flat = groups.flatMap((group) => group.items)
   const indexOf = new Map(flat.map((command, index) => [command, index]))
   // Bots can come and go while the palette is open; keep the highlight on a real row.
   const current = Math.min(active, Math.max(0, flat.length - 1))
+  const execute = (command: Command) => {
+    setRecent(pushRecentCommand(recent, command.id))
+    onClose()
+    command.run()
+  }
 
   useEffect(() => setActive(0), [query])
   useEffect(() => {
@@ -88,10 +107,7 @@ function PaletteBody({ commands, onClose }: { commands: Command[]; onClose: () =
     } else if (event.key === 'Enter') {
       event.preventDefault()
       const command = flat[current]
-      if (command) {
-        onClose()
-        command.run()
-      }
+      if (command) execute(command)
     }
   }
 
@@ -120,7 +136,7 @@ function PaletteBody({ commands, onClose }: { commands: Command[]; onClose: () =
                 <button key={command.id} type="button" role="option" aria-selected={selected}
                   className={`command-row ${selected ? 'active' : ''}`}
                   onMouseMove={() => setActive(indexOf.get(command) ?? 0)}
-                  onClick={() => { onClose(); command.run() }}>
+                  onClick={() => execute(command)}>
                   <Icon name={command.icon ?? 'bolt'} size={16} />
                   <Text grow truncate>{tr(command.title)}</Text>
                   {command.shortcutId && shortcutKeys(command.shortcutId) ? (

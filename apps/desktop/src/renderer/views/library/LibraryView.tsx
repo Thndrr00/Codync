@@ -18,6 +18,7 @@ import { LibraryFolders } from './LibraryFolders'
 import { LibraryRail } from './LibraryRail'
 import { LibraryState } from './LibraryState'
 import { LibraryUndo } from './LibraryUndo'
+import { LibraryUsage } from './LibraryUsage'
 import './library.css'
 
 /**
@@ -160,6 +161,7 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
         {error ? <Text size="caption" tone="danger" role="alert">{error}</Text> : null}
         {loadError ? <LibraryState kind="error" title="Couldn’t load this library" detail={loadError} action="Retry" onAction={refresh} /> : null}
         {notice ? <LibraryUndo text={notice.text} undo={() => { setNotice(null); notice.undo() }} dismiss={() => setNotice(null)} /> : null}
+        <LibraryUsage items={items} />
         <LibraryFolders
           folders={tiles}
           items={items}

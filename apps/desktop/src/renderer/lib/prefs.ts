@@ -123,6 +123,8 @@ export const prefs = {
   restoreLastWorkspace: pref('restoreLastWorkspace', true),
   /** Open tabs of each chat, keyed by computer and bot; ids only, kept on this device. */
   openTabsByChat: pref<SavedTabsByChat>('openTabsByChat', {}),
+  /** The command palette's last picks, newest first, leading its Recent group. */
+  recentCommands: pref<string[]>('recentCommands', []),
 }
 
 /** The Mac preference supplies one scale for conversation text and app chrome. */
