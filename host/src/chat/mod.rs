@@ -10,6 +10,7 @@ pub mod context;
 pub mod decider;
 pub mod discord_embed;
 pub mod fallbacks;
+pub mod file_reader;
 pub mod files;
 pub mod forward;
 pub mod group;

@@ -216,8 +216,10 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
     // Authorization and text commands precede audio I/O. A transcript never becomes a transport
     // command such as /detener; it is ordinary message content for this bound bot.
     let from = super::history::sender(message);
+    // Keep Telegram's message id on the row so a later edit or delete can find it (OpenBot nightly).
+    let message_id = message["message_id"].as_i64().map(|id| id.to_string()).unwrap_or_default();
     let remember = |text: &str, file: Option<&str>| {
-        if let Err(error) = super::history::remember(
+        if let Err(error) = super::history::remember_with_id(
             &hub.store,
             &super::history::Incoming {
                 connector: name,
@@ -229,6 +231,7 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
                 file,
                 at: crate::store::now_ms(),
             },
+            &message_id,
         ) {
             tracing::warn!(telegram = name, error = format!("{error:#}"), "Telegram history was not saved");
         }

@@ -99,6 +99,22 @@ pub(crate) fn keep_copy(first: Option<(i64, bool)>, at: i64) -> bool {
     }
 }
 
+/// What a bridge's delete-for-everyone or edit report does to a message it kept. A deletion drops
+/// the row; an edit with new text replaces the kept text; an edit with no text changes nothing.
+#[allow(dead_code)] // the bridge's edit/delete reports call `change_for`, wired outside this file
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Change<'a> {
+    Edit(&'a str),
+    Delete,
+}
+
+/// Pure edit/delete decision, so it is testable without a store. The bridge event handlers own
+/// calling it; until they do, this is reached from its regression test.
+#[allow(dead_code)]
+pub(crate) fn change_for(deleted: bool, text: Option<&str>) -> Option<Change<'_>> {
+    if deleted { Some(Change::Delete) } else { text.map(str::trim).filter(|text| !text.is_empty()).map(Change::Edit) }
+}
+
 fn copy_key(chat: &str, id: &str) -> Option<String> {
     (!chat.is_empty() && !id.is_empty()).then(|| format!("{chat}\0{id}"))
 }
@@ -155,6 +171,15 @@ fn open(c: &rusqlite::Connection, channel: Channel) -> Result<()> {
     if !file {
         c.execute(&format!("ALTER TABLE {table} ADD COLUMN file TEXT"), [])?;
     }
+    // The bridge's message id, so a delete-for-everyone or an edit can find the kept row later.
+    let bridge: bool = c.query_row(
+        &format!("SELECT EXISTS(SELECT 1 FROM pragma_table_info('{table}') WHERE name='bridge_id')"),
+        [],
+        |row| row.get(0),
+    )?;
+    if !bridge {
+        c.execute(&format!("ALTER TABLE {table} ADD COLUMN bridge_id TEXT"), [])?;
+    }
     Ok(())
 }
 
@@ -187,11 +212,14 @@ pub(crate) fn remember_in(channel: Channel, store: &Store, message: &Message<'_>
         return Ok(false);
     }
     let table = channel.table();
+    let bridge = (!message.id.is_empty()).then_some(message.id.as_str());
     let pruned = store.with_connection(|c| {
         open(c, channel)?;
         c.execute(
-            &format!("INSERT INTO {table}(chat, sender, name, text, file, at) VALUES(?1, ?2, ?3, ?4, ?5, ?6)"),
-            params![message.chat, message.sender, message.name, text, file, message.at],
+            &format!(
+                "INSERT INTO {table}(chat, sender, name, text, file, bridge_id, at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+            ),
+            params![message.chat, message.sender, message.name, text, file, bridge, message.at],
         )?;
         trim(c, channel, message.at)
     })?;
@@ -349,6 +377,60 @@ pub(crate) fn forget_prefix(store: &Store, channel: Channel, connector: &str) ->
     Ok(())
 }
 
+/// Applies a bridge edit to the row the channel kept for `(chat, bridge_id)`, so an agent reading
+/// history sees the new text. Returns whether a row changed. Ported from OpenBot's edited-message
+/// handling; a message that was never kept (or is already gone) is not re-added.
+pub(crate) fn edit_in(channel: Channel, store: &Store, chat: &str, bridge_id: &str, text: &str) -> Result<bool> {
+    if chat.is_empty() || bridge_id.is_empty() {
+        return Ok(false);
+    }
+    let table = channel.table();
+    store.with_connection(|c| {
+        open(c, channel)?;
+        let changed = c.execute(
+            &format!("UPDATE {table} SET text = ?1 WHERE chat = ?2 AND bridge_id = ?3"),
+            params![text.trim(), chat, bridge_id],
+        )?;
+        Ok(changed > 0)
+    })
+}
+
+/// Removes the row the channel kept for `(chat, bridge_id)` after a delete-for-everyone, with the
+/// same file cleanup a trim or an unlink uses. Returns whether a row was removed.
+pub(crate) fn forget_message_in(channel: Channel, store: &Store, chat: &str, bridge_id: &str) -> Result<bool> {
+    if chat.is_empty() || bridge_id.is_empty() {
+        return Ok(false);
+    }
+    let table = channel.table();
+    let removed = store.with_connection(|c| {
+        open(c, channel)?;
+        let files = {
+            let mut statement = c.prepare(&format!(
+                "SELECT file FROM {table} WHERE chat = ?1 AND bridge_id = ?2 AND file IS NOT NULL"
+            ))?;
+            let rows = statement.query_map(params![chat, bridge_id], |row| row.get::<_, String>(0))?;
+            rows.collect::<rusqlite::Result<Vec<String>>>()?
+        };
+        let changed =
+            c.execute(&format!("DELETE FROM {table} WHERE chat = ?1 AND bridge_id = ?2"), params![chat, bridge_id])?;
+        Ok((files, changed))
+    })?;
+    remove_files(channel, &removed.0);
+    Ok(removed.1 > 0)
+}
+
+/// WhatsApp wrappers over the shared store: the bridge reports a message by its chat and id.
+#[allow(dead_code)] // entry points for the bridge's edit/delete reports, wired outside this file
+pub(crate) fn edit(store: &Store, chat: &str, bridge_id: &str, text: &str) -> Result<bool> {
+    edit_in(Channel::WhatsApp, store, chat, bridge_id, text)
+}
+
+/// WhatsApp delete-for-everyone: forget just the one kept row, not the whole number.
+#[allow(dead_code)] // entry point for the bridge's delete-for-everyone report
+pub(crate) fn forget_message(store: &Store, chat: &str, bridge_id: &str) -> Result<bool> {
+    forget_message_in(Channel::WhatsApp, store, chat, bridge_id)
+}
+
 /// The file as the table keeps it: relative to the data folder, so a moved data folder still finds
 /// it. `None` for a file outside that folder, which the number does not own.
 fn relative(path: &str) -> Option<String> {
@@ -417,6 +499,10 @@ mod tests {
 
     fn message<'a>(chat: &'a str, text: &'a str, file: Option<&'a str>, at: i64) -> Message<'a> {
         Message { id: uuid::Uuid::new_v4().to_string(), chat, sender: "sender", name: "Name", text, file, at }
+    }
+
+    fn identified<'a>(id: &str, chat: &'a str, text: &'a str, file: Option<&'a str>, at: i64) -> Message<'a> {
+        Message { id: id.to_owned(), chat, sender: "sender", name: "Name", text, file, at }
     }
 
     #[test]
@@ -568,5 +654,40 @@ mod tests {
         assert!(!path.exists(), "a dropped queued message takes its file with it");
         remove_queued_file(&shown);
         // Removing a file already gone is fine; only other errors are logged.
+    }
+
+    #[test]
+    fn a_delete_report_wins_over_an_edit_and_an_empty_edit_changes_nothing() {
+        assert_eq!(change_for(true, Some("ignored")), Some(Change::Delete));
+        assert_eq!(change_for(false, Some("  new  ")), Some(Change::Edit("new")));
+        assert_eq!(change_for(false, None), None);
+        assert_eq!(change_for(false, Some("   ")), None, "no new text, nothing to show");
+    }
+
+    #[test]
+    fn an_edit_updates_the_kept_text_and_a_delete_removes_that_row_and_its_file() {
+        let store = crate::store::tests::temp_store();
+        let (path, shown) = saved_file("photo.jpg");
+        let at = 1_800_000_000_000;
+        remember(&store, &identified("m1", "chat", "old", Some(shown.as_str()), at)).unwrap();
+        remember(&store, &identified("m2", "chat", "other", None, at + 1)).unwrap();
+
+        assert!(edit(&store, "chat", "m1", "  new text  ").unwrap());
+        let kept = search(&store, &[], 0, i64::MAX, 10).unwrap();
+        assert_eq!(kept.len(), 2, "an edit never adds a row");
+        assert_eq!(
+            kept.iter().find(|row| row["text"] == "new text").unwrap()["file"],
+            format!("whatsapp-media/{}", path.file_name().unwrap().to_string_lossy()),
+            "the edited row keeps its file"
+        );
+        assert!(kept.iter().any(|row| row["text"] == "other"), "another message is untouched");
+
+        assert!(forget_message(&store, "chat", "m1").unwrap());
+        let kept = search(&store, &[], 0, i64::MAX, 10).unwrap();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0]["text"], "other", "only the reported message goes");
+        assert!(!path.exists(), "its file goes with it");
+        assert!(!edit(&store, "chat", "m1", "late").unwrap(), "an edit of a deleted message adds nothing");
+        assert!(!forget_message(&store, "chat", "missing").unwrap(), "no row to delete");
     }
 }

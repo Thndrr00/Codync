@@ -70,6 +70,13 @@ the entry's filename/size text fallback. No version or compatibility floor chang
 A picture or clip is usually asked for with `/image` or `/video`, which runs the bot's own agent
 media tool and shares the file the same way: [media](media.md).
 
+A bot can inspect one of its shared files with the read-only chat tool
+`read_shared_file {path}` (OpenBot nightly's image/video reader, `host/src/chat/file_reader.rs`).
+It returns only bounded metadata: kind (`image`, `video` or `file`), byte size, width and height when
+the file header holds them, and a short description from the file name for images — never file
+bytes. Paths must stay under the bot's shared-files folder and files are size-capped; nothing about
+the file is sent to analytics. Register the tool with the Chat MCP server to offer it to agents.
+
 The authenticated `readFile {entryId, fileId, offset}` API requires a nonnegative
 integer offset within the saved size and a file belonging to that final agent entry
 in an undeleted bot's own chat. Existing caller permissions apply: paired

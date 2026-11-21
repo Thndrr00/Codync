@@ -10,6 +10,57 @@ use super::{
 
 /// Seconds before each automatic retry; a run that fails after the last one waits for the user.
 const DELAYS: [i64; 3] = [60, 300, 900];
+/// A routine that failed before its first step gets exactly one more try, a few minutes later.
+/// Ported from OpenBot nightly's "retry a routine that failed to start once" (a provider that
+/// wasn't up, or a setup that timed out): no step of the first try could have done any work.
+const START_RETRY_MS: i64 = 5 * 60 * 1000;
+
+/// Whether a failed run is a transient start failure that gets one more try. `started` says its
+/// first step began (`Run::started_at`), `acted` says a tool changed something, and `attempt` is
+/// how many tries already failed. Only the very first try, which reached no step and acted on
+/// nothing, is retried; a run that began a step may have done work, and the one automatic retry
+/// itself never queues another. Pure so both decisions are testable without a host.
+pub(crate) fn retry_start(attempt: u32, started: bool, acted: bool) -> bool {
+    attempt == 0 && !started && !acted
+}
+
+/// Queues that one retry on the same `not_before` delay path as an ordinary failure. The queued run
+/// is marked past the retry ladder so that, if it also fails to start, it waits for the user rather
+/// than looping. Returns earlier failures that no longer offer a retry.
+pub fn after_start_failure(s: &mut State, failed: usize, now: i64) -> Vec<String> {
+    let (routine_id, event) = {
+        let run = &s.runs[failed];
+        (run.routine_id.clone(), run.event.clone())
+    };
+    let Some(routine) = s.routines.iter().find(|r| r.id == routine_id && !r.deleted) else {
+        return Vec::new();
+    };
+    if !may_run(routine, &event) {
+        // A paused routine (unless this was a test run) waits for the user, like an ordinary failure.
+        let withdrawn = forget(s, |r| r.routine_id == routine_id);
+        s.runs[failed].retryable = true;
+        return withdrawn;
+    }
+    // Past the ladder: this is the only automatic try, whatever happens to it.
+    let attempt = DELAYS.len() as u32;
+    let scheduled = event["source"] == "schedule";
+    let wake = s
+        .runs
+        .iter()
+        .position(|r| scheduled && r.routine_id == routine_id && r.status == Status::Pending && r.event == event);
+    let at = if let Some(wake) = wake {
+        s.runs[wake].attempt = attempt;
+        s.runs[wake].not_before.unwrap_or(now)
+    } else {
+        let mut next = new_run(routine, event.clone(), None);
+        next.attempt = attempt;
+        next.not_before = Some(now + START_RETRY_MS);
+        s.runs.push(next);
+        now + START_RETRY_MS
+    };
+    s.runs[failed].retry_at = Some(at);
+    Vec::new()
+}
 
 /// Whether run `id` used a tool that may have changed something. A run that never began didn't;
 /// one whose check fails counts as acted.
@@ -189,6 +240,48 @@ mod tests {
         assert_eq!(next.event["source"], "schedule");
         assert_eq!(retry_note(60_000), "Trying again in 1 minute.");
         assert_eq!(retry_note(900_000), "Trying again in 15 minutes.");
+    }
+
+    #[test]
+    fn only_a_first_try_that_reached_no_step_is_retried_on_start_failure() {
+        assert!(retry_start(0, false, false), "a provider not up before the first step is transient");
+        assert!(!retry_start(0, true, false), "a step began, so it may have done work");
+        assert!(!retry_start(0, false, true), "a tool acted, so work may have been done");
+        assert!(!retry_start(1, false, false), "the one automatic retry is not retried again");
+    }
+
+    #[test]
+    fn a_failure_before_the_first_step_gets_one_retry_five_minutes_later() {
+        let (mut s, i) = failed(0);
+        assert_eq!(after_start_failure(&mut s, i, 1_000), Vec::<String>::new());
+        assert_eq!(s.runs[0].retry_at, Some(301_000));
+        let next = &s.runs[1];
+        assert_eq!(next.status, Status::Pending);
+        assert_eq!((next.attempt, next.not_before), (3, Some(301_000)));
+        assert_eq!(next.event["source"], "schedule", "the retry keeps the event");
+        assert_eq!(retry_note(START_RETRY_MS), "Trying again in 5 minutes.");
+        assert!(!retry_start(next.attempt, false, false), "a failed retry waits for the user");
+    }
+
+    #[test]
+    fn a_queued_scheduled_fire_stands_in_as_the_start_retry() {
+        let (mut s, i) = failed(0);
+        let wake = new_run(&s.routines[0], json!({"source":"schedule"}), None);
+        s.runs.push(wake);
+        after_start_failure(&mut s, i, 1_000);
+        assert_eq!(s.runs.len(), 2, "no second run of the same work");
+        assert_eq!(s.runs[1].attempt, DELAYS.len() as u32);
+        assert_eq!(s.runs[0].retry_at, Some(1_000));
+        assert_eq!(retry_note(0), "Trying again now.");
+    }
+
+    #[test]
+    fn a_paused_routine_waits_for_the_user_after_a_start_failure() {
+        let (mut s, i) = failed(0);
+        s.routines[0].enabled = false;
+        after_start_failure(&mut s, i, 0);
+        assert_eq!(s.runs.len(), 1, "no automatic retry while paused");
+        assert!(s.runs[0].retryable && s.runs[0].retry_at.is_none());
     }
 
     #[test]

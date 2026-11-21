@@ -20,7 +20,22 @@ pub(super) fn routine() -> Routine {
         limit_policy: "wait".into(),
         outputs: vec![],
         thread: false,
+        quiet: false,
     }
+}
+
+#[test]
+fn a_quiet_run_posts_no_notice_and_an_old_routine_stays_loud() {
+    assert!(announces(false), "an ordinary run still posts its notice and alert");
+    assert!(!announces(true), "a quiet run keeps only its steps in the chat");
+
+    // A routine saved before the flag existed has no `quiet` key: it stays as it was.
+    let old = serde_json::to_value(routine()).unwrap();
+    let mut without = old.as_object().unwrap().clone();
+    without.remove("quiet");
+    let restored: Routine = serde_json::from_value(serde_json::Value::Object(without)).unwrap();
+    assert!(!restored.quiet, "old routines are unchanged");
+    assert!(public(&routine())["quiet"] == false, "the flag is visible to clients");
 }
 #[test]
 fn the_secret_key_name_is_a_valid_vault_name() {

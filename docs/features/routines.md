@@ -131,6 +131,11 @@ is open: it keeps a closed session's until the agent stops. A successful run ale
 reply through normal encrypted push delivery; a failed or interrupted one leaves a
 "Routine could not finish" notice. Returning `(pass)` or no text completes silently.
 
+Ported from OpenBot nightly: a routine can be saved with `quiet` (default `false`, so routines
+saved before the flag existed are unchanged). A quiet run keeps all its steps in the chat, so it
+stays visible there, but adds no "Routine · …" start notice, no result notice and no push alert of
+its own. The flag round-trips as `quiet` in `routines` and `saveRoutine`.
+
 A routine's workflow can hand its reply to teammate bots. The answer posted to "Send
 answers to" waits for the last teammate's reply rather than going out with only the text the
 routine's own agent wrote first; a handoff waits no longer than a day (OpenBot 0.74.0).
@@ -156,6 +161,11 @@ A failed or interrupted run is tried again only when that can't repeat work. The
 host checks the run's turn for a tool call whose ACP kind isn't `read`, `search`,
 `fetch` or `think` (an unknown kind counts as acting; `store::acted_in_turn`).
 
+- **Failed before the first step** (a provider that wasn't up, or a timeout in session setup):
+  tried once more five minutes later on the same `notBefore` delay path, even when the failure was
+  a timeout, because no step of the first try could have acted. That one retry never queues
+  another; if it also fails the run waits for the user. A run whose first step began, or that acted,
+  is not retried automatically.
 - **Nothing acted** (a rate limit, an agent that didn't start, a session it couldn't
   reload): a new run with the same event waits 1, 5, then
   15 minutes (`attempt`, `notBefore`). The failure's notice is an info line ending in
@@ -241,7 +251,7 @@ All normal methods use the existing authenticated host API / authorized E2E chan
 |---|---|
 | `routines` | `botId` |
 | `routineSchedule` | `triggers` + preferred `timeZone` to load, or `draft` to preview; returns hydrated form, validated triggers, summary, warning, next run |
-| `saveRoutine` | `botId`, optional `id`, `name`, `instruction`, `schedule` form or `triggers`, optional `enabled`, `timeoutSeconds` |
+| `saveRoutine` | `botId`, optional `id`, `name`, `instruction`, `schedule` form or `triggers`, optional `enabled`, `timeoutSeconds`, `quiet` |
 | `setRoutineEnabled` | `botId`, `id`, `enabled` |
 | `deleteRoutine` | `botId`, `id` |
 | `runRoutine` | `botId`, `id` (a waiting retry runs now instead) |

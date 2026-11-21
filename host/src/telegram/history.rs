@@ -59,13 +59,18 @@ pub(super) struct Incoming<'a> {
 /// Keeps one delivered message before it becomes a bot event. Telegram has no resend copy to
 /// reconcile, so the shared store's WhatsApp dedup stays idle (the id is empty here).
 pub(super) fn remember(store: &Store, message: &Incoming<'_>) -> Result<bool> {
+    remember_with_id(store, message, "")
+}
+
+/// Same as `remember`, with the bridge's message id so a reported edit or delete can find the row.
+pub(super) fn remember_with_id(store: &Store, message: &Incoming<'_>, id: &str) -> Result<bool> {
     let chat = format!("{}:{}", message.connector, message.chat);
     let name = place_name(message.title, message.group, message.sender);
     history::remember_in(
         Channel::Telegram,
         store,
         &Message {
-            id: String::new(),
+            id: id.to_owned(),
             chat: &chat,
             sender: message.sender,
             name,
@@ -76,11 +81,32 @@ pub(super) fn remember(store: &Store, message: &Incoming<'_>) -> Result<bool> {
     )
 }
 
+/// Applies an edit the Telegram bridge reported for a kept message, so an agent reading history
+/// sees the new text (OpenBot's edited-message handling).
+#[allow(dead_code)] // entry point for the bridge's edit reports, wired outside this file
+pub(crate) fn edit(store: &Store, connector: &str, chat: i64, message_id: &str, text: &str) -> Result<bool> {
+    let chat = format!("{connector}:{chat}");
+    history::edit_in(Channel::Telegram, store, &chat, message_id, text)
+}
+
+/// Removes a kept message the Telegram bridge reported as deleted for everyone.
+#[allow(dead_code)] // entry point for the bridge's delete-for-everyone reports
+pub(crate) fn forget_message(store: &Store, connector: &str, chat: i64, message_id: &str) -> Result<bool> {
+    let chat = format!("{connector}:{chat}");
+    history::forget_message_in(Channel::Telegram, store, &chat, message_id)
+}
+
 /// Keeps a whole update that never reaches the bot, such as a group line. Only the text is kept: a
 /// group message brings no file the host could save.
 pub(super) fn remember_update(store: &Store, connector: &str, message: &Value) -> Result<bool> {
     let sender = sender(message);
-    remember(
+    // Keep the id too: a later edit or delete-for-everyone report names it.
+    let id = message["message_id"]
+        .as_i64()
+        .map(|id| id.to_string())
+        .or_else(|| message["message_id"].as_str().map(str::to_owned))
+        .unwrap_or_default();
+    remember_with_id(
         store,
         &Incoming {
             connector,
@@ -92,6 +118,7 @@ pub(super) fn remember_update(store: &Store, connector: &str, message: &Value) -
             file: None,
             at: crate::store::now_ms(),
         },
+        &id,
     )
 }
 
@@ -221,6 +248,35 @@ mod tests {
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0]["text"], "other");
         assert_eq!(kept[0]["chat"], "work:42");
+    }
+
+    #[test]
+    fn an_edit_or_delete_finds_the_kept_row_by_message_id() {
+        let store = crate::store::tests::temp_store();
+        let at = 1_800_000_000_000;
+        let message = incoming("home", 42, "old", None, at);
+        assert!(remember_with_id(&store, &message, "77").unwrap());
+        assert!(edit(&store, "home", 42, "77", "new").unwrap());
+        let kept = search(&store, &[], 0, i64::MAX, 10).unwrap();
+        assert_eq!(kept[0]["text"], "new", "the agent sees the edited text");
+        assert!(forget_message(&store, "home", 42, "77").unwrap());
+        assert!(search(&store, &[], 0, i64::MAX, 10).unwrap().is_empty(), "the message is gone");
+        assert!(!edit(&store, "other", 42, "77", "late").unwrap(), "another connector's row is untouched");
+    }
+
+    #[test]
+    fn an_update_keeps_the_id_that_edit_and_delete_name() {
+        let store = crate::store::tests::temp_store();
+        let message = serde_json::json!({
+            "message_id": 99,
+            "chat": {"id": 42, "type": "private"},
+            "from": {"id": 7},
+            "text": "hi",
+        });
+        assert!(remember_update(&store, "home", &message).unwrap());
+        assert!(edit(&store, "home", 42, "99", "edited").unwrap());
+        let kept = search(&store, &[], 0, i64::MAX, 10).unwrap();
+        assert_eq!(kept[0]["text"], "edited");
     }
 
     #[test]

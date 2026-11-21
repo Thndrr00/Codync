@@ -98,6 +98,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::chat::fallbacks::tools());
                 list.push(crate::chat::reactions::tool());
                 list.push(crate::chat::channel_history::tool());
+                // A bot can read bounded metadata of a file it made, never the bytes.
+                list.extend(crate::chat::file_reader::tools());
                 list.push(crate::chat::browser_profile::tool());
                 list.push(crate::chat::discord_embed::tool());
                 // OpenBot 0.74.0: a bot sends bug reports and ideas in English, after approval.

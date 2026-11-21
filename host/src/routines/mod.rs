@@ -93,6 +93,10 @@ pub struct Routine {
     /// Runs post in a thread of the bot's chat instead of its main one.
     #[serde(default)]
     pub thread: bool,
+    /// Runs keep their steps in the chat but post no notice of their own and send no alert.
+    /// Ported from OpenBot nightly's quiet routine runs; the default keeps old routines as they were.
+    #[serde(default)]
+    pub quiet: bool,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -472,6 +476,7 @@ impl Routines {
                 ),
                 outputs: wanted_outputs.or_else(|| old.as_ref().map(|r| r.outputs.clone())).unwrap_or_default(),
                 thread: body["thread"].as_bool().unwrap_or_else(|| old.as_ref().is_some_and(|r| r.thread)),
+                quiet: body["quiet"].as_bool().unwrap_or_else(|| old.as_ref().is_some_and(|r| r.quiet)),
             };
             if !(1..=86_400).contains(&r.timeout_seconds) {
                 bail!("timeoutSeconds must be between 1 and 86400");
@@ -713,7 +718,7 @@ pub(crate) fn public(r: &Routine) -> Value {
         "timeoutSeconds":r.timeout_seconds,"lastError":r.last_error,"missedPolicy":r.missed_policy,"limitPolicy":r.limit_policy,
         "outputs":r.outputs,"outputDescriptions":r.outputs.iter().map(outputs::describe).collect::<Vec<_>>(),
         "outputText":output_text,"outputTextError":output_text_error,
-        "thread":r.thread,
+        "thread":r.thread,"quiet":r.quiet,
         "triggerDescriptions":r.triggers.iter().map(Trigger::description).collect::<Vec<_>>(),"nextRunAt": if r.enabled {r.next_runs.iter().flatten().min().copied()} else {None}})
 }
 fn new_run(r: &Routine, event: Value, delivery_id: Option<String>) -> Run {
@@ -780,6 +785,13 @@ fn cancel_pending(state: &mut State, id: &str) {
 /// The name of a run's own agent session, which it resumes after a restart.
 pub fn session_slot(run_id: &str) -> String {
     format!("routine-{run_id}")
+}
+
+/// Whether a run posts its own chat notices and push alert. A quiet run keeps its steps in the
+/// chat — so it stays visible there — but adds no "Routine · …" start notice, result notice or
+/// notification of its own. Pure so the decision is testable without a host.
+pub(crate) fn announces(quiet: bool) -> bool {
+    !quiet
 }
 
 /// The notice a run posts in the chat when it begins; the run's turn is the notice's.
