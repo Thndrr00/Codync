@@ -395,11 +395,16 @@ struct BotListView: View {
         // The lead stays on top.
         .moveDisabled(bot.lead)
         .contextActions(preview: { RosterPreviewView(bot: bot, store: store) }) {
-            // The lead is always on top and always there: no pin, hide or delete.
-            var items = [MenuItem("Open chat", icon: "bubble.left") { accounts.selection = item.ref }]
-            if bot.isWorking {
-                items.append(MenuItem(store.rosterStopping.contains(bot.id) ? "Stopping\u{2026}" : "Stop", icon: "stop.fill", destructive: true) { store.stopFromRoster(bot) })
+            // OpenBot-style quick actions from a long press on the row: reply, learn skills, pause.
+            var items = [MenuItem("Reply", icon: "arrowshape.turn.up.left") { accounts.selection = item.ref }]
+            if !bot.isGroup {
+                items.append(MenuItem(bot.learnSkills ? "Stop learning skills" : "Learn skills",
+                                      icon: bot.learnSkills ? "checkmark" : "brain") { store.setLearnSkills(bot, !bot.learnSkills) })
             }
+            if bot.isWorking {
+                items.append(MenuItem(store.rosterStopping.contains(bot.id) ? "Stopping\u{2026}" : "Pause", icon: "pause.fill") { store.stopFromRoster(bot) })
+            }
+            // The lead is always on top and always there: no pin, hide or delete.
             if !bot.lead {
                 items.append(MenuItem(bot.pinned ? "Unpin" : "Pin", icon: bot.pinned ? "pin.slash" : "pin") { store.setPinned(bot, !bot.pinned) })
             }

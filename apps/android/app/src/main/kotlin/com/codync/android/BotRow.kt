@@ -111,7 +111,7 @@ import kotlinx.coroutines.launch
                     add(CustomAccessibilityAction("Mark as read") { store.markBotRead(bot); true })
                 }
                 if (bot.status == "working" && "stop:${bot.id}" !in state.busy) {
-                    add(CustomAccessibilityAction("Stop") { store.stopBot(bot); true })
+                    add(CustomAccessibilityAction("Pause") { store.stopBot(bot); true })
                 }
                 if (!bot.lead) add(CustomAccessibilityAction("Hide from list") { store.hideBotFromRoster(bot); true })
                 if (drag != null) {

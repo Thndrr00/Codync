@@ -81,7 +81,7 @@ import com.kyant.shapes.RoundedRectangle
                 BotAvatar(bot, state.bots, 32.dp)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(bot.name, style = Type.subheadline.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    ConnectionSubtitle(state)
+                    ConnectionSubtitle(bot, state)
                 }
             }
             val screen = state.screen
@@ -156,12 +156,15 @@ import com.kyant.shapes.RoundedRectangle
     }
 }
 
-/** The link to the computer: route icon (or a spinner), computer name when known, and connection state. */
-@Composable private fun ConnectionSubtitle(state: AppState) {
+/** The link to the computer while idle; while working, the bot's live activity from the store. Host updates push it, so no polling. */
+@Composable private fun ConnectionSubtitle(bot: Bot, state: AppState) {
     val host = state.computer?.name.orEmpty()
-    val statusText = if (host.isNotEmpty()) "$host · ${connectionLabel(state)}" else connectionLabel(state)
+    val activity = if (bot.isWorking && bot.activity.isNotBlank()) tr(bot.activity) else null
+    val statusText = activity ?: if (host.isNotEmpty()) "$host · ${connectionLabel(state)}" else connectionLabel(state)
     Row(
-        Modifier.clearAndSetSemantics { contentDescription = "${state.hostName}, ${connectionDescription(state)}" },
+        Modifier.clearAndSetSemantics {
+            contentDescription = activity?.let { "${state.hostName}, $it" } ?: "${state.hostName}, ${connectionDescription(state)}"
+        },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {

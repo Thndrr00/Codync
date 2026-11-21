@@ -223,6 +223,7 @@ struct UserBubble: View {
                     items.append(pinItem(entry, model))
                     return items
                 }
+                .swipeToReply(reply)
     }
 
     @ViewBuilder private var status: some View {
@@ -295,6 +296,7 @@ struct AgentBubble: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(Palette.bubbleAgent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .swipeToReply(reply)
                 }
             }
                 .contextActions(reactions: model.reactionPick(entry)) {

@@ -233,5 +233,18 @@ pub(super) fn compact_roster(buf: &mut Buffer, r: Rect, app: &mut App) {
             put(buf, r.x + 2, y + 1, 1, "★", t.amber);
             app.hits.clicks.push((Rect::new(r.x + 2, y + 1, 1, 1), Click::LeadAgent));
         }
+        // The selected bot gets the free second line of its compact row: its live activity and
+        // unread count, from the same snapshot helpers the full roster uses (no new colors).
+        if sel.as_deref() == Some(b.id.as_str()) && y + 1 < r.bottom() {
+            let (pv, ps) = preview(b);
+            let badge = if b.unread > 0 { format!(" {} ", b.unread) } else { String::new() };
+            // The lead's star already owns the first cell of this line.
+            let x = if b.lead { r.x + 4 } else { r.x + 1 };
+            let room = usize::from(r.right().saturating_sub(x)).saturating_sub(w(&badge) + 1);
+            put(buf, x, y + 1, u(room), &truncate(&pv, room), ps);
+            if !badge.is_empty() {
+                rput(buf, r.right() - 1, y + 1, &badge, t.btn_primary);
+            }
+        }
     }
 }

@@ -10,12 +10,13 @@ use super::buffer::{centered, frame_box, put, u};
 use super::overlay::field_line;
 use super::style::theme;
 
-const HELP: [(&str, &str, &str); 75] = [
+const HELP: [(&str, &str, &str); 76] = [
     ("MOVE", "j k  ↑ ↓", "next / previous bot"),
     ("MOVE", "[ ]", "previous / next bot"),
     ("MOVE", "1…9", "jump to bot 1–9"),
     ("MOVE", "!", "next bot that needs you"),
-    ("MOVE", "u", "next unread bot"),
+    ("MOVE", "u  .", "next unread bot"),
+    ("MOVE", ",", "previous unread bot"),
     ("MOVE", "^k", "go to…"),
     ("MOVE", "tab  h l", "roster ⇄ chat ⇄ trace"),
     ("MOVE", "^d ^u", "half page down / up"),

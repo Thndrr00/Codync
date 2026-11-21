@@ -230,6 +230,14 @@ extension BotStore {
         perform(replay: true) { _ = try await $0.updateBot(d) }
     }
 
+    /// Lets the bot save what its background review learns as its own skills, or stops it.
+    public func setLearnSkills(_ bot: Bot, _ learn: Bool) {
+        var d = BotDraft(bot)
+        d.learnSkills = learn
+        bots[bot.id]?.learnSkills = learn
+        perform(replay: true) { _ = try await $0.updateBot(d) }
+    }
+
     /// Whether the bot may see and use the computer's screen.
     public func setComputer(_ bot: Bot, _ computer: Bool) {
         var d = BotDraft(bot)

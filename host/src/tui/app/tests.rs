@@ -74,6 +74,30 @@ async fn the_dev_servers_sheet_offers_what_each_server_allows() {
 }
 
 #[test]
+fn unread_jump_steps_both_ways_and_wraps() {
+    use crossterm::event::{KeyCode, KeyEvent};
+
+    let mut app = test_app();
+    for (id, unread) in [("a", 3), ("b", 0), ("c", 1)] {
+        let bot = Bot::parse(&json!({"id": id, "name": id, "unread": unread})).expect("a bot with an id parses");
+        app.bots.insert(id.into(), bot);
+    }
+    app.selected = Some("b".into());
+
+    app.on_key(KeyEvent::from(KeyCode::Char('u')));
+    assert_eq!(app.selected.as_deref(), Some("c"), "u jumps to the next unread");
+
+    app.on_key(KeyEvent::from(KeyCode::Char('.')));
+    assert_eq!(app.selected.as_deref(), Some("a"), ". wraps to the next unread");
+
+    app.on_key(KeyEvent::from(KeyCode::Char(',')));
+    assert_eq!(app.selected.as_deref(), Some("c"), ", wraps back to the previous unread");
+
+    app.on_key(KeyEvent::from(KeyCode::Char(',')));
+    assert_eq!(app.selected.as_deref(), Some("a"), ", steps back over the read bot");
+}
+
+#[test]
 fn fuzzy_is_a_subsequence_match() {
     assert!(fuzzy("rx", &["Rex"]));
     assert!(fuzzy("", &["anything"]));

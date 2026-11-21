@@ -382,18 +382,20 @@ struct Composer: View {
     }
 
         /// Still photos go out as JPEG (HEIC isn't something every agent can read); videos keep
-        /// their own data so a clip can be sent from Photos as on Android.
+        /// their own bytes and extension so a clip from Photos plays on every client, as on Android.
         private func addPhotos(_ items: [PhotosPickerItem]) async {
             let stamp = Int(Date.now.timeIntervalSince1970)
             var picked: [OutgoingFile] = []
             for (i, item) in items.enumerated() {
-                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
                 if item.contentType.conforms(to: .movie) {
-                    let ext = item.contentType.preferredFilenameExtension ?? "mov"
-                    picked.append(OutgoingFile(name: "video-\(stamp)-\(i + 1).\(ext)", data: data))
-                } else if let jpeg = ImageData.jpeg(data) {
-                    picked.append(OutgoingFile(name: "photo-\(stamp)-\(i + 1).jpg", data: jpeg))
+                    // A movie loaded as Data is nil; `PickedVideo` reads its file representation.
+                    guard let video = try? await item.loadTransferable(type: PickedVideo.self) else { continue }
+                    picked.append(OutgoingFile(name: "video-\(stamp)-\(i + 1).\(video.filenameExtension)", data: video.data))
+                    continue
                 }
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let jpeg = ImageData.jpeg(data) else { continue }
+                picked.append(OutgoingFile(name: "photo-\(stamp)-\(i + 1).jpg", data: jpeg))
             }
             append(picked)
         }

@@ -30,6 +30,11 @@ internal fun AppStore.setBotMuted(bot: Bot, muted: Boolean) {
     command("updateBot", buildJsonObject { put("id", bot.id); put("notify", muted) }, "roster:" + bot.id)
 }
 
+/** Lets the bot save what its background review learns as its own skills, or stops it. */
+internal fun AppStore.setBotLearnSkills(bot: Bot, learn: Boolean) {
+    command("updateBot", buildJsonObject { put("id", bot.id); put("learnSkills", learn) }, "roster:" + bot.id)
+}
+
 /**
  * Stops an active bot execution without faking local idle state; keeps `"stop:${bot.id}"` in `busy`
  * until the host confirms the command.
@@ -82,6 +87,23 @@ internal suspend fun AppStore.peekBotHistory(botId: String, limit: Int = 3) {
 internal fun botRosterActions(bot: Bot, store: AppStore, edit: () -> Unit, delete: () -> Unit,
     newSession: () -> Unit = { store.command("newSession", body("botId" to bot.id)) }): List<MenuItem> =
     buildList {
+        // OpenBot-style quick actions from a long press on the row: reply, learn skills, pause.
+        add(MenuItem("Reply", icon = "arrowshape.turn.up.left") { store.openBot(bot.id) })
+        if (bot.kind != "group") add(
+            MenuItem(
+                if (bot.learnSkills) "Stop learning skills" else "Learn skills",
+                icon = if (bot.learnSkills) "checkmark" else "brain",
+            ) { store.setBotLearnSkills(bot, !bot.learnSkills) },
+        )
+        if (bot.status == "working") {
+            add(
+                MenuItem(
+                    title = "Pause",
+                    icon = "pause.fill",
+                    enabled = "stop:${bot.id}" !in store.state.value.busy,
+                ) { store.stopBot(bot) },
+            )
+        }
         if (!bot.lead) add(
             MenuItem(if (bot.pinned) "Unpin" else "Pin", icon = if (bot.pinned) "pin.slash" else "pin") {
                 store.toggleBotPin(bot)
@@ -91,15 +113,6 @@ internal fun botRosterActions(bot: Bot, store: AppStore, edit: () -> Unit, delet
             if (bot.kind == "group") MenuItem("Edit group", icon = "person.2", action = edit)
             else MenuItem("Edit profile", icon = "pencil", action = edit),
         )
-        if (bot.status == "working") {
-            add(
-                MenuItem(
-                    title = "Stop",
-                    icon = "stop.fill",
-                    enabled = "stop:${bot.id}" !in store.state.value.busy,
-                ) { store.stopBot(bot) },
-            )
-        }
         add(
             MenuItem("Mark as read", icon = "checkmark.message") {
                 store.markBotRead(bot)

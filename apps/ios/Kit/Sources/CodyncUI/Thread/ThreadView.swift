@@ -181,6 +181,13 @@ public struct ThreadView: View {
 
     // MARK: chrome
 
+    /// The bot's live activity ("Searching its past chats…"), read straight from the store:
+    /// host updates already push it, so the header never polls.
+    private var headerActivity: String? {
+        guard let bot, bot.isWorking, !bot.activity.isEmpty else { return nil }
+        return L10n.tr(bot.activity)
+    }
+
     var connectionSubtitle: some View {
         HStack(spacing: 6) {
             Group {
@@ -193,9 +200,15 @@ public struct ThreadView: View {
             .frame(width: 12)
             .accessibilityHidden(true)
             HStack(spacing: 3) {
-                Text(L10n.tr(model.connectionLabel))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if let headerActivity {
+                    Text(headerActivity)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                } else {
+                    Text(L10n.tr(model.connectionLabel))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 if let devServerLabel {
                     Text("·")
                     if devServerSummary == .starting { Spinner(size: 8) }
@@ -209,8 +222,8 @@ public struct ThreadView: View {
         .font(.system(size: 10, weight: .medium))
         .foregroundStyle(Palette.secondary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([model.hostName, L10n.tr(connectionDescription), devServerLabel].compactMap(\.self).joined(separator: ", "))
-        .help("\(model.hostName) · \(L10n.tr(connectionDescription))")
+        .accessibilityLabel([model.hostName, headerActivity ?? L10n.tr(connectionDescription), devServerLabel].compactMap(\.self).joined(separator: ", "))
+        .help("\(model.hostName) · \(headerActivity ?? L10n.tr(connectionDescription))")
     }
 
     private var devServerSummary: DevServerSummary { DevServerSummary(bot?.devServers ?? []) }

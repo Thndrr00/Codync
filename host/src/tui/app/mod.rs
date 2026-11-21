@@ -580,16 +580,25 @@ impl App {
         self.select(&id);
     }
 
-    /// Next bot (after the selected one, wrapping) whose mark matches.
-    fn jump(&mut self, want: Mark) {
+    /// Next (or `back` previous) bot after the selected one, wrapping, whose mark matches.
+    fn jump(&mut self, want: Mark, back: bool) {
         // A bot busy in a group needs you there, and the group is marked too: skip the bot.
         let ids: Vec<(String, bool)> = self
             .roster()
             .iter()
             .map(|b| (b.id.clone(), b.mark() == want && (want != Mark::Need || b.away().is_none())))
             .collect();
-        let start = self.selected.as_ref().and_then(|s| ids.iter().position(|(x, _)| x == s)).map_or(0, |i| i + 1);
-        let found = (0..ids.len()).map(|k| &ids[(start + k) % ids.len()]).find(|(_, hit)| *hit).cloned();
+        let n = ids.len();
+        let at = self.selected.as_ref().and_then(|s| ids.iter().position(|(x, _)| x == s));
+        let found = if n == 0 {
+            None
+        } else {
+            let start = if back { at.map_or(n - 1, |i| (i + n - 1) % n) } else { at.map_or(0, |i| (i + 1) % n) };
+            (0..n).find_map(|k| {
+                let i = if back { (start + n - k) % n } else { (start + k) % n };
+                ids[i].1.then(|| ids[i].0.clone())
+            })
+        };
         match found {
             Some((id, _)) => {
                 self.select(&id);

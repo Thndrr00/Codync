@@ -7,6 +7,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -61,12 +62,14 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.*
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -283,22 +286,36 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
 }
 
 /**
- * A decided horizontal swipe on a main-chat message opens its thread (idea 28). The threshold
- * keeps vertical scroll, text selection and a code block's own horizontal scroll in charge.
+ * A decided horizontal swipe on a message quotes it for a reply, with the same 64 dp threshold as
+ * the iPhone. The bubble follows the finger and springs back; with Reduce Motion the return snaps.
  */
 @Composable private fun Modifier.swipeToReply(reply: (() -> Unit)?): Modifier {
     if (reply == null) return this
     val current by rememberUpdatedState(reply)
     val threshold = with(LocalDensity.current) { 64.dp.toPx() }
-    var total by remember { mutableStateOf(0f) }
-    return pointerInput(Unit) {
-        detectHorizontalDragGestures(
-            onDragStart = { total = 0f },
-            onHorizontalDrag = { _, amount -> total += amount },
-            onDragEnd = { if (abs(total) >= threshold) current(); total = 0f },
-            onDragCancel = { total = 0f },
-        )
+    val scope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    val reduced = reduceMotion()
+    fun settle() {
+        scope.launch { offsetX.animateTo(0f, if (reduced) snap() else Motion.layout()) }
     }
+    return this
+        .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+        .pointerInput(Unit) {
+            detectHorizontalDragGestures(
+                onDragStart = { scope.launch { offsetX.stop() } },
+                onHorizontalDrag = { change, amount ->
+                    change.consume()
+                    scope.launch { offsetX.snapTo((offsetX.value + amount).coerceIn(-threshold, threshold)) }
+                },
+                onDragEnd = {
+                    val committed = abs(offsetX.value) >= threshold
+                    settle()
+                    if (committed) current()
+                },
+                onDragCancel = { settle() },
+            )
+        }
 }
 
 internal val quickReactions = listOf("👍", "❤️", "😂", "🎉", "👀", "✅")
