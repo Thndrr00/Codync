@@ -9,17 +9,19 @@ use super::super::app::App;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {
     Details,
+    Insights,
     Library,
     Memory,
     Settings,
 }
 
 impl Page {
-    pub const ALL: [Self; 4] = [Self::Details, Self::Library, Self::Memory, Self::Settings];
+    pub const ALL: [Self; 5] = [Self::Details, Self::Insights, Self::Library, Self::Memory, Self::Settings];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Details => "Details",
+            Self::Insights => "Insights",
             Self::Library => "Library",
             Self::Memory => "Memory",
             Self::Settings => "Settings",
@@ -46,6 +48,7 @@ impl App {
     pub(in crate::tui) fn open_page(&mut self, page: Page) {
         match page {
             Page::Details => self.open_routines(),
+            Page::Insights => self.open_insights(),
             Page::Library => self.open_library(),
             Page::Memory => self.open_memory(),
             Page::Settings => self.edit_bot(),
@@ -60,9 +63,10 @@ mod tests {
     #[test]
     fn shift_arrows_move_between_pages_and_stop_at_the_ends() {
         let key = |code| KeyEvent::new(code, KeyModifiers::SHIFT);
-        assert_eq!(Page::Details.step(key(KeyCode::Right)), Some(Page::Library));
+        assert_eq!(Page::Details.step(key(KeyCode::Right)), Some(Page::Insights));
+        assert_eq!(Page::Insights.step(key(KeyCode::Right)), Some(Page::Library));
         assert_eq!(Page::Memory.step(key(KeyCode::Left)), Some(Page::Library));
-        assert_eq!(Page::Library.step(key(KeyCode::Left)), Some(Page::Details));
+        assert_eq!(Page::Library.step(key(KeyCode::Left)), Some(Page::Insights));
         assert_eq!(Page::Settings.step(key(KeyCode::Right)), None);
         assert_eq!(Page::Details.step(key(KeyCode::Left)), None);
         assert_eq!(

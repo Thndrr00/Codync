@@ -3,6 +3,7 @@
 
 pub mod apps;
 pub mod artifacts;
+pub mod ask_user;
 pub mod calls;
 pub mod context;
 pub mod decider;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::store::{Device, DeviceAccount, DeviceSource, Store};
+use crate::store::{Device, DeviceAccount, DeviceSource, EntryKind, Lane, Store};
 use serde_json::json;
 
 fn temp_hub() -> (std::sync::Arc<Hub>, std::path::PathBuf) {
@@ -12,6 +12,29 @@ fn temp_hub() -> (std::sync::Arc<Hub>, std::path::PathBuf) {
 
 fn props(method: &str, b: &Value) -> Option<(Event, Value)> {
     observe(&Caller::Local, method, b).map(|(e, p)| (e, Value::Object(p)))
+}
+
+#[test]
+fn a_question_card_reports_its_outcome_not_the_chosen_label() {
+    let (hub, dir) = temp_hub();
+    let card = hub
+        .add_entry(
+            &Lane::main("b1"),
+            EntryKind::Permission,
+            0,
+            &json!({"title": "Which database?", "askUserTool": true, "question": true}),
+        )
+        .expect("the card was saved");
+    let answer = json!({"entryId": card.id, "optionId": "1"});
+    let (event, p) = observe_call(&hub, &Caller::Local, "respondPermission", &answer).expect("tracked");
+    assert_eq!(event, Event::UserQuestionAnswered);
+    assert_eq!(serde_json::Value::Object(p), json!({"client": "local", "outcome": "answered"}));
+
+    let skipped = json!({"entryId": card.id, "optionId": serde_json::Value::Null});
+    let (event, p) = observe_call(&hub, &Caller::Local, "respondPermission", &skipped).expect("tracked");
+    assert_eq!(event, Event::UserQuestionAnswered);
+    assert_eq!(p["outcome"], json!("skipped"));
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -140,6 +163,31 @@ fn a_connector_edit_reports_how_it_ended_and_nothing_it_changed() {
     }
     let locked = refused(anyhow::anyhow!("the vault is locked"));
     assert_eq!(locked, json!({"client": "local", "outcome": "failed", "error": "other"}));
+}
+
+#[test]
+fn mini_apps_and_questions_report_use_without_content() {
+    assert_eq!(
+        props("createAppLink", &json!({"slug": "secret-board", "token": "abc", "mode": "edit"})),
+        Some((Event::AppLinkChanged, json!({"action": "create", "mode": "edit", "client": "local"})))
+    );
+    assert_eq!(
+        props("revokeAppLink", &json!({"token": "abc"})).map(|(_, p)| p["action"].clone()),
+        Some(json!("revoke"))
+    );
+    assert_eq!(
+        props("appRequest", &json!({"path": "/private/report.html", "method": "get", "body": "secret"})),
+        Some((Event::MiniAppRequested, json!({"method": "GET", "client": "local"})))
+    );
+    assert_eq!(
+        props(
+            "chatCall",
+            &json!({"name": "ask_user", "arguments": {
+                "question": "Salary or invoice?", "options": [{"label": "a"}, {"label": "b"}, {"label": "c"}]
+            }})
+        ),
+        Some((Event::UserQuestionAsked, json!({"options": 3, "client": "local"})))
+    );
 }
 
 #[test]

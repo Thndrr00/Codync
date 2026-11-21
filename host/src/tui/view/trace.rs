@@ -73,11 +73,56 @@ fn tool_label(kind: &str) -> &str {
     }
 }
 
+/// A trace row, or a run of tool steps folded into one "worked on N steps" line.
+pub(super) enum TraceGroup<'a> {
+    One(&'a Entry),
+    Work(Vec<&'a Entry>),
+}
+
+/// Folds runs of at least `min` consecutive tool steps; a full trace keeps every row.
+pub(super) fn group_work_steps<'a>(entries: Vec<&'a Entry>, min: usize, full: bool) -> Vec<TraceGroup<'a>> {
+    let mut out = vec![];
+    let mut run: Vec<&'a Entry> = vec![];
+    let flush = |run: &mut Vec<&'a Entry>, out: &mut Vec<TraceGroup<'a>>| {
+        if !full && run.len() >= min {
+            out.push(TraceGroup::Work(std::mem::take(run)));
+        } else {
+            out.extend(run.drain(..).map(TraceGroup::One));
+        }
+    };
+    for e in entries {
+        if e.kind == Kind::Tool {
+            run.push(e);
+        } else {
+            flush(&mut run, &mut out);
+            out.push(TraceGroup::One(e));
+        }
+    }
+    flush(&mut run, &mut out);
+    out
+}
+
 fn build_trace(app: &App, b: &Bot, turn: i64, width: usize, full: bool) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = vec![];
     let Some(map) = app.entries.get(&b.id) else { return out };
     let mut speaker: Option<&str> = None;
-    for e in map.values().filter(|e| e.turn == turn && !e.is_internal()) {
+    let entries: Vec<&Entry> = map.values().filter(|e| e.turn == turn && !e.is_internal()).collect();
+    for group in group_work_steps(entries, 3, full) {
+        let e = match group {
+            TraceGroup::One(e) => e,
+            TraceGroup::Work(steps) => {
+                let t = theme();
+                out.push(Line::from(vec![
+                    Span::styled(" ⋯ ", t.dim),
+                    label("worked"),
+                    Span::styled(
+                        tr("Worked on {count} steps").replace("{count}", &steps.len().to_string()),
+                        t.secondary,
+                    ),
+                ]));
+                continue;
+            }
+        };
         // In a group, each member's steps under its name.
         if b.group && e.kind != Kind::User {
             let author = e.data["author"].as_str();
@@ -217,6 +262,43 @@ fn push_diff(out: &mut Vec<Line<'static>>, app: &App, d: &serde_json::Value, wid
 }
 
 /// A tool's output: its last `max` lines.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(kind: Kind) -> Entry {
+        let wire = match kind {
+            Kind::User => "user",
+            Kind::Tool => "tool",
+            Kind::Agent => "agent",
+            _ => "notice",
+        };
+        Entry {
+            id: "e".into(),
+            seq: 0,
+            bot_id: "b".into(),
+            rev: 1,
+            kind: wire.into(),
+            turn: 1,
+            data: serde_json::Value::Null,
+            created_at: 0,
+            updated_at: 0,
+            thread_id: None,
+        }
+    }
+
+    #[test]
+    fn a_run_of_three_tools_folds_unless_the_trace_is_full() {
+        let owned = [entry(Kind::User), entry(Kind::Tool), entry(Kind::Tool), entry(Kind::Tool), entry(Kind::Agent)];
+        let all: Vec<&Entry> = owned.iter().collect();
+        let short = group_work_steps(all.clone(), 3, false);
+        assert!(matches!(short[1], TraceGroup::Work(_)));
+        assert_eq!(short.len(), 3);
+        let full = group_work_steps(all, 3, true);
+        assert!(full.iter().all(|g| matches!(g, TraceGroup::One(_))));
+    }
+}
+
 fn push_output(out: &mut Vec<Line<'static>>, output: &str, width: usize, max: usize) {
     let t = theme();
     let lines: Vec<&str> = output.trim_end().lines().collect();

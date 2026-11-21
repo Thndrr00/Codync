@@ -269,6 +269,17 @@
     transform 220ms var(--t-spring);
 }
 
+/* Idea 28: the outgoing draft fades with a small downward scale instead of vanishing on send. */
+@keyframes t-draft-dissolve {
+  from { opacity: 1; transform: scaleY(1); }
+  to { opacity: 0; transform: scaleY(0.6); }
+}
+.composer-field.is-dissolving textarea,
+.composer-field.is-dissolving .composer-measure {
+  transform-origin: top left;
+  animation: t-draft-dissolve 180ms var(--t-ease-in) both;
+}
+
 /* Idea 29: Stackable Toast Notifications (.t-toast-stack / .t-toast) */
 .t-toast-stack {
   position: fixed;

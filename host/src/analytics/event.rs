@@ -85,6 +85,16 @@ pub enum Event {
     SkillWritten,
     /// A bot's `publish_artifact`.
     ArtifactPublished,
+    /// A mini-app capability link was issued, revoked, or its app deleted (`action`).
+    AppLinkChanged,
+    /// A client read a mini-app page through the host bridge (`method`).
+    MiniAppRequested,
+    /// A bot's `ask_user` showed a question with choices (`options`: how many).
+    UserQuestionAsked,
+    /// The person answered or left a `ask_user` card (`outcome`).
+    UserQuestionAnswered,
+    /// A mail relay delivered a message to a bot's inbox (`stored`/`auto_reply`), never its content.
+    EmailReceived,
     CredentialSaved,
     AgentSetupStarted,
     AgentSignedIn,

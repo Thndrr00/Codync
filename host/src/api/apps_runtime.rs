@@ -168,9 +168,21 @@ fn handle_data(
 ) -> Response {
     let rest = rel.strip_prefix("_data").unwrap_or_default().trim_start_matches('/');
     let parts: Vec<&str> = rest.split('/').filter(|s| !s.is_empty()).collect();
+    let form = (link.mode == AppLinkMode::Submit).then(|| {
+        serde_json::from_value::<crate::apps_access::Access>(crate::apps_access::read_access(hub, bot_id, slug))
+            .unwrap_or_default()
+    });
+    let deny = |status: u16, message: &str| {
+        json_resp(StatusCode::from_u16(status).unwrap_or(StatusCode::FORBIDDEN), json!({"error": message}))
+    };
     if parts.is_empty() && *method == Method::GET {
         return match hub.store.app_collections(bot_id, slug) {
-            Ok(collections) => json_resp(StatusCode::OK, json!({"collections": collections, "mode": link.mode})),
+            Ok(mut collections) => {
+                if let Some(access) = &form {
+                    collections.retain(|c: &serde_json::Value| access.read.iter().any(|r| c["collection"] == *r));
+                }
+                json_resp(StatusCode::OK, json!({"collections": collections, "mode": link.mode}))
+            }
             Err(e) => json_resp(StatusCode::BAD_REQUEST, json!({"error": e.to_string()})),
         };
     }
@@ -178,6 +190,20 @@ fn handle_data(
         return json_resp(StatusCode::BAD_REQUEST, json!({"error": "collection required"}));
     };
     let item_id = parts.get(1).copied();
+
+    if let Some(access) = &form {
+        let op = if *method == Method::GET {
+            if item_id.is_some() { "get" } else { "list" }
+        } else if *method == Method::POST {
+            "put"
+        } else {
+            "deny"
+        };
+        match crate::apps_access::authorize(link.mode, access, op, collection, item_id, body.len()) {
+            crate::apps_access::Decision::Allow { .. } => {}
+            crate::apps_access::Decision::Deny(status, message) => return deny(status, message),
+        }
+    }
 
     if *method == Method::GET {
         if let Some(id) = item_id {
@@ -189,6 +215,27 @@ fn handle_data(
         }
         return match hub.store.app_data_list(bot_id, slug, collection, 500) {
             Ok(items) => json_resp(StatusCode::OK, json!({"items": items, "mode": link.mode})),
+            Err(e) => json_resp(StatusCode::BAD_REQUEST, json!({"error": e.to_string()})),
+        };
+    }
+
+    if let Some(access) = &form {
+        let Ok(payload) = serde_json::from_slice::<Value>(body) else {
+            return json_resp(StatusCode::BAD_REQUEST, json!({"error": "Invalid JSON"}));
+        };
+        let value = payload.get("value").cloned().unwrap_or_else(|| payload.clone());
+        let receipt =
+            match crate::apps_access::authorize(link.mode, access, "put", collection, None, value.to_string().len()) {
+                crate::apps_access::Decision::Allow { receipt } => {
+                    receipt.unwrap_or_else(crate::apps_access::new_receipt_id)
+                }
+                crate::apps_access::Decision::Deny(status, message) => return deny(status, message),
+            };
+        return match hub.store.app_data_put(bot_id, slug, collection, Some(&receipt), &value, Some(&link.label)) {
+            Ok(item) => {
+                emit_app_live(hub, bot_id, slug, json!({"type": "change", "collection": collection, "id": item.id}));
+                json_resp(StatusCode::OK, json!({"item": item, "receipt": receipt}))
+            }
             Err(e) => json_resp(StatusCode::BAD_REQUEST, json!({"error": e.to_string()})),
         };
     }

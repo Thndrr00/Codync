@@ -74,7 +74,12 @@ import kotlinx.serialization.json.jsonPrimitive
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(entries.firstOrNull { it.kind == "user" }?.text ?: tr("Turn {turn}").replace("{turn}", turn.toString()), Modifier.padding(start = 4.dp),
                         style = Type.subheadline.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    CardSection { for (entry in entries) row { TraceRow(entry) } }
+                    CardSection {
+                        for (slot in groupWorkSteps(entries)) when (slot) {
+                            is WorkSlot.Row -> row { TraceRow(slot.entry) }
+                            is WorkSlot.Group -> row { WorkStepsGroup(slot.entries) }
+                        }
+                    }
                 }
             }
         }

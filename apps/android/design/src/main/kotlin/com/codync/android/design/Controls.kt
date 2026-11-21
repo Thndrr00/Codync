@@ -21,6 +21,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,6 +76,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
@@ -185,15 +189,43 @@ import com.kyant.shapes.RoundedRectangle
     }
 }
 
-/** Tabs as text, the chosen one on a filled pill (a details sheet's pages): `TabChoice`. */
+/** Where the sliding pill starts: the measured widths of all tabs before `index`. */
+internal fun <T> tabPillOffset(bounds: Map<T, DpSize>, options: List<T>, index: Int, spacing: Dp): Dp =
+    (0 until index.coerceAtLeast(0)).fold(0.dp) { x, i -> x + (bounds[options[i]]?.width ?: 0.dp) + spacing }
+
+/** Tabs as text, one pill sliding between the chosen labels (a details sheet's pages): `TabChoice`. */
 @Composable fun <T> TabChoice(selection: T, options: List<Pair<T, String>>, select: (T) -> Unit, modifier: Modifier = Modifier) {
+    val haptics = LocalCodyncHaptics.current
+    val density = LocalDensity.current
+    val bounds = remember { mutableStateMapOf<T, DpSize>() }
+    val spacing = 2.dp
+    val index = options.indexOfFirst { it.first == selection }
+    val selected = options.getOrNull(index)?.first
+    // One pill moves to the measured tab instead of fading out of one label and into the next.
+    val pillX by animateDpAsState(
+        tabPillOffset(bounds, options.map { it.first }, index, spacing),
+        Motion.layout(), label = "TabPillX",
+    )
+    val pillWidth by animateDpAsState(selected?.let { bounds[it]?.width } ?: 0.dp, Motion.layout(), label = "TabPillWidth")
+    val pillHeight by animateDpAsState(selected?.let { bounds[it]?.height } ?: 0.dp, Motion.layout(), label = "TabPillHeight")
     // Four long labels (German) on a narrow phone scroll rather than cut a label short.
-    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        for ((id, label) in options) {
-            val on = id == selection
-            val fill by animateColorAsState(if (on) Palette.bubbleAgent else Color.Transparent, Motion.morph(), label = "Tab")
-            Text(tr(label), Modifier.clip(Capsule()).background(fill).selectable(on, role = Role.Tab) { select(id) }
-                .padding(horizontal = 12.dp, vertical = 6.dp), style = Type.subheadline, color = if (on) Palette.text else Palette.secondary, maxLines = 1)
+    Box(modifier.horizontalScroll(rememberScrollState())) {
+        if (index >= 0 && pillWidth > 0.dp && pillHeight > 0.dp) {
+            Box(Modifier.offset(x = pillX).width(pillWidth).height(pillHeight).clip(Capsule()).background(Palette.bubbleAgent))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+            for ((id, label) in options) {
+                val on = id == selection
+                Text(tr(label), Modifier
+                    .onSizeChanged { bounds[id] = with(density) { DpSize(it.width.toDp(), it.height.toDp()) } }
+                    .clip(Capsule())
+                    .selectable(on, role = Role.Tab) {
+                        if (!on) haptics.perform(CodyncHaptic.TabSwitch)
+                        select(id)
+                    }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = Type.subheadline, color = if (on) Palette.text else Palette.secondary, maxLines = 1)
+            }
         }
     }
 }

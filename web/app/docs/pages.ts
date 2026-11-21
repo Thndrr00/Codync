@@ -97,6 +97,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Reach a bot from WhatsApp: link a number on your computer with a pairing code, pick the bot that answers, and start routines from a chat.",
       },
       {
+        slug: "mini-apps",
+        title: "Mini-apps",
+        description:
+          "Apps a bot builds for you: open them from its chat, share view or edit links, and answer the bot's choice cards.",
+      },
+      {
         slug: "artifacts",
         title: "Artifacts and the Library",
         description:
