@@ -96,6 +96,17 @@ container query on the desktop pill, `ViewThatFits` on the iPhone, a width check
 and no purpose at all in the terminal's narrow layout — so the name keeps its room. Ported from OpenBot
 0.70.0, which added the agent's title to the chat header.
 
+## Message actions
+
+A message row's menu has **Copy link**, the stable `bot:<id>/entry:<id>` string the host also answers
+as `messageLink {botId, entryId}`; an image attachment can be copied from its right-click menu
+through the same store bytes and clipboard helper as the viewer's Copy. Hovering a reaction chip
+names everyone who chose that emoji (you and the bots in the store). **Compact message actions** is
+a device-only preference that hides the per-message time under each bubble. A working bot's status
+row comes from the live mirror, so a history search reads **Searching its past chats…** as soon as
+the host publishes it. A steer or queue call that mistypes a bot id names the close bot instead of
+just saying the id is unknown.
+
 ## Several people
 
 - The people of a chat are the devices paired with the computer (`host/src/chat/people.rs`): each by its

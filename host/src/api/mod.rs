@@ -24,6 +24,7 @@ mod island_runtime;
 mod island_workspace;
 mod marketplace;
 mod media;
+mod message_link;
 mod network;
 mod openai;
 mod openai_keys;
@@ -121,10 +122,17 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
             return Ok(serde_json::json!({"requests": hub.team.pending_for(bot)}));
         }
         "islandWorkspace" => return island_workspace::read(hub, str_arg(&b, "botId")?).await,
-        "queuedMessages" => return island_queue::read(hub, str_arg(&b, "botId")?).await,
-        "cancelQueuedMessage" => {
-            return island_queue::cancel(hub, str_arg(&b, "botId")?, str_arg(&b, "entryId")?).await;
+        "queuedMessages" => {
+            let bot = str_arg(&b, "botId")?;
+            crate::chat::steer::ensure_bot(&hub.store, bot)?;
+            return island_queue::read(hub, bot).await;
         }
+        "cancelQueuedMessage" => {
+            let bot = str_arg(&b, "botId")?;
+            crate::chat::steer::ensure_bot(&hub.store, bot)?;
+            return island_queue::cancel(hub, bot, str_arg(&b, "entryId")?).await;
+        }
+        "messageLink" => return message_link::call(hub, &b),
         "mediaModels" => return media::models(hub, &b),
         "sunraModels" => return media::sunra_models(hub, &b).await,
         "sunraCredits" => return media::sunra_credits(hub, &b).await,

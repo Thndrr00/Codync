@@ -7,21 +7,26 @@ import { Text } from '../../components/Text'
 import { ThinkingOrb } from '../../components/ThinkingOrb'
 import { prefs, usePref } from '../../lib/prefs'
 import { useTr } from '../../lib/use-language'
+import { useStore } from '../../store/context'
 import { useFollowEnd } from './follow-end'
 import { TraceRow } from './TraceView'
 
 /** The bot's current activity and elapsed time; with thinking details on (Settings), a click unfolds the turn's steps. */
 export function WorkingIndicator({ bot, steps }: { bot: Bot; steps: Entry[] }) {
   const tr = useTr()
+  const store = useStore()
   const [details] = usePref(prefs.thinkingDetails)
-  const waiting = needsInput(bot)
+  // The host publishes the tool's activity on the bot ("Searching its past chats…" when it reads
+  // history). Read the live mirror, so the status row says what the bot is doing now, without a poll.
+  const live = store.bots.get(bot.id) ?? bot
+  const waiting = needsInput(live)
   const [expanded, setExpanded] = useState(false)
   const open = details && expanded
   const status = (
     <HStack as="span" gap={8}>
       <ThinkingOrb state={waiting ? 'listening' : 'working'} size={16} color={waiting ? 'var(--warning)' : 'var(--secondary)'} />
-      <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} truncate grow>{tr(bot.activity || 'Working…')}</Text>
-      {bot.startedAt ? <Timer since={bot.startedAt} /> : null}
+      <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} truncate grow>{tr(live.activity || 'Working…')}</Text>
+      {live.startedAt ? <Timer since={live.startedAt} /> : null}
       {details ? (
         <span className={`disclosure-chevron${open ? ' open' : ''}`}>
           <Icon name="chevron.right" size={10} weight="semibold" />

@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { isImageName, isVideoName, type Attachment, type SharedFile } from '@shared/models'
 import { Button } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
+import { AnchoredMenu, useContextMenu, type MenuItem } from '../../components/Menu'
 import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { copyPicture } from '../../lib/copy-image'
 import { useTr } from '../../lib/use-language'
 import { useStoreRef } from '../../store/context'
+import type { BotStore } from '../../store/bot-store'
 import './attachments.css'
 
 /** The symbol for a file by its extension. */
@@ -40,9 +42,7 @@ export function AttachmentList({ attachments, botId }: { attachments: Attachment
     <VStack align="flex-end" gap={4}>
       {attachments.map((file) =>
         isImageName(file.name) ? (
-          <button key={file.id} className="attachment-image-button" aria-label={file.name} onClick={() => setViewing(file)}>
-            <AttachmentImage source={{ file, botId }} fit="thumbnail" />
-          </button>
+          <ImageChip key={file.id} file={file} botId={botId} open={() => setViewing(file)} />
         ) : (
           <HStack key={file.id} gap={8} className="attachment-file">
             <Icon name={attachmentSymbol(file.name)} size={16} color="var(--secondary)" />
@@ -61,6 +61,32 @@ export function AttachmentList({ attachments, botId }: { attachments: Attachment
 /** Where a picture's bytes are on the computer: a file sent with a message, or one a bot shared. */
 export type ImageSource = { file: Attachment; botId: string } | { file: SharedFile; entryId: string }
 
+/** Copies an attachment's bytes through the same store path and clipboard helper as the viewer's Copy. */
+export async function copyImage(store: BotStore, source: ImageSource): Promise<boolean> {
+  const bytes = 'entryId' in source
+    ? await store.sharedFileData(source.file, source.entryId)
+    : await store.attachmentData(source.file.id, source.botId)
+  if (!bytes) return false
+  await copyPicture(new Uint8Array(bytes))
+  return true
+}
+
+/** A picture on a message: click for full size, right-click to copy it (OpenBot 0.67.0). */
+function ImageChip({ file, botId, open }: { file: Attachment; botId: string; open: () => void }) {
+  const store = useStoreRef()
+  const menu = useContextMenu()
+  const source: ImageSource = { file, botId }
+  const items = (): MenuItem[] => [{ title: 'Copy image', icon: 'square.on.square', action: () => void copyImage(store, source) }]
+  return (
+    <>
+      <button className="attachment-image-button" aria-label={file.name} onClick={open} onContextMenu={menu.onContextMenu}>
+        <AttachmentImage source={source} fit="thumbnail" />
+      </button>
+      <AnchoredMenu open={menu.open} onClose={menu.close} point={menu.point} items={items} />
+    </>
+  )
+}
+
 /** A picture or a clip full size, in a sheet, with zoom and fit; Escape steps back to fit before closing. */
 export function AttachmentViewer({ source, close }: { source: ImageSource | null; close: () => void }) {
   const store = useStoreRef()
@@ -75,11 +101,7 @@ export function AttachmentViewer({ source, close }: { source: ImageSource | null
   const copy = async () => {
     if (!source) return
     try {
-      const bytes = 'entryId' in source
-        ? await store.sharedFileData(source.file, source.entryId)
-        : await store.attachmentData(source.file.id, source.botId)
-      if (!bytes) return setNote(tr('The picture could not be copied'))
-      await copyPicture(new Uint8Array(bytes))
+      if (!await copyImage(store, source)) return setNote(tr('The picture could not be copied'))
       setNote(tr('Copied'))
     } catch (reason) {
       setNote(reason instanceof Error ? reason.message : tr('The picture could not be copied'))

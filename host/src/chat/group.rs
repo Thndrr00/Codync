@@ -75,7 +75,7 @@ fn distance(a: &str, b: &str) -> usize {
 /// The agent whose id is nearly the same as a mistyped one. Ported from OpenBot 0.74.0: naming the
 /// almost-equal agent lets an agent that got a character wrong try again instead of guessing which
 /// of its listed agents could not be added.
-fn nearest<'a>(id: &str, agents: impl Iterator<Item = (&'a str, &'a str)>) -> Option<(&'a str, &'a str)> {
+pub(crate) fn nearest<'a>(id: &str, agents: impl Iterator<Item = (&'a str, &'a str)>) -> Option<(&'a str, &'a str)> {
     if id.len() < 3 {
         return None;
     }

@@ -7,6 +7,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
     ['hiddenComputers', 'null'],
     ['computerOrder', '{"a":1}'],
     ['sidebarCompact', '"yes"'],
+    ['compactMessageActions', 'true'],
     ['desktopSidebarWidth', '300'],
     ['computerAccessSetup', '"ready"'],
     ['accentColor', '"#1084FE"'],
@@ -24,6 +25,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
   assert.equal(prefs.hiddenComputers.get(), '')
   assert.deepEqual(prefs.computerOrder.get(), [])
   assert.equal(prefs.sidebarCompact.get(), false)
+  assert.equal(prefs.compactActions.get(), true, 'a stored compact-actions switch is read as a boolean')
   assert.equal(prefs.sidebarWidth.get(), 300)
   assert.equal(prefs.computerAccessSetup.get(), 'ready')
   assert.equal(prefs.accentColor.get(), '#1084FE')

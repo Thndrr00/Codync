@@ -10,6 +10,7 @@ import { AnchoredMenu, useContextMenu, type MenuItem, type ReactionPick } from '
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { messagePreview } from '../../lib/message-preview'
+import { messageLink } from './message-link'
 import { MemberQuestionCard } from './MemberQuestionCard'
 import { useTr } from '../../lib/use-language'
 import { avatarColor, inkOn, readableFill, type YourBubbles } from '../../lib/theme'
@@ -412,6 +413,7 @@ export function UserBubble({ entry, chat, reply, forward, branch }: { entry: Ent
   const [hovering, setHovering] = useState(false)
   const status = entry.data.status
   const copy = () => entry.data.text && window.codync.app.copy(entry.data.text)
+  const copyLink = () => window.codync.app.copy(messageLink(entry.botId, entry.id))
   const bubble = yourBubble(chat, yourBubbles)
   return (
     <div className="message user" title={fullDate.format(entry.createdAt)} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
@@ -424,7 +426,8 @@ export function UserBubble({ entry, chat, reply, forward, branch }: { entry: Ent
             reactions={reactionPick(store, entry)}
             items={() => [
               { title: 'Copy', icon: 'square.on.square', action: copy },
-            { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+              { title: 'Copy link', icon: 'link', action: copyLink },
+              { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
               { title: entry.data.pinned ? 'Unpin' : 'Pin', icon: entry.data.pinned ? 'pin.slash' : 'pin', action: () => store.setPinnedMessage(entry, !entry.data.pinned) },
               { title: 'Bookmark', icon: 'bookmark', action: () => void store.saveBookmark(entry.botId, entry.id, entry.data.text ?? '', '', entry.data.author ?? 'user', entry.threadId ?? null) },
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
@@ -440,7 +443,7 @@ export function UserBubble({ entry, chat, reply, forward, branch }: { entry: Ent
         ) : null}
         {status && status !== 'sent' ? <UserStatus entry={entry} hovering={hovering} /> : null}
         {/* Beside the bubble, inside its hover region: showing them never changes the height. */}
-        <MessageActions className="leading" visible={hovering} reactions={reactionPick(store, entry)} reply={reply} copy={copy} />
+        <MessageActions className="leading" visible={hovering} reactions={reactionPick(store, entry)} reply={reply} copy={copy} copyLink={copyLink} />
       </div>
     </div>
   )
@@ -449,6 +452,8 @@ export function UserBubble({ entry, chat, reply, forward, branch }: { entry: Ent
 function UserStatus({ entry, hovering }: { entry: Entry; hovering: boolean }) {
   const tr = useTr()
   const store = useStore()
+  // Compact message actions (OpenBot): keep delivery failures, drop the time under each bubble.
+  const [compact] = usePref(prefs.compactActions)
   switch (entry.data.status) {
     case 'sending':
       return <Text size="caption2" tone="tertiary">{tr(`Sending…`)}</Text>
@@ -463,7 +468,7 @@ function UserStatus({ entry, hovering }: { entry: Entry; hovering: boolean }) {
     case 'cancelled':
       return <Text size="caption2" tone="tertiary">{tr(`Not sent — stopped`)}</Text>
     default:
-      return <Text size="caption" tone="tertiary" className={hovering ? 'user-status-time shown' : 'user-status-time'}>{relativeTime.time(entry.createdAt)}</Text>
+      return compact ? null : <Text size="caption" tone="tertiary" className={hovering ? 'user-status-time shown' : 'user-status-time'}>{relativeTime.time(entry.createdAt)}</Text>
   }
 }
 
@@ -473,6 +478,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
   const [hovering, setHovering] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const copy = () => entry.data.text && window.codync.app.copy(entry.data.text)
+  const copyLink = () => window.codync.app.copy(messageLink(entry.botId, entry.id))
   // A reply carrying a visual page (an HTML artifact) can show an inert preview before it is opened.
   const card = entry.data.artifact
   const html = card ? store.artifacts.html.get(card.id) : null
@@ -486,8 +492,9 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
           reactions={reactionPick(store, entry)}
           items={() => [
             { title: 'Copy', icon: 'square.on.square', action: copy },
-              { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
-              { title: entry.data.pinned ? 'Unpin' : 'Pin', icon: entry.data.pinned ? 'pin.slash' : 'pin', action: () => store.setPinnedMessage(entry, !entry.data.pinned) },
+            { title: 'Copy link', icon: 'link', action: copyLink },
+            { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+            { title: entry.data.pinned ? 'Unpin' : 'Pin', icon: entry.data.pinned ? 'pin.slash' : 'pin', action: () => store.setPinnedMessage(entry, !entry.data.pinned) },
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(branch ? [{ title: 'Branch from here', icon: 'arrow.triangle.branch', action: branch }] : []),
               ...(forward ? [{ title: 'Send to a channel…', icon: 'arrowshape.turn.up.right', action: forward }] : []),
@@ -513,7 +520,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
             <Icon name="macwindow" size={12} /> {tr('Preview page')}
           </button>
         ) : null}
-        <MessageActions className="trailing" visible={hovering} reactions={reactionPick(store, entry)} reply={reply} trace={openTrace} copy={copy} />
+        <MessageActions className="trailing" visible={hovering} reactions={reactionPick(store, entry)} reply={reply} trace={openTrace} copy={copy} copyLink={copyLink} />
         <PagePreviewSheet
           html={previewing ? pageHtml : null}
           title={pageTitle}
@@ -566,20 +573,30 @@ export function NoticeRow({ entry, addFallback, undo }: { entry: Entry; addFallb
  * bots that chose it. */
 export function ReactionsRow({ entry }: { entry: Entry }) {
   const store = useStore()
+  const tr = useTr()
   const mine = entry.data.reactions ?? []
   const theirs = groupBotReactions(entry.data.botReactions ?? [])
     .map(({ emoji, bots }) => ({ emoji, bots: bots.map((id) => store.bots.get(id)).filter((b): b is Bot => !!b) }))
     .filter((g) => g.bots.length)
   if (!mine.length && !theirs.length) return null
+  // Hover names everyone who chose an emoji, not just the bots' avatars on the chip: the user's own
+  // reaction and the bots' are both already in the store, so the tooltip needs no extra data.
+  const reactedBy = (emoji: string) => {
+    const names = [
+      ...(mine.includes(emoji) ? [tr('You')] : []),
+      ...(theirs.find((group) => group.emoji === emoji)?.bots.map((bot) => bot.name) ?? []),
+    ]
+    return `${names.join(', ')} reacted ${emoji}`
+  }
   return (
     <HStack align="stretch" gap={4}>
       {mine.map((emoji) => (
-        <button key={emoji} className="press reaction-chip" title={`Remove ${emoji}`} aria-label={`Remove reaction ${emoji}`} onClick={() => store.react(entry, emoji)}>
+        <button key={emoji} className="press reaction-chip" title={reactedBy(emoji)} aria-label={`Remove reaction ${emoji}`} onClick={() => store.react(entry, emoji)}>
           <Text size="body">{emoji}</Text>
         </button>
       ))}
       {theirs.map(({ emoji, bots }) => {
-        const label = `${bots.map((b) => b.name).join(', ')} reacted ${emoji}`
+        const label = reactedBy(emoji)
         return (
           <HStack key={`bots-${emoji}`} gap={4} className="reaction-chip" title={label} aria-label={label} role="img">
             <Text size="body">{emoji}</Text>
@@ -598,13 +615,14 @@ export function ReactionsRow({ entry }: { entry: Entry }) {
 }
 
 /** Compact actions beside the bubble: a reaction strip, reply, and more (copy, what it did). */
-function MessageActions({ visible, className, reactions, reply, trace, copy }: {
+function MessageActions({ visible, className, reactions, reply, trace, copy, copyLink }: {
   visible: boolean
   className: string
   reactions: ReactionPick
   reply?: () => void
   trace?: () => void
   copy: () => void
+  copyLink: () => void
 }) {
   const [menu, setMenu] = useState<'reactions' | 'more' | null>(null)
   const smile = useRef<HTMLButtonElement>(null)
@@ -624,7 +642,7 @@ function MessageActions({ visible, className, reactions, reply, trace, copy }: {
         open={menu === 'more'}
         onClose={() => setMenu(null)}
         anchor={more}
-        items={() => [{ title: 'Copy', icon: 'square.on.square', action: copy }, ...(trace ? [{ title: 'Show what it did', icon: 'list.bullet', action: trace }] : [])]}
+        items={() => [{ title: 'Copy', icon: 'square.on.square', action: copy }, { title: 'Copy link', icon: 'link', action: copyLink }, ...(trace ? [{ title: 'Show what it did', icon: 'list.bullet', action: trace }] : [])]}
       />
     </div>
   )
