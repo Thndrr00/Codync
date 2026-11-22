@@ -30,7 +30,7 @@ fn routine_view(r: &crate::routines::Routine, now: i64) -> Value {
         "name": r.name,
         "enabled": r.enabled,
         "schedules": schedules,
-        "nextIn": until.map(|ms| crate::bdots_text::format_span(ms)),
+        "nextIn": until.map(crate::bdots_text::format_span),
         "nextInMs": until,
     })
 }

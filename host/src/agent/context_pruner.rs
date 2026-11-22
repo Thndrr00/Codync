@@ -52,7 +52,7 @@ impl ContextPruner {
     /// when the result changed. The result uses MCP's `{"content": [...]}` shape;
     /// a plain string content is capped but otherwise left alone.
     pub fn shape(&self, tool: &str, result: &mut Value) -> bool {
-        let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let is_page = PAGE_TOOLS.contains(&tool);
         if is_page {
             state.pages += 1;

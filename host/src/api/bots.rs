@@ -695,7 +695,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 let question = e.data["title"].as_str().unwrap_or("Question").to_owned();
                 let mut answered = e.clone();
                 answered.data["status"] = "answered".into();
-                answered.data["selected"] = option_id.map(Value::String).unwrap_or(Value::Null);
+                answered.data["selected"] = option_id.map_or(Value::Null, Value::String);
                 answered.data["answer"] = label.clone().into();
                 hub.set_entry(&answered.id, &answered.data);
                 let bot_id = e.data["author"].as_str().unwrap_or(&e.bot_id);

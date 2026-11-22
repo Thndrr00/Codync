@@ -57,11 +57,11 @@ fn parse_field(spec: &str, min: u32, max: u32) -> Option<Field> {
 
 /// Parse a five-field UTC cron, or `None` when it is malformed (`7` in dow becomes `0`).
 pub fn parse_cron(expr: &str) -> Option<Cron> {
-    let parts: Vec<&str> = expr.trim().split_whitespace().collect();
+    let parts: Vec<&str> = expr.split_whitespace().collect();
     if parts.len() != 5 {
         return None;
     }
-    let dow = parts[4].replace("7", "0");
+    let dow = parts[4].replace('7', '0');
     Some(Cron {
         minute: parse_field(parts[0], 0, 59)?,
         hour: parse_field(parts[1], 0, 23)?,
@@ -86,10 +86,10 @@ fn matches_at(cron: &Cron, minute: u32, hour: u32, dom: u32, month: u32, dow: u3
 fn utc_fields(ms: i64) -> (u32, u32, u32, u32, u32) {
     let days = ms.div_euclid(86_400_000);
     let secs = ms.rem_euclid(86_400_000) / 1000;
-    let hour = (secs / 3600) as u32;
-    let minute = (secs % 3600 / 60) as u32;
+    let hour = u32::try_from(secs / 3600).unwrap_or(0);
+    let minute = u32::try_from(secs % 3600 / 60).unwrap_or(0);
     // 1970-01-01 was a Thursday (dow 4).
-    let dow = (days + 4).rem_euclid(7) as u32;
+    let dow = u32::try_from((days + 4).rem_euclid(7)).unwrap_or(0);
     let (year, month, dom) = civil_from_days(days);
     let _ = year;
     (minute, hour, dom, month, dow)
@@ -105,7 +105,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let mp = (5 * doy + 2) / 153;
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = mp + if mp < 10 { 3 } else { -9 };
-    (y + if m <= 2 { 1 } else { 0 }, m as u32, d as u32)
+    (y + i64::from(m <= 2), u32::try_from(m).unwrap_or(0), u32::try_from(d).unwrap_or(0))
 }
 
 /// Run times in `[from, from + window)` at minute resolution, at most `limit` (`runsBetween`).

@@ -7,8 +7,8 @@
 use std::time::{Duration, Instant};
 
 pub const UPDATE_AFTER: Duration = Duration::from_secs(60);
-pub const WRAP_UP_AFTER: Duration = Duration::from_secs(3 * 60);
-pub const STOP_AFTER: Duration = Duration::from_secs(5 * 60);
+pub const WRAP_UP_AFTER: Duration = Duration::from_mins(3);
+pub const STOP_AFTER: Duration = Duration::from_mins(5);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Nudge {
