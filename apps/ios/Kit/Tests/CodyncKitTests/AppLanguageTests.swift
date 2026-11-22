@@ -17,7 +17,7 @@ struct AppLanguageTests {
         #expect(AppLanguage.preference(in: suite) == .system)
         suite.set(AppLanguage.zh.rawValue, forKey: AppLanguage.storageKey)
         #expect(AppLanguage.preference(in: suite) == .zh)
-        #expect(L10n.tr("Pair a computer", preference: AppLanguage.preference(in: suite), systemIsChinese: false) == "配对一台电脑")
+        #expect(L10n.tr("Pair a computer", preference: AppLanguage.preference(in: suite), systemIsChinese: false) == "é…å¯¹ä¸€å°ç”µè„‘")
     }
 
     @Test func theSharedLanguageStoreIsTheAppGroup() {
@@ -51,85 +51,84 @@ struct AppLanguageTests {
     }
 
     @Test func phrasesUseSimplifiedChineseOnlyWhenThatLanguageIsActive() {
-        #expect(L10n.tr("Pair a computer", preference: .zh, systemIsChinese: false) == "配对一台电脑")
+        #expect(L10n.tr("Pair a computer", preference: .zh, systemIsChinese: false) == "é…å¯¹ä¸€å°ç”µè„‘")
         #expect(L10n.tr("Pair a computer", preference: .en, systemIsChinese: true) == "Pair a computer")
-        #expect(L10n.tr("Pair a computer", preference: .system, systemIsChinese: true, systemLanguages: ["zh-Hans-CN"]) == "配对一台电脑")
-        #expect(L10n.tr("Settings", preference: .system, systemIsChinese: true, systemLanguages: ["zh-Hant-TW"]) == "設定")
+        #expect(L10n.tr("Pair a computer", preference: .system, systemIsChinese: true, systemLanguages: ["zh-Hans-CN"]) == "é…å¯¹ä¸€å°ç”µè„‘")
+        #expect(L10n.tr("Settings", preference: .system, systemIsChinese: true, systemLanguages: ["zh-Hant-TW"]) == "è¨­å®š")
         #expect(L10n.tr("Not a phrase", preference: .zh, systemIsChinese: false) == "Not a phrase")
-        #expect(AppLanguage.menuTitle(.zh, preference: .en, systemIsChinese: true) == "简体中文")
-        #expect(AppLanguage.menuTitle(.zhHant, preference: .en, systemIsChinese: true) == "繁體中文")
-        #expect(AppLanguage.menuTitle(.system, preference: .zh, systemIsChinese: false) == "跟随系统")
+        #expect(AppLanguage.menuTitle(.zh, preference: .en, systemIsChinese: true) == "ç®€ä½“ä¸­æ–‡")
+        #expect(AppLanguage.menuTitle(.zhHant, preference: .en, systemIsChinese: true) == "ç¹é«”ä¸­æ–‡")
+        #expect(AppLanguage.menuTitle(.system, preference: .zh, systemIsChinese: false) == "è·Ÿéšç³»ç»Ÿ")
     }
 
     @Test func usageCaptionAndScannerHintTranslateAsTheirOwnPhrases() {
-        #expect(L10n.tr("Weekly", preference: .zh, systemIsChinese: false) == "每周")
-        #expect(L10n.tr("highest usage", preference: .zh, systemIsChinese: false) == "用量最高")
-        #expect(L10n.tr("Weekly · highest usage", preference: .zh, systemIsChinese: false) == "Weekly · highest usage")
-        #expect(L10n.tr("Find nearby barcodes.", preference: .zh, systemIsChinese: false) == "寻找附近的条形码。")
+        #expect(L10n.tr("Weekly", preference: .zh, systemIsChinese: false) == "æ¯å‘¨")
+        #expect(L10n.tr("highest usage", preference: .zh, systemIsChinese: false) == "ç”¨é‡æœ€é«˜")
+        #expect(L10n.tr("Weekly Â· highest usage", preference: .zh, systemIsChinese: false) == "Weekly Â· highest usage")
+        #expect(L10n.tr("Find nearby barcodes.", preference: .zh, systemIsChinese: false) == "å¯»æ‰¾é™„è¿‘çš„æ¡å½¢ç ã€‚")
         #expect(L10n.tr("Open Codync to connect a computer and check {provider} usage.", preference: .zh, systemIsChinese: false)
-            == "打开 Codync，连接一台电脑后即可查看 {provider} 用量。")
+            == "æ‰“å¼€ Codyncï¼Œè¿žæŽ¥ä¸€å°ç”µè„‘åŽå³å¯æŸ¥çœ‹ {provider} ç”¨é‡ã€‚")
     }
 
     @Test func settingsAndBotChromeTranslateAsTheirOwnPhrases() {
-        #expect(L10n.tr("Personal", preference: .zh, systemIsChinese: false) == "个人")
-        #expect(L10n.tr("This Mac", preference: .zh, systemIsChinese: false) == "这台 Mac")
-        #expect(L10n.tr("Show in notch", preference: .zh, systemIsChinese: false) == "在屏幕顶部显示")
-        #expect(L10n.tr("Show in Notch", preference: .zh, systemIsChinese: false) == "在屏幕顶部显示")
-        #expect(L10n.tr("Voice input shortcut", preference: .zh, systemIsChinese: false) == "语音输入快捷键")
-        #expect(L10n.tr("Right ⌘ twice", preference: .zh, systemIsChinese: false) == "右 ⌘ 两次")
-        #expect(L10n.tr("Claude Code (not installed)", preference: .zh, systemIsChinese: false) == "Claude Code（未安装）")
-        #expect(L10n.tr("Copy template", preference: .zh, systemIsChinese: false) == "复制模板")
-        #expect(L10n.tr("Siri and Dictation are disabled", preference: .zh, systemIsChinese: false) == "Siri 和听写已关闭")
-        #expect(L10n.tr("the Codync cloud refused (403 forbidden): Sign in on the computer to use remote screen relay.", preference: .zh, systemIsChinese: false) == "Codync 云拒绝了（403 禁止）：请先在电脑上登录，才能使用远程屏幕中继。")
-        #expect(L10n.tr("Privacy", preference: .zh, systemIsChinese: false) == "隐私")
-        #expect(L10n.tr("Share usage analytics", preference: .zh, systemIsChinese: false) == "共享用量分析")
-        #expect(L10n.tr("Personal workspace", preference: .zh, systemIsChinese: false) == "个人工作区")
-        #expect(L10n.tr("Fast mode", preference: .zh, systemIsChinese: false) == "快速模式")
-        #expect(L10n.tr("Use the computer", preference: .zh, systemIsChinese: false) == "使用电脑")
-        #expect(L10n.tr("{size} pt (Default)", preference: .zh, systemIsChinese: false) == "{size} pt（默认）")
-        #expect(L10n.tr("Cursor · Personal workspace", preference: .zh, systemIsChinese: false) == "Cursor · Personal workspace")
+        #expect(L10n.tr("Personal", preference: .zh, systemIsChinese: false) == "ä¸ªäºº")
+        #expect(L10n.tr("This Mac", preference: .zh, systemIsChinese: false) == "è¿™å° Mac")
+        #expect(L10n.tr("Show in notch", preference: .zh, systemIsChinese: false) == "åœ¨å±å¹•é¡¶éƒ¨æ˜¾ç¤º")
+        #expect(L10n.tr("Show in Notch", preference: .zh, systemIsChinese: false) == "åœ¨å±å¹•é¡¶éƒ¨æ˜¾ç¤º")
+        #expect(L10n.tr("Voice input shortcut", preference: .zh, systemIsChinese: false) == "è¯­éŸ³è¾“å…¥å¿«æ·é”®")
+        #expect(L10n.tr("Right âŒ˜ twice", preference: .zh, systemIsChinese: false) == "å³ âŒ˜ ä¸¤æ¬¡")
+        #expect(L10n.tr("Claude Code (not installed)", preference: .zh, systemIsChinese: false) == "Claude Codeï¼ˆæœªå®‰è£…ï¼‰")
+        #expect(L10n.tr("Copy template", preference: .zh, systemIsChinese: false) == "å¤åˆ¶æ¨¡æ¿")
+        #expect(L10n.tr("Siri and Dictation are disabled", preference: .zh, systemIsChinese: false) == "Siri å’Œå¬å†™å·²å…³é—­")
+        #expect(L10n.tr("the Codync cloud refused (403 forbidden): Sign in on the computer to use remote screen relay.", preference: .zh, systemIsChinese: false) == "Codync äº‘æ‹’ç»äº†ï¼ˆ403 ç¦æ­¢ï¼‰ï¼šè¯·å…ˆåœ¨ç”µè„‘ä¸Šç™»å½•ï¼Œæ‰èƒ½ä½¿ç”¨è¿œç¨‹å±å¹•ä¸­ç»§ã€‚")
+        #expect(L10n.tr("Privacy", preference: .zh, systemIsChinese: false) == "éšç§")
+        #expect(L10n.tr("Share usage analytics", preference: .zh, systemIsChinese: false) == "å…±äº«ç”¨é‡åˆ†æž")
+        #expect(L10n.tr("Personal workspace", preference: .zh, systemIsChinese: false) == "ä¸ªäººå·¥ä½œåŒº")
+        #expect(L10n.tr("Fast mode", preference: .zh, systemIsChinese: false) == "å¿«é€Ÿæ¨¡å¼")
+        #expect(L10n.tr("Use the computer", preference: .zh, systemIsChinese: false) == "ä½¿ç”¨ç”µè„‘")
+        #expect(L10n.tr("{size} pt (Default)", preference: .zh, systemIsChinese: false) == "{size} ptï¼ˆé»˜è®¤ï¼‰")
+        #expect(L10n.tr("Cursor Â· Personal workspace", preference: .zh, systemIsChinese: false) == "Cursor Â· Personal workspace")
     }
 
     @Test func chatMenuAndMemoryTranslateAsTheirOwnPhrases() {
-        #expect(L10n.tr("Full conversation", preference: .zh, systemIsChinese: false) == "完整对话")
-        #expect(L10n.tr("Settings", preference: .zh, systemIsChinese: false) == "设置")
-        #expect(L10n.tr("Settings", preference: .zhHant, systemIsChinese: false) == "設定")
-        #expect(L10n.tr("Files", preference: .zhHant, systemIsChinese: false) == "檔案")
-        #expect(L10n.tr("Delete bot", preference: .zh, systemIsChinese: false) == "删除 Bot")
-        #expect(L10n.tr("Connected", preference: .zh, systemIsChinese: false) == "已连接")
-        #expect(L10n.tr("Ask {name}", preference: .zh, systemIsChinese: false) == "问 {name}")
-        #expect(L10n.tr("Said", preference: .zh, systemIsChinese: false) == "说了")
-        #expect(L10n.tr("Stopped.", preference: .zh, systemIsChinese: false) == "已停止。")
-        #expect(L10n.tr("Today", preference: .zh, systemIsChinese: false) == "今天")
-        #expect(L10n.tr("Yesterday", preference: .zh, systemIsChinese: false) == "昨天")
-        #expect(L10n.tr("No dreams yet.", preference: .zh, systemIsChinese: false) == "还没有梦境。")
-        #expect(L10n.tr("Standing instructions", preference: .zh, systemIsChinese: false) == "常驻指令")
-        #expect(L10n.tr("Agent", preference: .zh, systemIsChinese: false) == "智能体")
-        #expect(L10n.tr("Manage the team", preference: .zh, systemIsChinese: false) == "管理团队")
-        #expect(L10n.tr("Skills", preference: .zh, systemIsChinese: false) == "技能")
-        #expect(L10n.tr("Search agents, connectors and skills", preference: .zh, systemIsChinese: false) == "搜索智能体、连接器和技能")
-        #expect(L10n.tr("Apps", preference: .zh, systemIsChinese: false) == "应用")
-        #expect(L10n.tr("Agents", preference: .zh, systemIsChinese: false) == "智能体")
-        #expect(L10n.tr("Installed", preference: .zh, systemIsChinese: false) == "已安装")
-        #expect(L10n.tr("Not installed", preference: .zh, systemIsChinese: false) == "未安装")
-        #expect(L10n.tr("Set up", preference: .zh, systemIsChinese: false) == "设置")
-        #expect(L10n.tr("Writing a reply…", preference: .zh, systemIsChinese: false) == "正在写回复…")
-        #expect(L10n.tr("Downloading Codebuddy Code…", preference: .zh, systemIsChinese: false) == "正在下载 Codebuddy Code…")
-        #expect(L10n.tr("Needs approval: Bash", preference: .zh, systemIsChinese: false) == "需要批准：Bash")
-        #expect(L10n.tr("Storage", preference: .zh, systemIsChinese: false) == "存储")
-        #expect(L10n.tr("New skill", preference: .zh, systemIsChinese: false) == "新建技能")
-        #expect(L10n.tr("Composio API key", preference: .zh, systemIsChinese: false) == "Composio API 密钥")
-        #expect(L10n.tr("When to use it", preference: .zh, systemIsChinese: false) == "何时使用")
-        #expect(L10n.tr("Add connector", preference: .zh, systemIsChinese: false) == "添加连接器")
-        #expect(L10n.tr("Name your group", preference: .zh, systemIsChinese: false) == "给群聊起个名字")
-        #expect(L10n.tr("Nothing installed", preference: .zh, systemIsChinese: false) == "还没有安装")
-        #expect(L10n.tr("No setup needed.", preference: .zh, systemIsChinese: false) == "无需设置。")
-        #expect(L10n.tr("FORWARDXU-MC3 · Connected", preference: .zh, systemIsChinese: false) == "FORWARDXU-MC3 · Connected")
+        #expect(L10n.tr("Full conversation", preference: .zh, systemIsChinese: false) == "å®Œæ•´å¯¹è¯")
+        #expect(L10n.tr("Settings", preference: .zh, systemIsChinese: false) == "è®¾ç½®")
+        #expect(L10n.tr("Settings", preference: .zhHant, systemIsChinese: false) == "è¨­å®š")
+        #expect(L10n.tr("Files", preference: .zhHant, systemIsChinese: false) == "æª”æ¡ˆ")
+        #expect(L10n.tr("Delete bot", preference: .zh, systemIsChinese: false) == "åˆ é™¤ Bot")
+        #expect(L10n.tr("Connected", preference: .zh, systemIsChinese: false) == "å·²è¿žæŽ¥")
+        #expect(L10n.tr("Ask {name}", preference: .zh, systemIsChinese: false) == "é—® {name}")
+        #expect(L10n.tr("Said", preference: .zh, systemIsChinese: false) == "è¯´äº†")
+        #expect(L10n.tr("Stopped.", preference: .zh, systemIsChinese: false) == "å·²åœæ­¢ã€‚")
+        #expect(L10n.tr("Today", preference: .zh, systemIsChinese: false) == "ä»Šå¤©")
+        #expect(L10n.tr("Yesterday", preference: .zh, systemIsChinese: false) == "æ˜¨å¤©")
+        #expect(L10n.tr("No dreams yet.", preference: .zh, systemIsChinese: false) == "è¿˜æ²¡æœ‰æ¢¦å¢ƒã€‚")
+        #expect(L10n.tr("Standing instructions", preference: .zh, systemIsChinese: false) == "å¸¸é©»æŒ‡ä»¤")
+        #expect(L10n.tr("Agent", preference: .zh, systemIsChinese: false) == "æ™ºèƒ½ä½“")
+        #expect(L10n.tr("Manage the team", preference: .zh, systemIsChinese: false) == "ç®¡ç†å›¢é˜Ÿ")
+        #expect(L10n.tr("Skills", preference: .zh, systemIsChinese: false) == "æŠ€èƒ½")
+        #expect(L10n.tr("Search agents, connectors and skills", preference: .zh, systemIsChinese: false) == "æœç´¢æ™ºèƒ½ä½“ã€è¿žæŽ¥å™¨å’ŒæŠ€èƒ½")
+        #expect(L10n.tr("Apps", preference: .zh, systemIsChinese: false) == "åº”ç”¨")
+        #expect(L10n.tr("Agents", preference: .zh, systemIsChinese: false) == "æ™ºèƒ½ä½“")
+        #expect(L10n.tr("Installed", preference: .zh, systemIsChinese: false) == "å·²å®‰è£…")
+        #expect(L10n.tr("Not installed", preference: .zh, systemIsChinese: false) == "æœªå®‰è£…")
+        #expect(L10n.tr("Set up", preference: .zh, systemIsChinese: false) == "è®¾ç½®")
+        #expect(L10n.tr("Writing a replyâ€¦", preference: .zh, systemIsChinese: false) == "æ­£åœ¨å†™å›žå¤â€¦")
+        #expect(L10n.tr("Downloading Codebuddy Codeâ€¦", preference: .zh, systemIsChinese: false) == "æ­£åœ¨ä¸‹è½½ Codebuddy Codeâ€¦")
+        #expect(L10n.tr("Needs approval: Bash", preference: .zh, systemIsChinese: false) == "éœ€è¦æ‰¹å‡†ï¼šBash")
+        #expect(L10n.tr("Storage", preference: .zh, systemIsChinese: false) == "å­˜å‚¨")
+        #expect(L10n.tr("New skill", preference: .zh, systemIsChinese: false) == "æ–°å»ºæŠ€èƒ½")
+        #expect(L10n.tr("Composio API key", preference: .zh, systemIsChinese: false) == "Composio API å¯†é’¥")
+        #expect(L10n.tr("When to use it", preference: .zh, systemIsChinese: false) == "ä½•æ—¶ä½¿ç”¨")
+        #expect(L10n.tr("Add connector", preference: .zh, systemIsChinese: false) == "æ·»åŠ è¿žæŽ¥å™¨")
+        #expect(L10n.tr("Name your group", preference: .zh, systemIsChinese: false) == "ç»™ç¾¤èŠèµ·ä¸ªåå­—")
+        #expect(L10n.tr("Nothing installed", preference: .zh, systemIsChinese: false) == "è¿˜æ²¡æœ‰å®‰è£…")
+        #expect(L10n.tr("No setup needed.", preference: .zh, systemIsChinese: false) == "æ— éœ€è®¾ç½®ã€‚")
+        #expect(L10n.tr("FORWARDXU-MC3 Â· Connected", preference: .zh, systemIsChinese: false) == "FORWARDXU-MC3 Â· Connected")
     }
 }
 
 
-extension AppLanguageTests {
 @Test func additionalLanguagesResolveRegionsAndLoadBundledCatalogs() {
     for language in [AppLanguage.ja, .ko, .fr, .de, .es, .ru, .it] {
         #expect(AppLanguage.resolved(preference: .system, languages: [language.rawValue + "-XX"]) == language)
@@ -142,15 +141,13 @@ extension AppLanguageTests {
     }
     #expect(AppLanguage.resolved(preference: .system, languages: ["nl-NL"]) == .en)
     #expect(AppLanguage.resolved(preference: .system, languages: ["ru_RU.UTF-8"]) == .ru)
-    #expect(AppLanguage.menuTitle(.ru, preference: .en, systemIsChinese: true) == "Русский")
+    #expect(AppLanguage.menuTitle(.ru, preference: .en, systemIsChinese: true) == "Ð ÑƒÑÑÐºÐ¸Ð¹")
     #expect(AppLanguage.resolved(preference: .system, languages: ["it_IT.UTF-8"]) == .it)
     #expect(AppLanguage.menuTitle(.it, preference: .en, systemIsChinese: true) == "Italiano")
-}
 
 }
 
 
-extension AppLanguageTests {
     @Test func brazilianPortuguesePersistsAndLoadsItsBundledCatalog() {
         let name = "AppLanguageTests.Portuguese.\(UUID().uuidString)"
         let suite = UserDefaults(suiteName: name)!
@@ -162,7 +159,7 @@ extension AppLanguageTests {
         #expect(AppLanguage.ptBR.catalogName == "pt-BR")
         #expect(Array(AppLanguage.allCases.suffix(4)) == [.es, .ptBR, .ru, .ar])
         #expect(Array(AppLanguage.allCases.suffix(4)) == [.es, .ptBR, .ru, .it])
-        #expect(AppLanguage.menuTitle(.ptBR, preference: .en, systemIsChinese: true) == "Português (Brasil)")
+        #expect(AppLanguage.menuTitle(.ptBR, preference: .en, systemIsChinese: true) == "PortuguÃªs (Brasil)")
         #expect(!AppLanguage.usesChinese(preference: .ptBR, systemIsChinese: true))
         let locale = AppLanguage.locale(preference: .ptBR, systemIsChinese: true)
         #expect(locale.language.languageCode?.identifier == "pt")
@@ -178,7 +175,6 @@ extension AppLanguageTests {
         #expect(L10n.tr("Settings", preference: .en, systemLanguages: ["pt-BR"]) == "Settings")
         #expect(AppLanguage.resolved(preference: .system, languages: ["en-US"]) == .en)
         #expect(AppLanguage.resolved(preference: .system, languages: []) == .en)
-    }
 
     @Test func changingLanguageInvalidatesObservedTranslationConsumers() {
         let store = UserDefaults(suiteName: "language-observation-\(UUID().uuidString)")!
@@ -197,7 +193,7 @@ extension AppLanguageTests {
     @Test func arabicResolvesMirrorsAndLoadsItsBundledCatalog() {
         #expect(AppLanguage.resolved(preference: .system, languages: ["ar-SA"]) == .ar)
         #expect(AppLanguage.resolved(preference: .ar, languages: ["zh-TW"]) == .ar)
-        #expect(AppLanguage.menuTitle(.ar, preference: .en, systemIsChinese: true) == "العربية")
+        #expect(AppLanguage.menuTitle(.ar, preference: .en, systemIsChinese: true) == "Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©")
         #expect(!AppLanguage.usesChinese(preference: .ar, systemIsChinese: true))
         #expect(AppLanguage.readsRightToLeft(preference: .ar, languages: ["en-US"]))
         #expect(AppLanguage.readsRightToLeft(preference: .system, languages: ["ar-EG"]))
@@ -207,23 +203,23 @@ extension AppLanguageTests {
         #expect(L10n.tr("An unknown phrase", preference: .ar) == "An unknown phrase")
     @Test func botRoutineAndMessageSlotsKeepWhatTheUserWrote() {
         func ru(_ text: String) -> String { L10n.tr(text, preference: .ru, systemIsChinese: false) }
-        #expect(ru("Created bot connected") == "Создан бот connected")
+        #expect(ru("Created bot connected") == "Ð¡Ð¾Ð·Ð´Ð°Ð½ Ð±Ð¾Ñ‚ connected")
         #expect(ru("Created bot Reviewer").hasSuffix("Reviewer"))
-        #expect(ru("Routine · Проверка почты") == "Рутина · Проверка почты")
-        #expect(ru("Routine · Settings") == "Рутина · Settings")
-        #expect(ru("Message from Reviewer: Settings") == "Сообщение от Reviewer: Settings")
+        #expect(ru("Routine Â· ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð¿Ð¾Ñ‡Ñ‚Ñ‹") == "Ð ÑƒÑ‚Ð¸Ð½Ð° Â· ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð¿Ð¾Ñ‡Ñ‚Ñ‹")
+        #expect(ru("Routine Â· Settings") == "Ð ÑƒÑ‚Ð¸Ð½Ð° Â· Settings")
+        #expect(ru("Message from Reviewer: Settings") == "Ð¡Ð¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ Ð¾Ñ‚ Reviewer: Settings")
     }
 }
 
 @Test func filledTemplatesPreserveNamesAndSubstituteValuesOnlyOnce() {
         for language in AppLanguage.allCases where language != .system && language != .en {
             for name in ["Plan", "connected", "Standby", "$&", "{hint}"] {
-                let expected = L10n.tr("Routine · {name}", preference: language)
+                let expected = L10n.tr("Routine Â· {name}", preference: language)
                     .replacingOccurrences(of: "{name}", with: name)
-                #expect(L10n.tr("Routine · \(name)", preference: language) == expected)
-                let title = L10n.tr("Message about “{title}”", preference: language)
+                #expect(L10n.tr("Routine Â· \(name)", preference: language) == expected)
+                let title = L10n.tr("Message about â€œ{title}â€", preference: language)
                     .replacingOccurrences(of: "{title}", with: name)
-                #expect(L10n.tr("Message about “\(name)”", preference: language) == title)
+                #expect(L10n.tr("Message about â€œ\(name)â€", preference: language) == title)
             }
             let hint = "Install Claude Code and run `claude auth login`."
             let expected = L10n.tr("{name} isn't set up on this computer. {hint}", preference: language)
@@ -233,3 +229,4 @@ extension AppLanguageTests {
         }
     }
 
+}

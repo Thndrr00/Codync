@@ -130,7 +130,7 @@ fn teach_kv_key(bot: &str) -> String {
     format!("teach.session.{bot}")
 }
 
-pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
+pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "recorded_steps" => steps(hub, bot),
         "start_teaching" => start_teaching(hub, bot, args),

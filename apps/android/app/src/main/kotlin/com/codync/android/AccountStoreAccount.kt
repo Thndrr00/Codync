@@ -225,7 +225,7 @@ internal suspend fun AccountStore.addComputer(computer: Computer) {
 }
 
 fun AccountStore.cancelAccess(computerId: String) {
-    val ticket = state.value.access[computerId]
+    val ticket = state.value.accessCodes[computerId]
     val client = cloud
     val request = actions["access:$computerId"]
     if (ticket != null) Analytics.capture(AnalyticsEvent.AccessRequestFailed(AccessFailure.Cancelled))
