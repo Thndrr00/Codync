@@ -105,6 +105,26 @@ public struct RoutineOutput: Codable, Hashable, Sendable {
         if kind == "discordReact", target.contains(where: \.isWhitespace) { return "Use one emoji or name:id." }
         return nil
     }
+
+    /// The example destination shown until the person types one.
+    public var destinationPlaceholder: String {
+        if kind.hasPrefix("github") { return "owner/name" }
+        switch kind {
+        case "whatsapp": return "5215555555555@s.whatsapp.net"
+        case "telegram": return "-1001234567890"
+        case "discordReact": return "👍"
+        default: return "1234567890"
+        }
+    }
+
+    /// A blocked field for the editor, separate from the host's full `problem`.
+    public var missingField: String? {
+        if target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "An output needs a destination." }
+        if kind == "whatsapp", account?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            return "Use the linked WhatsApp account id as account."
+        }
+        return nil
+    }
 }
 
 public struct RoutineTrigger: Codable, Hashable, Sendable {

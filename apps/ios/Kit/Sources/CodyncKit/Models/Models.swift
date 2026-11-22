@@ -97,7 +97,33 @@ public struct PlanItem: Codable, Hashable, Sendable {
 
 public struct Usage: Codable, Hashable, Sendable {
     public var providers: [UsageProvider]
-    public init(providers: [UsageProvider] = []) { self.providers = providers }
+    /// The agents the Usage screen may show. Absent from a host older than the chooser.
+    public var services: [UsageService]?
+    public init(providers: [UsageProvider] = [], services: [UsageService]? = nil) {
+        self.providers = providers
+        self.services = services
+    }
+}
+
+/// An agent the Usage screen can show or hide. The host keeps the choice, so every app follows it.
+public struct UsageService: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var shown: Bool
+    /// The agent's ACP registry id, which its logo goes by.
+    public var registry: String?
+
+    public init(id: String, name: String, shown: Bool = false, registry: String? = nil) {
+        self.id = id
+        self.name = name
+        self.shown = shown
+        self.registry = registry
+    }
+
+    /// What a mascot needs of an agent that may have no reading.
+    public var provider: UsageProvider {
+        UsageProvider(id: registry ?? id, name: name, windows: [], source: "", updatedAt: 0)
+    }
 }
 
 public struct UsageProvider: Codable, Hashable, Sendable, Identifiable {

@@ -101,7 +101,7 @@ class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settin
     wakePhrase: Boolean = false,
     private val send: (String) -> Unit) : VoiceEngine {
     override var transcript: CallReceiptTranscript? = null
-    private val clock: () -> Long = { System.nanoTime() / 1_000_000 }, private val send: (String) -> Unit) : VoiceEngine {
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 }
     private sealed interface Event {
         data class Input(val value: VoiceInput) : Event
         data class Submit(val generation: Long, val revision: Long) : Event

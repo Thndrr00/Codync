@@ -24,6 +24,17 @@ public extension Palette {
 }
 
 public extension UsageProvider {
+    /// The bundled logo for this agent's registry id, if one exists.
+    var logoAsset: String? {
+        Self.logoIds.contains(registry) ? "agent-\(registry)" : nil
+    }
+
+    private static let logoIds: Set<String> = [
+        "claude-acp", "codex-acp", "antigravity-acp", "cursor", "github-copilot-cli",
+        "grok-build", "amp-acp", "auggie", "junie", "kilo", "kimi", "mistral-vibe",
+        "kiro", "omp", "opencode", "gemini", "qwen-code", "dsh", "cortex-code",
+    ]
+
     var statusLabel: String? {
         switch status {
         case "unsupported": "Update this agent to read its plan limits."
