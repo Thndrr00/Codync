@@ -15,6 +15,7 @@ mod file_tools;
 pub mod files;
 mod import;
 mod skill_review;
+pub(crate) mod switch;
 mod tools;
 pub mod turns;
 
@@ -36,7 +37,12 @@ pub fn shared(cfg: &BotConfig) -> bool {
 }
 
 /// The memory section of a bot's instructions: each `MEMORY.md` it sees, then the index of its notes.
+/// With the per-bot OpenBot memory switch off, no saved memory reaches the agent: it hears one block
+/// that supersedes any saved-memory blocks left in its history instead (`switch::OFF_UPDATE`).
 pub fn opening(store: &Store, cfg: &BotConfig) -> String {
+    if !switch::enabled(cfg) {
+        return format!("{}\n\n{}", switch::OFF_UPDATE, switch::OFF_INSTRUCTIONS);
+    }
     let memory = match store.memory_read(|c| codync_mem::opening::load(c, &cfg.id, shared(cfg))) {
         Ok(opening) => opening.render(|bot| files::folder(bot).display().to_string()),
         Err(error) => {

@@ -19,6 +19,7 @@ mod assignments;
 pub mod assistant;
 mod batch;
 mod blocking;
+pub(crate) mod channel_returns;
 mod directory;
 pub mod flow;
 mod interrupt;
@@ -58,7 +59,7 @@ cannot message the user, and it is not one of the user's other bots. Native suba
 your own harness; the other tools here are for collaborating with the user's existing bots. Use ask_bot for a \
 bounded task whose reply you need in this turn, \
 delegate_batch for several typed tasks and one digest, and run_pipeline for ordered stages. Do not ask a bot \
-that is waiting for you; stopping you cancels synchronous asks, batches and pipelines.";
+that is waiting for you; stopping you cancels synchronous asks, batches and pipelines. When work is posted to a group chat, each member that takes it sends its result back to the agent that asked as a teammate reply, with a note if the task failed, stopped or was cancelled: end your turn instead of waiting or polling for it.";
 
 pub fn tools() -> Value {
     json!([
@@ -188,6 +189,7 @@ impl BotRequest {
                     from_name: message.target_name.clone(),
                     outcome,
                     hops: self.hops,
+                    channel: None,
                 };
                 // A deleted sender has no chat to take the reply; its notice already shows it.
                 let _ = message.hub.send_cmd(sender, Cmd::BotReply(reply));
@@ -206,6 +208,9 @@ pub struct BotReply {
     from_name: String,
     outcome: std::result::Result<String, String>,
     hops: u8,
+    /// Set for a channel (group) task result: the header names the channel, and the text already
+    /// carries the result or a failure/stop/cancel note (OpenBot nightly `t3-cross-agent-channel-messages`).
+    channel: Option<String>,
 }
 
 impl BotReply {
@@ -214,6 +219,12 @@ impl BotReply {
     }
 
     fn line(&self) -> String {
+        if let Some(channel) = &self.channel {
+            let text = match &self.outcome {
+                Ok(text) | Err(text) => text,
+            };
+            return format!("[Codync: {channel}]\n{text}");
+        }
         let (name, id, quote) = (&self.from_name, &self.request_id, &self.quote);
         match &self.outcome {
             Ok(reply) => format!("[Codync: {name} replied to your message_bot request {id} (\"{quote}\").]\n{reply}"),
@@ -222,6 +233,39 @@ impl BotReply {
             }
         }
     }
+
+    /// A channel member's result, as a teammate reply in the asking agent's own chat.
+    pub(crate) fn channel_result(
+        channel_name: &str,
+        channel_id: &str,
+        member_name: &str,
+        state: channel_returns::TaskState,
+        answer: Option<&str>,
+        reason: &str,
+    ) -> Self {
+        let text = channel_returns::return_text(channel_name, channel_id, state, answer, reason);
+        Self {
+            request_id: String::new(),
+            quote: String::new(),
+            from_name: member_name.to_owned(),
+            outcome: Ok(text),
+            hops: 0,
+            channel: Some(channel_returns::header(channel_name, channel_id, member_name)),
+        }
+    }
+}
+
+/// The teammate reply that carries a channel task's result back to the agent that posted it.
+pub(crate) fn channel_result_reply(
+    channel_name: &str,
+    channel_id: &str,
+    member_name: &str,
+    state: &str,
+    answer: Option<&str>,
+    reason: &str,
+) -> Option<BotReply> {
+    let state = channel_returns::returned(state)?;
+    Some(BotReply::channel_result(channel_name, channel_id, member_name, state, answer, reason))
 }
 
 /// One turn's prompt for the replies that reached a bot while it was busy, oldest first.

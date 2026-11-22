@@ -69,6 +69,10 @@ static SCANNING: Mutex<()> = Mutex::new(());
 /// Records what changed in the folders a bot sees since the last scan. Returns whether a file was too fresh to
 /// take yet.
 pub fn scan(hub: &Hub, cfg: &BotConfig) -> bool {
+    // With the per-bot OpenBot memory switch off, the host neither loads nor records memory files.
+    if !super::switch::enabled(cfg) {
+        return false;
+    }
     let _one = SCANNING.locked();
     prune(&hub.store);
     let mut deferred = false;

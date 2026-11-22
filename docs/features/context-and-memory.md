@@ -269,3 +269,15 @@ later turn (`agent/bot/idle_progress.rs`): only work the running turn started ho
   memory; routines, rooms and other bots can't.
 
 A reply stays in its chat's session, and its quote stays out of what memory takes as the user's words; see [groups and replies](groups-and-replies.md). Group and delegated requests don't feed dreaming.
+
+## The OpenBot memory switch
+
+Following OpenBot nightly `t3-session-memory-providers`, each bot has an "OpenBot memory" switch
+(bot field `memory`, on unless it is explicitly `false`, so older configs need no migration). Turned
+off, the memory opening is replaced by one short block that says the earlier saved-memory blocks are
+no longer current (`chat/memory/switch.rs`), and the built-in memory tools refuse to run
+(`search_memory`, `read_memory`, `edit_memory`, `remember_for_all_bots` and the belief tools;
+`search_history` and `read_history` still read the transcript). The memory files stay on disk and a
+memory app connected as an MCP server keeps working. Skill learning is a separate setting and is
+unaffected: a bot with memory off still learns skills. The pure decisions and their tests live in
+`host/src/chat/memory/switch.rs`; the field is stored in `host/src/store/model.rs`.

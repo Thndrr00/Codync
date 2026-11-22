@@ -109,7 +109,9 @@ impl Actor {
         if let Some(sid) = session {
             params["sessionId"] = sid.into();
         }
-        if self.conn.as_ref().is_some_and(|c| c.sessions.additional_directories) {
+        if self.conn.as_ref().is_some_and(|c| c.sessions.additional_directories)
+            && crate::chat::memory::switch::enabled(&self.cfg)
+        {
             params["additionalDirectories"] = json!(memory::files::folders(&self.cfg));
         }
         params

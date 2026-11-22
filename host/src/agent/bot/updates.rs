@@ -333,7 +333,14 @@ impl Actor {
         let detach = crate::update::restart_waiting() && super::turn_rules::detachable_question(&question);
         let turn = self.turn.unwrap_or(0);
         self.close_seg();
-        let created = self.add(EntryKind::Permission, turn, data);
+        // OpenBot nightly triage-13781: a chat-app approval must show in the agent's chat and
+        // sidebar, not only in the messaging thread where the turn runs. Keep that thread on the
+        // card so the channel bridge can still find its link and answer there.
+        let lane = super::approval_visibility::approval_lane(&self.lane, &self.cfg.id);
+        if lane != self.lane {
+            data["executionThread"] = self.lane.thread.clone().into();
+        }
+        let created = self.add_in(&lane, EntryKind::Permission, turn, data);
         if let Some(e) = &created {
             if detach {
                 self.detach_question(&e.id, answer, title);

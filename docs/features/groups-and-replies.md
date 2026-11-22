@@ -116,5 +116,31 @@ quote as its first non-empty line without Markdown markers (the roster's message
 a message (the user's: tap to take back; the bots': emoji plus the avatars of who chose it),
 group create/edit (name, members), Stop in a group calls `stop` with the group id.
 
+## Channel tasks and alerts (OpenBot nightly)
+
+Four host decisions, all pure and tested beside the code that calls them, tighten rooms and replies:
+
+- **Results come back to the asking agent** (`host/src/chat/team/channel_returns.rs`,
+  `t3-cross-agent-channel-messages`). When a room message carries `requesterBotId`, a member's final
+  answer is delivered to that agent as a teammate reply in its own chat, with a channel header. A
+  failed, stopped or cancelled task sends a note instead of a result, so the agent can retry rather
+  than telling the user to follow the channel. A routing task the lead cancelled and moved to an open
+  task sends no result of its own. The receiving agent should end its turn, not poll for the result.
+- **Lead answers when routing times out** (`host/src/chat/decider.rs`, `t3-fix-coordinator-errors`).
+  A lead that takes too long to choose a speaker, or answers with nothing usable, takes the message
+  itself; no "lead did not answer in time" card waits for the user to pick a member.
+- **Chat-app approvals show in the agent's chat** (`host/src/agent/bot/approval_visibility.rs`,
+  `triage-13781`). A permission card raised in a WhatsApp, Telegram, Slack, Discord or native-channel
+  thread is saved in the agent's main chat so the apps and sidebar show it. The original thread stays
+  on the card (`executionThread`) so the channel bridge can still answer it.
+- **A muted member stays quiet in a room** (`host/src/chat/group.rs`, `triage-13696`). "Mute agent" /
+  "Notify me" now also stops the "done" notification for that member's channel reply; the room's own
+  mute is still checked by the push layer.
+
+Scheduled runs with nothing to report end quietly (`triage-13537`): the silence markers are already
+settled by `agent/bot/proactive.rs`, and `host/src/chat/routine_quiet.rs` adds OpenCode-only guidance
+for calling the quiet tool inside `execute` and answering only `[[no-update]]` when OpenCode refuses
+the call. Other harnesses get no extra text.
+
 Slack-style reply threads were removed for quote replies; [threads for teams](../plans/threads-for-teams.md)
 lists where their code lived and how to bring it back.

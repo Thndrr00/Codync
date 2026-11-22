@@ -33,6 +33,7 @@ pub mod prompt;
 pub mod reactions;
 pub mod recap;
 pub mod replies;
+pub(crate) mod routine_quiet;
 pub mod scratchpad;
 pub mod skill_proposals;
 pub mod skills;

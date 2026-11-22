@@ -291,6 +291,7 @@ mod tests {
             created_by: None,
             catalog: None,
             shared_memory: None,
+            memory: None,
             harness_memory: false,
             compaction: codync_mem::compaction::Threshold::Early,
             auto_name: false,

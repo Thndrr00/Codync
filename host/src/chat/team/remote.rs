@@ -295,7 +295,13 @@ fn replied(hub: &Hub, id: &str, waiter: Waiter, m: &Message) {
             Ok(truncate(&m.body, MAX_MESSAGE_BYTES))
         }
     };
-    let reply =
-        BotReply { request_id: id.to_owned(), quote: waiter.quote, from_name: peer.clone(), outcome, hops: m.hops };
+    let reply = BotReply {
+        request_id: id.to_owned(),
+        quote: waiter.quote,
+        from_name: peer.clone(),
+        outcome,
+        hops: m.hops,
+        channel: None,
+    };
     let _ = hub.send_cmd(&sender, Cmd::BotReply(reply));
 }

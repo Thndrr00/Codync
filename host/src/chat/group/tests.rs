@@ -32,6 +32,17 @@ fn a_typo_in_an_agent_id_names_the_almost_equal_agent() {
 }
 
 #[test]
+fn a_muted_member_gives_no_notification_for_a_channel_reply() {
+    let mut muted = bot("m", "Muted");
+    muted.notify = Some(false);
+    assert!(!channel_reply_allowed(&muted));
+    assert!(channel_reply_allowed(&bot("a", "Alice")));
+    let mut on = bot("b", "Bob");
+    on.notify = Some(true);
+    assert!(channel_reply_allowed(&on));
+}
+
+#[test]
 fn mentions_pick_responders_and_no_mention_means_everyone() {
     let members = [bot("a", "Alice Chen"), bot("b", "Bob"), bot("c", "尼采課")];
     let ids = |m: &[BotConfig], text: &str| -> Vec<String> {

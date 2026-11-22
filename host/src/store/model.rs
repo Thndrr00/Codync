@@ -315,6 +315,12 @@ pub struct BotConfig {
     /// project folder (see `chat::memory::shared`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_memory: Option<bool>,
+    /// The per-bot OpenBot memory switch (OpenBot nightly `t3-session-memory-providers`). On unless
+    /// explicitly `false`, which is the only value stored, so an older config needs no migration. Off:
+    /// no saved memories in the instructions, no built-in memory tools (see `chat::memory::switch`), but
+    /// memory files stay on disk and skill learning keeps working.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory: Option<bool>,
     /// Keeps the harness's own memory (Claude Code's auto memory…) on beside Codync's. Off unless the user turns it
     /// on, and only where Codync can turn it off (see `agent::own_memory::kept`). A client sending back the bot as
     /// it got it sends `null` where there is no switch.

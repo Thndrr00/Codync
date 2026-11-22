@@ -60,6 +60,14 @@ pub fn evaluate_probabilities(
     RoutingDecision::FallbackToLead
 }
 
+/// Resolves a routing result into a speaker (OpenBot nightly `t3-fix-coordinator-errors`). A lead
+/// that takes too long to choose, or answers with nothing usable, must answer the message itself
+/// instead of leaving a "lead did not answer in time" card for the user to pick a member. A usable
+/// decision from the lead is kept unchanged.
+pub fn decide_on_timeout(decision: Option<RoutingDecision>) -> RoutingDecision {
+    decision.unwrap_or(RoutingDecision::FallbackToLead)
+}
+
 /// Queries the configured fast decision endpoint (`CODYNC_DECIDER_URL`) with a
 /// hard 1200ms timeout. When unconfigured, returns `RoutingDecision::AllMembers`
 /// so classic round-robin group turns run unchanged.
@@ -79,10 +87,10 @@ pub async fn resolve_speaker(req: &DeciderRequest) -> RoutingDecision {
     }
 
     let Ok(Ok(resp)) = tokio::time::timeout(DECIDER_TIMEOUT, http_req.send()).await else {
-        return RoutingDecision::FallbackToLead;
+        return decide_on_timeout(None);
     };
     let Ok(body) = resp.json::<Value>().await else {
-        return RoutingDecision::FallbackToLead;
+        return decide_on_timeout(None);
     };
 
     let all_prob = body["allMembersProbability"].as_f64().unwrap_or(0.0);
@@ -94,7 +102,7 @@ pub async fn resolve_speaker(req: &DeciderRequest) -> RoutingDecision {
             }
         }
     }
-    evaluate_probabilities(&scores, all_prob, &req.candidates)
+    decide_on_timeout(Some(evaluate_probabilities(&scores, all_prob, &req.candidates)))
 }
 
 #[cfg(test)]
@@ -135,5 +143,19 @@ mod tests {
         let candidates = sample_candidates();
         let scores = vec![("rust-bot".into(), 0.42), ("ui-bot".into(), 0.39)];
         assert_eq!(evaluate_probabilities(&scores, 0.19, &candidates), RoutingDecision::FallbackToLead);
+    }
+
+    #[test]
+    fn a_routing_timeout_lets_the_lead_answer_itself() {
+        // No usable answer from the lead: it takes the request instead of leaving the user a card.
+        assert_eq!(decide_on_timeout(None), RoutingDecision::FallbackToLead);
+        // A usable answer still stands.
+        assert_eq!(
+            decide_on_timeout(Some(RoutingDecision::SingleBot("rust-bot".into()))),
+            RoutingDecision::SingleBot("rust-bot".into())
+        );
+        let candidates = sample_candidates();
+        let fallback = evaluate_probabilities(&[], 0.0, &candidates);
+        assert_eq!(fallback, RoutingDecision::FallbackToLead);
     }
 }

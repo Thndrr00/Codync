@@ -174,6 +174,7 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, turn: &Turn, asked: &m
         let group = group(hub, group_id)?;
         let members = members(hub, &group);
         let since_user = since_last_user_message(hub, lane)?;
+        let requester = requester_of(&since_user);
         let since_late = turn.late.map(|seq| hub.store.messages_after(lane, seq - 1, HISTORY_LINES)).transpose()?;
         let mut speakers = speakers(&members, &since_user, since_late.as_deref(), round, asked);
         if since_late.is_none() && round == 0 && speakers.len() == members.len() && members.len() > 1 {
@@ -251,11 +252,26 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, turn: &Turn, asked: &m
             let mut answer = answer;
             match tokio::time::timeout(hub.groups.member_timeout(), &mut answer).await {
                 Ok(Ok(Ok(Some(text)))) => {
+                    route_channel_result(hub, &group, member, requester.as_deref(), "completed", Some(&text), "");
                     spoke += 1;
                     replies += 1;
                     last_reply = Some((member.id.clone(), member.name.clone(), text));
                 }
-                Ok(_) => {}
+                Ok(Ok(Ok(None))) => {} // a pass is not a result
+                Ok(Ok(Err(error))) => {
+                    route_channel_result(
+                        hub,
+                        &group,
+                        member,
+                        requester.as_deref(),
+                        "failed",
+                        None,
+                        &format!("{error:#}"),
+                    );
+                }
+                Ok(Err(_)) => {
+                    route_channel_result(hub, &group, member, requester.as_deref(), "cancelled", None, "");
+                }
                 // Overdue: the room stops waiting, but the member's answer still lands in the lane.
                 Err(_) => {
                     tokio::spawn(answered_late(hub.clone(), lane.clone(), member.clone(), answer, Push::Quiet));
@@ -297,6 +313,8 @@ async fn answered_late(
         tracing::warn!(group = lane.chat, error = format!("{error:#}"), "late room reply not pushed");
     }
     let Ok(group) = group(&hub, &lane.chat) else { return };
+    let requester = since_last_user_message(&hub, &lane).ok().and_then(|recent| requester_of(&recent));
+    route_channel_result(&hub, &group, &member, requester.as_deref(), "completed", Some(&text), "");
     let named = named_by(&members(&hub, &group), &member.id, &text).next().is_some();
     // ponytail: the answer is placed by its `seq`, taken when it began streaming; a teammate that spoke while it
     // streamed counts as having seen it. Rare (an overdue answer's last few seconds); place by `rev` if it bites.
@@ -305,8 +323,55 @@ async fn answered_late(
     }
 }
 
+/// Routes a member's finished room task back to the agent that posted the channel request, as a
+/// teammate reply in that agent's own chat (OpenBot nightly `t3-cross-agent-channel-messages`).
+/// `requester` comes from the room message that started the turn; ordinary user turns have none.
+fn route_channel_result(
+    hub: &Hub,
+    group: &BotConfig,
+    member: &BotConfig,
+    requester: Option<&str>,
+    state: &str,
+    answer: Option<&str>,
+    reason: &str,
+) {
+    use crate::chat::team::channel_returns;
+    let Some(task_state) = channel_returns::returned(state) else { return };
+    if !channel_returns::should_return(task_state, true, requester, &member.id)
+        || channel_returns::moved_to_open_task(task_state, false, None)
+    {
+        return;
+    }
+    let Some(reply) =
+        crate::chat::team::channel_result_reply(&group.name, &group.id, &member.name, state, answer, reason)
+    else {
+        return;
+    };
+    if let Some(requester) = requester {
+        let _ = hub.send_cmd(requester, Cmd::BotReply(reply));
+    }
+}
+
+/// The agent that posted the channel request the room is answering, if any. A plain user message
+/// carries no `requesterBotId`, so no result is routed back.
+fn requester_of(since_user: &[Entry]) -> Option<String> {
+    since_user.iter().rev().find_map(|e| e.data["requesterBotId"].as_str()).map(str::to_owned)
+}
+
+/// Whether a member's channel reply may notify the user (OpenBot nightly `triage-13696`).
+/// "Mute agent" / "Notify me" set the same per-agent level used for every other alert; a muted
+/// member's reply in a room must not show a desktop or browser notification. Pure over the member so
+/// the decision is testable without a store.
+pub fn channel_reply_allowed(member: &BotConfig) -> bool {
+    member.notify != Some(false)
+}
+
 /// The "done" push for `name`'s reply in the group.
 fn alert(hub: &Hub, group_id: &str, from: &str, name: &str, text: &str) -> Result<()> {
+    // The room's own mute is checked in `push::notify`; this is the member speaking in it.
+    if hub.store.bot(from).ok().flatten().is_some_and(|r| !channel_reply_allowed(&r.config)) {
+        return Ok(());
+    }
     if let Some(group) = hub.store.bot(group_id)?.map(|r| r.config) {
         push::notify(hub, &group, Some(from), &format!("{name} in {}", group.name), text, AlertKind::Done);
     }
