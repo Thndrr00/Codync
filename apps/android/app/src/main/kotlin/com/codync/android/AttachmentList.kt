@@ -90,7 +90,8 @@ import kotlinx.coroutines.launch
             }
             IconButton("Save " + file.name, "arrow.down.to.line") { store.saveFile(entry.id, entry.botId, file) }
         }) { file, modifier, playing ->
-        if (file.isVideo) VideoPlayer({ store.sharedImage(entry.id, file) }, playing, modifier)
+        if (file.isVideo) VideoPlayer({ store.sharedImage(entry.id, file) }, playing, modifier,
+            download = { store.saveFile(entry.id, entry.botId, file) })
         else SharedImage(file, entry.id, 4096, state, store, modifier)
     }
 }

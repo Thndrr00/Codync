@@ -3,7 +3,7 @@ import { isImageName, isVideoName, type Attachment, type SharedFile } from '@sha
 import { Button } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { AnchoredMenu, useContextMenu, type MenuItem } from '../../components/Menu'
-import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
+import { IconButtonBase, ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { copyPicture } from '../../lib/copy-image'
@@ -186,6 +186,10 @@ const videoType = (name: string) => {
 /** A clip a bot made, played in place or in the zoomable viewer; its bytes come from the computer like a picture's. */
 export function SharedVideo({ file, entryId, full = false }: { file: SharedFile; entryId: string; full?: boolean }) {
   const store = useStoreRef()
+  const tr = useTr()
+  const state = store.fileDownloads.states.get(file.id)
+  const busy = state?.kind === 'downloading'
+  const download = () => busy ? store.fileDownloads.cancel(file.id) : void store.fileDownloads.save(store.client, entryId, file)
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let revoked = false
@@ -219,5 +223,13 @@ export function SharedVideo({ file, entryId, full = false }: { file: SharedFile;
       </div>
     )
   }
-  return <video src={url} className={full ? 'attachment-video full' : 'attachment-video'} controls playsInline preload="metadata" />
+  // The browser's own controls keep time, size and the other buttons; Download sits on the
+  // player itself (not buried in the right-click menu) alongside them (OpenBot 0.70.0).
+  return (
+    <div className={full ? 'video-player full' : 'video-player'}>
+      <video src={url} className={full ? 'attachment-video full' : 'attachment-video'} controls playsInline preload="metadata" />
+      <IconButtonBase className="video-download" size={30} title={busy ? tr('Cancel download') : tr('Download')}
+        icon={busy ? 'xmark' : 'arrow.down.to.line'} onClick={download} />
+    </div>
+  )
 }

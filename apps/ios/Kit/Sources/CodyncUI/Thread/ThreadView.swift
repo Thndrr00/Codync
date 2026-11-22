@@ -49,6 +49,7 @@ public struct ThreadView: View {
                         .padding(.bottom, 8)
                         .transition(.opacity)
                 } else {
+                    WaitingRepliesCard(botId: botId)
                     PresenceRow(botId: botId)
                     Composer(botId: botId, replyingTo: $replyingTo,
                              queued: model.chat(botId).hidingCalls().queue(working: busy),

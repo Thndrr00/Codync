@@ -2774,5 +2774,10 @@
   "Rename workflow": "Rename workflow",
   "Folder name": "Folder name",
   "Could not rename the workflow.": "Could not rename the workflow.",
-  "Making the result…": "Making the result…"
+  "Making the result…": "Making the result…",
+  "Waiting for replies": "Waiting for replies",
+  "Asked": "Asked",
+  "Hide this list": "Hide this list",
+  "Show older threads": "Show older threads",
+  "Loading older threads…": "Loading older threads…"
 }

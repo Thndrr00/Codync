@@ -14,6 +14,7 @@ import { ForwardSheet } from './ForwardSheet'
 import { WorkingIndicator } from './WorkingIndicator'
 import { workingSteps } from './trace-turns'
 import { Composer } from './Composer'
+import { WaitingRepliesCard } from './WaitingRepliesCard'
 import { TraceView } from './TraceView'
 
 /**
@@ -80,6 +81,7 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
         closeTitle={doc ? 'Close document conversation' : 'Close thread'}
         trailing={doc ? undefined : (
           <>
+            <IconButton title={tr('Back')} icon="chevron.left" onClick={close} />
             <IconButton title={tr('Thread actions')} icon="ellipsis" buttonRef={menuButton} menuOpen={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
             <AnchoredMenu open={menuOpen} onClose={() => setMenuOpen(false)} anchor={menuButton} items={() => [
               { title: 'Rename thread', icon: 'pencil', action: () => { setRenameText(info?.title ?? ''); setRenaming(true) } },
@@ -138,7 +140,10 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
             <UpdateNeededCard />
           </div>
         ) : (
-          <Composer botId={botId} thread={rootId} reply={replyEntry} cancelReply={() => setReplyEntry(null)} />
+          <>
+            <WaitingRepliesCard botId={botId} threadId={rootId} />
+            <Composer botId={botId} thread={rootId} reply={replyEntry} cancelReply={() => setReplyEntry(null)} />
+          </>
         )}
       </div>
       <Dialog open={renaming} title="Rename thread" actions={[{ title: 'Save', action: saveRename }]} onClose={() => setRenaming(false)}>

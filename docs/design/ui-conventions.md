@@ -327,3 +327,7 @@ ink that reads best on it, and the fill moves away from that ink until it reads 
 4.5:1; only the device that chose it sees the change.
 
 Roster section headings and the Bots label move whole groups within a computer: drag on desktop, touch and hold then drag on phones. Section order is per computer and per device. Pinned bots remain above all groups. Terminal Alt+Up/Down moves the selected bot's group for that run.
+
+## A few cross-client affordances
+
+The avatar picker offers eleven silhouettes (the eight originals plus **ghost**, **jellyfish** and **octopus**); a shape from an older host that a client can't draw falls back to the blob, and the plush/flat choice still applies to every shape. A video in chat fills the available width with its whole control bar, with **Download** on the player itself; the phones use their system player's controls plus the same action. **Back** (mouse back, Alt+←, ⌘[, or the thread's back arrow) closes an open thread before changing chats; the phones use their system back gesture. One **Stop** on a "Waiting for replies" row drops that teammate's request and leaves a **Stopped** row; **Hide this list** closes the card once nothing waits. An archived thread drawer offers **Show older threads** after a full page of 50, without dropping any saved messages. These labels are English source strings; translations are added to the language catalogs separately.

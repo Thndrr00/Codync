@@ -13,7 +13,7 @@ import { CustomIcon } from './CustomIcon'
 
 export type Mood = 'idle' | 'working' | 'needsInput' | 'failed'
 
-/** The eight Grok Bot character silhouettes, in a w×h box. */
+/** The eleven character silhouettes (including ghost, jellyfish and octopus), in a w×h box. */
 export function characterPath(kind: string, w: number, h: number) {
   const p = new Path2D()
   let stroke = 0
@@ -58,6 +58,31 @@ export function characterPath(kind: string, w: number, h: number) {
       p.arc(w * 0.5, h * 0.62, w * 0.44, 0, Math.PI, false)
       p.bezierCurveTo(w * 0.06, h * 0.38, w * 0.38, h * 0.2, w * 0.5, 0)
       break
+    case 'ghost':
+      // A smooth dome with a scalloped hem; the hollow eyes read on the dome.
+      p.moveTo(w * 0.08, h * 0.94)
+      p.quadraticCurveTo(w * 0.04, h * 0.04, w * 0.5, h * 0.04)
+      p.quadraticCurveTo(w * 0.96, h * 0.04, w * 0.92, h * 0.94)
+      p.quadraticCurveTo(w * 0.83, h * 0.76, w * 0.74, h * 0.94)
+      p.quadraticCurveTo(w * 0.62, h * 0.76, w * 0.5, h * 0.94)
+      p.quadraticCurveTo(w * 0.38, h * 0.76, w * 0.26, h * 0.94)
+      p.quadraticCurveTo(w * 0.17, h * 0.76, w * 0.08, h * 0.94)
+      p.closePath()
+      break
+    case 'jellyfish': {
+      // A bell with four rounded tentacles. They are separate subpaths of one silhouette.
+      p.ellipse(w * 0.5, h * 0.38, w * 0.4, h * 0.32, 0, 0, Math.PI * 2)
+      for (const x of [0.2, 0.37, 0.63, 0.8]) p.roundRect(w * (x - 0.06), h * 0.48, w * 0.12, h * 0.46, w * 0.06)
+      break
+    }
+    case 'octopus': {
+      // A round head over five short arms, all one silhouette.
+      p.ellipse(w * 0.5, h * 0.4, w * 0.4, h * 0.36, 0, 0, Math.PI * 2)
+      for (const [x, r] of [[0.14, 0.13], [0.32, 0.14], [0.5, 0.14], [0.68, 0.14], [0.86, 0.13]]) {
+        p.ellipse(w * x, h * 0.74, w * r, h * 0.24, 0, 0, Math.PI * 2)
+      }
+      break
+    }
     default: {
       // blob
       const steps = 64

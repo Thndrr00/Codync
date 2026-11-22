@@ -1,0 +1,9 @@
+/* "Waiting for replies" above the composer: one compact card, a row for each teammate asked. */
+.waiting-replies {
+  max-width: 560px;
+  margin-bottom: 6px;
+}
+.waiting-reply-row {
+  padding: 6px 0;
+  min-width: 0;
+}

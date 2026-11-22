@@ -67,7 +67,7 @@ import { useOnboardingTelemetry } from './use-onboarding-telemetry'
 import { useTr } from '../lib/use-language'
 import type { ExtensionSection } from './marketplace/market-models'
 import { useTool } from '../lib/use-tool'
-import { useChatNavigation } from './chat-navigation'
+import { registerBackHandler, useBackGesture, useChatNavigation } from './chat-navigation'
 
 
 /** Native desktop chat: roster on the left, the conversation on the right (Grok Bot's desktop layout). */
@@ -351,6 +351,9 @@ function ChatSplitView() {
   const computerChoice = creating && onlineStores.length > 1
     ? { options: onlineStores.map((s) => ({ id: s.computer.id, label: s.hostName })), selection: creating.computerId, onChange: (computerId: string) => setCreating({ ...creating, computerId }) }
     : null
+
+  useBackGesture()
+  useEffect(() => registerBackHandler(() => app.back()), [app])
 
   useChatNavigation({
     operationSettings: (page) => { setCanvasBot(null); if (page === 'channels') { setSettings(null); openMarketplace('channels') } else { setMarketplace(null); setSettings(page) } },

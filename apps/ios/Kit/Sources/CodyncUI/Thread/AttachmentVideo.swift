@@ -8,21 +8,25 @@ import SwiftUI
 struct AttachmentVideo: View {
     let name: String
     private let id: String
+    /// Set for a clip a bot shared, which can be downloaded from the player itself.
+    private let shared: (entryId: String, botId: String, file: SharedFile)?
     private let load: @MainActor (BotStore) async -> Data?
     @Environment(BotStore.self) private var model
     @State private var url: URL?
     /// Opens the clip full size, where pinch and double-tap zoom apply like a picture's.
     @State private var fullscreen = false
 
-    init(shared file: SharedFile, entryId: String) {
+    init(shared file: SharedFile, entryId: String, botId: String) {
         name = file.name
         id = file.id
+        shared = (entryId, botId, file)
         load = { await $0.sharedFileData(file, entryId: entryId) }
     }
 
     init(file: Attachment, botId: String) {
         name = file.name
         id = file.id
+        shared = nil
         load = { await $0.attachmentData(file, bot: botId) }
     }
 
@@ -37,20 +41,43 @@ struct AttachmentVideo: View {
                     .overlay { Image(systemName: "film").foregroundStyle(Palette.secondary) }
             }
         }
-        .frame(maxWidth: 340, maxHeight: 280)
+        .frame(maxWidth: .infinity, maxHeight: 320)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(alignment: .topTrailing) {
             if url != nil {
-                Button { fullscreen = true } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(7)
-                        .background(.black.opacity(0.6), in: Circle())
+                HStack(spacing: 6) {
+                    // Download is a control on the player, not only in a long-press menu (#11094).
+                    if let shared {
+                        let downloading: Bool = {
+                            if case .downloading = model.fileDownloads.states[id] { return true }
+                            return false
+                        }()
+                        Button {
+                            Motion.animate {
+                                if downloading { model.fileDownloads.cancel(id) }
+                                else { model.fileDownloads.save(client: model.client, entryId: shared.entryId, botId: shared.botId, file: shared.file) }
+                            }
+                        } label: {
+                            Image(systemName: downloading ? "xmark" : "arrow.down.to.line")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(7)
+                                .background(.black.opacity(0.6), in: Circle())
+                        }
+                        .buttonStyle(PressScale())
+                        .accessibilityLabel(downloading ? L10n.tr("Cancel download") : L10n.tr("Download"))
+                    }
+                    Button { fullscreen = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(7)
+                            .background(.black.opacity(0.6), in: Circle())
+                    }
+                    .buttonStyle(PressScale())
+                    .accessibilityLabel(L10n.tr("Full screen"))
                 }
-                .buttonStyle(PressScale())
                 .padding(6)
-                .accessibilityLabel(L10n.tr("Full screen"))
             }
         }
         .accessibilityLabel(name)

@@ -78,6 +78,11 @@ public final class BotStore {
     public internal(set) var threads: [String: [ThreadInfo]] = [:]
     /// Each chat's archived threads, newest first.
     public internal(set) var archivedThreads: [String: [ThreadInfo]] = [:]
+    /// Whether an archived drawer still has older rows to load (OpenBot #7204).
+    public internal(set) var threadHasMore: [String: Bool] = [:]
+    /// The "Asked" teammate requests stopped from a Waiting for replies row, kept so the row
+    /// still reads Stopped after the host marks the notice cancelled.
+    public internal(set) var stoppedRequests: [String: Entry] = [:]
     /// The lines of the threads read here, by root id; the chat keeps its own in `entries`.
     public internal(set) var threadEntries: [String: [Entry]] = [:]
     /// Each chat's pinned messages, newest first.

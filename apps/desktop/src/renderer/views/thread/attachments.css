@@ -66,6 +66,31 @@
   max-height: 100%;
   width: auto;
   height: auto;
+  aspect-ratio: auto;
+}
+/* The player keeps its own aspect ratio; Download is a control on its corner. */
+.video-player {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: #000;
+}
+.video-player.full {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+.video-download {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: var(--radius-xs);
 }
 
 .file-card {
@@ -73,6 +98,11 @@
   background: var(--bubble-agent);
   border-radius: var(--radius-l);
   max-width: 380px;
+}
+/* A clip in the chat fills the chat's width instead of collapsing into a small square,
+   so the browser's full control bar stays visible (OpenBot 0.70.0, #11094/#12616). */
+.file-card:has(.video-player) {
+  max-width: min(100%, 640px);
 }
 .file-card-image {
   display: flex;
@@ -84,8 +114,10 @@
 .attachment-video {
   display: block;
   width: 100%;
-  max-width: 340px;
-  max-height: 280px;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius-m);
   background: #000;
 }

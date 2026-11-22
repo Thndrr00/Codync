@@ -6,10 +6,17 @@ import Foundation
 
 extension BotStore {
     /// A chat's live threads, or its archive drawer, newest first; the host never sends their lines.
-    func refreshThreads(_ botId: String, archived: Bool = false) {
+    /// With `append`, asks for the next page of the archive and merges it with what is shown.
+    func refreshThreads(_ botId: String, archived: Bool = false, append: Bool = false) {
         Task {
-            guard let list = try? await withLink { try await $0.threads(botId: botId, archived: archived) } else { return }
-            if archived { archivedThreads[botId] = list } else { threads[botId] = list }
+            let before = append ? ((archived ? archivedThreads[botId] : threads[botId]) ?? []).last?.id : nil
+            guard let list = try? await withLink { try await $0.threads(botId: botId, archived: archived, before: before) } else { return }
+            let current = (archived ? archivedThreads[botId] : threads[botId]) ?? []
+            let page: (threads: [ThreadInfo], hasMore: Bool)
+            if append { page = ThreadPaging.merge(current, list) }
+            else { page = (threads: list, hasMore: list.count >= ThreadPaging.pageSize) }
+            if archived { archivedThreads[botId] = page.threads } else { threads[botId] = page.threads }
+            threadHasMore["\(botId)|\(archived)"] = page.hasMore
         }
     }
 

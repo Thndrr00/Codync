@@ -273,8 +273,8 @@ export class HostClient {
   }
 
   /** A chat's threads, the most recently written first; the archive drawer instead when `archived`. */
-  async threads(botId: string, archived = false) {
-    return (await this.call<{ threads: ThreadInfo[] }>('threads', { botId, archived })).threads
+  async threads(botId: string, archived = false, before?: string) {
+    return (await this.call<{ threads: ThreadInfo[] }>('threads', { botId, archived, ...(before ? { before } : {}) })).threads
   }
 
   /** Opens a thread on a chat, optionally branched from one of its messages, and answers its root. */

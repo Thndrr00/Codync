@@ -84,6 +84,9 @@ import com.codync.android.design.*
                 Text(message, style = Type.body, color = Palette.secondary, modifier = Modifier.padding(vertical = 12.dp))
             }
         }
+        if (archived && state.threadHasMore["$botId|true"] == true) {
+            SecondaryButton(tr("Show older threads")) { store.refreshThreads(bot.id, archived = true, append = true) }
+        }
     }
     CodyncDialog(tr("Rename thread"), renaming != null, { renaming = null }, field = {
         PlainInput(draftTitle, { draftTitle = it }, tr("A short name"))

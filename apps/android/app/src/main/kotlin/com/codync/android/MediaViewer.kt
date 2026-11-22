@@ -137,8 +137,9 @@ private fun List<PointerInputChange>.distance(): Float =
 private fun List<PointerInputChange>.center(): Offset =
     if (isEmpty()) Offset.Zero else fold(Offset.Zero) { total, change -> total + change.position } / size.toFloat()
 
-/** A clip played by the system player while its page is the one showing. */
-@Composable internal fun VideoPlayer(load: suspend () -> File, active: Boolean, modifier: Modifier) {
+/** A clip played by the system player while its page is the one showing. `download` puts the
+ * action on the player itself (OpenBot 0.70.0), not only in the viewer's trailing menu. */
+@Composable internal fun VideoPlayer(load: suspend () -> File, active: Boolean, modifier: Modifier, download: (() -> Unit)? = null) {
     var file by remember { mutableStateOf<File?>(null) }
     var view by remember { mutableStateOf<VideoView?>(null) }
     LaunchedEffect(Unit) {
@@ -149,15 +150,20 @@ private fun List<PointerInputChange>.center(): Offset =
         Box(modifier.background(Color.Black).semantics { contentDescription = "Loading video" }, contentAlignment = Alignment.Center) { Spinner() }
         return
     }
-    AndroidView(factory = { context ->
-        VideoView(context).apply {
-            MediaController(context).also { controller -> controller.setAnchorView(this); setMediaController(controller) }
-            setVideoURI(Uri.fromFile(ready))
-            setOnPreparedListener { if (active) start() }
-            view = this
+    Box(modifier.background(Color.Black)) {
+        AndroidView(factory = { context ->
+            VideoView(context).apply {
+                MediaController(context).also { controller -> controller.setAnchorView(this); setMediaController(controller) }
+                setVideoURI(Uri.fromFile(ready))
+                setOnPreparedListener { if (active) start() }
+                view = this
+            }
+        }, update = { player ->
+            if (active) { if (!player.isPlaying) player.start() } else if (player.isPlaying) player.pause()
+        }, modifier = Modifier.fillMaxSize())
+        if (download != null) Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+            IconButton(tr("Download"), "arrow.down.to.line") { download() }
         }
-    }, update = { player ->
-        if (active) { if (!player.isPlaying) player.start() } else if (player.isPlaying) player.pause()
-    }, modifier = modifier.background(Color.Black))
+    }
     DisposableEffect(Unit) { onDispose { view?.stopPlayback() } }
 }

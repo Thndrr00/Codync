@@ -136,6 +136,7 @@ struct ThreadSheet: View {
                 if let mismatch = model.mismatch {
                     UpdateNeededCard(store: model, mismatch: mismatch).padding(.horizontal, 16).padding(.bottom, 8)
                 } else {
+                    WaitingRepliesCard(botId: botId, threadId: root)
                     Composer(botId: botId, replyingTo: $replyingTo, thread: root)
                 }
             }

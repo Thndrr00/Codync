@@ -17,6 +17,7 @@ struct ThreadsView: View {
     @State private var renaming: ThreadInfo?
     @State private var draftTitle = ""
     @State private var deleting: ThreadInfo?
+    @State private var loadingOlder = false
 
     private var allThreads: [ThreadInfo] {
         (archived ? model.archivedThreads : model.threads)[botId] ?? []
@@ -71,6 +72,20 @@ struct ThreadsView: View {
                     .accessibilityLabel(L10n.tr("\(waiting) open threads wait for you"))
             }
             Hairline()
+            if archived && model.threadHasMore["\(botId)|true"] == true {
+                Button {
+                    loadingOlder = true
+                    model.refreshThreads(botId, archived: true, append: true)
+                    Task { try? await Task.sleep(for: .milliseconds(400)); loadingOlder = false }
+                } label: {
+                    Text(L10n.tr(loadingOlder ? "Loading older threads…" : "Show older threads"))
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(loadingOlder)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
+                .accessibilityLabel(L10n.tr("Show older threads"))
+            }
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(threads) { thread in

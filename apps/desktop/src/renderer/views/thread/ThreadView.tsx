@@ -1,10 +1,12 @@
 import { VoiceReceipt } from './VoiceReceipt'
 import { RepliesView } from './RepliesView'
+import { WaitingRepliesCard } from './WaitingRepliesCard'
 import { ForwardSheet } from './ForwardSheet'
 import { FileView, type OpenFile } from './FileView'
 import { IslandBudget } from '../island/IslandBudget'
 import { IslandTerminal } from '../island/IslandTerminal'
 import { useIslandThreadNavigation } from './use-island-thread-navigation'
+import { registerBackHandler } from '../chat-navigation'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { draftOf, folderName, isGroup, isWorking, isWorkingIn, sharedWorkspacePeers, type Bot, type BotApp, type BotDraft, type Entry, type SharedFile } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
@@ -208,6 +210,12 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
     })
   }, [])
   const openThread = useCallback((rootId: string) => setThreadRoot(rootId), [])
+  // Back from a thread (including a new one) closes it and returns to this chat (#13497).
+  useEffect(() => registerBackHandler(() => {
+    if (!threadRoot) return false
+    setThreadRoot(null)
+    return true
+  }, 10), [threadRoot])
   // A thread branched from a chat message, then opened over the chat.
   const openBranch = useCallback((e: Entry) => {
     void store.startThread(botId, e.id).then(setThreadRoot)
@@ -347,6 +355,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
           ) : activeArtifact ? null : (
             // The artifact over the chat has its own box (two would both take the voice shortcut).
             <>
+              <WaitingRepliesCard botId={botId} />
               <QueuedMessages botId={botId} />
               <PresenceRow botId={botId} />
               <Composer

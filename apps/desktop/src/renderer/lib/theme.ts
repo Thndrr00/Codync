@@ -80,7 +80,7 @@ export const palette = (dark: boolean) => ({
   tertiary: dark ? '#9a9a9a' : '#6e6e6e',
 })
 
-export const AVATAR_SHAPES = ['blob', 'pebble', 'squircle', 'tablet', 'wedge', 'hex', 'cloud', 'teardrop']
+export { AVATAR_SHAPES, isAvatarShape, safeAvatarShape, type AvatarShape } from './avatar-shapes.ts'
 
 export function avatarColor(id: string) {
   return (AVATAR_COLORS.find((c) => c.id === id) ?? AVATAR_COLORS[7]!).hex

@@ -21,6 +21,7 @@ import { AppFloorCard, UpdateNeededCard } from './UpdateNeededCard'
 import { RosterControls, RosterPreview } from './RosterControls'
 import { RosterSection } from './RosterSection'
 import { RepliesView } from './thread/RepliesView'
+import { registerBackHandler } from './chat-navigation'
 import { RosterThreads } from './RosterThreads'
 import { RosterStops } from '../store/roster-query'
 import { rosterProject, rosterProjectLabel } from '../lib/roster-query'
@@ -67,6 +68,11 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
   // One expanded row at a time; threads stay folded with their row and with its computer section.
   const [expandedThreads, setExpandedThreads] = useState<string | null>(null)
   const [threadOpen, setThreadOpen] = useState<{ botId: string; store: BotStore; threadId: string } | null>(null)
+  useEffect(() => registerBackHandler(() => {
+    if (!threadOpen) return false
+    setThreadOpen(null)
+    return true
+  }, 10), [threadOpen])
   const [collapsedProjects, setCollapsedProjects] = usePref(prefs.collapsedProjects)
   const [stops] = useState(() => new RosterStops())
   useModel(stops)

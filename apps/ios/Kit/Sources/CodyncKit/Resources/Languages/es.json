@@ -2774,5 +2774,10 @@
   "Rename workflow": "Renombrar flujo de trabajo",
   "Folder name": "Nombre de la carpeta",
   "Could not rename the workflow.": "No se pudo renombrar el flujo de trabajo.",
-  "Making the result…": "Creando el resultado…"
+  "Making the result…": "Creando el resultado…",
+  "Waiting for replies": "Esperando respuestas",
+  "Asked": "Preguntado",
+  "Hide this list": "Ocultar esta lista",
+  "Show older threads": "Mostrar hilos anteriores",
+  "Loading older threads…": "Cargando hilos anteriores…"
 }

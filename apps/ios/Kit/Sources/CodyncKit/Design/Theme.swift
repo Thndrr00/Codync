@@ -71,7 +71,13 @@ public enum AvatarPalette {
         .init(id: "gray", label: "Gray", hex: 0x777777),
     ]
 
-    public static let shapes = ["blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop"]
+    public static let shapes = ["blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop", "ghost", "jellyfish", "octopus"]
+
+    /// Whether a shape from the host or a saved draft can be drawn here.
+    public static func isShape(_ shape: String) -> Bool { shapes.contains(shape) }
+
+    /// An unknown shape falls back to the original silhouette rather than drawing nothing.
+    public static func safeShape(_ shape: String?) -> String { guard let shape, isShape(shape) else { return "blob" }; return shape }
 
     public static func color(_ id: String) -> Color {
         (colors.first { $0.id == id } ?? colors[7]).color

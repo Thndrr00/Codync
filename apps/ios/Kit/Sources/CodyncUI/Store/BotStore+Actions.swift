@@ -294,6 +294,13 @@ extension BotStore {
         answer(entry, "continue") { try await $0.continueTurn(entryId: entry.id) }
     }
 
+    /// Stops one teammate's "Asked" request from its Waiting for replies row: the host drops it
+    /// from the queue, and the row stays with a Stopped state.
+    public func stopRequest(_ entry: Entry) {
+        cancelTask(entry)
+        stoppedRequests[entry.id] = entry
+    }
+
     /// Ends a stopped turn from its card; the messages stay and it can't be continued after.
     public func cancelTask(_ entry: Entry) {
         answer(entry, "cancel") { try await $0.cancelTask(entryId: entry.id) }

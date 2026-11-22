@@ -137,6 +137,13 @@ fun AppStore.retryRoutineRun(entry: Entry) = action("retry:" + entry.id) {
     ready().call("retryRoutineRun", body("botId" to entry.botId, "runId" to runId))
 }
 
+/** Stops one teammate's "Asked" request from its Waiting for replies row: the host drops it
+ * from the queue, and the row stays with a Stopped state. */
+fun AppStore.stopRequest(entry: Entry) {
+    cancelTask(entry)
+    mutableState.update { it.copy(stoppedRequests = it.stoppedRequests + (entry.id to entry)) }
+}
+
 /** Ends a stopped turn or a failed routine run from its card; the messages stay. */
 fun AppStore.cancelTask(entry: Entry) = action("cancel:" + entry.id) {
     ready().call("cancelTask", body("entryId" to entry.id))

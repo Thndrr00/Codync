@@ -7,12 +7,20 @@ import kotlinx.serialization.json.*
 // Threads: a side conversation opened from a chat, so one message can be followed without filling the chat.
 
 /** A chat's live threads, or its archive drawer, newest first; the host never sends their lines. */
-internal fun AppStore.refreshThreads(botId: String, archived: Boolean = false) {
+internal fun AppStore.refreshThreads(botId: String, archived: Boolean = false, append: Boolean = false) {
     action("threads:$botId:$archived") {
-        val response = hostQuery("threads", buildJsonObject { put("botId", botId); put("archived", archived) })
-        val list = ThreadInfo.decodeList(response)
+        val existing = if (archived) state.value.archivedThreads[botId].orEmpty() else state.value.threads[botId].orEmpty()
+        val before = if (append) ThreadPaging.cursor(existing) else null
+        val response = hostQuery("threads", buildJsonObject {
+            put("botId", botId); put("archived", archived)
+            before?.let { put("before", it) }
+        })
+        val incoming = ThreadInfo.decodeList(response)
+        val (list, more) = if (append) ThreadPaging.merge(existing, incoming) else incoming to incoming.size >= ThreadPaging.pageSize
         mutableState.update {
-            if (archived) it.copy(archivedThreads = it.archivedThreads + (botId to list)) else it.copy(threads = it.threads + (botId to list))
+            if (archived) it.copy(archivedThreads = it.archivedThreads + (botId to list),
+                threadHasMore = it.threadHasMore + ("$botId|true" to more))
+            else it.copy(threads = it.threads + (botId to list))
         }
     }
 }

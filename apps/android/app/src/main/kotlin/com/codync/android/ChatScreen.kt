@@ -151,6 +151,7 @@ import com.kyant.shapes.RoundedRectangle
             val mismatch = state.mismatch
             if (mismatch != null) UpdateNeededCard(state, mismatch, store::requestHostUpdate, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             else if (viewing == null) {
+                WaitingRepliesCard(bot.id, state, store, entries = state.entries.filter { it.botId == bot.id && it.isChat })
                 PresenceRow(bot.id, state, store)
                 MessageComposer(bot, null, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
                     replyingTo = replyingTo, cancelReply = { replyingTo = null },

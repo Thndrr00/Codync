@@ -28,7 +28,13 @@ object AvatarPalette {
     val colors = linkedMapOf("black" to 0xFF2B2B2B, "brown" to 0xFF936439, "red" to 0xFFFF263C,
         "orange" to 0xFFFF6700, "yellow" to 0xFFFF9800, "green" to 0xFF00C972, "cyan" to 0xFF00BCA6,
         "blue" to 0xFF1084FE, "violet" to 0xFF9159FE, "magenta" to 0xFFFF309B, "gray" to 0xFF777777)
-    val shapes = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
+    val shapes = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop", "ghost", "jellyfish", "octopus")
+
+    /** A shape from the host or a saved draft that this client can draw. */
+    fun isShape(shape: String?) = shape != null && shape in shapes
+
+    /** An unknown shape falls back to the original silhouette instead of drawing nothing. */
+    fun safeShape(shape: String?) = if (isShape(shape)) shape!! else "blob"
     fun tint(id: String): Color = Color(colors[id] ?: colors.getValue("blue"))
 }
 
@@ -200,6 +206,24 @@ private fun avatarPath(shape: String): Path = Path().apply {
         }
         "teardrop" -> { moveTo(500f, 0f); cubicTo(620f, 200f, 940f, 380f, 940f, 620f)
             arcTo(RectF(60f, 180f, 940f, 1060f), 0f, 180f); cubicTo(60f, 380f, 380f, 200f, 500f, 0f); close() }
+        "ghost" -> {
+            moveTo(80f, 940f)
+            quadTo(40f, 40f, 500f, 40f)
+            quadTo(960f, 40f, 920f, 940f)
+            for ((end, control) in listOf(740f to 830f, 500f to 620f, 260f to 380f, 80f to 170f))
+                quadTo(control, 760f, end, 940f)
+            close()
+        }
+        "jellyfish" -> {
+            addOval(RectF(100f, 60f, 900f, 700f), Path.Direction.CW)
+            for (x in listOf(200f, 370f, 630f, 800f))
+                addRoundRect(RectF(x - 60f, 480f, x + 60f, 940f), 60f, 60f, Path.Direction.CW)
+        }
+        "octopus" -> {
+            addOval(RectF(100f, 40f, 900f, 760f), Path.Direction.CW)
+            for ((x, r) in listOf(140f to 130f, 320f to 140f, 500f to 140f, 680f to 140f, 860f to 130f))
+                addOval(RectF(x - r, 500f, x + r, 980f), Path.Direction.CW)
+        }
         else -> { for (i in 0..64) {
             val angle = i / 64.0 * 2 * PI; val radius = .46 + .035 * sin(angle * 3 + .6)
             val x = (500 + cos(angle) * 1000 * radius).toFloat(); val y = (500 + sin(angle) * 1000 * radius).toFloat()

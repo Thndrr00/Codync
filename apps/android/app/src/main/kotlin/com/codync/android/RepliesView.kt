@@ -132,8 +132,12 @@ import com.kyant.shapes.RoundedRectangle
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { composerHeight = it.height }) {
             val mismatch = state.mismatch
             if (mismatch != null) UpdateNeededCard(state, mismatch, store::requestHostUpdate, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
-            else MessageComposer(bot, rootId, state, store, onCall = null,
-                replyingTo = replyingTo, cancelReply = { replyingTo = null })
+            else {
+                WaitingRepliesCard(bot.id, state, store, threadId = rootId,
+                    entries = state.entries.filter { it.botId == bot.id && it.threadId == rootId })
+                MessageComposer(bot, rootId, state, store, onCall = null,
+                    replyingTo = replyingTo, cancelReply = { replyingTo = null })
+            }
         }
     }
     if (!doc) {

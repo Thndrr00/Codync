@@ -723,6 +723,8 @@ struct WorkingBotFace: View {
     let since: Date
     let size: CGFloat
 
+    /// Timer fonts exist only for the eight original shapes; a newer creature shape uses the
+    /// blob font in the Island (the app's picker offers all eleven).
     private static let shapes: Set = ["blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop"]
 
     var body: some View {

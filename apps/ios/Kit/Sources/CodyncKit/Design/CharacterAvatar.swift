@@ -216,7 +216,7 @@ struct DottedBody: View {
     }
 }
 
-/// The eight Grok Bot character silhouettes.
+/// The eleven character silhouettes (ghost, jellyfish and octopus among them).
 public struct CharacterShape: Shape {
     let kind: String
 
@@ -260,6 +260,31 @@ public struct CharacterShape: Shape {
             p.addCurve(to: CGPoint(x: w * 0.94, y: h * 0.62), control1: CGPoint(x: w * 0.62, y: h * 0.2), control2: CGPoint(x: w * 0.94, y: h * 0.38))
             p.addArc(center: CGPoint(x: w * 0.5, y: h * 0.62), radius: w * 0.44, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
             p.addCurve(to: CGPoint(x: w * 0.5, y: 0), control1: CGPoint(x: w * 0.06, y: h * 0.38), control2: CGPoint(x: w * 0.38, y: h * 0.2))
+            return p
+        case "ghost":
+            var p = Path()
+            p.move(to: CGPoint(x: w * 0.08, y: h * 0.94))
+            p.addQuadCurve(to: CGPoint(x: w * 0.5, y: h * 0.04), control: CGPoint(x: w * 0.04, y: h * 0.04))
+            p.addQuadCurve(to: CGPoint(x: w * 0.92, y: h * 0.94), control: CGPoint(x: w * 0.96, y: h * 0.04))
+            for (at, control) in [(0.74, 0.83), (0.5, 0.62), (0.26, 0.38), (0.08, 0.17)] {
+                p.addQuadCurve(to: CGPoint(x: w * at, y: h * 0.94), control: CGPoint(x: w * control, y: h * 0.76))
+            }
+            p.closeSubpath()
+            return p
+        case "jellyfish":
+            var p = Path()
+            p.addEllipse(in: CGRect(x: w * 0.1, y: h * 0.06, width: w * 0.8, height: h * 0.64))
+            for x in [0.2, 0.37, 0.63, 0.8] {
+                p.addRoundedRect(in: CGRect(x: w * (x - 0.06), y: h * 0.48, width: w * 0.12, height: h * 0.46),
+                                 cornerSize: CGSize(width: w * 0.06, height: w * 0.06))
+            }
+            return p
+        case "octopus":
+            var p = Path()
+            p.addEllipse(in: CGRect(x: w * 0.1, y: h * 0.04, width: w * 0.8, height: h * 0.72))
+            for (x, radius) in [(0.14, 0.13), (0.32, 0.14), (0.5, 0.14), (0.68, 0.14), (0.86, 0.13)] {
+                p.addEllipse(in: CGRect(x: w * (x - radius), y: h * 0.5, width: w * radius * 2, height: h * 0.48))
+            }
             return p
         default: // blob
             var p = Path()

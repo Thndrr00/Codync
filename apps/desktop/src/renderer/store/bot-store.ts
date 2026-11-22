@@ -33,6 +33,7 @@ import type { PinnedMessage } from '@shared/pins'
 import type { SecurityProfile } from '@shared/security-profiles'
 import type { HostClient } from '../client/host-client'
 import { readSharedFile } from '../../shared/files.ts'
+import { mergeThreadPage, threadPageCursor, THREAD_PAGE_SIZE } from '../lib/thread-paging.ts'
 import { latestOnly } from '../lib/latest-only'
 import { trNow } from '../lib/l10n.ts'
 import { prefs } from '../lib/prefs'
@@ -540,6 +541,20 @@ export class BotStore extends BotSync {
     if (runId) this.answer(entry, 'retry', (c) => c.call('retryRoutineRun', { botId: entry.botId, runId }))
   }
 
+  /** The "Asked" teammate requests stopped from a Waiting for replies row, kept so the row
+   * still reads Stopped after the host marks the notice cancelled. */
+  stoppedRequests = new Map<string, Entry>()
+
+  /** Stops one teammate's request: the host drops it from the queue and the row shows Stopped. */
+  async stopRequest(entry: Entry): Promise<string | null> {
+    const error = await this.cancelTask(entry)
+    if (!error) {
+      this.stoppedRequests.set(entry.id, entry)
+      this.changed()
+    }
+    return error
+  }
+
   /** Ends a stopped turn from its card; the messages stay and the card can't be continued. */
   async cancelTask(entry: Entry): Promise<string | null> {
     try {
@@ -726,10 +741,18 @@ export class BotStore extends BotSync {
     return thread
   }
 
-  async refreshThreads(botId: string, archived = false) {
-    const list = await (await this.ready()).threads(botId, archived)
+  /** Whether the archive still has older rows to fetch, per chat. */
+  threadPages = new Map<string, boolean>()
+
+  async refreshThreads(botId: string, archived = false, append = false) {
+    const map = archived ? this.archivedThreads : this.threads
+    const existing = map.get(botId) ?? []
+    const cursor = append ? threadPageCursor(existing) ?? undefined : undefined
+    const list = await (await this.ready()).threads(botId, archived, cursor)
     if (this.retired) return
-    ;(archived ? this.archivedThreads : this.threads).set(botId, list)
+    const page = append ? mergeThreadPage(existing, list) : { threads: list, hasMore: list.length >= THREAD_PAGE_SIZE }
+    map.set(botId, page.threads)
+    this.threadPages.set(`${botId}|${archived}`, page.hasMore)
     this.changed()
   }
 

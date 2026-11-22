@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { threadName, type Bot, type ThreadInfo } from '@shared/models'
-import { CardSection, DropdownMenu, IconButton, TabChoice } from '../../components/Controls'
+import { Button, CardSection, DropdownMenu, IconButton, TabChoice } from '../../components/Controls'
 import { Dialog, Sheet } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
 import { useTr } from '../../lib/use-language'
+import { registerBackHandler } from '../chat-navigation'
 import type { BotStore } from '../../store/bot-store'
 import { relativeTime } from './chat-items'
 import { RepliesView } from './RepliesView'
@@ -28,9 +29,16 @@ export function ThreadsCard({ bot, store }: { bot: Bot; store: BotStore }) {
   const archived = section === 'archived'
   const threads = (archived ? store.archivedThreads : store.threads).get(bot.id) ?? []
   const [open, setOpen] = useState<string | null>(null)
+  useEffect(() => registerBackHandler(() => {
+    if (!open) return false
+    setOpen(null)
+    return true
+  }, 10), [open])
   const [renaming, setRenaming] = useState<ThreadInfo | null>(null)
   const [renameText, setRenameText] = useState('')
   const [deleting, setDeleting] = useState<ThreadInfo | null>(null)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const hasOlder = archived && store.threadPages.get(`${bot.id}|true`) === true
   useEffect(() => {
     void store.refreshThreads(bot.id, archived)
   }, [store, bot.id, archived])
@@ -77,6 +85,10 @@ export function ThreadsCard({ bot, store }: { bot: Bot; store: BotStore }) {
           </div>
         ))}
       </CardSection>
+      {hasOlder ? <Button kind="secondary" disabled={loadingOlder} onClick={() => {
+        setLoadingOlder(true)
+        void store.refreshThreads(bot.id, true, true).finally(() => setLoadingOlder(false))
+      }}>{loadingOlder ? tr('Loading older threads…') : tr('Show older threads')}</Button> : null}
       <Dialog open={renaming !== null} title="Rename thread" actions={[{ title: 'Save', action: saveRename }]} onClose={() => setRenaming(null)}>
         <input className="dialog-field" data-autofocus value={renameText} placeholder={tr('A short name')} aria-label={tr('A short name')} spellCheck={false}
           onChange={(e) => setRenameText(e.target.value)}

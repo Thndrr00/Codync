@@ -1,7 +1,7 @@
 import { trackBody } from '@shared/analytics'
 import type { HostSnapshot, LocalHost } from '@shared/ipc'
 import type { AccessRequest, Bot, Computer, PairingRequest } from '@shared/models'
-import type { BotRef } from '@shared/bot-ref'
+import { sameRef, type BotRef } from '@shared/bot-ref'
 import { HostError, LoopbackTransport, type HostTransport } from '../client/host-client'
 import { Observable } from '../lib/observable'
 import { undoOnFailure } from '../lib/undo-on-failure'
@@ -201,9 +201,25 @@ export class AppModel extends Observable {
     return items
   }
 
+  /** The chats visited in this window, oldest first, for Back. Capped so a long session stays small. */
+  private selectionHistory: BotRef[] = []
+
   select(ref: BotRef | null) {
+    const current = this.selection
+    if (ref && current && !sameRef(ref, current)) {
+      this.selectionHistory = [...this.selectionHistory.filter((r) => !sameRef(r, current)), current].slice(-40)
+    }
     this.selection = ref
     this.changed()
+  }
+
+  /** Goes back to the chat selected before this one; false at the start of the history. */
+  back(): boolean {
+    const previous = this.selectionHistory.pop()
+    if (!previous) return false
+    this.selection = previous
+    this.changed()
+    return true
   }
 
   get selectedStore() {

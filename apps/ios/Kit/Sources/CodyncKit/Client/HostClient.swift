@@ -197,10 +197,22 @@ public extension HostClient {
     }
 
     /// A chat's threads, live ones or its archive, newest first; never their lines.
-    func threads(botId: String, archived: Bool = false) async throws -> [ThreadInfo] {
-        struct Body: Encodable { var botId: String; var archived: Bool }
+    /// `before` asks for the older page of the archive (OpenBot #7204).
+    func threads(botId: String, archived: Bool = false, before: String? = nil) async throws -> [ThreadInfo] {
+        struct Body: Encodable {
+            var botId: String
+            var archived: Bool
+            var before: String?
+            enum CodingKeys: String, CodingKey { case botId, archived, before }
+            func encode(to encoder: Encoder) throws {
+                var box = encoder.container(keyedBy: CodingKeys.self)
+                try box.encode(botId, forKey: .botId)
+                try box.encode(archived, forKey: .archived)
+                if let before { try box.encode(before, forKey: .before) }
+            }
+        }
         struct Res: Decodable { var threads: [ThreadInfo] }
-        let res: Res = try await call("threads", Body(botId: botId, archived: archived))
+        let res: Res = try await call("threads", Body(botId: botId, archived: archived, before: before))
         return res.threads
     }
 

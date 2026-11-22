@@ -11,7 +11,7 @@ struct FileDownloadCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if file.showsAsVideo || entry.data.media?.isVideo == true {
-                AttachmentVideo(file: file, entryId: entry.id)
+                AttachmentVideo(shared: file, entryId: entry.id, botId: entry.botId)
             } else if file.showsAsImage {
                 preview
             }

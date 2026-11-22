@@ -95,6 +95,10 @@ data class AppState(
     val threads: Map<String, List<ThreadInfo>> = emptyMap(),
     /** Each chat's archived threads as last fetched, by chat ID. */
     val archivedThreads: Map<String, List<ThreadInfo>> = emptyMap(),
+    /** Whether an archived drawer still has older threads to load (OpenBot #7204). */
+    val threadHasMore: Map<String, Boolean> = emptyMap(),
+    /** "Asked" teammate requests stopped from a row, kept so the row still reads Stopped. */
+    val stoppedRequests: Map<String, Entry> = emptyMap(),
     val navigationRequest: Int = 0,
     val navigationPage: LinkPage = LinkPage.Bots,
     val trace: Boolean = false,

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -34,7 +35,11 @@ internal data class MediaItem(val key: String, val name: String, val video: Bool
     if (items.isEmpty()) return
     if (items.size == 1) {
         val item = items.first()
-        Box(Modifier.sizeIn(maxWidth = 220.dp, maxHeight = 280.dp).clip(RoundedRectangle(16.dp))
+        // A lone clip fills the chat's width: a narrow square cuts off the player's controls
+        // (OpenBot 0.70.0, #12616). A lone picture keeps the old thumbnail size.
+        val size = if (item.video) Modifier.fillMaxWidth().mediaRatio(true)
+                   else Modifier.sizeIn(maxWidth = 220.dp, maxHeight = 280.dp)
+        Box(size.clip(RoundedRectangle(16.dp))
             .semantics { contentDescription = item.name }.plainButton { open(0) }) {
             tile(item, Modifier.fillMaxSize())
         }
