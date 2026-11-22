@@ -1,7 +1,10 @@
 import type { MediaKind } from '@shared/media'
 import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable.ts'
-import { clampCoordinate, type FlowCanvas, type FlowLink, type FlowMedia } from '../lib/routine-flow.ts'
+import {
+  clampCoordinate, type FlowCanvas, type FlowLink, type FlowMedia,
+  type WorkflowFolderAction, type WorkflowFoldersSnapshot,
+} from '../lib/routine-flow.ts'
 
 /** What a view needs after a move: the node's new place, shown at once and saved on the host. */
 type Client = () => Promise<Pick<HostClient, 'call'>>
@@ -18,10 +21,15 @@ export class RoutineFlowStore extends Observable {
   error: string | null = null
   /** Set when the host has no flow methods (an older host): the canvas hides. */
   unsupported = false
+  /** The computer-wide "All workflows" folder tree; null until it has been read. */
+  folders: WorkflowFoldersSnapshot | null = null
+  foldersLoading = false
+  /** A folder call's own error: folders are additive, so a refusal never hides the canvas. */
+  foldersError: string | null = null
   private sequence = 0
   private disposed = false
 
-  readonly botId: string
+  botId: string
   private readonly client: Client
 
   constructor(botId: string, client: Client) {
@@ -33,6 +41,22 @@ export class RoutineFlowStore extends Observable {
   /** A view mounted again (React may mount twice): the store works again. */
   resume() {
     this.disposed = false
+  }
+
+  /**
+   * The tab strip changed workflow. The canvas is dropped first, so the view shows its loading
+   * spinner rather than the previous workflow's steps while the new one is read.
+   */
+  switchTo(botId: string) {
+    if (botId === this.botId) return
+    ++this.sequence
+    this.botId = botId
+    this.canvas = null
+    this.loading = false
+    this.error = null
+    this.unsupported = false
+    this.changed()
+    void this.load()
   }
 
   dispose() {
@@ -145,5 +169,45 @@ export class RoutineFlowStore extends Observable {
   /** Pauses or resumes a routine from the inspector. */
   async setEnabled(routineId: string, enabled: boolean) {
     await this.change('setRoutineEnabled', { botId: this.botId, id: routineId, enabled })
+  }
+
+  /** The routines (the host's workflows) of these bots, for the All workflows menu. */
+  async listWorkflows(botIds: readonly string[]): Promise<{ id: string; name: string; botId: string }[]> {
+    const client = await this.client()
+    const lists = await Promise.all(botIds.map((botId) =>
+      client.call<{ routines: { id: string; name: string }[] }>('routines', { botId })))
+    return lists.flatMap((list, index) => list.routines.map((routine) => ({ ...routine, botId: botIds[index] })))
+  }
+
+  /** The computer's workflow folders and where each workflow sits. */
+  async loadFolders() {
+    if (this.disposed) return
+    this.foldersLoading = true
+    this.foldersError = null
+    this.changed()
+    try {
+      this.folders = await (await this.client()).call<WorkflowFoldersSnapshot>('workflowFolders', {})
+    } catch (error) {
+      this.foldersError = error instanceof Error ? error.message : String(error)
+    } finally {
+      this.foldersLoading = false
+      this.changed()
+    }
+  }
+
+  /** Creates, renames, deletes or files a workflow; the host returns the new snapshot. */
+  async folderAction(action: WorkflowFolderAction) {
+    if (this.disposed) return
+    this.busy = true
+    this.foldersError = null
+    this.changed()
+    try {
+      this.folders = await (await this.client()).call<WorkflowFoldersSnapshot>('workflowFolderApply', action)
+    } catch (error) {
+      this.foldersError = error instanceof Error ? error.message : String(error)
+    } finally {
+      this.busy = false
+      this.changed()
+    }
   }
 }

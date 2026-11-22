@@ -6,7 +6,7 @@ import { MenuPanel, type MenuItem } from '../../../components/Menu'
 import { useEscape, usePresence } from '../../../components/Overlay'
 import { useTr } from '../../../lib/use-language'
 import {
-  NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, isUnconnected, latestStep, linkEndOf, mediaOf, mediaTitle, nodeAt,
+  NODE_HEIGHT, NODE_WIDTH, canvasCenter, edgePath, fitView, isUnconnected, latestStep, linkEndOf, mediaOf, mediaTitle, nodeAt,
   portCarry, stepNameOf, stepOf, stepProgress, zoomAt, type FlowNode, type View,
 } from '../../../lib/routine-flow.ts'
 import {
@@ -45,8 +45,10 @@ interface Props {
   onUngroup: (groupId: string) => void
   /** Collapse or expand a group (double-click a stack card opens it). */
   onToggleGroup: (groupId: string) => void
-  /** Two or more files were pasted or dropped; the view makes a node per file in one group. */
-  onFiles: (files: { name: string }[]) => void
+  /** Two or more files were pasted or dropped; the view makes a node per file in one group at `at`. */
+  onFiles: (files: { name: string }[], at: { x: number; y: number }) => void
+  /** Backspace or Delete on the focused canvas removes the selected steps. */
+  onDelete: (nodeKey: string) => void
   /** The step menu's rows: Run from this step, Settings and (for a picture step) Duplicate. */
   menuItems: (nodeKey: string) => MenuItem[]
   /** Clicking a card's title edits its name; empty clears it back to the step type. */
@@ -117,7 +119,7 @@ function MiniMap({ nodes, view, box, onCenter }: {
 }
 
 /** The canvas: routine and bot nodes, their edges, groups, pan, zoom (wheel and buttons) and gestures. */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onTidy, onUndoTidy, onRun, onStop, menuItems, onRenameStep, query, composer }: Props) {
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onDelete, onTidy, onUndoTidy, onRun, onStop, menuItems, onRenameStep, query, composer }: Props) {
   const tr = useTr()
   const groups = groupsOf(canvas)
   const nodes = useMemo(() => groupedNodes(canvas), [canvas])
@@ -148,6 +150,11 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
   }, [])
 
   const size = () => viewport.current?.getBoundingClientRect() ?? new DOMRect(0, 0, 800, 500)
+  /** Where pasted steps land: the middle of what the person is looking at, never a far-off saved spot. */
+  const pastePoint = () => {
+    const rect = size()
+    return canvasCenter(viewRef.current, rect.width, rect.height)
+  }
   useLayoutEffect(() => {
     if (fitted.current || nodes.length === 0) return
     fitted.current = true
@@ -187,6 +194,9 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
 
   const startPan = (event: PointerEvent) => {
     if (event.target !== event.currentTarget && !(event.target as Element).classList.contains('flow-layer')) return
+    // After a title-bar tab click the focus is on that button; a canvas click must move it here,
+    // or Backspace closes the tab instead of deleting the selected steps.
+    viewport.current?.focus()
     onSelect(null)
     setMulti(new Set())
     setMenu(null)
@@ -276,6 +286,15 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
 
   /** Group / ungroup from the keyboard, over any focused node or the canvas itself. */
   const canvasKeys = (event: KeyboardEvent) => {
+    if ((event.key === 'Backspace' || event.key === 'Delete') && !disabled) {
+      const keys = multi.size >= 2 ? [...multi] : selection?.kind === 'node' ? [selection.key] : []
+      if (keys.length === 0) return
+      event.preventDefault()
+      for (const key of keys) onDelete(key)
+      setMulti(new Set())
+      onSelect(null)
+      return
+    }
     if (event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 't') {
       event.preventDefault()
       onTidy()
@@ -361,7 +380,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
         const files = [...event.clipboardData.files]
         if (files.length >= 2) {
           event.preventDefault()
-          onFiles(files.map((file) => ({ name: file.name })))
+          onFiles(files.map((file) => ({ name: file.name })), pastePoint())
         }
       }}
       onDragOver={(event) => {
@@ -371,7 +390,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
         const files = [...event.dataTransfer.files]
         if (files.length >= 2) {
           event.preventDefault()
-          onFiles(files.map((file) => ({ name: file.name })))
+          onFiles(files.map((file) => ({ name: file.name })), pastePoint())
         }
       }}
     >

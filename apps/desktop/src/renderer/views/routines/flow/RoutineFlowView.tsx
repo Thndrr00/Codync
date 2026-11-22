@@ -1,27 +1,34 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { MediaKind } from '@shared/media'
-import { isGroup, type Bot } from '@shared/models'
+import { draftOf, isGroup, type Bot } from '@shared/models'
 import { Button, ChoicePicker, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
 import { Dialog, DialogField, ModalHeader, Sheet } from '../../../components/Overlay'
 import { AnchoredMenu, type MenuItem } from '../../../components/Menu'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
+import { prefs, usePref } from '../../../lib/prefs'
 import {
-  NODE_WIDTH, botKey, canvasBotIds, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle, stepNameOf, tidyLayout,
-  type FlowCanvas, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard, type FlowStep,
+  NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasRunning, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle,
+  stepNameOf, tidyLayout, type FlowCanvas, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard,
+  type FlowStep, type WorkflowFolderAction,
 } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
 import { RoutineFlowStore } from '../../../store/routine-flow-store'
+import { AllWorkflowsMenu } from './AllWorkflowsMenu'
 import { FlowCanvasView, type FlowSelection } from './FlowCanvas'
 import {
   documentFromCanvas, type FlowChoice, type FlowConflict, type FlowDocument, type FlowSaveAnswer,
 } from './flow-merge'
+import {
+  closeOtherWorkflows, closeWorkflow, closeWorkflowsRight, moveWorkflow, nextActiveTab, openWorkflow, restoreWorkflowTabs,
+} from './flow-tabs'
 import { groupsOf, groupSpot, newGroupId, outputType, parsePort, type CanvasWithGroups, type FlowGroup } from './flow-groups'
 import { FlowInspector, type FlowTarget, type MediaSettings } from './FlowInspector'
 import { FlowEmptyState } from './FlowEmptyState'
 import { FlowList } from './FlowList'
+import { FlowTabStrip } from './FlowTabStrip'
 import { clipped, hasMore, leftmostNode, settingsOf, type FlowStepSettings } from './flow-settings'
 import { RoutineEditorView } from '../RoutineEditorView'
 import './routine-flow.css'
@@ -116,6 +123,11 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const store = useStore()
   const [flow] = useState(() => new RoutineFlowStore(botId, () => store.ready()))
   const model = useModel(flow)
+  /** The open workflows, in tab order, on this device (ids only). The active one is session state. */
+  const [openTabs, setOpenTabs] = usePref(prefs.openWorkflowTabs)
+  const [activeId, setActiveId] = useState(botId)
+  /** The host files workflows by routine id; a tab is the bot whose canvas holds its routines. */
+  const [workflowList, setWorkflowList] = useState<{ id: string; name: string; botId: string }[]>([])
   const [mode, setMode] = useState<Mode>('canvas')
   const [selection, setSelection] = useState<FlowSelection>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -126,6 +138,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [choices, setChoices] = useState<Record<string, FlowChoice>>({})
   /** The step whose saved settings are open in the sheet. */
   const [shownSettings, setShownSettings] = useState<{ card: FlowRoutineCard; step: FlowStep } | null>(null)
+  /** A workflow being renamed from the All workflows menu (the tabs rename inline). */
+  const [renameDraft, setRenameDraft] = useState<{ id: string; name: string } | null>(null)
   const [creating, setCreating] = useState(false)
   const [choose, setChoose] = useState<{ from: string; to: string; at: { x: number; y: number }; routines: { id: string; name: string }[] } | null>(null)
   /** The canvas search: nodes that don't match are dimmed and list rows are filtered. */
@@ -136,13 +150,33 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   /** The drawing a tidy replaced, so Undo can put the steps back. */
   const [tidyUndo, setTidyUndo] = useState<{ positions: FlowPosition[]; groups: FlowGroup[] } | null>(null)
   const offline = store.isOffline
-  const rev = store.flowRev(botId)
+  const rev = store.flowRev(activeId)
 
   useEffect(() => {
     flow.resume()
     void flow.load()
     return () => flow.dispose()
   }, [flow])
+  // A parent opening another workflow adds its tab and selects it; a launch restores the saved strip.
+  useEffect(() => {
+    setOpenTabs(restoreWorkflowTabs(openTabs, botId))
+    setActiveId(botId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botId])
+  // The tab strip owns which workflow's canvas the store shows from here on.
+  useEffect(() => { flow.switchTo(activeId) }, [flow, activeId])
+  useEffect(() => { void flow.loadFolders() }, [flow])
+  const botIdsKey = [...store.bots.keys()].join('\u0000')
+  useEffect(() => {
+    let live = true
+    const ids = botIdsKey ? botIdsKey.split('\u0000') : []
+    void flow.listWorkflows(ids).then((list) => {
+      if (live) setWorkflowList(list)
+    }).catch((error: unknown) => {
+      if (live) setNote(error instanceof Error ? error.message : String(error))
+    })
+    return () => { live = false }
+  }, [flow, botIdsKey])
   // The host says the canvas changed (another client, a step finishing): load it again.
   useEffect(() => {
     if (rev > 0) void flow.load()
@@ -151,6 +185,50 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const canvas = model.canvas as CanvasWithGroups | null
   const bots = store.bots
   const roster = useMemo(() => [...bots.values()].filter(canTakeWork), [bots])
+
+  // --- The title bar's workflow tabs and the "All workflows" tree --------------------------------
+
+  /** Tabs are bot canvases; the host files workflows by routine id, so the menu lists routines. */
+  const workflows = useMemo(() => workflowList.map((workflow) => ({
+    ...workflow,
+    name: workflow.name?.trim() || bots.get(workflow.botId)?.name?.trim() || tr('Untitled workflow'),
+  })), [workflowList, bots, tr])
+  const currentWorkflowId = workflows.find((workflow) => workflow.botId === activeId)?.id
+    ?? canvas?.routines.find((card) => card.routine.botId === activeId)?.routine.id
+    ?? canvas?.routines[0]?.routine.id ?? null
+  const nameOfWorkflow = (id: string) => bots.get(id)?.name?.trim() || tr('Untitled workflow')
+  const isRunning = (id: string) => {
+    const status = bots.get(id)?.status
+    return status === 'working' || status === 'needsInput' || (id === activeId && canvasRunning(canvas))
+  }
+  const openTab = (id: string) => {
+    setOpenTabs(openWorkflow(openTabs, id))
+    setActiveId(id)
+    setSelection(null)
+  }
+  const closeTab = (id: string) => {
+    const next = closeWorkflow(openTabs, id)
+    setOpenTabs(next)
+    const follow = nextActiveTab(openTabs, id, activeId)
+    if (follow) setActiveId(follow)
+  }
+  const closeOthers = (id: string) => {
+    setOpenTabs(closeOtherWorkflows(openTabs, id))
+    setActiveId(id)
+  }
+  const closeRight = (id: string) => setOpenTabs(closeWorkflowsRight(openTabs, id))
+  const reorderTab = (from: string, to: string) => setOpenTabs(moveWorkflow(openTabs, from, to))
+  /** A tab's name is its workflow's name, which on Codync is the bot's name. */
+  const renameWorkflow = async (id: string, name: string) => {
+    const bot = bots.get(id)
+    if (!bot) return
+    try {
+      await store.save({ ...draftOf(bot), name })
+    } catch (error) {
+      setNote(`${tr('Could not rename the workflow.')} ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  const applyFolderAction = (action: WorkflowFolderAction) => { void flow.folderAction(action) }
 
   const connectable = (c: FlowCanvas, from: string, to: string) =>
     c.routines.filter((r) => connectProblem(c, r.routine.id, from, to) === null)
@@ -197,17 +275,55 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     return [...bots, ...steps]
   }
 
+  // The strip stays visible while a workflow opens: only the canvas area shows the spinner.
+  const titleBar = (
+    <HStack gap={8} align="center" className="flow-title-bar">
+      <AllWorkflowsMenu
+        workflows={workflows}
+        current={currentWorkflowId ?? ''}
+        folders={flow.folders}
+        loading={flow.foldersLoading}
+        error={flow.foldersError}
+        onOpen={(workflow) => {
+          openTab(workflow.botId)
+          setSelection({ kind: 'node', key: `routine:${workflow.id}` })
+        }}
+        onNew={() => setCreating(true)}
+        onRename={(workflow) => setRenameDraft({ id: workflow.botId, name: nameOfWorkflow(workflow.botId) })}
+        onFolderAction={applyFolderAction}
+      />
+      <FlowTabStrip
+        tabs={openTabs}
+        active={activeId}
+        nameOf={nameOfWorkflow}
+        running={isRunning}
+        onSelect={openTab}
+        onClose={closeTab}
+        onCloseOthers={closeOthers}
+        onCloseRight={closeRight}
+        onReorder={reorderTab}
+        onRename={(id, name) => void renameWorkflow(id, name)}
+      />
+      <IconButton title={tr('New workflow')} icon="plus" disabled={offline} onClick={() => setCreating(true)} />
+    </HStack>
+  )
+
   if (flow.unsupported) {
     return <Text size="callout" tone="secondary" className="outlined-card flow-state">{tr('This computer\'s host doesn\'t support routine flows yet. Update Codync on it.')}</Text>
   }
   if (!canvas) {
-    return model.error ? (
-      <VStack gap={8} className="outlined-card flow-state">
-        <Text size="callout" tone="danger">{model.error}</Text>
-        <Button kind="secondary" onClick={() => void flow.load()}>{tr('Try again')}</Button>
+    return (
+      <VStack gap={8} className="routine-flow">
+        {titleBar}
+        {model.error ? (
+          <VStack gap={8} className="outlined-card flow-state">
+            <Text size="callout" tone="danger">{model.error}</Text>
+            <Button kind="secondary" onClick={() => void flow.load()}>{tr('Try again')}</Button>
+          </VStack>
+        ) : (
+          <HStack gap={8} className="outlined-card flow-state"><Spinner /><Text size="callout" tone="secondary">{tr('Loading the flow…')}</Text></HStack>
+        )}
       </VStack>
-    ) : (
-      <HStack gap={8} className="outlined-card flow-state"><Spinner /><Text size="callout" tone="secondary">{tr('Loading the flow…')}</Text></HStack>
     )
   }
 
@@ -247,7 +363,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       let answer: FlowSaveAnswer | null = null
       for (const item of waiting.conflicts) {
         answer = await client.call<FlowSaveAnswer>('resolveRoutineFlowConflict', {
-          botId, field: item.field, key: item.key, choice: choices[conflictId(item)] ?? 'local',
+          botId: activeId, field: item.field, key: item.key, choice: choices[conflictId(item)] ?? 'local',
         })
         if (answer.saved) break
       }
@@ -267,7 +383,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     if (!canvas || offline) return false
     setMergeNote(false)
     try {
-      const answer = await (await store.ready()).call<FlowSaveAnswer>('saveRoutineFlow', { botId, baseRev: canvas.rev, document })
+      const answer = await (await store.ready()).call<FlowSaveAnswer>('saveRoutineFlow', { botId: activeId, baseRev: canvas.rev, document })
       if (answer.conflicts?.length) {
         setConflict({ document: answer.document, conflicts: answer.conflicts })
         setChoices({})
@@ -339,10 +455,10 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }
     await saveGroups(groupsOf(canvas).map((g) => (g.id === id ? { ...g, x, y } : g)))
   }
-  /** A paste or drop of two or more files makes one picture step per file, all in one group. */
-  const addFiles = async (files: { name: string }[]) => {
+  /** A paste or drop of two or more files makes one picture step per file, all in one group in the middle of the view. */
+  const addFiles = async (files: { name: string }[], at: { x: number; y: number }) => {
     if (!canvas || offline) return
-    const routine = canvas.routines.find((r) => r.routine.botId === botId) ?? canvas.routines[0]
+    const routine = canvas.routines.find((r) => r.routine.botId === activeId) ?? canvas.routines[0]
     if (!routine) {
       setNote(tr('Add a routine before dropping files.'))
       return
@@ -355,7 +471,9 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       members.push(mediaKey(media.id))
     }
     if (members.length < 2) return
-    const spot = freeSpot(canvas)
+    // The paste point is the middle of the visible canvas, not a saved position from another
+    // workflow that might be far off screen (OpenBot 0.70 workflow paste fix).
+    const spot = { x: Math.round(at.x - NODE_WIDTH / 2), y: Math.round(at.y - NODE_HEIGHT / 2) }
     await saveGroups([...groupsOf(canvas), {
       id: newGroupId(groupsOf(canvas)), name: tr('New group'), members, collapsed: false, x: spot.x, y: spot.y,
     }])
@@ -409,7 +527,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }
     setNote(null)
     try {
-      await (await store.ready()).call('runRoutineFlowFromStep', { botId, routineId: card.routine.id, nodeKey })
+      await (await store.ready()).call('runRoutineFlowFromStep', { botId: activeId, routineId: card.routine.id, nodeKey })
       setSelection({ kind: 'node', key })
       await flow.load()
     } catch (error) {
@@ -500,6 +618,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
 
   return (
     <VStack gap={8} className="routine-flow">
+      {titleBar}
       <HStack gap={8} wrap>
         <SegmentedChoice selection={mode} options={[{ id: 'canvas', label: 'Canvas' }, { id: 'list', label: 'List' }]} onChange={setMode} />
         <input
@@ -525,12 +644,10 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       {model.error ? <Text size="caption" tone="danger">{model.error}</Text> : null}
       {note ? <Text size="caption" tone="danger">{note}</Text> : null}
       {mergeNote ? <Text size="caption" tone="attention" className="flow-merge-note">{tr('Someone else edited this flow; their changes were merged in.')}</Text> : null}
-      {canvas.routines.length === 0 && mode === 'canvas' ? (
-        <FlowEmptyState note={note} disabled={offline} onNew={() => setCreating(true)} />
-      ) : (
-        <HStack gap={8} align="stretch" className="flow-body">
-          <div className="flow-main">
-            {mode === 'canvas' ? (
+      <HStack gap={8} align="stretch" className="flow-body">
+        <div className="flow-main">
+          {mode === 'canvas' ? (
+            <div className="flow-canvas-wrap">
               <FlowCanvasView
                 canvas={canvas}
                 bots={bots}
@@ -545,7 +662,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 onGroup={(keys) => { setGroupDraft(keys); setGroupName('') }}
                 onUngroup={(id) => void ungroup(id)}
                 onToggleGroup={(id) => void toggleGroup(id)}
-                onFiles={(files) => void addFiles(files)}
+                onFiles={(files, at) => void addFiles(files, at)}
+                onDelete={(key) => void flow.removeNode(key)}
                 menuItems={menuItems}
                 onRenameStep={renameStep}
                 query={query}
@@ -560,37 +678,42 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                   setSelection({ kind: 'node', key: `routine:${id}` })
                   void flow.test(id)
                 }}
-                onStop={() => void store.stop(botId)}
+                onStop={() => void store.stop(activeId)}
               />
-            ) : (
-              <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} query={query} note={note} disabled={offline} onNew={() => setCreating(true)} />
-            )}
-          </div>
-          <FlowInspector
-            canvas={canvas}
-            bots={bots}
-            selection={selection}
-            busy={model.busy}
-            offline={offline}
-            targets={targets}
-            onSaveInstruction={saveLink}
-            onDisconnect={(link) => void disconnect(link)}
-            onTest={(id) => void flow.test(id)}
-            onSetEnabled={(id, on) => void flow.setEnabled(id, on)}
-            // No pointer position here: a routine choice, if needed, opens in the middle of the window.
-            onConnectFrom={(from, to) => dropped(from, to, { x: window.innerWidth / 2, y: window.innerHeight / 2 })}
-            onRemoveNode={(key) => void flow.removeNode(key)}
-            onAddMedia={(id, kind) => void addMedia(id, kind)}
-            onSaveMedia={saveMedia}
-            onRemoveMedia={(media) => void removeMedia(media)}
-            onShowSettings={(card, step) => setShownSettings({ card, step })}
-            onDuplicateMedia={(media) => void duplicateMedia(media)}
-            onRenameGroup={(id, name) => void renameGroup(id, name)}
-            onToggleGroup={(id) => void toggleGroup(id)}
-            onUngroup={(id) => void ungroup(id)}
-          />
-        </HStack>
-      )}
+              {canvas.routines.length === 0 ? (
+                <div className="flow-empty-overlay">
+                  <FlowEmptyState note={note} disabled={offline} onNew={() => setCreating(true)} />
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} query={query} note={note} disabled={offline} onNew={() => setCreating(true)} />
+          )}
+        </div>
+        <FlowInspector
+          canvas={canvas}
+          bots={bots}
+          selection={selection}
+          busy={model.busy}
+          offline={offline}
+          targets={targets}
+          onSaveInstruction={saveLink}
+          onDisconnect={(link) => void disconnect(link)}
+          onTest={(id) => void flow.test(id)}
+          onSetEnabled={(id, on) => void flow.setEnabled(id, on)}
+          // No pointer position here: a routine choice, if needed, opens in the middle of the window.
+          onConnectFrom={(from, to) => dropped(from, to, { x: window.innerWidth / 2, y: window.innerHeight / 2 })}
+          onRemoveNode={(key) => void flow.removeNode(key)}
+          onAddMedia={(id, kind) => void addMedia(id, kind)}
+          onSaveMedia={saveMedia}
+          onRemoveMedia={(media) => void removeMedia(media)}
+          onShowSettings={(card, step) => setShownSettings({ card, step })}
+          onDuplicateMedia={(media) => void duplicateMedia(media)}
+          onRenameGroup={(id, name) => void renameGroup(id, name)}
+          onToggleGroup={(id) => void toggleGroup(id)}
+          onUngroup={(id) => void ungroup(id)}
+        />
+      </HStack>
       <AnchoredMenu
         open={choose !== null}
         onClose={() => setChoose(null)}
@@ -603,7 +726,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
             <ModalHeader icon="plus" title={tr('New routine')} onClose={() => setCreating(false)} />
             <div className="flow-new-routine">
               <RoutineEditorView
-                botId={botId}
+                botId={activeId}
                 routine={null}
                 saved={(routine) => {
                   setCreating(false)
@@ -637,6 +760,31 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
             setGroupDraft(null)
           }}
         />
+      </Dialog>
+      <Dialog
+        open={renameDraft !== null}
+        title={tr('Rename workflow')}
+        actions={[{
+          title: tr('Rename'),
+          disabled: !renameDraft?.name.trim(),
+          action: () => {
+            if (renameDraft?.name.trim()) void renameWorkflow(renameDraft.id, renameDraft.name.trim())
+          },
+        }]}
+        onClose={() => setRenameDraft(null)}
+      >
+        {renameDraft ? (
+          <DialogField
+            value={renameDraft.name}
+            onChange={(name) => setRenameDraft({ ...renameDraft, name })}
+            onSubmit={() => {
+              if (renameDraft.name.trim()) void renameWorkflow(renameDraft.id, renameDraft.name.trim())
+              setRenameDraft(null)
+            }}
+            placeholder={tr('Workflow name')}
+            label={tr('Workflow name')}
+          />
+        ) : null}
       </Dialog>
       <Dialog
         open={conflict !== null}

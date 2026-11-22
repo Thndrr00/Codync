@@ -2760,5 +2760,19 @@
   "Restart now": "Reiniciar ahora",
   "Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in.": "Los mensajes se detuvieron tres veces en la última hora. Codync se reconecta solo; reconecta ahora si siguen sin llegar.",
   "{n} waiting for you": "{n} esperando tu respuesta",
-  "{n} open threads wait for you": "{n} hilos abiertos esperan tu respuesta"
+  "{n} open threads wait for you": "{n} hilos abiertos esperan tu respuesta",
+  "All workflows": "Todos los flujos de trabajo",
+  "Workflow tabs": "Pestañas de flujos de trabajo",
+  "Workflow name": "Nombre del flujo de trabajo",
+  "Untitled workflow": "Flujo de trabajo sin título",
+  "Close other tabs": "Cerrar las otras pestañas",
+  "Close tabs to the right": "Cerrar las pestañas a la derecha",
+  "No folder": "Sin carpeta",
+  "Move workflow": "Mover flujo de trabajo",
+  "Move workflow here": "Mover flujo de trabajo aquí",
+  "This folder is empty": "Esta carpeta está vacía",
+  "Rename workflow": "Renombrar flujo de trabajo",
+  "Folder name": "Nombre de la carpeta",
+  "Could not rename the workflow.": "No se pudo renombrar el flujo de trabajo.",
+  "Making the result…": "Creando el resultado…"
 }

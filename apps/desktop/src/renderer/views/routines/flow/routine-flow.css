@@ -695,3 +695,127 @@
   border-radius: var(--radius-xs);
   background: rgba(var(--text-rgb), 0.05);
 }
+
+/* The title bar: the All workflows menu, the tab strip, and New workflow. */
+.flow-title-bar {
+  min-width: 0;
+}
+.flow-title-bar .flow-tab-strip {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.flow-all-workflows {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--chrome-fill);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.flow-all-workflows:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The shared inline-edit pattern, laid over the tab being renamed. */
+.flow-tab-rename {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-s);
+  background: var(--sheet);
+  color: var(--text);
+  font: inherit;
+  animation: flow-tab-rename-in 120ms ease-out;
+}
+.flow-tab-rename:focus {
+  outline: none;
+}
+@keyframes flow-tab-rename-in {
+  from { opacity: 0; transform: scaleX(0.9); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+/* The empty message floats over a live canvas: it must not swallow drawing or paste clicks. */
+.flow-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.flow-empty-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.flow-empty-overlay .flow-empty {
+  pointer-events: none;
+}
+.flow-empty-overlay .flow-empty button {
+  pointer-events: auto;
+}
+
+/* Round result thumbnails: larger when active, a thin ring coloured from the result. */
+.flow-result-switcher {
+  min-height: 34px;
+}
+.flow-result-thumb,
+.flow-result-arrow {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sheet) 82%, transparent);
+  backdrop-filter: blur(8px);
+  color: var(--secondary);
+  transition: transform var(--morph), border-color var(--morph), color var(--morph);
+}
+.flow-result-thumb {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1.5px solid var(--stroke-strong);
+}
+.flow-result-thumb[data-active='true'] {
+  transform: scale(1.14);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.flow-step-result[data-status='succeeded'] .flow-result-thumb[data-active='true'] {
+  border-color: var(--added);
+  color: var(--added);
+}
+.flow-step-result[data-status='failed'] .flow-result-thumb[data-active='true'] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.flow-result-arrow {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--chrome-stroke);
+  cursor: pointer;
+}
+.flow-result-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.flow-result-arrow:focus-visible,
+.flow-result-thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-result-thumb,
+  .flow-result-arrow {
+    transition: none;
+  }
+  .flow-tab-rename {
+    animation: none;
+  }
+}

@@ -127,6 +127,8 @@ export const prefs = {
   restoreLastWorkspace: pref('restoreLastWorkspace', true),
   /** Open tabs of each chat, keyed by computer and bot; ids only, kept on this device. */
   openTabsByChat: pref<SavedTabsByChat>('openTabsByChat', {}),
+  /** Open workflow tabs in the flow title bar, in open order; workflow (bot) ids only, on this device. */
+  openWorkflowTabs: pref<string[]>('openWorkflowTabs', []),
   /** The command palette's last picks, newest first, leading its Recent group. */
   recentCommands: pref<string[]>('recentCommands', []),
 }

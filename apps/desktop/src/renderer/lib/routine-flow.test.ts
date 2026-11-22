@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  NODE_WIDTH, botKey, connectProblem, depths, edgePath, fitView, flowEdges, flowRows, layoutNodes, mediaKey, mediaTitle, nodeAt,
-  portCarry, routineKey, stepNameOf, stepProgress, tidyLayout, zoomAt, type FlowCanvas, type FlowLink, type FlowMedia, type FlowNode, type FlowStep,
+  NODE_WIDTH, botKey, canvasCenter, canvasRunning, connectProblem, depths, edgePath, fitView, flowEdges, flowRows, folderOf,
+  layoutNodes, mediaKey, mediaTitle, nodeAt, portCarry, routineKey, stepNameOf, stepProgress, tidyLayout, workflowsInFolder, zoomAt,
+  type FlowCanvas, type FlowLink, type FlowMedia, type FlowNode, type FlowStep, type WorkflowFoldersSnapshot,
 } from './routine-flow.ts'
+import {
+  closeOtherWorkflows, closeWorkflow, closeWorkflowsRight, moveWorkflow, nextActiveTab, openWorkflow,
+  restoreWorkflowTabs, safeWorkflowId,
+} from '../views/routines/flow/flow-tabs.ts'
 
 const link = (from: string, to: string, extra: Partial<FlowLink> = {}): FlowLink =>
   ({ id: `${from}-${to}`, routineId: 'r', fromBotId: from, toBotId: to, instruction: '', createdAt: 1, ...extra })
@@ -174,4 +179,85 @@ test('the list shows a media step under the step that hands to it', () => {
   assert.equal(mediaTitle(rows[1]!.media), 'A red fox')
   assert.equal(mediaTitle(media('m9')), 'Picture')
   assert.equal(mediaTitle(media('m9', 'video')), 'Video')
+})
+
+test('a canvas is running when a step or a recent run is still active', () => {
+  assert.equal(canvasRunning(null), false)
+  assert.equal(canvasRunning(canvas([])), false)
+  assert.equal(canvasRunning(canvas([], {}, [step('b', 'running')])), true)
+  const run = { id: 'r1', routineId: 'r', botId: 'a', status: 'recovering', createdAt: 1 }
+  assert.equal(canvasRunning(canvas([], { routines: [{ ...canvas([]).routines[0], recentRuns: [run] }] })), true)
+  const done = { ...run, status: 'succeeded' }
+  assert.equal(canvasRunning(canvas([], { routines: [{ ...canvas([]).routines[0], recentRuns: [done] }] })), false)
+})
+
+test('the canvas centre follows pan and zoom, so paste lands where the person looks', () => {
+  assert.deepEqual(canvasCenter({ x: 0, y: 0, scale: 1 }, 800, 600), { x: 400, y: 300 })
+  assert.deepEqual(canvasCenter({ x: -100, y: -50, scale: 2 }, 800, 600), { x: 250, y: 175 })
+  assert.deepEqual(canvasCenter({ x: 40, y: 10, scale: 0.5 }, 200, 100), { x: 120, y: 80 })
+})
+
+test('a workflow sits in one folder and the unfiled list is the rest, in order', () => {
+  const folders: WorkflowFoldersSnapshot = {
+    revision: 2,
+    folders: [{ id: 'f1', name: 'Reports' }, { id: 'f2', name: 'Images' }],
+    placement: { a: 'f1', b: 'f1', c: 'gone' },
+  }
+  assert.equal(folderOf(folders, 'a'), 'f1')
+  assert.equal(folderOf(folders, 'c'), null, 'a placement to a deleted folder is unfiled')
+  assert.equal(folderOf(folders, 'z'), null)
+  assert.equal(folderOf(null, 'a'), null)
+  assert.deepEqual(workflowsInFolder(folders, ['a', 'b', 'c', 'z'], 'f1'), ['a', 'b'])
+  assert.deepEqual(workflowsInFolder(folders, ['a', 'b', 'c', 'z'], null), ['c', 'z'])
+  assert.deepEqual(workflowsInFolder(null, ['a', 'b'], null), ['a', 'b'])
+})
+
+test('a saved tab list keeps only safe ids, in order, and brings the opened workflow back', () => {
+  assert.deepEqual(restoreWorkflowTabs(['a', 'b', 'a', '', 'x/y', 4, null, 'b'], 'c'), ['a', 'b', 'c'])
+  assert.deepEqual(restoreWorkflowTabs(null, 'a'), ['a'])
+  assert.deepEqual(restoreWorkflowTabs('nope', 'a'), ['a'])
+  assert.deepEqual(restoreWorkflowTabs(['b', 'a'], 'a'), ['b', 'a'], 'an already open workflow keeps its place')
+})
+
+test('only plain host ids are safe to save', () => {
+  assert.equal(safeWorkflowId('bot_12'), true)
+  assert.equal(safeWorkflowId('a/b'), false)
+  assert.equal(safeWorkflowId('a b'), false)
+  assert.equal(safeWorkflowId('a\nb'), false)
+  assert.equal(safeWorkflowId(''), false)
+  assert.equal(safeWorkflowId('x'.repeat(201)), false)
+  assert.equal(safeWorkflowId(7), false)
+})
+
+test('opening moves a repeat tab to the end and keeps a fresh id out of a bad list', () => {
+  assert.deepEqual(openWorkflow(['a', 'b', 'c'], 'b'), ['a', 'c', 'b'])
+  assert.deepEqual(openWorkflow(['a'], 'b'), ['a', 'b'])
+  assert.deepEqual(openWorkflow(['a'], 'a b'), ['a'])
+})
+
+test('closing keeps one tab and selects the right neighbour, else the left one', () => {
+  assert.deepEqual(closeWorkflow(['a', 'b', 'c'], 'b'), ['a', 'c'])
+  assert.deepEqual(closeWorkflow(['a', 'b'], 'a'), ['b'])
+  assert.deepEqual(closeWorkflow(['only'], 'only'), ['only'], 'the last tab cannot close')
+  assert.deepEqual(closeWorkflow(['a', 'b'], 'missing'), ['a', 'b'])
+  assert.equal(nextActiveTab(['a', 'b', 'c'], 'a', 'a'), 'b')
+  assert.equal(nextActiveTab(['a', 'b', 'c'], 'c', 'c'), 'b')
+  assert.equal(nextActiveTab(['a', 'b', 'c'], 'b', 'a'), null, 'a different tab being closed leaves the selection alone')
+  assert.equal(nextActiveTab(['only'], 'only', 'only'), null)
+  assert.equal(nextActiveTab(['a', 'b'], 'missing', 'missing'), 'a')
+})
+
+test('the tab menu closes others or everything to the right', () => {
+  assert.deepEqual(closeOtherWorkflows(['a', 'b', 'c'], 'b'), ['b'])
+  assert.deepEqual(closeOtherWorkflows(['a', 'b'], 'missing'), ['a', 'b'])
+  assert.deepEqual(closeWorkflowsRight(['a', 'b', 'c', 'd'], 'b'), ['a', 'b'])
+  assert.deepEqual(closeWorkflowsRight(['a', 'b'], 'b'), ['a', 'b'])
+  assert.deepEqual(closeWorkflowsRight(['a', 'b'], 'missing'), ['a', 'b'])
+})
+
+test('a dragged tab takes the target\'s place in the strip', () => {
+  assert.deepEqual(moveWorkflow(['a', 'b', 'c', 'd'], 'd', 'b'), ['a', 'd', 'b', 'c'])
+  assert.deepEqual(moveWorkflow(['a', 'b', 'c'], 'b', 'a'), ['b', 'a', 'c'])
+  assert.deepEqual(moveWorkflow(['a', 'b'], 'a', 'a'), ['a', 'b'])
+  assert.deepEqual(moveWorkflow(['a', 'b'], 'a', 'missing'), ['a', 'b'])
 })

@@ -14,6 +14,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
     ['restoreLastWorkspace', '"yes"'],
     ['startupAnimation', '"yes"'],
     ['openTabsByChat', '[]'],
+    ['openWorkflowTabs', '{"a":1}'],
   ])
   const events = new EventTarget()
   setMaxListeners(0, events)
@@ -33,6 +34,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
   assert.equal(prefs.restoreLastWorkspace.get(), true, 'a non-boolean switch reads as its default')
   assert.equal(prefs.startupAnimation.get(), true, 'a non-boolean startup switch reads as its default')
   assert.deepEqual(prefs.openTabsByChat.get(), {}, 'an array is not a tab map')
+  assert.deepEqual(prefs.openWorkflowTabs.get(), [], 'an object is not a workflow tab list')
 })
 
 test('a custom accent writes the accent variables and clearing it removes them', async () => {

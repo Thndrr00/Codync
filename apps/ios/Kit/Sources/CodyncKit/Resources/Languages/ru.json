@@ -2760,5 +2760,19 @@
   "Restart now": "Restart now",
   "Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in.": "Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in.",
   "{n} waiting for you": "{n} waiting for you",
-  "{n} open threads wait for you": "{n} open threads wait for you"
+  "{n} open threads wait for you": "{n} open threads wait for you",
+  "All workflows": "All workflows",
+  "Workflow tabs": "Workflow tabs",
+  "Workflow name": "Workflow name",
+  "Untitled workflow": "Untitled workflow",
+  "Close other tabs": "Close other tabs",
+  "Close tabs to the right": "Close tabs to the right",
+  "No folder": "No folder",
+  "Move workflow": "Move workflow",
+  "Move workflow here": "Move workflow here",
+  "This folder is empty": "This folder is empty",
+  "Rename workflow": "Rename workflow",
+  "Folder name": "Folder name",
+  "Could not rename the workflow.": "Could not rename the workflow.",
+  "Making the result…": "Making the result…"
 }

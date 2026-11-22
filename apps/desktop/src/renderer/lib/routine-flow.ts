@@ -7,7 +7,7 @@
 
 import type { MediaKind } from '@shared/media'
 import type { SharedFile } from '@shared/models'
-import type { Routine, RoutineRun } from '../views/routines/routine'
+import { isActiveRun, type Routine, type RoutineRun } from '../views/routines/routine.ts'
 
 export type StepStatus = 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'
 
@@ -84,6 +84,26 @@ export interface FlowCanvas {
   /** The picture and clip steps of these routines (host/src/store/flow_media.rs). */
   mediaNodes: FlowMedia[]
 }
+
+/** One folder of the computer-wide "All workflows" tree (host `workflowFolders`). */
+export interface WorkflowFolder {
+  id: string
+  name: string
+}
+
+/** The host's folder tree: folders and which workflow sits in which one. */
+export interface WorkflowFoldersSnapshot {
+  revision: number
+  folders: WorkflowFolder[]
+  placement: Record<string, string>
+}
+
+/** The body of `workflowFolderApply`; `action` is the discriminator (OpenBot's folder actions). */
+export type WorkflowFolderAction =
+  | { action: 'create'; id: string; name: string; workflowIds?: string[] }
+  | { action: 'rename'; folderId: string; name: string }
+  | { action: 'delete'; folderId: string }
+  | { action: 'place'; workflowIds: string[]; folderId: string | null }
 
 /** The host's limit on how far a flow reaches from its routine's bot. */
 export const DEFAULT_MAX_DEPTH = 5
@@ -428,6 +448,32 @@ export function flowRows(canvas: FlowCanvas): FlowRow[] {
     walk(card.routine.botId, 0, null, [])
   }
   return rows
+}
+
+/** Whether this canvas has a step still running: the run snapshot a workflow tab's dot reads. */
+export function canvasRunning(canvas: FlowCanvas | null): boolean {
+  return !!canvas && canvas.routines.some((card) =>
+    card.steps.some((step) => step.status === 'running') || card.recentRuns.some(isActiveRun))
+}
+
+/** The canvas point at the middle of the viewport: where steps pasted from elsewhere land. */
+export function canvasCenter(view: View, width: number, height: number): { x: number; y: number } {
+  return { x: (width / 2 - view.x) / view.scale, y: (height / 2 - view.y) / view.scale }
+}
+
+/** A workflow's folder id, or null when it is unfiled or the folder has gone. */
+export function folderOf(snapshot: WorkflowFoldersSnapshot | null, workflowId: string): string | null {
+  const folderId = snapshot?.placement[workflowId]
+  return folderId && snapshot?.folders.some((folder) => folder.id === folderId) ? folderId : null
+}
+
+/** The given workflows filed in `folderId` (null = unfiled), keeping their order. */
+export function workflowsInFolder(
+  snapshot: WorkflowFoldersSnapshot | null,
+  ids: readonly string[],
+  folderId: string | null,
+): string[] {
+  return ids.filter((id) => folderOf(snapshot, id) === folderId)
 }
 
 /** What a step's status says, in the words the other clients use. */
