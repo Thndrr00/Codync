@@ -61,6 +61,17 @@ pub fn is_chained(command: &str) -> bool {
     CHAINING.iter().any(|c| command.contains(c))
 }
 
+/// The Codex app-server approval policy for a bot, or `None` for another backend (OpenBot nightly
+/// `triage-14587`). At Ask first with no per-backend auto-approval, Codex must ask before each command and
+/// file change; its harness default (`on-request`) lets commands outside the workspace, `sudo` included,
+/// through without a card. An auto-approved backend keeps `on-request` (the "Full access" reach).
+pub fn codex_approval_policy(backend: &str, permission: Permission, auto_approved: bool) -> Option<&'static str> {
+    if backend != "codex" {
+        return None;
+    }
+    Some(if permission == Permission::Ask && !auto_approved { "untrusted" } else { "on-request" })
+}
+
 /// The rule that decides a request of `kind` doing `subject` (its command, or its title).
 #[cfg(test)]
 fn decide<'a>(rules: &'a [ApprovalRule], kind: &str, subject: &str) -> Option<&'a ApprovalRule> {
@@ -332,5 +343,13 @@ mod tests {
         let many: Vec<ApprovalRule> = std::iter::repeat_n(rule("x", Decision::Ask), MAX_RULES + 1).collect();
         assert!(validate(&many).is_err());
         assert!(validate(&[rule("npm test", Decision::Allow)]).is_ok());
+    }
+
+    #[test]
+    fn codex_asks_before_each_command_only_at_ask_first() {
+        assert_eq!(codex_approval_policy("codex", Permission::Ask, false), Some("untrusted"));
+        assert_eq!(codex_approval_policy("codex", Permission::Ask, true), Some("on-request"));
+        assert_eq!(codex_approval_policy("codex", Permission::Auto, false), Some("on-request"));
+        assert_eq!(codex_approval_policy("claude", Permission::Ask, false), None, "only Codex reads this");
     }
 }

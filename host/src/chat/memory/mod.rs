@@ -14,6 +14,7 @@ mod file_api;
 mod file_tools;
 pub mod files;
 mod import;
+mod search_terms;
 mod skill_review;
 pub(crate) mod switch;
 mod tools;

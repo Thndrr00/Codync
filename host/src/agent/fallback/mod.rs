@@ -4,6 +4,7 @@
 //! agent rests is `rest`, shared by every bot on the computer; what the next agent is told is `carry`. The actor's
 //! side is `agent::bot::fallback`. Design: `docs/features/agent-fallback.md`.
 
+pub mod blocked;
 pub mod carry;
 pub mod reason;
 pub mod rest;
@@ -102,9 +103,10 @@ pub fn start_again(hub: &Hub, account: &str) {
 }
 
 /// Agent `backend` is signed in now: its rests for being signed out are over (one for usage stays), so bots that
-/// moved on to a fallback come back on their next message.
+/// moved on to a fallback come back on their next message. A replaced key or a new sign-in also ends a
+/// refused-credential hold, so the user's fix is tried at once (OpenBot nightly triage-14253).
 pub fn signed_in(hub: &Hub, backend: &str) {
-    for account in rest::signed_out(&hub.store, backend) {
+    for account in rest::signed_out(&hub.store, backend).into_iter().chain(rest::refused(&hub.store, backend)) {
         end_rest(hub, &account);
     }
 }

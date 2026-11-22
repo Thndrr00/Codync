@@ -8,7 +8,7 @@ use crate::store::BotConfig;
 use anyhow::{Result, anyhow, bail};
 use codync_mem::files::{self as mf, MAIN};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 const SEARCH_DEFAULT: i64 = 10;
@@ -123,12 +123,27 @@ async fn search_memory(hub: &Arc<Hub>, cfg: &BotConfig, query: &str) -> Result<V
     if query.trim().is_empty() {
         bail!("query required");
     }
-    let (hub, cfg, query) = (hub.clone(), cfg.clone(), query.to_owned());
+    let (hub, cfg) = (hub.clone(), cfg.clone());
+    let terms = super::search_terms::query_terms(query, SEARCH_TERMS);
     let results = tokio::task::spawn_blocking(move || -> Result<Vec<Value>> {
         super::files::scan(&hub, &cfg);
         let shared = super::shared(&cfg);
         let (hits, mut sources) = hub.store.memory_read(|c| {
-            let hits = mf::search(c, &cfg.id, shared, &query, 20)?;
+            // A broad scan per term finds a Latin word that touches unspaced text; the matcher keeps only
+            // real whole-word (or unspaced-touching) hits (OpenBot nightly `triage-14438`).
+            let mut hits: Vec<mf::Hit> = Vec::new();
+            let mut seen: HashSet<(Option<String>, String, usize)> = HashSet::new();
+            for term in &terms {
+                for hit in mf::search(c, &cfg.id, shared, term, 20)? {
+                    if !super::search_terms::term_matches(term, &hit.text) {
+                        continue;
+                    }
+                    if seen.insert((hit.bot.clone(), hit.name.clone(), hit.line)) {
+                        hits.push(hit);
+                    }
+                }
+            }
+            hits.truncate(20);
             // Where each MEMORY.md fact was learned, by layer and line.
             let mut sources = HashMap::new();
             for layer in super::files::layers(&cfg) {

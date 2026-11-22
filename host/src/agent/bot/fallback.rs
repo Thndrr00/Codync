@@ -10,7 +10,7 @@ pub(super) use park::resume_step;
 use super::{Actor, Done, NoticeStyle};
 use crate::LockExt;
 use crate::agent::account::rotation;
-use crate::agent::fallback::{self, Reason, carry, rest};
+use crate::agent::fallback::{self, Reason, blocked, carry, rest};
 use crate::store::{BotConfig, Entry, EntryKind, Lane, now_ms};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -261,6 +261,13 @@ impl Actor {
         let (Some(mut reason), Some(attempt)) = (fallback::reason::of(error), self.relay.attempt.clone()) else {
             return false;
         };
+        // triage-14512: a turn that already started work only moves to the backup for causes the backup can carry
+        // on from. Network and timeout were missing from that set, so a dropped connection after work used to stop
+        // with an error and the person had to send the message again.
+        let worked = !self.tools.is_empty() || !self.sent.is_empty() || self.watchdog.tool_calls() > 0;
+        if worked && !fallback::reason::continues_after_work(reason) {
+            return false;
+        }
         let mut start_error: Option<anyhow::Error> = None;
         loop {
             let now = now_ms();
@@ -313,6 +320,17 @@ impl Actor {
             }
             self.report_turn(false, Some(failed), "error");
             crate::analytics::agent_fell_back(&self.hub, &agent, reason);
+            // triage-14253: a refused key moves the turn to the backup, but the person must be told why. The
+            // notice stays in the chat; the rest backs off up to an hour and ends as soon as the key is replaced.
+            if reason == Reason::RefusedKey {
+                self.notice(
+                    &format!(
+                        "{} refused the saved API key or sign-in. Replace or remove the key in Settings, then try again.",
+                        fallback::name(&agent)
+                    ),
+                    NoticeStyle::Error,
+                );
+            }
             let done = self.so_far();
             self.relay.failed.push(carry::Failed { agent: fallback::name(&agent), reason, done });
             self.relay.stopped = Some((reason, rest.map(|r| r.until)));
@@ -360,14 +378,15 @@ impl Actor {
     /// agents all failed this turn (`fall_back` ran out of them) says how each one is.
     pub(super) fn failure_notice(&self, error: &anyhow::Error, text: &str) {
         let mut data = json!({"text": text, "style": NoticeStyle::Error});
-        match fallback::reason::of(error) {
+        let reason = fallback::reason::of(error);
+        match reason {
             Some(Reason::UsageLimit | Reason::OutOfCredits | Reason::RateLimited | Reason::Overloaded)
                 if self.base.fallbacks.is_empty() =>
             {
                 data["addFallback"] = true.into();
             }
             Some(_) if self.relay.exhausted && !self.base.fallbacks.is_empty() => {
-                data["text"] = format!("{text}\n\n{}", self.chain_note()).into();
+                data["text"] = format!("{text}\n\n{}", self.chain_note(reason)).into();
             }
             _ => {}
         }
@@ -375,9 +394,19 @@ impl Actor {
     }
 
     /// How each agent of the chain is: "No agent in this bot's list could answer: Claude Code reached its usage
-    /// limit (resets in 2 h); Codex is rate limited (back in 4 min)."
-    fn chain_note(&self) -> String {
+    /// limit (resets in 2 h); Codex is rate limited (back in 4 min)." When a usage limit stopped the bot and every
+    /// backup is also limited or on hold after a recent failure, the chat explains the shared account limit
+    /// instead (OpenBot nightly `triage-14070`).
+    fn chain_note(&self, reason: Option<Reason>) -> String {
         let now = now_ms();
+        let backups: Vec<blocked::BackupStatus> = (1..fallback::steps(&self.base))
+            .map(|s| {
+                blocked::BackupStatus::of(rest::get(&self.hub.store, &fallback::account(&self.base, s), now).as_ref())
+            })
+            .collect();
+        if matches!(reason, Some(Reason::UsageLimit | Reason::OutOfCredits)) && blocked::all_backups_blocked(&backups) {
+            return blocked::NOTE.to_owned();
+        }
         let parts: Vec<String> = (0..fallback::steps(&self.base))
             .map(|s| {
                 let agent = fallback::backend(&self.base, s);

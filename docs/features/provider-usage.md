@@ -103,3 +103,33 @@ the life of the host process: that exact build is not started again until the
 host restarts, while a newer version is still eligible. **Update all** applies
 every eligible provider at once on this computer; there is no joined-server
 part because providers belong to a computer.
+
+## Model lists, accounts and approvals (OpenBot nightly 0.70.0)
+
+`agent::auth::models` caches the last model list for the agents whose catalog can
+grow while they stay running (Antigravity / Gemini). The next picker ask after
+about ten minutes reads it again, so a model Google grants the account later
+appears without a restart; a quiet re-read that fails or comes back empty keeps
+the older list. An account added after the first gets a five-second first read
+and one full-length retry when that read times out, so a slow new Codex account
+still shows its own models. The catalog returned for a backend also carries
+`backupModelChoices`: the shared models first, then each account's own models
+tagged with that account, so an account-only model can be a backup.
+
+A custom provider's model id with punctuation keeps its vendor form in the bot
+and gets an escaped listed form for the agent: `@cf/openai/gpt-oss-120b` becomes
+`=40cf/openai/gpt-oss-120b` after the endpoint id. Matching accepts either form,
+and hidden models are saved in the listed form, so Cloudflare Workers AI ids
+work without changing saved agents that already use plain ids.
+
+A Codex bot at **Ask first** starts with `approval_policy: untrusted` in its
+`CODEX_CONFIG`, so it asks before each command and file change, including work
+in routines and channels; its reach and network are unchanged. A backend the
+person opted into automatic approval keeps `on-request` — that is the "Full
+access" reach of an **Always allow** choice. The policy is set when the agent
+process starts, so a setting change takes effect from its next message. When a
+usage limit stops a bot and every automatic backup is also limited or on hold
+after a recent failure, the chat says that models of one account can share a
+limit and that a backup on another provider or account lets it continue; the
+provider's own text stays in the log. On a joined server the server must also
+run this version for these host-side changes.

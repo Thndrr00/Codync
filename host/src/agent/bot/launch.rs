@@ -113,7 +113,8 @@ fn model_error(model: &str, e: &anyhow::Error) -> anyhow::Error {
 /// Cursor names a model variant `grok-4.7[reasoning_effort=high,fast=true]`. When the agent
 /// lists plain models instead, the bracket becomes options of the plain model.
 fn split_variant<'a>(res: &Value, model: &'a str) -> (&'a str, Vec<(&'a str, &'a str)>) {
-    let listed = |id: &str| crate::agent::auth::model_ids(res).iter().any(|m| m == id);
+    let listed =
+        |id: &str| crate::agent::auth::model_ids(res).iter().any(|m| crate::agent::auth::model_ids_match(m, id));
     if let Some((name, params)) = model.strip_suffix(']').and_then(|m| m.split_once('['))
         && let Some(params) =
             params.split(',').filter(|p| !p.is_empty()).map(|p| p.split_once('=')).collect::<Option<Vec<_>>>()

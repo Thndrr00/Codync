@@ -251,7 +251,18 @@ impl Actor {
             }
             if self.cfg.backend == "codex" && !env.iter().any(|(k, _)| k == "CODEX_CONFIG") {
                 // Codex's `/compact` takes no instructions: the keep-list is its config's `compact_prompt`.
-                let config = json!({"compact_prompt": codync_mem::compaction::KEEP});
+                // OpenBot nightly `triage-14587`: a bot at Ask first (no auto-approval for its backend)
+                // starts Codex asking before each command and file change, including routines and channels.
+                let mut config = json!({"compact_prompt": codync_mem::compaction::KEEP});
+                let auto = crate::approval_automation::enabled(
+                    &crate::approval_automation::load(&self.hub.store),
+                    &self.cfg.backend,
+                );
+                if let Some(policy) =
+                    crate::agent::approval_rules::codex_approval_policy(&self.cfg.backend, self.cfg.permission, auto)
+                {
+                    config["approval_policy"] = json!(policy);
+                }
                 env.push(("CODEX_CONFIG".into(), config.to_string()));
             }
             if pi {

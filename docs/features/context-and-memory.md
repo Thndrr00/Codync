@@ -250,6 +250,15 @@ link; when a check does send it back, the prompt says the user already has the l
 findings, or one short line when they confirm it. An older background job or teammate request no longer idles a
 later turn (`agent/bot/idle_progress.rs`): only work the running turn started holds its continuation.
 
+Two more nightly turn rules (pure decisions in `agent/bot/plan_continuation.rs` and `team_rules.rs`). A short final
+answer that only promises work — "I'll research the options now", "vou pesquisar isso agora" — in a turn that used
+no tool gets the same bounded completion check, so the request does not end on the promise; a short closing
+("Let me know if you need anything"), a refusal and a question still end it (triage-14327). A teammate result that
+restart recovery gives again ends quietly when its empty turn has nothing new to add and the result had already
+reached the provider before the restart — the requester took the earlier answer, so the turn no longer fails every
+result with "no answer"; a result that was only starting keeps its retry and its error (triage-14330). The markers
+that tell the two apart survive in `kv` (`agent/bot/results.rs`).
+
 ## Limits
 
 - An agent without ACP `systemPrompt` gets the instructions as a user message, which models follow less firmly
@@ -258,10 +267,13 @@ later turn (`agent/bot/idle_progress.rs`): only work the running turn started ho
   to keep, and re-applies the instructions afterwards; it can't make a harness keep anything.
 - A session a harness has deleted (for example, one cleaned up after a month) can't be resumed. The bot
   starts fresh, but its memory remains.
-- Memory search is a substring scan, not semantic vectors. A voice call's transcript feeds dreaming from the call's
-  line: what the user said counts as their own words (spoken, not typed), the voice's lines and what it relayed to
-  the bot (`from: voice`) are context only ([voice call](voice-call.md#the-call-on-the-host)). Group rooms don't
-  feed dreaming.
+- Memory search is a bounded substring scan, not semantic vectors. A query is split into terms; each term must
+  really match a line. A Latin word or number counts when it is a whole word (spaces, punctuation or an edge on
+  both sides) **or** when it touches Japanese, Chinese, Korean, Thai, Lao, Khmer or Myanmar text — so "LP" finds
+  "制作LPを確認した" but not "HELPを読む", and "cat" not "concatを使う" (OpenBot nightly `triage-14438`).
+  A voice call's transcript feeds dreaming from the call's line: what the user said counts as their own words
+  (spoken, not typed), the voice's lines and what it relayed to the bot (`from: voice`) are context only
+  ([voice call](voice-call.md#the-call-on-the-host)). Group rooms don't feed dreaming.
 - `search_history` covers the bot's own chat, not group chats it took part in. It finds messages by words, or
   reads back from a message id (`from`, then each page's `next`); `search_memory` gives each `MEMORY.md` line's
   source message, so a bot can check where a memory came from.

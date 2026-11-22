@@ -7,45 +7,141 @@ use crate::hub::Hub;
 use crate::store::Store;
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::OnceCell;
 
-/// Model lists being fetched, by agent: a settings screen asks for one from several places at once (the model
-/// picker, Approvals), and each would otherwise start the agent. An ask after one came fetches afresh.
+/// How often an agent whose catalog can grow while it runs is read again (OpenBot nightly `triage-12308`).
+const RELIST_INTERVAL: Duration = Duration::from_secs(10 * 60);
+/// A short first read for an account added after the first; a timeout retries with the full budget
+/// (OpenBot nightly `triage-12627`).
+const SHORT_LIST_TIMEOUT: Duration = Duration::from_secs(5);
+/// The full model-list read budget.
+const LIST_TIMEOUT: Duration = Duration::from_mins(1);
+
+/// Model lists being fetched, by agent, and the last list that came back. A settings screen asks for one
+/// from several places at once (the model picker, Approvals), and each would otherwise start the agent. An
+/// agent whose list can change while it stays running keeps its last list and is read again every
+/// [`RELIST_INTERVAL`]; a quiet re-read that fails or comes back empty keeps the older list.
 #[derive(Default)]
-pub struct InFlight(Mutex<HashMap<String, Slot>>);
+pub struct InFlight {
+    flights: Mutex<HashMap<String, Slot>>,
+    cached: Mutex<HashMap<String, (Value, Instant)>>,
+}
 
 /// One fetch's answer, for every ask that came while it ran (a failure as its text).
 type Slot = Arc<OnceCell<Result<Value, String>>>;
 
 impl InFlight {
     async fn get(&self, agent: &str, fetch: impl Future<Output = Result<Value>>) -> Result<Value> {
-        let slot = self.0.locked().entry(agent.to_owned()).or_default().clone();
+        let slot = self.flights.locked().entry(agent.to_owned()).or_default().clone();
         let answer = slot
             .get_or_init(|| async {
                 let answer = fetch.await.map_err(|e| format!("{e:#}"));
-                self.0.locked().remove(agent);
+                self.flights.locked().remove(agent);
                 answer
             })
             .await;
         answer.clone().map_err(anyhow::Error::msg)
     }
+
+    /// A list still fresh enough to use without waking the agent again.
+    pub(crate) fn fresh(&self, key: &str, now: Instant) -> Option<Value> {
+        let cached = self.cached.lock().ok()?;
+        let (value, at) = cached.get(key)?;
+        (!should_relist(Some(*at), now)).then(|| value.clone())
+    }
+
+    /// The last list for `key`, however old: a failed re-read keeps it.
+    pub(crate) fn stale(&self, key: &str) -> Option<Value> {
+        self.cached.lock().ok()?.get(key).map(|(value, _)| value.clone())
+    }
+
+    pub(crate) fn remember(&self, key: &str, value: Value, now: Instant) {
+        if let Ok(mut cached) = self.cached.lock() {
+            cached.insert(key.to_owned(), (value, now));
+        }
+    }
+
+    /// The catalogs of one backend's isolated accounts, for account-only backup choices.
+    fn account_catalogs(&self, backend: &str) -> Vec<(String, Value)> {
+        let Ok(cached) = self.cached.lock() else { return Vec::new() };
+        let prefix = format!("{backend}:");
+        cached
+            .iter()
+            .filter_map(|(key, (value, _))| key.strip_prefix(&prefix).map(|id| (id.to_owned(), value.clone())))
+            .collect()
+    }
+}
+
+/// Agents whose list Google (or the provider) can extend while the process keeps running.
+pub(crate) fn relists_while_running(backend: &str) -> bool {
+    matches!(backend, "antigravity" | "gemini")
+}
+
+/// Whether a list last read at `last` is due for another read (OpenBot nightly `triage-12308`).
+pub(crate) fn should_relist(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|at| now.saturating_duration_since(at) >= RELIST_INTERVAL)
+}
+
+/// A timed-out first read of a secondary account gets one full-length retry (OpenBot nightly `triage-12627`).
+pub(crate) fn retry_slow_account(is_secondary: bool, timed_out: bool) -> bool {
+    is_secondary && timed_out
+}
+
+fn timed_out(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| cause.is::<tokio::time::error::Elapsed>())
+}
+
+/// A re-read with no models is quiet: keep the older list (OpenBot nightly `triage-12308`).
+pub(crate) fn has_models(catalog: &Value) -> bool {
+    catalog["models"].as_array().is_some_and(|models| !models.is_empty())
 }
 
 /// [`models`], shared with the asks for the same agent (and account) meanwhile.
 pub async fn shared_models(hub: &Hub, backend: &str, account: Option<&str>) -> Result<Value> {
     let key = account.map_or_else(|| backend.to_owned(), |id| format!("{backend}:{id}"));
-    hub.model_lists.get(&key, models(&hub.store, backend, account)).await
+    let relists = relists_while_running(backend);
+    if relists && let Some(fresh) = hub.model_lists.fresh(&key, Instant::now()) {
+        return Ok(fresh);
+    }
+    let result = hub.model_lists.get(&key, models(&hub.store, backend, account)).await;
+    let mut value = match result {
+        Ok(value) => value,
+        Err(error) if relists => {
+            tracing::warn!(backend, error = format!("{error:#}"), "model list re-read failed; keeping the old list");
+            return hub.model_lists.stale(&key).ok_or(error);
+        }
+        Err(error) => return Err(error),
+    };
+    if account.is_none() {
+        let others = hub.model_lists.account_catalogs(backend);
+        value["backupModelChoices"] = json!(backup_model_choices(&value, &others));
+    }
+    if relists && has_models(&value) {
+        hub.model_lists.remember(&key, value.clone(), Instant::now());
+    }
+    Ok(value)
 }
 
 /// Discover the agent's advertised models in an isolated, prompt-free session.
-/// This uses the same credentials as actual bot sessions and never reads project files.
+/// A secondary account gets a short first read and one full-length retry when that times out.
 pub async fn models(store: &Store, backend: &str, account: Option<&str>) -> Result<Value> {
+    let first =
+        discover(store, backend, account, if account.is_some() { SHORT_LIST_TIMEOUT } else { LIST_TIMEOUT }).await;
+    match first {
+        Err(error) if retry_slow_account(account.is_some(), timed_out(&error)) => {
+            discover(store, backend, account, LIST_TIMEOUT).await
+        }
+        other => other,
+    }
+}
+
+async fn discover(store: &Store, backend: &str, account: Option<&str>, budget: Duration) -> Result<Value> {
     let extra_env = account.map(|id| crate::agent::account::env(id, backend)).transpose()?.unwrap_or_default();
     let Started { acp, mut inbox, .. } = start_with_env(store, backend, &extra_env).await?;
-    let result = tokio::time::timeout(Duration::from_mins(1), async {
+    let result = tokio::time::timeout(budget, async {
         let request = acp.request("session/new", json!({"cwd": probe_dir(), "mcpServers": []}));
         tokio::pin!(request);
         let session = loop {
@@ -226,6 +322,53 @@ fn collect_values(options: &Value, out: &mut Vec<Value>) {
     }
 }
 
+/// Models offered as backups: the shared ones first, then each account's own, tagged with that account. A
+/// model every account serves is listed once, on the shared side (OpenBot nightly `triage-12627`).
+pub(crate) fn backup_model_choices(shared: &Value, per_account: &[(String, Value)]) -> Vec<Value> {
+    let shared_ids: HashSet<&str> =
+        shared["models"].as_array().into_iter().flatten().filter_map(|model| model["id"].as_str()).collect();
+    let mut out: Vec<Value> = shared["models"].as_array().into_iter().flatten().cloned().collect();
+    for (account, catalog) in per_account {
+        for model in catalog["models"].as_array().into_iter().flatten() {
+            let Some(id) = model["id"].as_str() else { continue };
+            if shared_ids.contains(id)
+                || out.iter().any(|m| m["id"].as_str() == Some(id) && m["account"].as_str() == Some(account.as_str()))
+            {
+                continue;
+            }
+            let mut choice = model.clone();
+            choice["account"] = json!(account);
+            out.push(choice);
+        }
+    }
+    out
+}
+
+/// Custom-provider punctuation an agent's listed-id charset refuses. OpenBot nightly `triage-7961`.
+const ESCAPED_MODEL_CHARS: [char; 19] =
+    ['!', '#', '$', '%', '&', '(', ')', '*', '+', ';', '<', '>', '?', '@', '^', '{', '|', '}', '~'];
+
+/// A custom model id with punctuation gets a listed id in the charset agents accept: each such
+/// character becomes `=` and its hex code (`@cf/openai/gpt-oss-120b` -> `=40cf/openai/gpt-oss-120b`).
+/// An id the charset already accepts keeps its key, so saved agents do not change.
+pub(crate) fn escaped_custom_model_id(full: &str) -> Option<String> {
+    let (provider, model) = full.split_once('/')?;
+    if provider.is_empty() || model.is_empty() {
+        return None;
+    }
+    let escaped: String = model
+        .chars()
+        .map(|c| if ESCAPED_MODEL_CHARS.contains(&c) { format!("={:02X}", c as u32) } else { c.to_string() })
+        .collect();
+    Some(format!("{provider}/{escaped}"))
+}
+
+/// A listed id and the raw vendor id of one custom model name the same model.
+pub(crate) fn model_ids_match(listed: &str, chosen: &str) -> bool {
+    listed == chosen
+        || escaped_custom_model_id(listed).zip(escaped_custom_model_id(chosen)).is_some_and(|(a, b)| a == b)
+}
+
 const KV_HIDDEN: &str = "models.hidden";
 
 fn hidden_map(store: &Store) -> HashMap<String, Vec<String>> {
@@ -239,6 +382,13 @@ pub fn hidden(store: &Store, backend: &str) -> Vec<String> {
 
 /// Turns one model off or back on in the picker.
 pub fn set_hidden(store: &Store, backend: &str, model: &str, hidden: bool) -> Result<()> {
+    // A custom provider's raw vendor id has a different listed form; keep hidden models in that form.
+    let listed = if backend == "custom" {
+        escaped_custom_model_id(model).unwrap_or_else(|| model.to_owned())
+    } else {
+        model.to_owned()
+    };
+    let model = listed.as_str();
     if backend.is_empty() || backend.len() > 80 || model.is_empty() || model.len() > 200 {
         bail!("invalid model or provider");
     }
@@ -366,6 +516,65 @@ mod tests {
         ]});
         assert_eq!(model_config(&session).unwrap()["id"], "engine");
         assert!(model_config(&json!({"configOptions": [{"id": "model", "type": "boolean"}]})).is_none());
+    }
+
+    #[test]
+    fn a_list_is_read_again_about_every_ten_minutes_only_where_it_can_grow() {
+        assert!(relists_while_running("antigravity"));
+        assert!(relists_while_running("gemini"));
+        assert!(!relists_while_running("claude"));
+        let now = Instant::now();
+        assert!(should_relist(None, now));
+        assert!(!should_relist(Some(now - RELIST_INTERVAL + Duration::from_secs(1)), now));
+        assert!(should_relist(Some(now - RELIST_INTERVAL), now));
+    }
+
+    #[test]
+    fn a_failed_or_empty_relist_keeps_the_last_good_list() {
+        let now = Instant::now();
+        let lists = InFlight::default();
+        let old = json!({"models": [{"id": "neon"}]});
+        lists.remember("antigravity", old.clone(), now - RELIST_INTERVAL);
+        assert!(should_relist(Some(now - RELIST_INTERVAL), now));
+        assert!(lists.fresh("antigravity", now).is_none(), "the old list is past its interval");
+        assert_eq!(lists.stale("antigravity"), Some(old));
+        assert!(!has_models(&json!({"models": []})), "an empty re-read is quiet");
+        assert!(has_models(&json!({"models": [{"id": "neon"}]})));
+    }
+
+    #[test]
+    fn only_a_secondary_account_retries_its_timed_out_list() {
+        assert!(retry_slow_account(true, true));
+        assert!(!retry_slow_account(true, false), "a failure that isn't a timeout is not retried");
+        assert!(!retry_slow_account(false, true), "the first account already reads with the full budget");
+    }
+
+    #[test]
+    fn backup_choices_include_an_accounts_own_models() {
+        let shared = json!({"models": [{"id": "opus", "name": "Opus"}]});
+        let others = vec![
+            ("acc_a".to_owned(), json!({"models": [{"id": "opus"}, {"id": "paid-a", "name": "Paid A"}]})),
+            ("acc_b".to_owned(), json!({"models": [{"id": "paid-b", "name": "Paid B"}]})),
+        ];
+        let choices = backup_model_choices(&shared, &others);
+        let ids: Vec<&str> = choices.iter().filter_map(|m| m["id"].as_str()).collect();
+        assert_eq!(ids, ["opus", "paid-a", "paid-b"]);
+        assert!(choices[0].get("account").is_none(), "the shared model is not copied per account");
+        assert_eq!(choices[1]["account"], "acc_a");
+        assert_eq!(choices[2]["account"], "acc_b");
+        assert!(backup_model_choices(&json!({"models": []}), &[]).is_empty());
+    }
+
+    #[test]
+    fn a_custom_model_id_with_punctuation_has_a_listed_form() {
+        assert_eq!(
+            escaped_custom_model_id("cloudflare/@cf/openai/gpt-oss-120b").as_deref(),
+            Some("cloudflare/=40cf/openai/gpt-oss-120b")
+        );
+        assert_eq!(escaped_custom_model_id("spark/gpt-6-astral").as_deref(), Some("spark/gpt-6-astral"));
+        assert!(escaped_custom_model_id("no-slash").is_none());
+        assert!(model_ids_match("cloudflare/=40cf/openai/gpt-oss-120b", "cloudflare/@cf/openai/gpt-oss-120b"));
+        assert!(!model_ids_match("spark/a", "spark/b"));
     }
 }
 

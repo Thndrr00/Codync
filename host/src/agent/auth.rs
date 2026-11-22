@@ -38,7 +38,7 @@ pub use agent::authenticate;
 use agent::start;
 pub(crate) use agent::{Started, start_registry, start_with_env};
 pub use models::{InFlight, models};
-pub(crate) use models::{hidden, model_config, model_ids, set_hidden};
+pub(crate) use models::{hidden, model_config, model_ids, model_ids_match, set_hidden};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
