@@ -199,7 +199,7 @@ async fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
                     .history(None)
                     .await
                     .inspect_err(|error| {
-                        tracing::warn!(error = format!("{error:#}"), "no CDP navigation history for teaching")
+                        tracing::warn!(error = format!("{error:#}"), "no CDP navigation history for teaching");
                     })
                     .unwrap_or_default()
             }

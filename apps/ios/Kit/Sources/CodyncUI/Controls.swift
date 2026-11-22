@@ -148,29 +148,6 @@ public struct Spinner: View {
     }
 }
 
-/// A button that opens the system menu.
-public struct DropdownMenu<Label: View>: View {
-    let items: () -> [MenuItem]
-    let label: Label
-
-    public init(items: @escaping () -> [MenuItem], @ViewBuilder label: () -> Label) {
-        self.items = items
-        self.label = label()
-    }
-
-    public var body: some View {
-        // The system menu: it anchors correctly inside sheets and scroll views, where an overlay can't.
-        Menu {
-            ForEach(items()) { item in
-                if item.divider { Divider() }
-                systemMenuRow(item)
-            }
-        } label: { label }
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-    }
-}
-
 /// Picks one value: shows the current choice in a pill with a chevron, opens the system menu.
 public struct ChoicePicker<ID: Hashable>: View {
     @Binding var selection: ID
