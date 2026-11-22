@@ -83,6 +83,8 @@ impl Fixture {
             from_step: None,
             seed: BTreeMap::new(),
             run_time_text: String::new(),
+            answer_specs: BTreeMap::new(),
+            run_fields: Vec::new(),
         }
     }
 
@@ -677,7 +679,7 @@ async fn a_bot_can_only_change_the_flow_of_its_own_routines_through_its_tools() 
     );
     tool_call(&f.hub, "a", "unlink_routine_bots", &json!({"routineId": r, "toBotId": "b"})).unwrap();
     assert_eq!(f.hub.store.flow_links(&r).unwrap().len(), 0);
-    assert_eq!(tool_list().len(), 5);
+    assert_eq!(tool_list().len(), TOOLS.len());
     f.shutdown().await;
 }
 
@@ -695,4 +697,91 @@ fn remote_devices_get_the_same_access_as_for_routines() {
 #[test]
 fn the_configured_depth_stays_within_its_bounds() {
     assert_eq!(max_depth(), graph::DEFAULT_MAX_DEPTH);
+}
+
+#[tokio::test]
+async fn answer_fields_are_validated_shown_on_the_canvas_and_frozen_on_a_run() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.call(
+        "connectRoutineFlow",
+        json!({"routineId": r, "fromBotId": "a", "toBotId": "b", "instruction": "Use {{count}}"}),
+    )
+    .await
+    .unwrap();
+    let bad = f
+        .call(
+            "setRoutineFlowAnswers",
+            json!({"botId": "a", "routineId": r, "nodeKey": "bot:b", "answer": "bad name: wat"}),
+        )
+        .await;
+    assert!(bad.is_err(), "a broken answer spec is refused");
+    f.call("setRoutineFlowAnswers", json!({"botId": "a", "routineId": r, "nodeKey": "bot:b", "answer": "count: int"}))
+        .await
+        .unwrap();
+    let canvas = f.call("routineFlowCanvas", json!({"botId": "a"})).await.unwrap();
+    assert_eq!(canvas["answerSpecs"]["b"]["answer"], "count: int");
+    assert!(
+        canvas["answerProblems"].as_array().is_some_and(|problems| {
+            problems.iter().any(|problem| {
+                problem["nodeKey"] == "b"
+                    && problem["text"].as_str().is_some_and(|text| text.contains("no connected step before it gives"))
+            })
+        }),
+        "{canvas}"
+    );
+
+    // The trigger's fields check the input a start gives, and a plain text start is unchanged.
+    f.call("setRoutineFlowAnswers", json!({"botId": "a", "routineId": r, "answer": "count: int"})).await.unwrap();
+    assert!(f.call("testRoutineFlow", json!({"botId": "a", "routineId": r, "input": {"Count": 2}})).await.is_err());
+    let started =
+        f.call("testRoutineFlow", json!({"botId": "a", "routineId": r, "input": {"count": 2}})).await.unwrap();
+    assert!(started["runId"].as_str().is_some());
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_step_with_no_supplier_for_a_field_fails_instead_of_running_with_an_empty_value() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.link(&r, "a", "b", "Use {{missing}}");
+    answers::save_spec(&f.hub.store, "a", "b", Some("result: text"), None).unwrap();
+    answers::save_spec(&f.hub.store, "a", format!("routine:{r}"), Some("count: int"), None).unwrap();
+    execute(f.hub.clone(), f.start(&r, "typed", Root::Replied("seed".into()))).await;
+    let b = f.step("typed", "b");
+    assert_eq!(b.status, StepStatus::Failed);
+    assert!(b.error.as_deref().is_some_and(|error| error.contains("answer setup")), "{:?}", b.error);
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn the_answer_tool_checks_an_answer_before_the_step_takes_it() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.link(&r, "a", "b", "Give the count");
+    answers::save_spec(&f.hub.store, "a", "b", Some("count: int"), None).unwrap();
+    let run = "tool-run";
+    let step = NewStep {
+        run_id: run,
+        routine_id: &r,
+        owner_bot_id: "a",
+        bot_id: "b",
+        run_at: now_ms(),
+        input: "",
+        status: StepStatus::Running,
+        output: None,
+        error: None,
+    };
+    f.hub.store.flow_add_step(&step).unwrap();
+    // Recorded in the flow run store so the tool can find the waiting step.
+    f.hub.store.flow_attach_delivery(&f.step(run, "b").id, "delivery-1").unwrap();
+
+    let bad = tool_call(&f.hub, "b", answers::ANSWER_TOOL, &json!({"answer": {"Count": 2}})).unwrap();
+    assert_eq!(bad["ok"], false);
+    assert!(bad["problem"].as_str().is_some_and(|text| text.contains("case-sensitive")), "{bad}");
+    let good = tool_call(&f.hub, "b", answers::ANSWER_TOOL, &json!({"answer": {"count": 2}})).unwrap();
+    assert_eq!(good["ok"], true);
+    let saved = answers::take_tool_answer(&f.hub.store, run, &f.step(run, "b").id).unwrap();
+    assert_eq!(saved["count"], answers::AnswerValue::Integer(2));
+    f.shutdown().await;
 }

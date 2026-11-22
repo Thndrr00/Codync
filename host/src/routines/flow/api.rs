@@ -1,5 +1,7 @@
 //! The host API methods of routine flows, with strict validation of every input.
 
+use super::answer_paths;
+use super::answers;
 use super::merge::{FlowDocument, Version};
 use super::{FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, folders, graph, groups, merge};
 use crate::LockExt;
@@ -38,7 +40,17 @@ pub const METHODS: &[&str] = &[
     "testRoutineFlow",
     "runRoutineFlowFromStep",
     "renameRoutineFlowStep",
+    "setRoutineFlowAnswers",
 ];
+
+/// An answer or check spec from a request: text, bounded well below the canvas document limit.
+fn spec_arg(b: &Value, key: &str) -> Result<Option<String>> {
+    match b.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) if text.chars().count() <= 2000 => Ok(Some(text.clone())),
+        _ => bail!("`{key}` must be text of at most 2000 characters"),
+    }
+}
 
 fn str_arg<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
     b[key].as_str().ok_or_else(|| anyhow!("`{key}` is required"))
@@ -198,11 +210,34 @@ fn end_node(hub: &Hub, routine: &Routine, id: &str) -> Result<()> {
 }
 
 /// Creates a link in `routine` from `from` to `to`; the routine's own bot is the flow's start.
-pub(super) fn connect(hub: &Hub, routine: &Routine, from: &str, to: &str, instruction: String) -> Result<FlowLink> {
+pub(super) fn connect(
+    hub: &Hub,
+    routine: &Routine,
+    from: &str,
+    to: &str,
+    instruction: String,
+    answer: Option<&str>,
+    check: Option<&str>,
+) -> Result<FlowLink> {
     end_node(hub, routine, to)?;
     if from != routine.bot_id {
         end_node(hub, routine, from).context("the step handing work on can't take part in a flow")?;
     }
+    // A new link may not make one field ambiguous in a single run: two steps that can both give it.
+    // Path problems are only shown in the canvas; saved workflows keep running as before.
+    let mut specs = answers::load_specs(&hub.store, &routine.bot_id);
+    if answer.is_some() || check.is_some() {
+        specs.insert(
+            to.to_owned(),
+            answers::NodeSpec {
+                answer: answer.unwrap_or_default().to_owned(),
+                check: check.unwrap_or_default().to_owned(),
+            },
+        );
+    }
+    let run_fields =
+        answers::fields_of(specs.get(&format!("routine:{}", routine.id)).unwrap_or(&answers::NodeSpec::default()));
+    let mut candidate = hub.store.flow_links(&routine.id)?;
     let link = FlowLink {
         id: uuid::Uuid::new_v4().to_string(),
         routine_id: routine.id.clone(),
@@ -216,6 +251,18 @@ pub(super) fn connect(hub: &Hub, routine: &Routine, from: &str, to: &str, instru
         created_at: now_ms(),
     };
     let max = super::max_depth();
+    candidate.push(link.clone());
+    let graph =
+        engine::answer_graph(&routine.id, &routine.bot_id, &routine.instruction, &specs, &run_fields, &candidate);
+    if let Some(problem) = answer_paths::graph_problems(&graph)
+        .into_iter()
+        .find(|problem| matches!(problem, answer_paths::GraphProblem::Repeated { .. }) && problem.node_key() == to)
+    {
+        bail!("{}", problem.text());
+    }
+    if answer.is_some() || check.is_some() {
+        answers::save_spec(&hub.store, &routine.bot_id, to, answer, check)?;
+    }
     hub.emit_flow_change(|| {
         let change = hub.store.flow_add_link(&link, |links| {
             match graph::connect_problem(&routine.bot_id, links, from, to, max) {
@@ -375,10 +422,23 @@ pub fn forget_bot(hub: &Hub, bot: &str) {
 
 /// Starts the flow of `routine` as if its own bot had just replied with `reply`, without running the
 /// routine. Returns the run id its steps carry.
-fn test(hub: &Arc<Hub>, routine: &Routine, reply: String) -> Result<String> {
+fn test(hub: &Arc<Hub>, routine: &Routine, reply: String, input: Option<&Value>) -> Result<String> {
     if hub.store.flow_links(&routine.id)?.is_empty() {
         bail!("this routine has no flow: connect it to a bot first");
     }
+    let specs = answers::load_specs(&hub.store, &routine.bot_id);
+    let run_fields =
+        answers::fields_of(specs.get(&format!("routine:{}", routine.id)).unwrap_or(&answers::NodeSpec::default()));
+    if let Some(input) = input {
+        let problems = answer_paths::run_input_problems(&run_fields, Some(input));
+        if !problems.is_empty() {
+            bail!("The workflow's input did not fit its answer fields: {}", answers::fix_text(&problems));
+        }
+    }
+    let reply = input
+        .and_then(|value| answer_paths::run_input_answer(&run_fields, Some(value)))
+        .map(|answer| serde_json::to_string(&answer).unwrap_or_default())
+        .unwrap_or(reply);
     let run_id = format!("flow-test-{}", uuid::Uuid::new_v4());
     let now = now_ms();
     let start = engine::Start {
@@ -405,6 +465,8 @@ fn test(hub: &Arc<Hub>, routine: &Routine, reply: String) -> Result<String> {
         from_step: None,
         seed: BTreeMap::new(),
         run_time_text: engine::run_time_text(now, &routine.triggers),
+        answer_specs: specs,
+        run_fields,
     };
     hub.routines.stage_flow(&hub.store, start.clone())?;
     tokio::spawn(engine::execute(hub.clone(), start));
@@ -415,7 +477,8 @@ fn test(hub: &Arc<Hub>, routine: &Routine, reply: String) -> Result<String> {
 /// the routine's latest run for every step before it. Those steps are recorded again with their
 /// stored answers but are never sent or made again.
 fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String> {
-    if hub.store.flow_links(&routine.id)?.is_empty() {
+    let links = hub.store.flow_links(&routine.id)?;
+    if links.is_empty() {
         bail!("this routine has no flow: connect it to a bot first");
     }
     // The newest run that actually has this step: a newer test run may have stopped before it.
@@ -431,9 +494,19 @@ fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String
                 .unwrap_or(false)
         })
         .with_context(|| format!("this routine has no run with a saved answer for {step}"))?;
-    let seed: BTreeMap<String, engine::SeededStep> = hub
-        .store
-        .flow_run_steps(&last.run_id)?
+    let saved_steps = hub.store.flow_run_steps(&last.run_id)?;
+    // "Run one step" may not reuse an answer from a step that failed or was stopped most recently.
+    let specs = answers::load_specs(&hub.store, &routine.bot_id);
+    let run_fields =
+        answers::fields_of(specs.get(&format!("routine:{}", routine.id)).unwrap_or(&answers::NodeSpec::default()));
+    let graph = engine::answer_graph(&routine.id, &routine.bot_id, &routine.instruction, &specs, &run_fields, &links);
+    let statuses: BTreeMap<String, crate::store::StepStatus> =
+        saved_steps.iter().map(|saved| (saved.bot_id.clone(), saved.status)).collect();
+    let sources = answer_paths::source_ids(&graph, &answer_paths::forward_edges(&graph), step);
+    if let Some(problem) = answer_paths::stale_seed_problem(&sources, &statuses) {
+        bail!("{problem}");
+    }
+    let seed: BTreeMap<String, engine::SeededStep> = saved_steps
         .into_iter()
         .map(|saved| {
             let settings = hub.store.flow_step_settings(&saved.id)?;
@@ -464,6 +537,8 @@ fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String
         from_step: Some(step.to_owned()),
         seed,
         run_time_text: engine::run_time_text(now, &routine.triggers),
+        answer_specs: specs,
+        run_fields,
     };
     hub.routines.stage_flow(&hub.store, start.clone())?;
     tokio::spawn(engine::execute(hub.clone(), start));
@@ -479,7 +554,33 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
         "routineFlowCanvas" => {
             let bot = id_arg(b, "botId")?;
             canvas_bot(hub, bot)?;
-            canvas::canvas(hub, bot)?
+            let mut value = canvas::canvas(hub, bot)?;
+            let specs = answers::load_specs(&hub.store, bot);
+            let mut answer_problems = Vec::new();
+            for routine in hub.routines.canvas_routines(&hub.store, bot)? {
+                let links = hub.store.flow_links(&routine.id)?;
+                let run_fields = answers::fields_of(
+                    specs.get(&format!("routine:{}", routine.id)).unwrap_or(&answers::NodeSpec::default()),
+                );
+                let graph = engine::answer_graph(
+                    &routine.id,
+                    &routine.bot_id,
+                    &routine.instruction,
+                    &specs,
+                    &run_fields,
+                    &links,
+                );
+                answer_problems.extend(
+                    answer_paths::graph_problems(&graph)
+                        .into_iter()
+                        .map(|problem| json!({"nodeKey": problem.node_key(), "text": problem.text()})),
+                );
+            }
+            if let Some(object) = value.as_object_mut() {
+                object.insert("answerSpecs".to_owned(), json!(specs));
+                object.insert("answerProblems".to_owned(), json!(answer_problems));
+            }
+            value
         }
         "saveRoutineFlowPosition" => {
             let bot = id_arg(b, "botId")?;
@@ -510,7 +611,8 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
         "connectRoutineFlow" => {
             let (routine_id, from, to) = (id_arg(b, "routineId")?, id_arg(b, "fromBotId")?, id_arg(b, "toBotId")?);
             let r = routine(hub, routine_id)?;
-            json!({"link": connect(hub, &r, from, to, instruction_arg(b, false)?)?})
+            let (answer, check) = (spec_arg(b, "answer")?, spec_arg(b, "check")?);
+            json!({"link": connect(hub, &r, from, to, instruction_arg(b, false)?, answer.as_deref(), check.as_deref())?})
         }
         "disconnectRoutineFlow" => {
             disconnect(hub, id_arg(b, "linkId")?)?;
@@ -665,19 +767,52 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             }
             json!({"ok": true})
         }
+        "setRoutineFlowAnswers" => {
+            let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
+            let r = routine(hub, routine_id)?;
+            if r.bot_id != bot {
+                bail!("routine not found among this bot's routines");
+            }
+            let key = match b.get("nodeKey").and_then(Value::as_str) {
+                None | Some("") => format!("routine:{routine_id}"),
+                Some(key) => key.strip_prefix("bot:").unwrap_or(key).to_owned(),
+            };
+            let (answer, check) = (spec_arg(b, "answer")?, spec_arg(b, "check")?);
+            let spec = answers::NodeSpec {
+                answer: answer.clone().unwrap_or_default(),
+                check: check.clone().unwrap_or_default(),
+            };
+            if !spec.answer.trim().is_empty() && !answers::parse_spec(&spec.answer).1.is_empty() {
+                bail!("the answer spec is invalid: check the field names and types");
+            }
+            if !spec.check.trim().is_empty() && answers::parse_check(&spec.check).is_none() {
+                bail!("the check is invalid: write tests joined with and / or");
+            }
+            answers::save_spec(&hub.store, bot, &key, answer.as_deref(), check.as_deref())?;
+            json!({"ok": true})
+        }
         _ => {
             let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
             if !hub.routines.owns(bot, routine_id) {
                 bail!("routine not found among this bot's routines");
             }
-            let reply = match b.get("input") {
-                None | Some(Value::Null) => SAMPLE_REPLY.to_owned(),
+            let value = b.get("input").filter(|value| !value.is_null());
+            let reply = match value {
+                None => SAMPLE_REPLY.to_owned(),
                 Some(Value::String(text)) if !text.trim().is_empty() && text.len() <= MAX_INSTRUCTION_BYTES => {
                     text.clone()
                 }
-                _ => bail!("`input` must be text of at most {MAX_INSTRUCTION_BYTES} bytes"),
+                Some(Value::Object(object))
+                    if serde_json::to_string(object).map_or(false, |s| s.len() <= MAX_INSTRUCTION_BYTES) =>
+                {
+                    String::new()
+                }
+                _ => {
+                    bail!("`input` must be text of at most {MAX_INSTRUCTION_BYTES} bytes or an object of answer fields")
+                }
             };
-            json!({"runId": test(hub, &routine(hub, routine_id)?, reply)?})
+            let input = value.filter(|value| value.is_object());
+            json!({"runId": test(hub, &routine(hub, routine_id)?, reply, input)?})
         }
     }))
 }

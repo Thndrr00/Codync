@@ -1,12 +1,13 @@
 //! Running a flow: after a routine's run ends, level by level from the routine's own bot, each
 //! bot with the replies of the bots linked to it.
 
-use super::graph;
+use super::{answer_paths, answers, graph};
 use crate::chat::team::ModelOverride;
 use crate::chat::team::flow::{FlowCancelled, Handoff, handoff, recipient};
 use crate::hub::Hub;
 use crate::routines::{Routine, Run, Status, Trigger, local_zone};
-use crate::store::{FlowLink, FlowStep, NewStep, StepStatus};
+use crate::store::{FlowLink, FlowStep, NewStep, StepStatus, Store};
+use answers::ValueProblem;
 use anyhow::{Context, Result};
 use futures::future::Either;
 use serde::{Deserialize, Serialize};
@@ -147,6 +148,41 @@ pub struct Start {
     /// The run's start time in UTC and the schedule's zone, for steps that compute a time window.
     #[serde(default)]
     pub run_time_text: String,
+    /// The answer specs of this flow's steps, frozen when the run began. A later edit to a link
+    /// never changes what a retry of this run checks its answer against.
+    #[serde(default)]
+    pub answer_specs: BTreeMap<String, answers::NodeSpec>,
+    /// The answer fields of the trigger that started this run, also frozen for its whole life.
+    #[serde(default)]
+    pub run_fields: Vec<answers::AnswerField>,
+}
+
+impl Start {
+    /// Loads the specs a run started with and checks a webhook's body against its trigger's fields.
+    /// Called once before the flow executes, so a restart replay uses the same rules as the first
+    /// attempt. A flow saved before typed answers existed simply has no fields to check.
+    fn prepare(&mut self, store: &Store) {
+        let specs = answers::load_specs(store, &self.owner);
+        let current = answers::fields_of(
+            specs.get(&format!("routine:{}", self.routine_id)).unwrap_or(&answers::NodeSpec::default()),
+        );
+        let frozen = (!self.run_fields.is_empty()).then_some(self.run_fields.as_slice());
+        self.run_fields = answer_paths::with_run_spec(&current, frozen).to_vec();
+        if self.answer_specs.is_empty() {
+            self.answer_specs = specs;
+        }
+        if !self.run_fields.is_empty()
+            && let Some(data) = self.event.get("data")
+        {
+            let problems = answer_paths::webhook_problems(&self.run_fields, data);
+            if !problems.is_empty() {
+                self.root = Root::Failed(format!(
+                    "The workflow cannot start: the webhook body did not fit its answer fields ({}).",
+                    answers::fix_text(&problems)
+                ));
+            }
+        }
+    }
 }
 
 /// What a bot's step left for the bots after it.
@@ -166,6 +202,8 @@ struct Pending {
     /// The first incoming link's own model and options, when they name any.
     model: Option<ModelOverride>,
     hops: u8,
+    /// The fields this step's answer must give. Empty keeps the old free-text handoff.
+    fields: Vec<answers::AnswerField>,
 }
 
 /// A media step ready to make its file.
@@ -182,8 +220,9 @@ enum Begin {
     Done(Outcome),
 }
 
-pub async fn execute(hub: Arc<Hub>, start: Start) {
+pub async fn execute(hub: Arc<Hub>, mut start: Start) {
     let (run, routine) = (start.run_id.clone(), start.routine_id.clone());
+    start.prepare(&hub.store);
     match run_flow(&hub, Arc::new(start)).await {
         Ok(()) => {
             if let Err(error) = hub.routines.ack_flow(&hub.store, &run) {
@@ -397,11 +436,18 @@ fn begin(
     depth: usize,
     cancel: &watch::Receiver<bool>,
 ) -> Result<Begin> {
+    let end = |status, reason: &str| -> Result<Begin> {
+        record_ended(hub, start, bot, status, reason)?;
+        Ok(Begin::Done(Outcome::Nothing))
+    };
     // A completed step is a durable result, independent of whether its bot is still visible or
-    // runnable. Resolve it before current recipient/input checks when replaying after a crash.
-    if !*cancel.borrow()
-        && let Some(step) = hub.store.flow_run_steps(&start.run_id)?.into_iter().find(|step| step.bot_id == bot)
-    {
+    // runnable. Resolve it before current recipient/input checks when replaying after a crash, but
+    // check a stored answer against the fields this run started with: the workflow may have changed.
+    let steps = if *cancel.borrow() { Vec::new() } else { hub.store.flow_run_steps(&start.run_id)? };
+    if let Some(step) = steps.iter().find(|step| step.bot_id == bot).cloned() {
+        if let Err(problem) = saved_answer_problem(start, bot, &step) {
+            return end(StepStatus::Failed, &problem);
+        }
         return Ok(Begin::Done(step_outcome(step)));
     }
     let inputs: Vec<(&FlowLink, &str)> = links
@@ -412,10 +458,6 @@ fn begin(
             Outcome::Nothing => None,
         })
         .collect();
-    let end = |status, reason: &str| -> Result<Begin> {
-        record_ended(hub, start, bot, status, reason)?;
-        Ok(Begin::Done(Outcome::Nothing))
-    };
     if depth > start.max_depth {
         return end(StepStatus::Skipped, &format!("Skipped: the flow reaches at most {} bots deep", start.max_depth));
     }
@@ -442,30 +484,81 @@ fn begin(
     let Some(from) = hub.store.bot(from_id(&first.from_bot_id, &start.owner))?.filter(|b| !b.deleted) else {
         return end(StepStatus::Failed, "The bot that handed work on is gone");
     };
-    let names: Vec<StepInput> = inputs
+    // Fail closed when a field this step uses has no supplier that finished, or when a name or
+    // check does not match the steps before it. A flow with no typed steps stays literal.
+    let graph = answer_graph(
+        &start.routine_id,
+        &start.owner,
+        &start.instruction,
+        &start.answer_specs,
+        &start.run_fields,
+        links,
+    );
+    let statuses: BTreeMap<String, StepStatus> = steps.iter().map(|step| (step.bot_id.clone(), step.status)).collect();
+    if let Some(gap) = answer_paths::step_answer_gap(&graph, bot, &statuses) {
+        return end(StepStatus::Failed, &gap.text());
+    }
+    let fields = graph.nodes.get(bot).map(|node| answers::fields_of(&node.spec)).unwrap_or_default();
+    let forward = answer_paths::forward_edges(&graph);
+    let sources = answer_paths::answer_sources(&graph, &forward, bot);
+    let mut outputs: BTreeMap<String, String> = steps
         .iter()
-        .map(|(link, text)| StepInput {
-            from: node_name(hub, &start.routine_id, &link.from_bot_id),
-            text: (*text).to_owned(),
-            instruction: link.instruction.clone(),
-            picture: is_picture_node(&link.from_bot_id),
+        .filter(|step| step.status == StepStatus::Succeeded)
+        .filter_map(|step| step.output.as_ref().map(|text| (step.bot_id.clone(), text.clone())))
+        .collect();
+    outputs.entry(start.owner.clone()).or_insert_with(|| match &start.root {
+        Root::Replied(text) => text.clone(),
+        _ => String::new(),
+    });
+    let by_name = answer_paths::answers_from(&sources, &outputs);
+    let answer: answers::Answer = by_name.iter().map(|(name, (_, value))| (name.clone(), value.clone())).collect();
+    if let Some(check) = graph.nodes.get(bot).and_then(answer_paths::node_check)
+        && !answers::check_passes(&check, &answer)
+    {
+        return end(StepStatus::Skipped, "Skipped: the condition did not match");
+    }
+    let values = answer_paths::template_values(&by_name, false);
+    let mut names: Vec<StepInput> = inputs
+        .iter()
+        .map(|(link, text)| {
+            let source = start.answer_specs.get(&link.from_bot_id).map(answers::fields_of).unwrap_or_default();
+            let plain = answer_paths::readable_input(&source, text).unwrap_or_else(|| (*text).to_owned());
+            StepInput {
+                from: node_name(hub, &start.routine_id, &link.from_bot_id),
+                text: answers::fill_template(&plain, &values),
+                instruction: answers::fill_template(&link.instruction, &values),
+                picture: is_picture_node(&link.from_bot_id),
+            }
         })
         .collect();
     let include_run_time = depth == 1 || start.from_step.is_some();
-    let body = handoff_body(
-        &start.routine_name,
-        &names,
-        start.case_text.as_deref(),
-        depth,
-        include_run_time.then_some(start.run_time_text.as_str()).filter(|text| !text.is_empty()),
+    let mut body = answers::fill_template(
+        &handoff_body(
+            &start.routine_name,
+            &names,
+            start.case_text.as_deref(),
+            depth,
+            include_run_time.then_some(start.run_time_text.as_str()).filter(|text| !text.is_empty()),
+        ),
+        &values,
     );
     // A fan-in is one step: the first incoming link's model and options win, as its instruction leads the task.
     let model = inputs.iter().find_map(|(link, _)| override_of(link));
+    if !fields.is_empty() {
+        let claude = model
+            .as_ref()
+            .and_then(|override_| override_.model.as_deref())
+            .is_some_and(|id| id.to_ascii_lowercase().starts_with("claude"));
+        let ask = if claude { answers::claude_ask(&fields) } else { answers::agent_ask(&fields) };
+        body.push_str("\n\n");
+        body.push_str(&ask);
+    }
+    let instruction = inputs.first().map(|(link, _)| link.instruction.clone()).unwrap_or_default();
     let settings = StepSettings {
         kind: "bot".to_owned(),
         model: model.as_ref().and_then(|override_| override_.model.clone()),
         model_options: model.as_ref().map(|override_| override_.options.clone()).unwrap_or_default(),
-        instruction: inputs.first().map(|(link, _)| link.instruction.clone()).unwrap_or_default(),
+        instruction: answers::fill_template(&instruction, &values),
         inputs: names,
         ..StepSettings::default()
     };
@@ -473,11 +566,103 @@ fn begin(
         Some(step) => {
             record_settings(hub, &step.id, &settings);
             let hops = u8::try_from(depth).unwrap_or(u8::MAX);
-            Ok(Begin::Send(Box::new(Pending { step, from: from.config, bot: bot.to_owned(), body, model, hops })))
+            Ok(Begin::Send(Box::new(Pending {
+                step,
+                from: from.config,
+                bot: bot.to_owned(),
+                body,
+                model,
+                hops,
+                fields,
+            })))
         }
         // A retry of the run finds the step the first attempt made, and doesn't send it twice.
         None => Ok(Begin::Done(earlier_outcome(hub, &start.run_id, bot)?)),
     }
+}
+
+/// The graph of answer fields a run started with. The routine's own bot is the trigger that gives
+/// the run input; each link end is a step whose spec was frozen when the run began.
+pub(super) fn answer_graph(
+    routine_id: &str,
+    owner: &str,
+    instruction: &str,
+    specs: &BTreeMap<String, answers::NodeSpec>,
+    run_fields: &[answers::AnswerField],
+    links: &[FlowLink],
+) -> answer_paths::Graph {
+    let mut graph = answer_paths::Graph::default();
+    let root_spec = specs
+        .get(&format!("routine:{routine_id}"))
+        .cloned()
+        .unwrap_or_else(|| answers::NodeSpec { answer: answers::spec_text(run_fields), check: String::new() });
+    graph.nodes.insert(
+        owner.to_owned(),
+        answer_paths::GraphNode {
+            id: owner.to_owned(),
+            kind: answer_paths::NodeKind::Trigger,
+            spec: root_spec,
+            instruction: instruction.to_owned(),
+        },
+    );
+    for link in links {
+        for id in [&link.from_bot_id, &link.to_bot_id] {
+            if graph.nodes.contains_key(id) {
+                continue;
+            }
+            let media = id.starts_with(crate::store::flow_media::PREFIX);
+            graph.nodes.insert(
+                id.clone(),
+                answer_paths::GraphNode {
+                    id: id.clone(),
+                    kind: if media { answer_paths::NodeKind::Media } else { answer_paths::NodeKind::Agent },
+                    spec: specs.get(id).cloned().unwrap_or_default(),
+                    instruction: link.instruction.clone(),
+                },
+            );
+        }
+        graph.edges.push(answer_paths::GraphEdge {
+            from: link.from_bot_id.clone(),
+            to: link.to_bot_id.clone(),
+            branch: None,
+            is_loop: false,
+        });
+    }
+    graph
+}
+
+/// A retry reuses a step that already ran in this run, but not when its stored answer no longer
+/// fits the fields the run started with: a new spec must not validate an old answer.
+fn saved_answer_problem(start: &Start, bot: &str, step: &FlowStep) -> std::result::Result<(), String> {
+    let fields = answer_spec_fields(start, bot);
+    if fields.is_empty() {
+        return Ok(());
+    }
+    let Some(output) = step.output.as_deref() else {
+        return Err(format!(
+            "The step cannot be reused: it has no answer for {}",
+            answers::fix_text(&[ValueProblem {
+                name: fields.iter().map(|field| field.name.as_str()).collect::<Vec<_>>().join(", "),
+                problem: answers::Problem::Missing,
+            }])
+        ));
+    };
+    let Some(value) = answers::last_json_object(output) else {
+        return Err("The step cannot be reused: its saved answer has no JSON object".to_owned());
+    };
+    let (_, problems) = answers::check_answer(&fields, &value, answers::ExtraKeys::Refuse);
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "The step cannot be reused with the answer fields this run started with: {}",
+            answers::fix_text(&problems)
+        ))
+    }
+}
+
+fn answer_spec_fields(start: &Start, bot: &str) -> Vec<answers::AnswerField> {
+    start.answer_specs.get(bot).map(answers::fields_of).unwrap_or_default()
 }
 
 /// Whether a link's start is a media step, whose file the next step should read as a picture.
@@ -772,8 +957,32 @@ fn media_failure_text(kind: &str, error: &str) -> String {
     }
 }
 
+/// Reads and checks the JSON object a step ended its reply with. A reply without a JSON object is a
+/// problem the step gets to correct in one more turn.
+fn checked_answer(fields: &[answers::AnswerField], text: &str) -> std::result::Result<String, Vec<ValueProblem>> {
+    let problems = match answers::last_json_object(text) {
+        None => vec![ValueProblem {
+            name: fields.iter().map(|field| field.name.as_str()).collect::<Vec<_>>().join(", "),
+            problem: answers::Problem::Json,
+        }],
+        Some(value) => answers::check_answer(fields, &value, answers::ExtraKeys::Refuse).1,
+    };
+    if !problems.is_empty() {
+        return Err(problems);
+    }
+    let Some(value) = answers::last_json_object(text) else { return Err(Vec::new()) };
+    let (answer, _) = answers::check_answer(fields, &value, answers::ExtraKeys::Refuse);
+    Ok(serde_json::to_string(&answer).unwrap_or_default())
+}
+
+fn attach_delivery(hub: &Hub, step: &str, delivery: &str) {
+    if let Err(e) = hub.store.flow_attach_delivery(step, delivery) {
+        tracing::warn!(step, error = format!("{e:#}"), "couldn't record a routine flow step's request");
+    }
+}
+
 async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Receiver<bool>) -> Outcome {
-    let step = pending.step.id.clone();
+    let (step, fields) = (pending.step.id.clone(), pending.fields);
     let request = Handoff {
         routine_name: &start.routine_name,
         from: &pending.from,
@@ -782,21 +991,75 @@ async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Re
         model: pending.model.clone(),
         hops: pending.hops,
         timeout: teammate_wait(start.timeout),
-        cancel,
+        cancel: cancel.clone(),
     };
-    let attach = |delivery: &str| {
-        if let Err(e) = hub.store.flow_attach_delivery(&step, delivery) {
-            tracing::warn!(step, error = format!("{e:#}"), "couldn't record a routine flow step's request");
-        }
-    };
-    match handoff(hub, request, attach).await {
-        Ok(text) if nothing_to_report(&text) => {
-            settle(hub, &step, StepStatus::Succeeded, None, None);
-            Outcome::Nothing
+    let first = handoff(hub, request, |delivery| attach_delivery(hub, &step, delivery)).await;
+    match first {
+        Ok(text) if fields.is_empty() || nothing_to_report(&text) => {
+            if nothing_to_report(&text) {
+                settle(hub, &step, StepStatus::Succeeded, None, None);
+                Outcome::Nothing
+            } else {
+                settle(hub, &step, StepStatus::Succeeded, Some(&text), None);
+                Outcome::Replied(text)
+            }
         }
         Ok(text) => {
-            settle(hub, &step, StepStatus::Succeeded, Some(&text), None);
-            Outcome::Replied(text)
+            // An agent that used the `workflow_answer` tool already got its answer checked when it
+            // called the tool, so it does not need another turn.
+            if let Some(answer) = answers::take_tool_answer(&hub.store, &start.run_id, &step) {
+                let output = serde_json::to_string(&answer).unwrap_or_default();
+                settle(hub, &step, StepStatus::Succeeded, Some(&output), None);
+                return Outcome::Replied(output);
+            }
+            match checked_answer(&fields, &text) {
+                Ok(output) => {
+                    settle(hub, &step, StepStatus::Succeeded, Some(&output), None);
+                    Outcome::Replied(output)
+                }
+                Err(problems) => {
+                    let retry_body = format!("{}\n\n{}", pending.body, answers::answer_fix_ask(&fields, &problems));
+                    let retry = Handoff {
+                        routine_name: &start.routine_name,
+                        from: &pending.from,
+                        to: &pending.bot,
+                        body: &retry_body,
+                        model: pending.model.clone(),
+                        hops: pending.hops,
+                        timeout: teammate_wait(start.timeout),
+                        cancel,
+                    };
+                    match handoff(hub, retry, |delivery| attach_delivery(hub, &step, delivery)).await {
+                        Ok(reply) => match checked_answer(&fields, &reply) {
+                            Ok(output) => {
+                                settle(hub, &step, StepStatus::Succeeded, Some(&output), None);
+                                Outcome::Replied(output)
+                            }
+                            Err(problems) => {
+                                settle(
+                                    hub,
+                                    &step,
+                                    StepStatus::Failed,
+                                    None,
+                                    Some(&format!(
+                                        "The answer did not fit after another try: {}",
+                                        answers::fix_text(&problems)
+                                    )),
+                                );
+                                Outcome::Nothing
+                            }
+                        },
+                        Err(e) if e.is::<FlowCancelled>() => {
+                            settle(hub, &step, StepStatus::Cancelled, None, Some(&e.to_string()));
+                            Outcome::Nothing
+                        }
+                        Err(e) => {
+                            settle(hub, &step, StepStatus::Failed, None, Some(&format!("{e:#}")));
+                            Outcome::Nothing
+                        }
+                    }
+                }
+            }
         }
         Err(e) if e.is::<FlowCancelled>() => {
             settle(hub, &step, StepStatus::Cancelled, None, Some(&e.to_string()));
@@ -938,6 +1201,8 @@ pub fn start_for(
         from_step: None,
         seed: BTreeMap::new(),
         run_time_text: run_time_text(run.created_at, &routine.triggers),
+        answer_specs: BTreeMap::new(),
+        run_fields: Vec::new(),
     })
 }
 
@@ -1058,6 +1323,95 @@ mod tests {
         let answered = media_failure_text("image", "the Image model made no file: I can only write text");
         assert!(answered.contains("the model answered \"I can only write text\""), "{answered}");
         assert!(media_failure_text("image", "a new error").contains("a new error"));
+    }
+
+    fn answer_start() -> Start {
+        Start {
+            run_id: "run".to_owned(),
+            routine_id: "r".to_owned(),
+            routine_name: "Digest".to_owned(),
+            owner: "a".to_owned(),
+            run_at: 0,
+            timeout: Duration::from_secs(30),
+            max_depth: 5,
+            instruction: String::new(),
+            case_text: None,
+            outputs: Vec::new(),
+            event: serde_json::json!({"source": "test"}),
+            root: Root::Replied("seed".to_owned()),
+            from_step: None,
+            seed: BTreeMap::new(),
+            run_time_text: String::new(),
+            answer_specs: BTreeMap::new(),
+            run_fields: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_webhook_body_with_a_wrong_cased_field_fails_the_run_clearly() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        answers::save_spec(&store, "a", "routine:r", Some("count: int, name: text"), None).expect("a spec");
+        let mut start = answer_start();
+        start.event = serde_json::json!({"data": {"Count": 3, "name": "Ada"}});
+        start.prepare(&store);
+        assert_eq!(start.run_fields.len(), 2, "the trigger's fields are frozen on the run");
+        assert!(
+            matches!(start.root, Root::Failed(ref text) if text.contains("Count") && text.contains("case-sensitive"))
+        );
+
+        let mut good = answer_start();
+        good.event = serde_json::json!({"data": {"count": 3, "name": "Ada", "extra": "kept"}});
+        good.prepare(&store);
+        assert!(matches!(good.root, Root::Replied(_)), "an extra sender key is fine");
+    }
+
+    #[test]
+    fn a_retry_reuses_a_step_only_when_its_answer_fits_the_fields_of_the_run() {
+        let mut start = answer_start();
+        start
+            .answer_specs
+            .insert("b".to_owned(), answers::NodeSpec { answer: "count: int".to_owned(), check: String::new() });
+        let good = FlowStep {
+            id: "s1".to_owned(),
+            run_id: "run".to_owned(),
+            bot_id: "b".to_owned(),
+            delivery_id: None,
+            input: String::new(),
+            output: Some("{\"count\":3}".to_owned()),
+            status: StepStatus::Succeeded,
+            error: None,
+            files: Vec::new(),
+            created_at: 0,
+            updated_at: 0,
+            routine_id: "r".to_owned(),
+            owner_bot_id: "a".to_owned(),
+            run_at: 0,
+        };
+        assert!(saved_answer_problem(&start, "b", &good).is_ok());
+        let bad = FlowStep { output: Some("{\"Count\":3}".to_owned()), ..good.clone() };
+        assert!(saved_answer_problem(&start, "b", &bad).is_err(), "a changed spec rejects the old answer");
+        let no_json = FlowStep { output: Some("no json here".to_owned()), ..good };
+        assert!(saved_answer_problem(&start, "b", &no_json).is_err());
+    }
+
+    #[test]
+    fn a_step_with_a_bad_answer_gets_one_more_try() {
+        let fields = answers::fields_of(&answers::NodeSpec { answer: "count: int".to_owned(), check: String::new() });
+        assert!(checked_answer(&fields, "no json").is_err());
+        assert!(checked_answer(&fields, "{\"count\":3}").is_ok());
+        let (_, problems) =
+            answers::check_answer(&fields, &serde_json::json!({"count":"0x10"}), answers::ExtraKeys::Refuse);
+        let retry = answers::answer_fix_ask(&fields, &problems);
+        assert!(retry.contains("count has the wrong type"), "{retry}");
+        assert!(retry.contains("- count: integer"), "{retry}");
+    }
+
+    #[test]
+    fn a_claude_model_step_is_given_the_exact_answer_shape() {
+        let fields = answers::fields_of(&answers::NodeSpec { answer: "count: int".to_owned(), check: String::new() });
+        let schema = answers::answer_schema(&fields);
+        assert_eq!(schema["properties"]["count"]["type"], "integer");
+        assert!(answers::claude_ask(&fields).contains("\"additionalProperties\""));
     }
 
     #[test]

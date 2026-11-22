@@ -245,3 +245,36 @@ The clients pre-check the connect rules (`connectProblem`, same wording as the h
 ## Trying it
 
 See [Testing routine flows](../guides/routine-flows-testing.md).
+
+## Typed step answers
+
+A step can declare the fields it answers with and the next step can name them in its instruction or test them
+in a check. Set them with `setRoutineFlowAnswers` (`answer` / `check` text, `nodeKey` omitted for the trigger),
+with the `answer` / `check` arguments of `link_routine_bots`, or with the canvas's `answerSpecs`. An answer line is
+`name: type`; `int` and `integer` mean whole numbers, `number` accepts a JSON number or decimal text (not `0x10`),
+`list` needs a JSON list, `yes/no` takes a flag, and a choice is `one of high, low`. A trailing `?` makes a field
+optional. Examples: `count: int; tags: list; priority: one of high, low; note?: text` (one line or `;` per field). A check joins tests with
+`and` / `or` (`count > 2 and priority = high`), and an instruction can use `{{count}}`. These rules are ported from
+OpenBot nightly's workflow answers.
+
+- Values are strict: a reply with no JSON object, a wrong-cased or unknown field name or a wrong type is a problem.
+  An agent step gets one more turn with the problem; the JSON-object fallback still works. A webhook body refuses a
+  field name that differs from a declared one in case, but lets other sender keys through. A list reaches the next
+  step as JSON; an approval-style answer is shown as plain `name: value` text. An apostrophe in a word (`it's`) no
+  longer hides the `and` / `or` after it.
+- Steps fail closed: using a field whose only supplier failed, was stopped or was skipped fails with a clear error;
+  so does a `{{name}}` or check field that no earlier step gives. A check on a missing value is false, also for `!=`.
+  The fields and the webhook rules are frozen when a run starts, so a later edit cannot change a retry's checks.
+- Starting a flow with a JSON input checks it against the trigger's answer fields and refuses a wrong or missing
+  field; a start with no input is unchanged. "Run from this step" refuses to reuse an answer from a step that
+  failed or stopped most recently.
+- The canvas shows `answerProblems` for a field not supplied on every path into a step (the other condition branch,
+  another trigger, the first pass of a loop) and for two steps that can give one field in the same run. Mark the
+  field optional or give it on every path; new links that make a field ambiguous are refused. Older saved flows run
+  as before.
+- An agent in a step with answer fields is asked to call the `workflow_answer` tool with `{"answer": {...}}`. The
+  tool checks the answer before it returns so the agent can correct it in the same turn, and keeps a valid answer
+  for the step. A Claude model step is given the exact JSON schema of its answer, so it needs fewer retries.
+
+The validators live in `host/src/routines/flow/answers.rs` and `answer_paths.rs` and are called from the engine's
+step/run/answer path, the flow API and the flow tools.

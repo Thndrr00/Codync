@@ -13,6 +13,8 @@
 //! A link applies only to runs that began after it was made, so connecting a bot never sends it
 //! the reply of an earlier run.
 
+mod answer_paths;
+mod answers;
 mod api;
 mod apply;
 mod canvas;
