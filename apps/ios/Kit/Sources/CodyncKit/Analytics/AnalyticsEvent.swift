@@ -65,8 +65,7 @@ public enum AnalyticsEvent: Equatable, Sendable {
     public enum PromptSource: String, Sendable { case settings, widgets }
     public enum Setting: String, Sendable { case push, liveActivities = "live_activities" }
     public enum Link: String, Sendable {
-        case github, issues, discord, appStore = "app_store", demo, tailscale, privacy, installCommand = "install_command"
-        case github, issues, appStore = "app_store", demo, tailscale, privacy, installCommand = "install_command", installLink = "install_link"
+        case github, issues, discord, appStore = "app_store", demo, tailscale, privacy, installCommand = "install_command", installLink = "install_link"
     }
     public enum DevServerUse: String, Sendable { case open, copy }
     public enum VoiceEngine: String, Sendable { case onDevice = "on_device", openai, gemini, cloud }
