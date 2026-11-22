@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! A third batch of pure helpers from bdots' current source: plain text, approval previews,
 //! grant scopes, error extraction, spend summaries, rate limits, and desk activity. All

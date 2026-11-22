@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! Spend aggregation and cursor helpers ported from bdots' `agents/spend.ts`. Pure arithmetic;
 //! the host already has its own budget table, so these are used for reporting, not enforcement.

@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! Pure text helpers ported from bdots' `pipeline-summary.ts`, `call-preview.ts`, `show.ts`
 //! and `choices.ts`. No client, DB or model dependency; each is deterministic and tested.

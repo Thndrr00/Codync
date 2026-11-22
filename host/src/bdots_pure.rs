@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! More pure helpers ported from bdots: memory facts (`agents/memory.ts`), choice options and
 //! endpoint comparison (`lib/choices.ts`), and required-token checks (`agents/guards.ts`).

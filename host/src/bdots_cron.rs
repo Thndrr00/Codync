@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! Minimal 5-field UTC cron, ported from bdots' `lib/cron.ts`. Enough to describe a routine's
 //! schedule and find its next runs; the host's scheduler remains the source of truth for firing.

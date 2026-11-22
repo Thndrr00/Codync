@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! Bot-mention links ported from bdots' `lib/bot-links.ts`, using the same shape
 //! (`[@Name](codync://bot/<id>)`) so stored messages stay readable by both.

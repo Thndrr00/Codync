@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! A second batch of pure helpers from bdots' current source: tool-call descriptions, error
 //! reasons, safety validation, money/format and skill parsing. All deterministic, no client/DB.

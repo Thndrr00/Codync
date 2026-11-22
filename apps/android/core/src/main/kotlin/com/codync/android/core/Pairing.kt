@@ -17,6 +17,9 @@ class PairingProblem(val kind: Kind, cause: Throwable? = null) : IllegalArgument
 data class Pairing(val computer: Computer, val code: String) {
     internal val offerId: String get() = RelayCrypto.offerId(code.decodeBase64Url(16))
 
+    /** The pairing without its relay: the direct addresses only, for when the phone can't use the cloud. */
+    val withoutRelay: Pairing get() = copy(computer = computer.copy(cloud = null))
+
     companion object {
         fun parse(text: String, scheme: String): Pairing {
             if (text.length > 16 * 1024) throw PairingProblem(PairingProblem.Kind.Invalid)

@@ -30,6 +30,10 @@ data class BotDraft(
     val pinned: Boolean = false,
     val hidden: Boolean = false,
     val notify: Boolean? = null,
+    /** It learns skills from its background review (host learnSkills). */
+    val learnSkills: Boolean = false,
+    /** The host's subagents: the bot may hand a bounded task to a short-lived child turn. */
+    val subagents: Boolean = false,
     val connectors: List<String>? = null,
     /** Unset on a new bot, like [connectors]: the host turns on every installed one. */
     val skills: List<String>? = null,
@@ -61,6 +65,8 @@ data class BotDraft(
     val actionRulesOn: Boolean? = null,
     /** The profile picked in the form; null when none, so nothing is sent. */
     val securityProfile: String? = null,
+    /** When Codync summarizes the chat; null where the host has none, so it isn't sent. */
+    val compaction: Compaction? = null,
 ) {
     /** A saved bot keeps a name; only a new one goes without (the host names it after its first conversations). */
     val isValid: Boolean get() = name.isNotBlank()
@@ -94,18 +100,19 @@ data class BotDraft(
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive", "actionRulesOn", "securityProfile", "offeredToNetwork", "reachableByAssistants", "verifyCommand", "backgroundModel", "saver", "personality")
+        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive", "actionRulesOn", "securityProfile", "offeredToNetwork", "reachableByAssistants", "verifyCommand", "backgroundModel", "saver", "personality", "compaction")
         /** Who reaches a bot belongs to its computer, not its setup, and neither do this computer's specifics. */
         private val TEMPLATE_SKIPS =
             setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks", "offeredToNetwork", "reachableByAssistants")
+        @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
         private val TemplateJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
         val AVATAR_SHAPES = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
             bot.avatarLook, bot.actionRules, bot.proactive,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.mode, bot.customIcon, bot.model,
-            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
+            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.learnSkills, bot.subagents, bot.connectors, bot.skills, bot.computer, bot.account,
             bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks,
-            bot.verifyCommand, bot.backgroundModel, bot.browserProfile, bot.chatColor, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants, bot.approvalRules, bot.actionRulesOn, bot.securityProfile)
+            bot.verifyCommand, bot.backgroundModel, bot.browserProfile, bot.chatColor, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants, bot.approvalRules, bot.actionRulesOn, bot.securityProfile, bot.compaction)
     }
 }

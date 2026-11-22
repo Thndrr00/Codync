@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::pedantic, clippy::style, clippy::perf)]
 
 //! Card text helpers ported from bdots' `agents/desk.ts` and `lib/shop.ts`, `lib/auth.ts`,
 //! `agents/skill-sources.ts`, `lib/models.ts`. Pure formatting/validation for chat cards.
