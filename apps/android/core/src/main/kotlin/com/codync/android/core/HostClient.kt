@@ -37,6 +37,10 @@ data class Bot(
     val fastModeSupport: String = "unknown",
     val fastModeIssue: String? = null,
     val notify: Boolean? = null,
+    /** It learns skills from its background review (learnSkills on the wire). */
+    val learnSkills: Boolean = false,
+    /** The bot may hand a bounded task to a short-lived child turn (`subagents` on the wire). */
+    val subagents: Boolean = false,
     val connectors: List<String> = emptyList(),
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,
@@ -52,6 +56,10 @@ data class Bot(
     val chatColor: String? = null,
     /** Saver: at 80 percent of the daily token budget, new sessions start on [backgroundModel] until tomorrow; null from an older host. */
     val saver: Boolean? = null,
+    /** When Codync summarizes the chat so it can go on; null on an older host. */
+    val compaction: Compaction? = null,
+    /** The sizes the window takes, once the agent has told its context window; null before that. */
+    val compactionTokens: CompactionTokens? = null,
     /** The user's rules for the agent's permission requests, first match first. */
     val approvalRules: List<ApprovalRule> = emptyList(),
     /** Whether the quick rules ([actionRules]) are enforced; null from an older host. */
@@ -105,6 +113,8 @@ data class Bot(
     val agentStep: AgentStep? = null,
     /** Agents of its chain resting now. */
     val resting: List<Resting> = emptyList(),
+    /** Programs it keeps running on the computer (an older host sends none). */
+    val devServers: List<DevServer> = emptyList(),
 ) {
     /** Its band in the roster: the lead, then pinned bots, then the rest. Reordering stays inside a band. */
     val band: Int get() = when { lead -> 0; pinned -> 1; else -> 2 }

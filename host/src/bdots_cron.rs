@@ -61,7 +61,7 @@ pub fn parse_cron(expr: &str) -> Option<Cron> {
     if parts.len() != 5 {
         return None;
     }
-    let dow = parts[4].replace('7', '0');
+    let dow = parts[4].replace('7', "0");
     Some(Cron {
         minute: parse_field(parts[0], 0, 59)?,
         hour: parse_field(parts[1], 0, 23)?,

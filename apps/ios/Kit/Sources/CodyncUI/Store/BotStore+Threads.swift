@@ -8,14 +8,14 @@ extension BotStore {
     /// A chat's live threads, or its archive drawer, newest first; the host never sends their lines.
     func refreshThreads(_ botId: String, archived: Bool = false) {
         Task {
-            guard let list = try? await withLink { try await $0.threads(botId: botId, archived: archived) } else { return }
+            guard let list = try? await withLink({ try await $0.threads(botId: botId, archived: archived) }) else { return }
             if archived { archivedThreads[botId] = list } else { threads[botId] = list }
         }
     }
 
     /// Reads a thread: its lines join the mirror and the host marks it read.
     func readThread(_ botId: String, root: String) async -> ThreadInfo? {
-        guard let read = try? await withLink { try await $0.thread(botId: botId, root: root) } else { return nil }
+        guard let read = try? await withLink({ try await $0.thread(botId: botId, root: root) }) else { return nil }
         threadEntries[root] = read.entries
         if let info = read.thread { replace(info, botId: botId) }
         patch(botId: botId, root: root) { $0.unread = 0 }
@@ -25,9 +25,7 @@ extension BotStore {
     /// Opens a thread, optionally branched from one of the chat's messages, and shows it.
     @discardableResult
     func startThread(_ botId: String, from entry: Entry? = nil, title: String = "") async -> String? {
-        guard let root = try? await withLink(replay: true) {
-            try await $0.createThread(botId: botId, fromEntryId: entry?.id, title: title)
-        } else { return nil }
+        guard let root = try? await withLink(replay: true, { try await $0.createThread(botId: botId, fromEntryId: entry?.id, title: title) }) else { return nil }
         let now = Int64(Date.now.timeIntervalSince1970 * 1000)
         replace(ThreadInfo(id: root, title: title, fromEntry: entry?.id, branchText: entry?.replyQuote.text,
                            archived: false, createdAt: now, updatedAt: now, unread: 0, lastText: nil, lastAuthor: nil),
