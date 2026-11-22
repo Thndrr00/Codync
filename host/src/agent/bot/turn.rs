@@ -132,7 +132,7 @@ impl Actor {
         }
         self.lane = lane.clone();
         self.turn = Some(turn);
-        self.turn_budget.start(std::time::Instant::now());
+        self.turn_budget.start(Instant::now());
         // Only the user's own words feed memory: not another bot's, a room's or a routine's.
         let from_user = !hidden && self.source() == TurnSource::User;
         self.turn_text = from_user.then(|| text.to_owned());

@@ -16,6 +16,7 @@ fn normalize(line: &str) -> String {
 }
 
 /// Append one fact as a bullet unless the document already says it (`appendFact`).
+#[derive(Debug)]
 pub enum AppendFact {
     Content(String),
     Duplicate,

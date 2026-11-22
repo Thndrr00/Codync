@@ -404,7 +404,7 @@ impl App {
                     if let Overlay::Insights(i) = o
                         && i.bot == *bot
                     {
-                        i.data.get_or_insert_with(Value::Null);
+                        i.data.get_or_insert_with(|| Value::Null);
                     }
                 }
             }

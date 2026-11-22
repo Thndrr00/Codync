@@ -93,7 +93,8 @@ pub fn deliver(
     }
     let row = hub.store.bot(bot_id)?.context("unknown bot")?;
     let root = Path::new(&row.config.cwd).join("inbox").join("email");
-    let rel = Path::new(&file_name(from, subject, at_ms));
+    let file_name = file_name(from, subject, at_ms);
+    let rel = Path::new(&file_name);
     let path = under(&root, rel).context("invalid mail path")?;
     std::fs::create_dir_all(root).with_context(|| "couldn't create the mail folder")?;
     std::fs::write(&path, message(from, subject, body)).with_context(|| "couldn't save the message")?;

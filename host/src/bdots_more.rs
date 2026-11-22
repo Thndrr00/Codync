@@ -6,7 +6,7 @@
 use serde_json::Value;
 
 /// The first string field of a call's input (`describeCall` family).
-fn str_field(input: &Value, key: &str) -> &str {
+fn str_field<'a>(input: &'a Value, key: &str) -> &'a str {
     input.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
@@ -353,7 +353,7 @@ pub fn pick_skills<'a>(found: &'a [String], wanted: &[String]) -> Result<Vec<&'a
 }
 
 /// Resolve a chat or background model with fallbacks (`pickModel`).
-pub fn pick_model(configured: Option<&str>, background: Option<&str>, is_background: bool) -> &str {
+pub fn pick_model<'a>(configured: Option<&'a str>, background: Option<&'a str>, is_background: bool) -> &'a str {
     if is_background { background.or(configured).unwrap_or("default") } else { configured.unwrap_or("default") }
 }
 
@@ -399,7 +399,7 @@ mod tests {
         assert_eq!(https_origin("http://api.test"), None);
         let out = redact("token=abc12345 and abc12345", "abc12345");
         assert!(!out.contains("abc12345"));
-        assert_eq!(approval_key("call", true, &["b", "a"]), "call:read:a,b");
+        assert_eq!(approval_key("call", true, &["b".to_owned(), "a".to_owned()]), "call:read:a,b");
     }
 
     #[test]

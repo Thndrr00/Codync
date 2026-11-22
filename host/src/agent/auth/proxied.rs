@@ -140,11 +140,11 @@ mod tests {
         assert_eq!(names(&store, "claude").unwrap(), ["ANTHROPIC_API_KEY"]);
         assert!(client::reveal(&store, "agent-env:claude:ANTHROPIC_API_KEY").is_err());
         assert_eq!(
-            saved_env(&store, "claude").unwrap(),
+            saved_env(&store, "claude", None).unwrap(),
             ["ANTHROPIC_API_KEY", "CODEX_HOME", "OPENAI_API_KEY", "OPENAI_BASE_URL"]
         );
 
-        let (vars, grants) = env(&store, "claude").unwrap();
+        let (vars, grants) = env(&store, "claude", None).unwrap();
         let env: BTreeMap<String, String> = vars.into_iter().collect();
         assert_eq!(env["ANTHROPIC_API_KEY"], PLACEHOLDER);
         let grant = format!("http://127.0.0.1:{}/t/", k.keeper.port);
@@ -191,7 +191,7 @@ mod tests {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         k.manage(&store);
         save_now(&store, &[change("GEMINI_API_KEY", Some("g"))]).unwrap();
-        let (vars, grants) = env(&store, "claude").unwrap();
+        let (vars, grants) = env(&store, "claude", None).unwrap();
         let base = vars.iter().find(|(k, _)| k == "GOOGLE_GEMINI_BASE_URL").unwrap().1.clone();
         let token = base.rsplit('/').next().unwrap().to_owned();
         let (acp, _inbox) = crate::agent::acp::Acp::spawn("cat", env!("CARGO_MANIFEST_DIR"), &vars).unwrap();
@@ -208,9 +208,9 @@ mod tests {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         let saved = serde_json::json!({"ANTHROPIC_API_KEY": "sk-ant", "OTHER": "o"});
         crate::market::vault::write(&store, &env_slot("claude"), &saved.to_string()).unwrap();
-        let (env, grants) = env(&store, "claude").unwrap();
+        let (env, grants) = env(&store, "claude", None).unwrap();
         assert!(grants.is_empty(), "no grants off a cloud computer");
         assert_eq!(env, [("ANTHROPIC_API_KEY".to_owned(), "sk-ant".to_owned()), ("OTHER".to_owned(), "o".to_owned())]);
-        assert_eq!(saved_env(&store, "claude").unwrap(), ["ANTHROPIC_API_KEY", "OTHER"]);
+        assert_eq!(saved_env(&store, "claude", None).unwrap(), ["ANTHROPIC_API_KEY", "OTHER"]);
     }
 }

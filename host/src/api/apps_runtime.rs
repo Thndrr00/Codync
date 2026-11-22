@@ -179,7 +179,7 @@ fn handle_data(
         return match hub.store.app_collections(bot_id, slug) {
             Ok(mut collections) => {
                 if let Some(access) = &form {
-                    collections.retain(|c: &serde_json::Value| access.read.iter().any(|r| c["collection"] == *r));
+                    collections.retain(|c: &Value| access.read.iter().any(|r| c["collection"] == *r));
                 }
                 json_resp(StatusCode::OK, json!({"collections": collections, "mode": link.mode}))
             }

@@ -146,7 +146,7 @@ pub fn tool_result_error(value: &Value) -> Option<String> {
 }
 
 /// The `filters` query for gateway logs after an ISO time (`afterFilter`), as a JSON array.
-pub fn after_filter(at: &str, one_ms_before: &str) -> Value {
+pub fn after_filter(_at: &str, one_ms_before: &str) -> Value {
     serde_json::json!([{"key":"created_at","operator":"gt","value":[one_ms_before]}])
 }
 
@@ -213,7 +213,7 @@ pub fn connection_status(state: &str, tools: usize, needs_sign_in: bool) -> Stri
 }
 
 /// Resolve a model with fallbacks (`pickModel`).
-pub fn pick_model(chat: Option<&str>, background: Option<&str>, is_background: bool) -> &str {
+pub fn pick_model<'a>(chat: Option<&'a str>, background: Option<&'a str>, is_background: bool) -> &'a str {
     if is_background { background.or(chat).unwrap_or("default") } else { chat.unwrap_or("default") }
 }
 
@@ -328,16 +328,20 @@ pub fn format_money(minor: i64, currency: &str) -> String {
         _ => "",
     };
     let value = minor as f64 / 10f64.powi(digits as i32);
-    let number =
-        if digits == 0 || minor % 10i64.pow(digits) == 0 { format!("{value:.0}") } else { format!("{value:.digits$}") };
+    let precision = digits as usize;
+    let number = if digits == 0 || minor % 10i64.pow(digits) == 0 {
+        format!("{value:.0}")
+    } else {
+        format!("{value:.precision$}")
+    };
     if symbol.is_empty() { format!("{number} {currency}") } else { format!("{symbol}{number}") }
 }
 
 /// A patch preview of a finished edit (`editedPreview`): path + patch, or `None`.
 pub fn edited_preview(input: &Value, output: &Value) -> Option<(String, String)> {
     let patch = output.get("patch")?.as_str()?;
-    let path = output["path"].as_str().or_else(|| input["path"].as_str())?;
-    (!path.is_empty() && !patch.is_empty()).then(|| (path.to_owned(), patch.to_owned()))
+    let file_path = output["path"].as_str().or_else(|| input["path"].as_str())?;
+    (!file_path.is_empty() && !patch.is_empty()).then(|| (file_path.to_owned(), patch.to_owned()))
 }
 
 /// True when a preview has nothing worth showing (`isEmptyPreview`).

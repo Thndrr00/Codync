@@ -36,7 +36,7 @@ impl Routines {
     }
 
     /// The routines a bot's canvas shows: its own, then those whose links name it.
-    pub(super) fn canvas_routines(&self, store: &Store, bot: &str) -> Result<Vec<Routine>> {
+    pub(crate) fn canvas_routines(&self, store: &Store, bot: &str) -> Result<Vec<Routine>> {
         let touching = store.flow_routines_touching(bot)?;
         let state = self.state.locked();
         let own = state.routines.iter().filter(|r| r.bot_id == bot && !r.deleted);

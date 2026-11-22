@@ -470,10 +470,10 @@ impl Actor {
                 _ = flush_tick.tick() => {
                     self.flush(false);
                     if self.turn.is_some()
-                        && let Some(nudge) = self.turn_budget.check(std::time::Instant::now())
+                        && let Some(nudge) = self.turn_budget.check(Instant::now())
                     {
                         let text = nudge.note().to_owned();
-                        self.notice(&format!("⏱ {text}"), "info");
+                        self.notice(&format!("⏱ {text}"), NoticeStyle::Info);
                     }
                     self.expire_abandoned().await;
                     self.age_approvals().await;

@@ -99,7 +99,7 @@ impl Actor {
             "agent_message_chunk" => {
                 let t = acp::content_text(&u["content"]);
                 if !t.trim().is_empty() {
-                    self.turn_budget.spoke(std::time::Instant::now());
+                    self.turn_budget.spoke(Instant::now());
                 }
                 self.append(SegKind::Text, &t);
                 self.set_activity("Writing a reply…");

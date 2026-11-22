@@ -182,8 +182,11 @@ pub fn keep_hyphens(text: &str) -> String {
 
 /// The colour of a stat's value: the tone the bot gave it, or else its sign (`show.ts`).
 pub fn stat_tone(tone: Option<&str>, value: Option<&str>) -> &'static str {
-    if matches!(tone, Some("neutral" | "good" | "warn")) {
-        return tone.unwrap();
+    match tone {
+        Some("neutral") => return "neutral",
+        Some("good") => return "good",
+        Some("warn") => return "warn",
+        _ => {}
     }
     let value = value.unwrap_or("").trim();
     if value.starts_with('-') && value[1..].trim_start().starts_with(|c: char| c.is_ascii_digit()) {

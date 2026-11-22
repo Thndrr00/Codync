@@ -267,24 +267,7 @@ mod tests {
     use super::*;
 
     fn entry(kind: Kind) -> Entry {
-        let wire = match kind {
-            Kind::User => "user",
-            Kind::Tool => "tool",
-            Kind::Agent => "agent",
-            _ => "notice",
-        };
-        Entry {
-            id: "e".into(),
-            seq: 0,
-            bot_id: "b".into(),
-            rev: 1,
-            kind: wire.into(),
-            turn: 1,
-            data: serde_json::Value::Null,
-            created_at: 0,
-            updated_at: 0,
-            thread_id: None,
-        }
+        Entry { id: "e".into(), seq: 0, turn: 1, kind, data: serde_json::Value::Null, created_at: 0 }
     }
 
     #[test]

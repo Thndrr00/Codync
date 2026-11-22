@@ -86,7 +86,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "routines": routines,
         "usage": {
             "used": used,
-            "usedText": crate::bdots_text::compact_count(used),
+            "usedText": crate::bdots_desk::compact_count(used),
             "limit": limit,
             "resetsAt": usage.get("resetsAt").cloned(),
         },

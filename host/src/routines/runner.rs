@@ -17,6 +17,15 @@ pub struct Prepared {
 }
 
 impl Routines {
+    /// A cloud computer may sleep only when no run is queued or going, and it wakes for the next one.
+    pub fn sleep_window(&self) -> (bool, Option<i64>) {
+        let s = self.state.locked();
+        let active = s.runs.iter().any(|r| r.status.active());
+        let next =
+            s.routines.iter().filter(|r| !r.deleted && r.enabled).flat_map(|r| r.next_runs.iter().flatten()).min();
+        (active, next.copied())
+    }
+
     /// An enabled clock schedule keeps the local daemon's machine awake between
     /// runs. Explicit system sleep or a closed laptop lid still suspends execution.
     pub fn keeps_awake(&self) -> bool {
@@ -291,7 +300,7 @@ impl Routines {
                 && let Some(bot) = hub.store.bot(&run.bot_id)?.filter(|b| !b.deleted)
             {
                 crate::remote::push::notify(hub, &bot.config, None, &bot.config.name, &text, kind);
-                if kind == Some(AlertKind::Done)
+                if kind == AlertKind::Done
                     && let Some(result) = &run.result
                 {
                     super::dedup::mark_reported(hub, &run.bot_id, &run.routine_id, result);

@@ -78,8 +78,8 @@ fn matches_at(cron: &Cron, minute: u32, hour: u32, dom: u32, month: u32, dow: u3
         return false;
     }
     let dom_ok = cron.dom.values.contains(&dom);
-    let dow_ok = cron.dow.values.contains(&dow);
-    if !cron.dom.any && !cron.dow.any { dom_ok || dow_ok } else { dom_ok && dow_ok }
+    let weekday_ok = cron.dow.values.contains(&dow);
+    if !cron.dom.any && !cron.dow.any { dom_ok || weekday_ok } else { dom_ok && weekday_ok }
 }
 
 /// UTC fields for an epoch-millisecond timestamp (civil-from-days, no timezone dependency).
@@ -111,7 +111,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 /// Run times in `[from, from + window)` at minute resolution, at most `limit` (`runsBetween`).
 pub fn runs_between(cron: &Cron, from: i64, window: i64, limit: usize) -> Vec<i64> {
     let mut out = Vec::new();
-    let mut t = from.div_ceil(60_000) * 60_000;
+    let mut t = from.saturating_add(59_999) / 60_000 * 60_000;
     while t < from + window && out.len() < limit {
         let (m, h, dom, mon, dow) = utc_fields(t);
         if matches_at(cron, m, h, dom, mon, dow) {

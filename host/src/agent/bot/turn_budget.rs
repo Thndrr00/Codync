@@ -59,7 +59,7 @@ impl TurnBudget {
         let started = self.started?;
         let worked = now.duration_since(started);
         let quiet = now.duration_since(self.last_spoke.unwrap_or(started));
-        let (index, nudge, due) = [
+        let (index, nudge) = [
             (2, Nudge::Stop, worked >= STOP_AFTER),
             (1, Nudge::WrapUp, worked >= WRAP_UP_AFTER),
             (0, Nudge::Update, quiet >= UPDATE_AFTER),

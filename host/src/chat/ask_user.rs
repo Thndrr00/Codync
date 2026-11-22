@@ -6,11 +6,8 @@
 //! The tool returns at once — the answer arrives as the bot's next turn, like a mini-app `_tell`.
 
 use crate::hub::Hub;
+use crate::remote::push::{AlertKind, notify};
 use crate::store::{EntryKind, Lane};
-use crate::{
-    LockExt,
-    remote::push::{AlertKind, notify},
-};
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
