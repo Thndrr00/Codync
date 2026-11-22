@@ -40,6 +40,12 @@ ends the group but leaves every node and link in place — a group never changes
 Pasting or dropping two or more files on the canvas makes one picture step per file, all in a single
 new group. An older host or canvas with no groups simply shows the nodes ungrouped.
 
+On the desktop each open workflow is a **tab** in the flow view's title bar, ported from OpenBot nightly's workflow tab mode. Tabs reuse the shared `TabStrip`: click to open, double-click to rename the workflow inline, drag to reorder, and middle-click or the tab's menu to close it, its siblings or every tab to its right. The open tab list and order live in the device pref `openWorkflowTabs` (workflow ids only); a tab whose bot is working, or whose canvas has a step running, shows its running state.
+
+The **All workflows** menu lists every workflow with its folder and can make, rename or delete a folder and move a workflow into a folder or out of it. Folders belong to the computer, not the device (the host owns them): `workflowFolders` reads `{revision, folders: [{id, name}], placement: {workflowId: folderId}}` and `workflowFolderApply` takes one `{action}` body — `create` (`id`, `name`, optional `workflowIds`), `rename` (`folderId`, `name`), `delete` (`folderId`) or `place` (`workflowIds`, `folderId: null` takes a workflow out of its folder). An older host without these methods simply shows every workflow unfiled. Folders are navigation only — a flow's links and steps never change.
+
+The host keeps that snapshot in one bounded kv blob (`workflowFolders`) stamped with the global rev, so every computer client reads the same tree and catches up when it moves. It enforces at most 200 folders with unique names of at most 80 characters, 10,000 placements and 1,000 workflows in one action, checks ids, names and action keys strictly, and drops the placement of any workflow deleted from the routine registry on load and before an apply. A `create` may file its `workflowIds` as it makes the folder, `place` moves several workflows at once (a `null` folder files them in "All workflows"), and a `delete` removes that folder's placements too. The optional `folders` field of `routineFlowCanvas` is omitted on an older canvas with no folder blob.
+
 A video step's **Length** menu lists the lengths its model declares. When the model declares more
 than one, **Custom** opens a slider over the range those lengths span (the smallest to the largest,
 one second per step), so the step can make a clip of exactly that length. The value is saved with the
@@ -128,8 +134,16 @@ settings and **Run** in one place; it reuses the inspector's shared controls and
 
 A card's output **port** keeps a soft tint of what its visible line carries — text, a picture or a file — using
 the theme's own semantic colour tokens; a port with no line stays grey. A step's result shows the **newest file**
-as soon as a run ends; arrows still walk the older files of that step. A new run starts on its newest file again,
-so a file clicked earlier is never left showing as the current result.
+as soon as a run ends; round thumbnails (with a thin ring coloured from the result and a blurred backing) walk
+the older files of that step, and the arrows do the same. A new run starts on its newest file again,
+so a file clicked earlier is never left showing as the current result. A result still being made shows a spinner,
+not an empty result.
+
+Other fixes from the same nightly apply to the desktop canvas: files pasted or dropped into a flow land in the
+middle of the visible canvas instead of a far-off saved position; the empty-workflow message floats over a live
+canvas rather than replacing it, so drawing, pan and paste clicks pass through; and a click on the canvas moves
+focus there, so Backspace deletes the selected steps instead of acting on the title-bar tab. Opening another
+workflow shows a spinner until its canvas arrives, so an open canvas is never mistaken for an empty one.
 
 ## Host API
 
@@ -156,6 +170,8 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `testRoutineFlow` | `botId` (the routine's owner), `routineId`, optional `input` | `{"runId": "flow-test-…"}` |
 | `runRoutineFlowFromStep` | `botId`, `routineId`, `nodeKey` (`bot:` or `media:`) | `{"runId": "flow-step-…"}` |
 | `renameRoutineFlowStep` | `botId`, `routineId`, `nodeKey` (`bot:` or `media:`), `name` (≤ 200 chars, empty clears) | `{"ok": true}` |
+| `workflowFolders` | — | `{revision, folders: [{id, name}], placement: {workflowId: folderId}}` |
+| `workflowFolderApply` | `action` (`create` with `id`/`name`/optional `workflowIds`; `rename` with `folderId`/`name`; `delete` with `folderId`; `place` with `workflowIds`/`folderId`, `null` = out of folder) | the new snapshot |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`
 (a sample sentence by default), so a link can be tried without spending a run. Its steps carry the returned

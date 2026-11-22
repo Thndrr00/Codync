@@ -1,7 +1,7 @@
 //! One bot's canvas as clients load it: its routines and those whose flow passes through it, the
 //! links, where the nodes sit and the bots placed before any link reaches them.
 
-use super::groups;
+use super::{folders, groups};
 use crate::LockExt;
 use crate::hub::{Hub, flows::flow_event};
 use crate::routines::{Routine, Routines, Run, public};
@@ -66,7 +66,7 @@ pub(super) fn canvas(hub: &Hub, bot: &str) -> Result<Value> {
     let ids: Vec<String> = routines.iter().map(|r| r.id.clone()).collect();
     let cards = routines.iter().map(|r| hub.routines.flow_routine(store, r, now)).collect::<Result<Vec<_>>>()?;
     let rev = store.flow_revs_since(-1).into_iter().find(|(b, _)| b == bot).map_or(0, |(_, rev)| rev);
-    Ok(json!({
+    let mut canvas = json!({
         "botId": bot,
         "rev": rev,
         "routines": cards,
@@ -75,7 +75,12 @@ pub(super) fn canvas(hub: &Hub, bot: &str) -> Result<Value> {
         "placedBotIds": store.flow_placed_bots(bot)?,
         "mediaNodes": store.flow_media_for(&ids)?,
         "groups": groups::load(store, bot),
-    }))
+    });
+    // An older canvas has no folder blob at all, so the field is omitted rather than sent empty.
+    if let Some(snapshot) = folders::load(store) {
+        canvas["folders"] = serde_json::to_value(folders::pruned(&snapshot, &super::api::known_workflows(hub)))?;
+    }
+    Ok(canvas)
 }
 
 /// The times a routine fires in the next week, soonest first. Watches and webhooks have none.

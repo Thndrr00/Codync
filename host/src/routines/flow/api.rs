@@ -1,15 +1,15 @@
 //! The host API methods of routine flows, with strict validation of every input.
 
 use super::merge::{FlowDocument, Version};
-use super::{FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, graph, groups, merge};
+use super::{FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, folders, graph, groups, merge};
 use crate::LockExt;
 use crate::chat::team::flow::recipient;
 use crate::hub::Hub;
 use crate::routines::{Routine, default_timeout};
-use crate::store::{FlowLink, FlowMedia, now_ms};
+use crate::store::{FlowChange, FlowLink, FlowMedia, now_ms};
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -31,6 +31,8 @@ pub const METHODS: &[&str] = &[
     "updateRoutineFlowMedia",
     "removeRoutineFlowMedia",
     "saveRoutineFlowGroups",
+    "workflowFolders",
+    "workflowFolderApply",
     "saveRoutineFlow",
     "resolveRoutineFlowConflict",
     "testRoutineFlow",
@@ -128,6 +130,13 @@ fn canvas_bot(hub: &Hub, id: &str) -> Result<()> {
 pub(super) fn routine(hub: &Hub, id: &str) -> Result<Routine> {
     let state = hub.routines.state.locked();
     state.routines.iter().find(|r| r.id == id && !r.deleted).cloned().context("routine not found")
+}
+
+/// The live workflows (routines) a folder placement may name. A deleted one is pruned from the
+/// snapshot on load, so a stale id never blocks a canvas or a new placement.
+pub(super) fn known_workflows(hub: &Hub) -> BTreeSet<String> {
+    let state = hub.routines.state.locked();
+    state.routines.iter().filter(|r| !r.deleted).map(|r| r.id.clone()).collect()
 }
 
 fn node_exists(hub: &Hub, key: &str) -> Result<()> {
@@ -535,6 +544,21 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             let parsed = groups_arg(hub, b)?;
             hub.emit_flow_change(|| Ok(((), Some(groups::save(&hub.store, bot, &parsed)?))))?;
             json!({"ok": true})
+        }
+        "workflowFolders" => {
+            let snapshot = folders::load(&hub.store).unwrap_or_default();
+            json!(folders::pruned(&snapshot, &known_workflows(hub)))
+        }
+        "workflowFolderApply" => {
+            let action = folders::parse_action(b)?;
+            let known = known_workflows(hub);
+            let snapshot = hub.emit_flow_change(|| {
+                let snapshot = folders::mutate(&hub.store, &known, |current| folders::apply(current, &action, &known))?;
+                // Folders belong to the computer, so no one canvas owns this rev.
+                let change = FlowChange { rev: snapshot.revision, bots: Vec::new() };
+                Ok((snapshot, Some(change)))
+            })?;
+            json!(snapshot)
         }
         "saveRoutineFlow" => {
             let bot = id_arg(b, "botId")?;

@@ -18,6 +18,7 @@ mod apply;
 mod canvas;
 mod document;
 mod engine;
+mod folders;
 pub mod graph;
 pub mod groups;
 mod merge;

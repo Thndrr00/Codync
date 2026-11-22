@@ -30,11 +30,23 @@ fn teammate_wait(timeout: Duration) -> Duration {
     timeout.min(TEAMMATE_ANSWER_WAIT)
 }
 
+/// An agent step that replied with a pass (or nothing at all) has nothing to report: it stays
+/// silent, handing nothing to the next step and adding nothing to the run's answer. This is the
+/// host's no-update path; the pure decision keeps it identical in the send, handoff and output code.
+fn nothing_to_report(reply: &str) -> bool {
+    crate::chat::group::is_pass(reply)
+}
+
 /// The answer posted to "Send answers to": the final teammates' replies, not the text the routine's
-/// own agent wrote before it asked them. Empty replies are left out, so a step with nothing to say
+/// own agent wrote before it asked them. Silent replies are left out, so a step with nothing to say
 /// doesn't push the real answer away.
 fn final_answer(replies: &[&str]) -> String {
-    replies.iter().map(|reply| reply.trim()).filter(|reply| !reply.is_empty()).collect::<Vec<_>>().join("\n\n---\n\n")
+    replies
+        .iter()
+        .map(|reply| reply.trim())
+        .filter(|reply| !nothing_to_report(*reply))
+        .collect::<Vec<_>>()
+        .join("\n\n---\n\n")
 }
 
 /// How the routine's own run ended.
@@ -620,7 +632,9 @@ async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watc
         let mut request = match crate::media::sunra::Request::from_node(&pending.node) {
             Ok(request) => request,
             Err(error) => {
-                settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
+                let detail = format!("{error:#}");
+                let text = media_failure_text(&pending.node.kind, &detail);
+                settle(hub, &step, StepStatus::Failed, None, Some(&text));
                 return Outcome::Nothing;
             }
         };
@@ -632,7 +646,9 @@ async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watc
         let request = match crate::media::request(&pending.node) {
             Ok(request) => request,
             Err(error) => {
-                settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
+                let detail = format!("{error:#}");
+                let text = media_failure_text(&pending.node.kind, &detail);
+                settle(hub, &step, StepStatus::Failed, None, Some(&text));
                 return Outcome::Nothing;
             }
         };
@@ -656,7 +672,9 @@ async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watc
             Outcome::Replied(text)
         }
         Err(error) => {
-            settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
+            let detail = format!("{error:#}");
+            let text = media_failure_text(&pending.node.kind, &detail);
+            settle(hub, &step, StepStatus::Failed, None, Some(&text));
             Outcome::Nothing
         }
     }
@@ -668,6 +686,90 @@ fn made_text(prompt: &str, files: &[crate::chat::files::SharedFile], owner: &str
     let listing: Vec<String> =
         files.iter().map(|file| format!("{} ({})", file.name, root.join(&file.id).display())).collect();
     format!("Made for \"{prompt}\":\n{}", listing.join("\n"))
+}
+
+/// Why a media step could not make its file. Triage 13612: the step's error must say which of these
+/// happened instead of a generic "could not make the image". The model's own words are the exception
+/// — they are kept in full, because they are the only thing that explains a reply with no file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum MediaFailure {
+    SignInExpired,
+    LimitUsedUp,
+    ProviderBusy,
+    NoInternet,
+    ModelAnswer(String),
+    Other(String),
+}
+
+/// Classifies a provider error by its words. Pure so every reason can be tested without a provider;
+/// the order matters — a rate limit is a busy provider, not a used-up quota, and a model that answered
+/// without a file is its own case ahead of the network ones.
+fn classify_media_failure(error: &str) -> MediaFailure {
+    let lower = error.to_lowercase();
+    if lower.contains("made no file") {
+        let answer = error.split_once(": ").map_or("", |(_, answer)| answer.trim());
+        return MediaFailure::ModelAnswer(answer.to_owned());
+    }
+    if ["sign-in", "sign in", "unauthor", "expired", "401", "re-author", "log in again"]
+        .iter()
+        .any(|word| lower.contains(word))
+    {
+        return MediaFailure::SignInExpired;
+    }
+    if ["insufficient balance", "out of credit", "no credit", "used up", "quota", "balance"]
+        .iter()
+        .any(|word| lower.contains(word))
+    {
+        return MediaFailure::LimitUsedUp;
+    }
+    if ["rate limit", "busy", "overload", "try again", "temporarily", "server answered 5", "429"]
+        .iter()
+        .any(|word| lower.contains(word))
+    {
+        return MediaFailure::ProviderBusy;
+    }
+    if [
+        "can't reach",
+        "could not reach",
+        "did not answer in time",
+        "took too long",
+        "timed out",
+        "network",
+        "offline",
+        "connection",
+    ]
+    .iter()
+    .any(|word| lower.contains(word))
+    {
+        return MediaFailure::NoInternet;
+    }
+    MediaFailure::Other(error.to_owned())
+}
+
+/// The step's error text for a failed media request, naming the reason the person can act on.
+fn media_failure_text(kind: &str, error: &str) -> String {
+    let what = if kind == "video" { "clip" } else { "picture" };
+    match classify_media_failure(error) {
+        MediaFailure::SignInExpired => {
+            format!("The {what} could not be made because the sign-in expired. Sign in again and rerun this step.")
+        }
+        MediaFailure::LimitUsedUp => format!(
+            "The {what} could not be made because the account's limit is used up. Add credits or use another model, then rerun this step."
+        ),
+        MediaFailure::ProviderBusy => {
+            format!("The {what} could not be made because the provider is busy. Try again shortly.")
+        }
+        MediaFailure::NoInternet => format!(
+            "The {what} could not be made because this computer has no internet connection. Reconnect and rerun this step."
+        ),
+        MediaFailure::ModelAnswer(answer) if !answer.is_empty() => {
+            format!("The {what} could not be made: the model answered \"{answer}\" instead of making a file.")
+        }
+        MediaFailure::ModelAnswer(_) => {
+            format!("The {what} could not be made: the model answered without making a file.")
+        }
+        MediaFailure::Other(detail) => format!("The {what} could not be made: {detail}"),
+    }
 }
 
 async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Receiver<bool>) -> Outcome {
@@ -688,7 +790,7 @@ async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Re
         }
     };
     match handoff(hub, request, attach).await {
-        Ok(text) if crate::chat::group::is_pass(&text) => {
+        Ok(text) if nothing_to_report(&text) => {
             settle(hub, &step, StepStatus::Succeeded, None, None);
             Outcome::Nothing
         }
@@ -720,11 +822,8 @@ fn handoff_text(routine: &str, inputs: &[StepInput]) -> String {
     let answers: Vec<String> = inputs
         .iter()
         .map(|input| {
-            format!(
-                "{} answered:\n\n{}",
-                input.from,
-                if input.text.is_empty() { "(no answer text)" } else { &input.text }
-            )
+            let answer: &str = if nothing_to_report(&input.text) { "(nothing to report)" } else { input.text.as_str() };
+            format!("{} answered:\n\n{}", input.from, answer)
         })
         .collect();
     let mut instructions: Vec<&str> =
@@ -930,5 +1029,57 @@ mod tests {
         assert_eq!(run_case_text(&event).as_deref(), Some("invoice 7"));
         assert_eq!(run_case_text(&serde_json::json!({"source": "test"})), None);
         assert_eq!(run_case_text(&serde_json::json!({"caseText": "   "})), None);
+    }
+
+    #[test]
+    fn a_failed_media_step_says_why_instead_of_a_generic_error() {
+        assert_eq!(classify_media_failure("Sunra's sign-in headers are invalid"), MediaFailure::SignInExpired);
+        assert_eq!(classify_media_failure("401 unauthorized: token expired"), MediaFailure::SignInExpired);
+        assert_eq!(classify_media_failure("Insufficient balance"), MediaFailure::LimitUsedUp);
+        assert_eq!(classify_media_failure("the account quota is spent"), MediaFailure::LimitUsedUp);
+        assert_eq!(classify_media_failure("Sunra's server answered 503"), MediaFailure::ProviderBusy);
+        assert_eq!(classify_media_failure("rate limit reached, try again"), MediaFailure::ProviderBusy);
+        assert_eq!(classify_media_failure("can't reach Sunra"), MediaFailure::NoInternet);
+        assert_eq!(classify_media_failure("making the image took too long"), MediaFailure::NoInternet);
+        assert_eq!(
+            classify_media_failure("the Image model made no file: I can only write text"),
+            MediaFailure::ModelAnswer("I can only write text".to_owned())
+        );
+        assert_eq!(classify_media_failure("a new error"), MediaFailure::Other("a new error".to_owned()));
+
+        let expired = media_failure_text("image", "sign-in expired");
+        assert!(expired.contains("sign-in expired"), "{expired}");
+        assert!(expired.starts_with("The picture could not be made"), "{expired}");
+        let limit = media_failure_text("video", "Insufficient balance");
+        assert!(limit.contains("limit is used up"), "{limit}");
+        assert!(limit.starts_with("The clip could not be made"), "{limit}");
+        assert!(media_failure_text("image", "server answered 503").contains("provider is busy"));
+        assert!(media_failure_text("image", "can't reach Sunra").contains("no internet connection"));
+        let answered = media_failure_text("image", "the Image model made no file: I can only write text");
+        assert!(answered.contains("the model answered \"I can only write text\""), "{answered}");
+        assert!(media_failure_text("image", "a new error").contains("a new error"));
+    }
+
+    #[test]
+    fn a_step_with_nothing_to_report_stays_silent_in_the_handoff_and_the_answer() {
+        assert!(nothing_to_report(""));
+        assert!(nothing_to_report("   "));
+        assert!(nothing_to_report("(pass)"));
+        assert!(nothing_to_report("PASS."));
+        assert!(!nothing_to_report("the report is ready"));
+
+        // A pass never displaces the real answer, and blank text is left out too.
+        assert_eq!(final_answer(&["(pass)", " the real answer ", "  "]), "the real answer");
+        assert_eq!(final_answer(&["first", "second"]), "first\n\n---\n\nsecond");
+        assert_eq!(final_answer(&[]), "");
+
+        let inputs = [
+            StepInput { from: "ada".to_owned(), text: "(pass)".to_owned(), ..StepInput::default() },
+            StepInput { from: "bob".to_owned(), text: "the answer".to_owned(), ..StepInput::default() },
+        ];
+        let text = handoff_text("Digest", &inputs);
+        assert!(text.contains("ada answered:\n\n(nothing to report)"), "{text}");
+        assert!(text.contains("bob answered:\n\nthe answer"), "{text}");
+        assert!(!text.contains("no answer text"), "{text}");
     }
 }
