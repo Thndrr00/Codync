@@ -125,30 +125,6 @@ public struct Spinner: View {
 
 // MARK: - Menus
 
-/// One row in a Codync menu: an action, or a choice when `selected` is set.
-public struct MenuItem: Identifiable {
-    public let id = UUID()
-    public var title: String
-    public var icon: String?
-    /// A picture in the icon's place (an agent's logo).
-    public var image: Image?
-    public var selected: Bool?
-    public var destructive: Bool
-    public var divider: Bool
-    public var action: () -> Void
-
-    public init(_ title: String, icon: String? = nil, image: Image? = nil, selected: Bool? = nil, destructive: Bool = false,
-                divider: Bool = false, action: @escaping () -> Void) {
-        self.title = title
-        self.icon = icon
-        self.image = image
-        self.selected = selected
-        self.destructive = destructive
-        self.divider = divider
-        self.action = action
-    }
-}
-
 /// A `MenuItem` inside a system `Menu` or `contextMenu`: choices as checkmarked toggles.
 @ViewBuilder func systemMenuRow(_ item: MenuItem) -> some View {
     let role: ButtonRole? = item.destructive ? .destructive : nil

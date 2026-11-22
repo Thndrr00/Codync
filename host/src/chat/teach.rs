@@ -134,8 +134,8 @@ fn teach_kv_key(bot: &str) -> String {
 pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "recorded_steps" => steps(hub, bot),
-        "start_teaching" => start_teaching(hub, bot, args),
-        "finish_teaching" => finish_teaching(hub, bot, args),
+        "start_teaching" => start_teaching(hub, bot, args).await,
+        "finish_teaching" => finish_teaching(hub, bot, args).await,
         _ => bail!("unknown teach tool: {name}"),
     }
 }
