@@ -8,6 +8,8 @@
 //! - Idea 32: only the last `KEEP_PAGE_RESULTS` page snapshots stay full; older ones are cut to 1,000 chars.
 //! - Idea 33: only the last `KEEP_IMAGES` images stay; older image blocks become a text placeholder.
 
+#[cfg(test)]
+use super::loop_guard::MAX_TOOL_RESULT_CHARS;
 use super::loop_guard::{KEEP_IMAGES, KEEP_PAGE_RESULTS, cap_tool_output};
 use serde_json::{Value, json};
 use std::sync::Mutex;

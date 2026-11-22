@@ -18,6 +18,10 @@ public struct WeekSummary: Decodable, Hashable, Sendable {
     public var activeBots = 0
     public var topBots: [TopBot] = []
 
+    private enum CodingKeys: String, CodingKey {
+        case messages, replies, tools, fileEdits, approvalsAsked, approvalsAnswered, approvalsWaiting, activeBots, topBots
+    }
+
     public init() {}
 
     /// Lenient: a count the host leaves out is zero.

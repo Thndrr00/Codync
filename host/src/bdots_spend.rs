@@ -16,10 +16,10 @@ pub struct SpendRow {
     pub requests: u64,
 }
 
-fn meta(log: &Value) -> &Value {
+fn meta(log: &Value) -> Value {
     match log.get("metadata") {
         Some(Value::String(raw)) => serde_json::from_str::<Value>(raw).unwrap_or(Value::Null),
-        other => other.unwrap_or(&Value::Null).clone(),
+        other => other.cloned().unwrap_or(Value::Null),
     }
 }
 
