@@ -121,6 +121,27 @@ fn limited(reason: Reason) -> bool {
     )
 }
 
+/// Whether a failure signs the account out of rotation. A background usage reading can fail because the provider
+/// is busy or the read timed out: that is not a sign-out, so the account stays connected and keeps its last usage
+/// reading and its place in rotation. Only a real sign-in error signs it out (OpenBot nightly triage-13749).
+pub fn usage_failure_signs_out(reason: Reason) -> bool {
+    reason == Reason::SignedOut
+}
+
+/// Whether a refused sign-in passes over just this pooled account instead of signing the whole provider out.
+/// Google asking to verify the account in use, or a provider refusing its sign-in, is such a failure: the same
+/// message is retried on the next ready account. Only when the pool has another ready account — with one account
+/// there is nowhere to retry, so the old sign-out rest stands (OpenBot nightly triage-13877).
+pub fn passes_over_verification(reason: Reason, other_ready: bool) -> bool {
+    other_ready && reason == Reason::SignedOut
+}
+
+/// Whether a state row other than `account` is ready. `states` gives these rows for one provider; the pass-over
+/// above must not leave a pool with no account that can answer.
+pub fn another_ready(states: &[Value], account: &str) -> bool {
+    states.iter().any(|row| row["id"].as_str() != Some(account) && row["state"] == "ready")
+}
+
 /// Picks an account from `accounts` in host order. `resting(id)` reports why one cannot answer.
 /// A bot's pin is applied by the caller and always wins. With fewer than two accounts nothing
 /// rotates, so a computer with one extra account keeps its old behaviour.
@@ -283,6 +304,27 @@ mod tests {
             Some("acc_00000002"),
             "a start failure is not a reason to change accounts"
         );
+    }
+
+    #[test]
+    fn a_failed_usage_reading_keeps_the_account_connected() {
+        for reason in [Reason::UsageLimit, Reason::RateLimited, Reason::Overloaded, Reason::NotStarting] {
+            assert!(!usage_failure_signs_out(reason), "{reason:?} is not a sign-out");
+        }
+        assert!(usage_failure_signs_out(Reason::SignedOut), "a real sign-out still shows as one");
+    }
+
+    #[test]
+    fn verification_passes_over_an_account_only_when_another_is_ready() {
+        assert!(passes_over_verification(Reason::SignedOut, true));
+        assert!(!passes_over_verification(Reason::SignedOut, false), "one account has no other to retry on");
+        for reason in [Reason::UsageLimit, Reason::RateLimited, Reason::Overloaded] {
+            assert!(!passes_over_verification(reason, true), "{reason:?} is not a refused sign-in");
+        }
+        let rows = [json!({"id": "acc_00000001", "state": "resting"}), json!({"id": "acc_00000002", "state": "ready"})];
+        assert!(another_ready(&rows, "acc_00000001"));
+        assert!(!another_ready(&rows, "acc_00000002"), "the only ready account is the one that failed");
+        assert!(!another_ready(&[], "acc_00000001"), "an empty pool has no other account");
     }
 
     #[test]

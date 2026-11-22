@@ -73,3 +73,12 @@ A rest a limit put one profile into is keyed `rest.<agent>:<account>`, so rotati
 skip that profile and keep the others eligible; out-of-credits and signed-out rests stay
 on the provider-wide `rest.<agent>` key that older hosts wrote. The old key remains
 readable after the change.
+
+From OpenBot nightly (`triage-13749`, `triage-13877`): a failed usage reading — a busy
+provider or a timed-out read — does not sign an account out. It keeps its connection and
+its last reading, so it stays available to rotation and backups; only a real sign-in error
+signs it out. When Google asks to verify the account in use, or a provider refuses its
+sign-in, and the pool has another ready account, that account is passed over for a short
+rest scoped to it and the message is retried on the next ready account instead of failing
+on the same one each time. With a single account there is nowhere to retry, so the older
+provider-wide sign-out behaviour stands.

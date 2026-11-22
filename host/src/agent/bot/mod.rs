@@ -17,6 +17,7 @@
 //! from a session of its own (see `session`).
 
 mod approval_age;
+mod approval_visibility;
 mod background_work;
 mod channel_input;
 mod cmd;
@@ -25,8 +26,10 @@ mod compaction;
 mod fallback;
 mod fast_mode;
 mod files;
+mod idle_progress;
 mod launch;
 mod lifecycle;
+mod memory_rules;
 mod model_override;
 mod modes;
 mod native_revocation;
@@ -584,7 +587,13 @@ impl Actor {
     }
 
     /// Adds an entry to the current lane, signed by this bot (a group shows who said it).
-    fn add(&self, kind: EntryKind, turn: i64, mut data: Value) -> Option<Entry> {
+    fn add(&self, kind: EntryKind, turn: i64, data: Value) -> Option<Entry> {
+        self.add_in(&self.lane, kind, turn, data)
+    }
+
+    /// The same entry in an explicit lane. A chat-app approval card uses the agent's main chat
+    /// while its turn still runs in the messaging thread (see `approval_visibility`).
+    fn add_in(&self, lane: &Lane, kind: EntryKind, turn: i64, mut data: Value) -> Option<Entry> {
         data["author"] = self.cfg.id.clone().into();
         if self.proactive_turn && proactive::internal_step(kind) {
             data["internal"] = true.into();
@@ -604,7 +613,7 @@ impl Actor {
         if let (EntryKind::Agent, Some(call)) = (kind, &self.turn_call) {
             data["call"] = call.clone().into();
         }
-        self.hub.add_entry(&self.lane, kind, turn, &data)
+        self.hub.add_entry(lane, kind, turn, &data)
     }
 
     /// A notice in the running turn's lane (or the bot's own chat between turns).

@@ -241,6 +241,15 @@ permission card or a Stop. The host also sends the activities "Thinking it throu
 tools run. A New chat opens an empty context window but keeps the chat in SQLite: `search_history` and `read_history`
 read those earlier messages on demand when asked, never in every turn.
 
+From OpenBot nightly: saved memories are presented as the user's **lasting preferences** (`agent/bot/memory_rules.rs`,
+added to the composed prompt). A note naming a site stays a hint; only the user's own request can save a memory, so
+a web page, file or tool result cannot. A Codex bot is also told to open a reference picture with `read_image`
+before `image_gen` must copy it. The completion check is given the names and short results of the turn's tools,
+marked as data (`agent/bot/self_check.rs`), so it does not send the agent back after a finished reminder or a saved
+link; when a check does send it back, the prompt says the user already has the last answer and asks only for new
+findings, or one short line when they confirm it. An older background job or teammate request no longer idles a
+later turn (`agent/bot/idle_progress.rs`): only work the running turn started holds its continuation.
+
 ## Limits
 
 - An agent without ACP `systemPrompt` gets the instructions as a user message, which models follow less firmly

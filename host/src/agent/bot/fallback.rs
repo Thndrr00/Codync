@@ -9,6 +9,7 @@ pub(super) use park::resume_step;
 
 use super::{Actor, Done, NoticeStyle};
 use crate::LockExt;
+use crate::agent::account::rotation;
 use crate::agent::fallback::{self, Reason, carry, rest};
 use crate::store::{BotConfig, Entry, EntryKind, Lane, now_ms};
 use serde_json::{Value, json};
@@ -264,11 +265,26 @@ impl Actor {
         loop {
             let now = now_ms();
             let (agent, account) = (self.cfg.backend.clone(), rest::account(&self.cfg));
-            if reason == Reason::SignedOut {
+            let pinned = self.cfg.account.as_deref();
+            let other_ready = pinned.is_some_and(|id| {
+                rotation::another_ready(&rotation::states(&self.hub.store, &agent).unwrap_or_default(), id)
+            });
+            let pass_over = pinned.is_some() && rotation::passes_over_verification(reason, other_ready);
+            // A failed usage reading (a busy provider, a timed-out read) is not a sign-out: keep the account
+            // connected and keep its last reading (OpenBot nightly triage-13749). A pass-over leaves it too.
+            let sign_out = rotation::usage_failure_signs_out(reason) && !pass_over;
+            if sign_out {
                 crate::agent::backends::set_signed_in(&agent, Some(false));
             }
             let resets = rest::reset_time(&self.hub.usage.locked(), &agent, now);
-            let rest = rest::record(&self.hub.store, &account, reason, now, resets);
+            // A sign-in Google wants verified, or one the provider refuses, rests only this pooled account when
+            // another is ready: the message is retried there instead of failing on the same one each time
+            // (OpenBot nightly triage-13877). With no other account it stays a provider-wide sign-out.
+            let rest = if pass_over {
+                rest::record_scoped(&self.hub.store, &agent, pinned, Reason::RateLimited, now, resets)
+            } else {
+                rest::record(&self.hub.store, &account, reason, now, resets)
+            };
             if rest.is_some() {
                 fallback::tell_bots(&self.hub, &account);
             }
@@ -292,7 +308,7 @@ impl Actor {
                     None => false,
                 };
             }
-            if reason == Reason::SignedOut {
+            if sign_out {
                 self.left_signed_out(&agent);
             }
             self.report_turn(false, Some(failed), "error");

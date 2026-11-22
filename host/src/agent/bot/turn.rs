@@ -87,6 +87,15 @@ impl Actor {
         if remind_artifacts && own_chat {
             prompt.push_str("\n\n[Codync: for a report, plan, tracker or dashboard the user will come back to, write one self-contained HTML file and publish_artifact(path, title) instead of a long message. To change it, edit a copy of its HTML (list_artifacts) and publish_artifact(path, artifact: its id).]");
         }
+        if own_chat {
+            // Codync memory is the user's lasting preferences, not untrusted background data; a site note is only
+            // a hint, and only the user's own request can save one (OpenBot nightly t3-fix-ai-plate-generation).
+            prompt.push_str(&format!("\n\n[Codync: {}]", super::memory_rules::MEMORY_PREFERENCE));
+            // Codex must open a picture it has to copy before image_gen, so the tool sees it and not a description.
+            if let Some(note) = super::memory_rules::reference_image_note(&self.cfg.backend) {
+                prompt.push_str(&format!("\n\n[Codync: {note}]"));
+            }
+        }
         Ok(prompt)
     }
 
@@ -341,11 +350,13 @@ impl Actor {
         if value["stopReason"].as_str() != Some("end_turn") || self.has_written_answer() {
             return None;
         }
-        let background = self.task_started
-            && match &self.conn {
-                Some(conn) => super::background_work::background_work(&conn.acp).await,
-                None => false,
-            };
+        let detached = match &self.conn {
+            Some(conn) => super::background_work::background_work(&conn.acp).await,
+            None => false,
+        };
+        // A job an older turn started must not stop this one: only work this turn started holds the agent
+        // (OpenBot nightly t3-fix-agent-idle-progress).
+        let background = super::idle_progress::background_holds(self.task_started, detached);
         let has_backup = crate::agent::fallback::steps(&self.base) > 1;
         Some(super::turn_rules::no_answer_action(self.watchdog.tool_calls(), background, has_backup))
     }
@@ -430,14 +441,16 @@ impl Actor {
             )
         {
             let request = self.turn_text.clone().unwrap_or_default();
-            self.schedule_self_check(request);
+            let steps = self.self_check_steps();
+            self.schedule_self_check(request, steps);
         } else if !grouped && !delegated && !self.proactive_turn && !self.task_started && !stopped && !pending_input {
             // A short "continue" from the person is not a new request: carry on with the same
             // bounded self-check instead of a second agent loop (OpenBot nightly).
             let text = self.turn_text.clone().unwrap_or_default();
             if super::self_check::continuation_uses_self_check(&text, self.self_checks) {
                 let request = self.self_check_request.clone().unwrap_or(text);
-                self.schedule_self_check(request);
+                let steps = self.self_check_steps();
+                self.schedule_self_check(request, steps);
             }
         }
         // A turn that went well and used several kinds of tool may become a proposed skill (it waits in an inbox).
