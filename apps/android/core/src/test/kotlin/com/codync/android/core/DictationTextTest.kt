@@ -11,11 +11,38 @@ class DictationTextTest {
         assertEquals("Fix it\nnow", DictationText.join("Fix it\n", "now"))
     }
 
-    @Test fun `a recording goes in 20 s pieces, a short tail staying with the last`() {
-        val piece = DictationText.PIECE_BYTES
-        assertEquals(listOf(0 until 100), DictationText.pieces(100))
-        assertEquals(listOf(0 until piece, piece until piece + DictationText.MIN_BYTES), DictationText.pieces(piece + DictationText.MIN_BYTES))
-        assertEquals(listOf(0 until piece + 10), DictationText.pieces(piece + 10))
-        assertEquals(emptyList<IntRange>(), DictationText.pieces(0))
+    @Test fun `parts cover the recording and respect the 90 s limit`() {
+        val part = DictationSplit.PART_BYTES
+        val loud = { _: Int, _: Int -> 1.0 }
+        assertEquals(listOf(0 until part / 2), DictationSplit.ranges(part / 2, loud))
+        assertEquals(listOf(0 until part, part until part * 2), DictationSplit.ranges(part * 2, loud))
+        assertEquals(emptyList<IntRange>(), DictationSplit.ranges(0, loud))
+        val ranges = DictationSplit.ranges(part * 2 + 1, loud)
+        assertEquals(2, ranges.size)
+        assertEquals(0, ranges.first().start)
+        assertEquals(part * 2 + 1, ranges.last().endInclusive + 1)
+        assertEquals(true, ranges.all { it.endInclusive - it.start + 1 <= part })
+        assertEquals(Pcm.RATE * 2 * 600, DictationSplit.MAX_BYTES)
+    }
+
+    @Test fun `a long recording breaks at the quietest nearby point`() {
+        val part = DictationSplit.PART_BYTES
+        val second = Pcm.RATE * 2
+        val count = part * 2 - second
+        val quiet = part - second
+        val ranges = DictationSplit.ranges(count) { start, _ -> if (start == quiet) 0.0 else 1.0 }
+        assertEquals(2, ranges.size)
+        assertEquals(0 until quiet, ranges[0])
+        assertEquals(quiet until count, ranges[1])
+    }
+
+    @Test fun `loudness reads pcm amplitude`() {
+        assertEquals(0.0, DictationSplit.level(ByteArray(20), 0, 20), 0.0)
+        val pcm = ByteArray(20)
+        for (i in 0 until 10) {
+            pcm[i * 2] = (-1).toByte()
+            pcm[i * 2 + 1] = 0x7f.toByte()
+        }
+        assertEquals(true, DictationSplit.level(pcm, 0, 20) > 0.6)
     }
 }

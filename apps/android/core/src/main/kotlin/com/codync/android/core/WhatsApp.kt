@@ -22,6 +22,8 @@ import kotlinx.serialization.json.jsonObject
     val workingMessage: Boolean = true,
     /** React with 👀 on arrival and ✅ / ❌ / 🫡 at the end (missing: on). Off sends no status reactions. */
     val statusReactions: Boolean = true,
+    /** Three stops in an hour while messages still flow: show "Needs attention" with Reconnect. */
+    val needsAttention: Boolean = false,
 )
 
 /** What the WhatsApp screen shows, and the words it uses; the host owns the meaning. */

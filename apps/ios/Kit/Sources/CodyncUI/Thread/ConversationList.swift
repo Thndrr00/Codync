@@ -230,7 +230,10 @@ private struct ConversationCollection: UIViewRepresentable {
             // Only the reader's own scrolling changes following; layout never does.
             guard !view.updatingViewport, scrollView.isTracking || scrollView.isDecelerating else { return }
             setFollowing(view.followingAfterScroll(from: lastOffset))
-            if !view.following, y + scrollView.adjustedContentInset.top < scrollView.bounds.height / 2 {
+            if !view.following,
+               ConversationNearTop.isNear(offset: y, inset: scrollView.adjustedContentInset.top,
+                                          height: scrollView.bounds.height) {
+                // Older pages load as the reader nears the top; the snapshot below keeps their place.
                 parent?.nearTop?()
             }
         }

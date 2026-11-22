@@ -47,6 +47,8 @@ import kotlinx.coroutines.launch
     /** On the newest message, following new ones; false once the reader scrolls away. */
     val following = mutableStateOf(true)
     internal var hasMessages by mutableStateOf(false)
+    /** The reader is near the top, where older messages load without moving what they read. */
+    internal var nearTop by mutableStateOf(false)
     private val counter = NewMessageCounter()
     /** How many messages arrived since the reader left the bottom; shown on Jump to latest (idea 31). */
     val newMessages = mutableStateOf(0)
@@ -67,6 +69,10 @@ import kotlinx.coroutines.launch
     refresh: (suspend () -> Unit)? = null, indicatorTop: Dp = 0.dp, content: LazyListScope.() -> Unit) {
     val list = scroll.list
     FollowNewest(scroll, ids, last, rev, working, padding.calculateBottomPadding())
+    LaunchedEffect(list) {
+        snapshotFlow { list.firstVisibleItemIndex to list.firstVisibleItemScrollOffset }
+            .collect { (index, offset) -> scroll.nearTop = nearTop(index, offset) }
+    }
     SideEffect { scroll.hasMessages = last != null }
     if (refresh == null) LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = padding, content = content)
     else PullToRefresh(refresh, Modifier.fillMaxSize(), indicatorTop) {

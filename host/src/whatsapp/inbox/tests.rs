@@ -91,7 +91,16 @@ async fn hermes_whatsapp_notes_survive_temporary_disconnect_without_running_a_bo
     let event = Fixture::event();
     let generation = snapshot(hub, &event, OWNER).unwrap().unwrap();
     hub.store
-        .kv_set(KEY, &serde_json::to_string(&vec![Pending { id: "input".into(), generation, event }]).unwrap())
+        .kv_set(
+            KEY,
+            &serde_json::to_string(&vec![Pending {
+                id: "input".into(),
+                generation,
+                event,
+                at: crate::store::now_ms(),
+            }])
+            .unwrap(),
+        )
         .unwrap();
     hub.whatsapp.state.lock().await.state = "disconnected".into();
     tick(&hub.whatsapp, hub).await.unwrap();
@@ -109,7 +118,7 @@ fn queued_with_file(hub: &Hub, id: &str) -> (PathBuf, Pending) {
     let mut event = Fixture::event();
     event["media"] = json!({"_codyncPath": path.to_string_lossy()});
     let generation = snapshot(hub, &event, OWNER).unwrap().unwrap();
-    (path, Pending { id: id.into(), generation, event })
+    (path, Pending { id: id.into(), generation, event, at: crate::store::now_ms() })
 }
 
 #[tokio::test]

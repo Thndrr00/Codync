@@ -71,9 +71,8 @@ final class Dictation {
         self.service = service
     }
 
-    /// A transcription request has to fit one channel message once base64-encoded: 20 s of audio
-    /// (20.5 s with a short tail still fits).
-    static let pieceBytes = MicTap.bytesPerSecond * 20
+    /// A recording runs for up to ten minutes, then transcribes itself (OpenBot t3-b2cd3129).
+    static let maxBytes = DictationSplit.maxBytes
     /// Under half a second is a tap of the mic, not speech (and speech-to-text models invent words for silence).
     static let minBytes = MicTap.bytesPerSecond / 2
     /// Transcription requests in flight at once, under the channel's and the providers' limits.
@@ -214,6 +213,8 @@ final class Dictation {
         guard generation == self.generation, recording != nil else { return }
         recording?.pcm.append(pcm)
         self.level = level
+        // Ten minutes is the most a dictation records; finish on the limit instead of waiting for a stop.
+        if let count = recording?.pcm.count, count >= Self.maxBytes { finish() }
     }
 
     /// The call's audio session (a recording tap on a `.record` session fails on some routes) and
@@ -238,19 +239,14 @@ final class Dictation {
         }
     }
 
-    /// Byte ranges of a recording's 20 s pieces; a tail under half a second stays with the piece before.
-    static func pieces(of count: Int) -> [Range<Int>] {
-        var starts = Array(stride(from: 0, to: count, by: pieceBytes))
-        if starts.count > 1, let last = starts.last, count - last < minBytes { starts.removeLast() }
-        return zip(starts, starts.dropFirst() + [count]).map { $0..<$1 }
-    }
-
-    /// The recording in pieces, a few transcribed at a time and joined in order.
+    /// The recording in parts cut at quiet points, a few transcribed at a time and joined in order.
+    /// A long recording would otherwise fail in the provider's 90-second limit (t3-b2cd3129).
     fileprivate static func transcribe(_ pcm: Data, provider: VoiceProvider, on store: BotStore) async throws -> String {
         // Asked for now, not at the start: a reconnect while recording replaces the client.
         let client = try await store.ready()
         let model = VoiceSettings.transcribeModel(provider)
-        let wavs = pieces(of: pcm.count).map { MicTap.wav(pcm.subdata(in: $0)) }
+        let wavs = DictationSplit.ranges(of: pcm.count) { DictationSplit.level(of: pcm.subdata(in: $0)) }
+            .map { MicTap.wav(pcm.subdata(in: $0)) }
         let texts = try await withThrowingTaskGroup(of: (Int, String).self) { group in
             var texts = [String](repeating: "", count: wavs.count)
             func keep(_ result: (Int, String)) { texts[result.0] = result.1.trimmingCharacters(in: .whitespacesAndNewlines) }

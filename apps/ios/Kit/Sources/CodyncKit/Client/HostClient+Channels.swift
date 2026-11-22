@@ -95,6 +95,11 @@ public extension HostClient {
         let _: [String: Bool] = try await call("whatsappConnect", Empty())
     }
 
+    /// Connects the same number again after repeated stalls ("Needs attention").
+    func whatsappReconnect() async throws {
+        let _: [String: Bool] = try await call("whatsappReconnect", Empty())
+    }
+
     /// Links `phone` with a pairing code to type in WhatsApp instead of scanning a QR code.
     func whatsappPair(phone: String) async throws -> WhatsAppLink {
         struct Body: Encodable { var phone: String }

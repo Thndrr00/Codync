@@ -59,6 +59,9 @@ extension BotStore {
     /// Starts the link; the QR code arrives through `whatsapp()`.
     public func whatsappConnect() async throws { try await ready().whatsappConnect() }
 
+    /// Connects the same number again after repeated stalls; keeps its account and allowlist.
+    public func whatsappReconnect() async throws { try await ready().whatsappReconnect() }
+
     /// Links `phone` with a pairing code to type in WhatsApp instead of scanning a QR code.
     public func whatsappPair(phone: String) async throws -> WhatsAppLink {
         try await ready().whatsappPair(phone: phone)

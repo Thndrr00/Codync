@@ -77,6 +77,14 @@ public struct ThreadView: View {
                 guard let request, request.botId == botId else { return }
                 model.rosterThreadRequest = nil
             }
+            // The roster row of this bot was tapped again: leave its side thread for the main chat.
+            .onChange(of: model.mainChatRequest) { _, _ in
+                guard openThread != nil || showingThreads else { return }
+                withAnimation(Motion.reduced(Motion.layout, reduceMotion)) {
+                    openThread = nil
+                    showingThreads = false
+                }
+            }
             .readingConversation(botId)
             .onChange(of: model.voiceCallRequest, initial: true) { _, _ in
                 if model.takeVoiceCallRequest(for: botId) { startShortcutCall() }

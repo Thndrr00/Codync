@@ -19,10 +19,19 @@ struct Pending {
     id: String,
     generation: String,
     event: Value,
+    /// When it was queued, so a message that never finishes can reconnect the link.
+    #[serde(default)]
+    at: u64,
 }
 
 fn read(hub: &Hub) -> Result<Vec<Pending>> {
     Ok(hub.store.kv_read(KEY)?.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default())
+}
+
+/// The oldest queued message's id and queue time, for the stalled-link watchdog (triage-12196).
+pub(super) fn oldest_queued(hub: &Hub) -> Result<Option<(String, u64)>> {
+    let _guard = crate::LockExt::locked(&hub.store.connector_lock);
+    Ok(read(hub)?.into_iter().min_by_key(|p| p.at).map(|p| (p.id, p.at)))
 }
 
 /// A queued message that is dropped before `on_message` writes its history row still owns the file
@@ -217,7 +226,7 @@ pub(super) async fn receive(app: &WhatsApp, hub: &Arc<Hub>, event: &Value) -> Re
         if queue.len() >= 32 {
             true
         } else {
-            queue.push(Pending { id, generation, event });
+            queue.push(Pending { id, generation, event, at: crate::store::now_ms() });
             hub.store.kv_set(KEY, &serde_json::to_string(&queue)?)?;
             false
         }
@@ -285,6 +294,8 @@ pub(super) fn start(app: &Arc<WhatsApp>, hub: &Arc<Hub>) {
                 && let Err(error) = tick(&app, &hub).await
             {
                 tracing::warn!(%error, "WhatsApp input queue needs attention");
+                // A message that could not be finished is one stop toward a reconnect.
+                app.note_stall(&hub).await;
             }
             drop((app, hub));
             tokio::time::sleep(Duration::from_millis(100)).await;

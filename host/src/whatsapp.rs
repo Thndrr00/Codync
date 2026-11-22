@@ -10,6 +10,7 @@ pub(crate) mod history;
 mod incoming;
 mod outgoing;
 mod receipts;
+mod recovery;
 mod settings;
 mod transport;
 mod voice_notes;
@@ -59,6 +60,10 @@ pub struct LinkState {
     pub me: Option<String>,
     pub name: Option<String>,
     pub error: Option<String>,
+    /// Three stops in an hour: messages still flow, but the owner is asked to reconnect.
+    /// OpenBot nightly triage-12196; the link itself keeps saying "connected".
+    #[serde(default)]
+    pub needs_attention: bool,
 }
 
 impl LinkState {
@@ -85,6 +90,12 @@ pub struct WhatsApp {
     sender: std::sync::atomic::AtomicBool,
     /// The number a pairing code was asked for, until the link ends.
     pairing: std::sync::Mutex<Option<String>>,
+    /// Stops in the last hour, for the self-reconnect decision (triage-12196).
+    stalls: std::sync::Mutex<recovery::Stalls>,
+    /// One reconnect at a time: a stalled message must not start several child processes.
+    reconnecting: std::sync::atomic::AtomicBool,
+    /// Three stops in an hour, cleared by a fresh link or a manual reconnect.
+    needs_attention: std::sync::atomic::AtomicBool,
 }
 
 impl WhatsApp {
@@ -136,7 +147,7 @@ impl WhatsApp {
         Ok(())
     }
 
-    /// Runs the reply sender once for the life of the host.
+    /// Runs the reply sender and the stalled-link watchdog once for the life of the host.
     fn ensure_sender(self: &Arc<Self>, hub: &Arc<Hub>) {
         if self.sender.swap(true, std::sync::atomic::Ordering::SeqCst) {
             return;
@@ -144,11 +155,36 @@ impl WhatsApp {
         let app = self.clone();
         let hub = hub.clone();
         tokio::spawn(async move {
+            // One flagged message at a time: the same queued row isn't a new stop on every tick.
+            let mut flagged: Option<String> = None;
             loop {
-                if app.state.lock().await.state == "connected"
-                    && let Err(error) = app.replies(&hub).await
-                {
-                    tracing::warn!(error = format!("{error:#}"), "WhatsApp replies need attention");
+                if app.state.lock().await.state == "connected" {
+                    if let Err(error) = app.replies(&hub).await {
+                        tracing::warn!(error = format!("{error:#}"), "WhatsApp replies need attention");
+                    }
+                    // A receipt that never arrived is a post WhatsApp did not confirm (triage-12196).
+                    if app.receipts.take_stalled() {
+                        app.note_stall(&hub).await;
+                    }
+                    if let Ok(Some((id, at))) = inbox::oldest_queued(&hub)
+                        && crate::store::now_ms().saturating_sub(at) >= recovery::QUEUED_STALL_MS
+                        && flagged.as_deref() != Some(id.as_str())
+                    {
+                        flagged = Some(id);
+                        app.note_stall(&hub).await;
+                    }
+                    if flagged.is_some() && inbox::oldest_queued(&hub).ok().flatten().is_none() {
+                        flagged = None;
+                    }
+                    // A quiet hour clears the owner-facing flag on its own.
+                    let quiet = { crate::LockExt::locked(&app.stalls).count(crate::store::now_ms()) == 0 };
+                    if quiet && app.needs_attention.load(std::sync::atomic::Ordering::SeqCst) {
+                        app.needs_attention.store(false, std::sync::atomic::Ordering::SeqCst);
+                        let current = app.state.lock().await.clone();
+                        app.set(&hub, current).await;
+                    }
+                } else {
+                    flagged = None;
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
             }
@@ -207,6 +243,68 @@ impl WhatsApp {
         }
     }
 
+    /// Connects again on the owner's request, clearing "Needs attention".
+    pub async fn reconnect(self: &Arc<Self>, hub: &Arc<Hub>) -> Result<()> {
+        self.reconnect_with(hub, true).await
+    }
+
+    /// Connects again even when the link still says "connected", so held messages come in.
+    /// The account and its authorization generations stay as they are: this is the same link, not a
+    /// re-pairing (OpenBot nightly triage-12196). A self-reconnect keeps the owner-facing flag until
+    /// the quiet-hour watchdog or a manual reconnect clears it.
+    async fn reconnect_with(self: &Arc<Self>, hub: &Arc<Hub>, clear_attention: bool) -> Result<()> {
+        {
+            let _lifecycle = self.lifecycle.lock().await;
+            let _configuration = crate::LockExt::locked(&hub.store.connector_lock);
+            self.transport_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        {
+            let mut link = self.link.lock().await;
+            if let Some(child) = link.child.as_mut() {
+                let _ = child.kill().await;
+            }
+            link.child = None;
+            link.stdin = None;
+        }
+        self.receipts.disconnect();
+        if clear_attention {
+            self.needs_attention.store(false, std::sync::atomic::Ordering::SeqCst);
+            crate::LockExt::locked(&self.stalls).clear();
+        }
+        let current = self.state.lock().await.clone();
+        self.set(hub, LinkState { state: "disconnected".into(), ..current }).await;
+        self.begin(hub, None).await
+    }
+
+    /// One stop: a message that could not finish or a post WhatsApp did not confirm. The link
+    /// reconnects itself; three stops in an hour also show "Needs attention" with Reconnect.
+    pub(super) async fn note_stall(self: &Arc<Self>, hub: &Arc<Hub>) {
+        if self.state.lock().await.state != "connected"
+            || self.reconnecting.swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            return;
+        }
+        let decision = crate::LockExt::locked(&self.stalls).note(crate::store::now_ms());
+        if decision == recovery::Decision::NeedsAttention {
+            self.needs_attention.store(true, std::sync::atomic::Ordering::SeqCst);
+            let current = self.state.lock().await.clone();
+            self.set(hub, current).await;
+        }
+        let app = self.clone();
+        let hub = hub.clone();
+        tokio::spawn(async move {
+            if let Err(error) = app.reconnect_with(&hub, false).await {
+                tracing::warn!(error = format!("{error:#}"), "WhatsApp could not reconnect a stalled link");
+                app.set(
+                    &hub,
+                    LinkState { state: "error".into(), error: Some(format!("{error:#}")), ..LinkState::default() },
+                )
+                .await;
+            }
+            app.reconnecting.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
+    }
+
     pub async fn logout(&self, hub: &Arc<Hub>) -> Result<()> {
         let _lifecycle = self.lifecycle.lock().await;
         {
@@ -227,12 +325,14 @@ impl WhatsApp {
             link.child = None;
             link.stdin = None;
         }
+        self.needs_attention.store(false, std::sync::atomic::Ordering::SeqCst);
+        crate::LockExt::locked(&self.stalls).clear();
         self.set(hub, LinkState { state: "loggedOut".into(), ..LinkState::default() }).await;
         self.set_pairing(None);
         invalidated
     }
 
-    async fn on_event(&self, hub: &Arc<Hub>, event: Value) {
+    async fn on_event(self: &Arc<Self>, hub: &Arc<Hub>, event: Value) {
         let state = event["type"].as_str().unwrap_or_default();
         match state {
             "qr" => {
@@ -254,6 +354,7 @@ impl WhatsApp {
                     error: event["error"].as_str().map(str::to_owned),
                     qr: None,
                     pair_code: None,
+                    ..LinkState::default()
                 };
                 if next.state == "connected" || next.state == "loggedOut" {
                     self.set_pairing(None);
@@ -299,6 +400,8 @@ impl WhatsApp {
             "message" => {
                 if let Err(error) = inbox::receive(self, hub, &event).await {
                     tracing::warn!(%error, "WhatsApp message could not be queued");
+                    // A message that could not be finished is a stop, not just a log line.
+                    self.note_stall(hub).await;
                 }
             }
             _ => {}

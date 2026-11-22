@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.Bot
 import com.codync.android.core.ThreadInfo
+import com.codync.android.core.ThreadStatus
 import com.codync.android.design.*
 
 /**
@@ -41,6 +42,8 @@ import com.codync.android.design.*
     var draftTitle by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<ThreadInfo?>(null) }
     val allThreads = (if (archived) state.archivedThreads else state.threads)[bot.id].orEmpty()
+    // How many open threads wait for the owner, shown as the tab's count (OpenBot t3-prototype).
+    val waiting = if (archived) 0 else allThreads.count { it.status == ThreadStatus.Waiting }
     // A free-text filter over titles and last lines, using the host search's case-insensitive
     // all-words rule. The thread the chat is showing stays in the list so its place isn't lost.
     val words = query.split(Regex("\\s+")).filter { it.isNotEmpty() }
@@ -63,6 +66,8 @@ import com.codync.android.design.*
         SearchField(query, { query = it }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), prompt = tr("Search threads"))
         Text(tr("A thread keeps one side conversation apart from the chat."), style = Type.caption, color = Palette.secondary,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+        if (waiting > 0) Text(tr("$waiting waiting for you"), style = Type.caption2, color = Palette.accent,
+            modifier = Modifier.padding(horizontal = 20.dp, bottom = 4.dp))
         Hairline()
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             items(threads, key = { it.id }) { thread ->
@@ -125,6 +130,8 @@ import com.codync.android.design.*
             ).firstOrNull()
             if (subtitle != null) Text(subtitle, style = Type.caption, color = Palette.secondary, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
+            Text(tr(thread.status.label), style = Type.caption2,
+                color = if (thread.status == ThreadStatus.Waiting) Palette.accent else Palette.tertiary)
         }
         Text(RelativeTime.short(thread.updatedAt), style = Type.caption2, color = Palette.tertiary)
     }

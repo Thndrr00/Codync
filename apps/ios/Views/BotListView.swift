@@ -366,6 +366,15 @@ struct BotListView: View {
         return label
     }
 
+    /// Tapping the row of the bot already open returns to its main chat when a side thread is
+    /// showing (OpenBot triage-13632); the first tap still just opens the bot.
+    private func open(_ item: RosterItem, store: BotStore) {
+        if accounts.selection?.botId == item.bot.id && accounts.selection?.computerId == item.ref.computerId {
+            store.openMainChat()
+        }
+        accounts.selection = item.ref
+    }
+
     private func row(_ item: RosterItem, store: BotStore) -> some View {
         let bot = item.bot
         let line = RosterLine.bot(item, store)
@@ -374,7 +383,7 @@ struct BotListView: View {
         let agent = agentLogos && !bot.isGroup && store.mixesAgents ? bot.runningAgent : nil
         let name = agent.map { "\(bot.name), \(store.backendName($0))" } ?? bot.name
         // A plain button instead of a NavigationLink: same push, no chevron.
-        return Button { accounts.selection = item.ref } label: {
+        return Button { open(item, store: store) } label: {
             BotRow(bot: bot, agent: agent)
                 .environment(store)
         }
@@ -396,7 +405,7 @@ struct BotListView: View {
         .moveDisabled(bot.lead)
         .contextActions(preview: { RosterPreviewView(bot: bot, store: store) }) {
             // OpenBot-style quick actions from a long press on the row: reply, learn skills, pause.
-            var items = [MenuItem("Reply", icon: "arrowshape.turn.up.left") { accounts.selection = item.ref }]
+            var items = [MenuItem("Reply", icon: "arrowshape.turn.up.left") { open(item, store: store) }]
             if !bot.isGroup {
                 items.append(MenuItem(bot.learnSkills ? "Stop learning skills" : "Learn skills",
                                       icon: bot.learnSkills ? "checkmark" : "brain") { store.setLearnSkills(bot, !bot.learnSkills) })

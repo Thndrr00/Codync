@@ -83,6 +83,11 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.whatsapp.start(hub);
             json!({"ok": true})
         }
+        // "Needs attention" after repeated stalls: reconnect the same number without re-pairing.
+        "whatsappReconnect" => {
+            hub.whatsapp.reconnect(hub).await?;
+            json!({"ok": true})
+        }
         "whatsappPair" => {
             let phone = str_arg(&b, "phone")?;
             hub.whatsapp.pair(hub, phone)?;

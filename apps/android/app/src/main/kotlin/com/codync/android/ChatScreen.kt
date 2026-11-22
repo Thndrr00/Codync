@@ -292,9 +292,11 @@ private fun AppState.chatEntries(bot: Bot) = entries.filter { it.botId == bot.id
             Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
                 contentAlignment = Alignment.Center) { if ("history" !in state.busy) Spinner(14.dp) }
             // A chat shorter than the screen never scrolls, so showing the row is the trigger.
-            LaunchedEffect(rows.size, "history" in state.busy, state.failedAction) {
+            LaunchedEffect(rows.size, "history" in state.busy, state.failedAction, scroll.nearTop) {
                 if (state.failedAction == "history") paging.failed()
-                if (paging.ask(settled = true, visible = true, loading = "history" in state.busy, shown = entries.size,
+                // Near the top older messages load on their own; what is being read keeps its place.
+                if (paging.ask(settled = true, visible = scroll.nearTop || entries.isEmpty(),
+                        loading = "history" in state.busy, shown = entries.size,
                         floor = entries.firstOrNull()?.seq ?: 0)) store.loadHistory()
             }
             DisposableEffect(paging) { onDispose { paging.left() } }

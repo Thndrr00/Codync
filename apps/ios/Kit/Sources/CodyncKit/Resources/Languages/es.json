@@ -2757,5 +2757,8 @@
   "Scope": "Alcance",
   "Risks": "Riesgos",
   "Recommendation": "Recomendación",
-  "Restart now": "Reiniciar ahora"
+  "Restart now": "Reiniciar ahora",
+  "Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in.": "Los mensajes se detuvieron tres veces en la última hora. Codync se reconecta solo; reconecta ahora si siguen sin llegar.",
+  "{n} waiting for you": "{n} esperando tu respuesta",
+  "{n} open threads wait for you": "{n} hilos abiertos esperan tu respuesta"
 }

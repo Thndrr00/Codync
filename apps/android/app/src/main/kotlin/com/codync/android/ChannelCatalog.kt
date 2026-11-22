@@ -39,9 +39,10 @@ internal fun channelSummaries(
         ChannelSummary(
             ChannelProvider.WhatsApp,
             whatsappConnected,
-            whatsapp?.state in setOf("error", "loggedOut"),
+            whatsapp?.state in setOf("error", "loggedOut") || whatsapp?.needsAttention == true,
             if (!whatsappConnected) "Not connected"
-            else listOfNotNull(whatsapp?.name ?: whatsapp?.me, stateOf(whatsapp?.state.orEmpty())).joinToString(" · "),
+            else listOfNotNull(whatsapp?.name ?: whatsapp?.me, stateOf(whatsapp?.state.orEmpty()),
+                if (whatsapp?.needsAttention == true) "Needs attention" else null).joinToString(" · "),
         ),
         ChannelSummary(
             ChannelProvider.Telegram,

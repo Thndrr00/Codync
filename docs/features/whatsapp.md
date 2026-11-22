@@ -11,6 +11,18 @@ message again once it can (OpenBot 0.70.0): the empty first copy leaves no histo
 readable resend within ten minutes is saved in the group history and mentioned to the orchestrator
 instead of being dropped as a duplicate. Ordinary repeats are still dropped.
 
+## A link that stops without saying so
+
+WhatsApp can stop handing a number its messages while the link still says "Connected" (OpenBot nightly
+triage-12196). The host treats both a message it could not finish (an inbox entry left queued for
+30 minutes) and a post WhatsApp never confirmed (a receipt that timed out or came back without a
+message id) as a stop: it connects the same number again by itself, without new pairing, so held
+messages come in. Three stops inside an hour add **Needs attention** beside the linked number in the
+iPhone and Android WhatsApp pages and an Extensions summary, with a **Reconnect** button that does
+the same restart on demand. The flag clears on a manual reconnect; the stop count drops out of the
+window after an hour. A number on a joined server needs that server on this version too, since the
+host owns the decision and the clients only show its state.
+
 ## Status reactions
 
 A number's **Status reactions** switch is on by default. While it is on, a request gets a 👀 on

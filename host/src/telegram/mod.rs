@@ -8,6 +8,7 @@
 
 mod client;
 mod commands;
+mod error;
 pub(crate) mod history;
 mod inbox;
 mod input;

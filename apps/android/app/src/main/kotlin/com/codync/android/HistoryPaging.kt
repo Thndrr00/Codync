@@ -1,5 +1,11 @@
 package com.codync.android
 
+/** How close to the top the reader has to be before older messages load (iOS `ConversationNearTop`). */
+internal const val NEAR_TOP_PX = 200
+
+/** Near the top: the first row, or the one just below it before it has scrolled 200 px away. */
+internal fun nearTop(firstIndex: Int, firstOffset: Int): Boolean = firstIndex <= 1 && firstOffset <= NEAR_TOP_PX
+
 /**
  * Whether the chat should ask for an earlier page now: the list has settled with the "earlier" row on screen,
  * nothing is loading, and the last page asked for moved the chat at all (`shown` rows, the oldest `floor`:

@@ -1,5 +1,6 @@
 //! Keep bridge receipts flowing while incoming control messages wait for their own sends.
 
+use super::receipts::Receipt;
 use super::{Hub, LinkState, Value, WhatsApp, json};
 use anyhow::{Context, Result, ensure};
 use std::path::Path;
@@ -26,8 +27,14 @@ impl WhatsApp {
             if self.transport_epoch.load(Ordering::SeqCst) != epoch {
                 break;
             }
-            if self.receipts.accept(&event) {
-                continue;
+            match self.receipts.accept(&event) {
+                Receipt::None => {}
+                Receipt::Confirmed => continue,
+                Receipt::Unconfirmed => {
+                    // WhatsApp did not confirm a post: stop and connect again (triage-12196).
+                    self.note_stall(&hub).await;
+                    continue;
+                }
             }
             if event["type"] == "message" {
                 let me = self.state.lock().await.me.clone();
@@ -199,6 +206,11 @@ impl WhatsApp {
         if next.state != "connected" {
             self.receipts.disconnect();
         }
+        // The owner-facing flag lives beside "connected": messages still flow while it is on.
+        let next = LinkState {
+            needs_attention: next.state == "connected" && self.needs_attention.load(Ordering::SeqCst),
+            ..next
+        };
         let mut view = next.view();
         // The number's own switches, so a state event never shows them as on again behind their owner's back.
         view["workingMessage"] = json!(super::working_message(&hub.store));

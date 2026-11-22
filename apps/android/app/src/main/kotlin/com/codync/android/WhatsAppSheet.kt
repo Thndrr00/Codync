@@ -111,6 +111,16 @@ import kotlinx.coroutines.launch
                                     style = Type.footnote, color = Palette.secondary)
                             }
                         }
+                        if (current.needsAttention) row {
+                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(tr("Needs attention"), style = Type.body, color = Palette.warning)
+                                Text(tr("Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in."),
+                                    style = Type.caption, color = Palette.secondary)
+                                SecondaryButton(tr("Reconnect"), enabled = !busy) {
+                                    act { store.whatsappReconnect(); link = store.whatsapp() }
+                                }
+                            }
+                        }
                         row {
                             CodyncSwitch(current.workingMessage, { on ->
                                 act { store.whatsappSetWorkingMessage(on); link = store.whatsapp() }

@@ -22,6 +22,11 @@ struct ThreadsView: View {
         (archived ? model.archivedThreads : model.threads)[botId] ?? []
     }
 
+    /// How many open threads wait for the owner, shown as the tab's count (OpenBot t3-prototype).
+    private var waiting: Int {
+        (model.threads[botId] ?? []).filter { $0.status == .waiting }.count
+    }
+
     /// Titles and last lines are searched with the host's own case-insensitive word rule; the
     /// thread currently open is kept so the reader never loses their place while narrowing the list.
     private var threads: [ThreadInfo] {
@@ -56,6 +61,15 @@ struct ThreadsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
+            if !archived && waiting > 0 {
+                Text(L10n.tr("\(waiting) waiting for you"))
+                    .font(.caption2)
+                    .foregroundStyle(Palette.accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 4)
+                    .accessibilityLabel(L10n.tr("\(waiting) open threads wait for you"))
+            }
             Hairline()
             ScrollView {
                 LazyVStack(spacing: 2) {
@@ -147,6 +161,9 @@ private struct ThreadRow: View {
                             .foregroundStyle(Palette.secondary)
                             .lineLimit(1)
                     }
+                    Text(thread.status.label)
+                        .font(.caption2)
+                        .foregroundStyle(thread.status == .waiting ? Palette.accent : Palette.tertiary)
                 }
                 Spacer(minLength: 8)
                 Text(RelativeTime.short(Date(milliseconds: thread.updatedAt)))

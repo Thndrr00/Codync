@@ -719,5 +719,9 @@
   "Scope": "Scope",
   "Risks": "Risks",
   "Recommendation": "Recommendation",
-  "Restart now": "Restart now"
+  "Restart now": "Restart now",
+  "Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in.": "Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in.",
+  "{n} waiting for you": "{n} waiting for you",
+  "{n} open threads wait for you": "{n} open threads wait for you",
+  "Answered": "Answered"
 }

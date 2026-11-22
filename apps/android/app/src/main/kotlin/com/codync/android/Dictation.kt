@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.codync.android.core.DictationSplit
 import com.codync.android.core.DictationText
 import com.codync.android.core.MicSource
 import com.codync.android.core.Pcm
@@ -45,11 +46,11 @@ internal fun AppStore.dictationService(context: Context) = DictationService(voic
     hasKey = { provider -> voiceStatus().also { voiceChoices().remember(it) }.configured(provider) },
     openMic = { AndroidMic(context) }, transcribe = ::transcribeDictation)
 
-/** The recording in pieces, a few transcribed at a time and joined in order, then counted toward this month's minutes. */
+/** The recording in parts cut at quiet points, a few transcribed at a time and joined in order, then counted toward this month's minutes. */
 private suspend fun AppStore.transcribeDictation(pcm: ByteArray, provider: VoiceProvider): String = coroutineScope {
     val model = voiceChoices().model(provider, VoiceChoices.Model.Transcribe)
     val gate = Semaphore(DictationText.IN_FLIGHT)
-    val texts = DictationText.pieces(pcm.size).map { range ->
+    val texts = DictationSplit.ranges(pcm.size) { start, end -> DictationSplit.level(pcm, start, end) }.map { range ->
         async { gate.withPermit { voiceTranscribe(provider, model, Pcm.wav(pcm.copyOfRange(range.first, range.last + 1))).trim() } }
     }.awaitAll()
     voiceChoices().addUsage(provider, DictationText.seconds(pcm.size))
@@ -162,7 +163,14 @@ internal class Dictation(private val context: Context, private val scope: Corout
         val microphone = service.openMic()
         val take = Recording(provider, service)
         try {
-            microphone.start({ pcm, heard -> scope.launch { if (asked == generation && recording === take) { take.pcm.write(pcm); level = heard } } }) {
+            microphone.start({ pcm, heard -> scope.launch {
+                if (asked == generation && recording === take) {
+                    take.pcm.write(pcm)
+                    level = heard
+                    // Ten minutes is the most a dictation records; stop at the limit (t3-b2cd3129).
+                    if (take.pcm.size >= DictationSplit.MAX_BYTES) finish()
+                }
+            } }) {
                 scope.launch { if (asked == generation) { failure = "The microphone isn't available."; stop() } }
             }
         } catch (cancelled: CancellationException) { throw cancelled }

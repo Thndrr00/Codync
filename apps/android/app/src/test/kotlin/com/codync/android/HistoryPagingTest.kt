@@ -9,6 +9,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HistoryPagingTest {
+    @Test fun `older pages load near the top and not once the reader scrolls away`() {
+        assertTrue(nearTop(0, 0))
+        assertTrue(nearTop(1, NEAR_TOP_PX))
+        assertFalse(nearTop(2, 0))
+        assertFalse(nearTop(0, NEAR_TOP_PX + 1))
+    }
+
     @Test fun `paging waits until the earlier row is on screen and a page would move the chat`() {
         assertFalse(pageEarlier(settled = false, visible = true, loading = false, shown = 10, floor = 40, askedShown = -1, askedFloor = Long.MAX_VALUE))
         assertFalse(pageEarlier(settled = true, visible = false, loading = false, shown = 10, floor = 40, askedShown = -1, askedFloor = Long.MAX_VALUE))

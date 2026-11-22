@@ -2,6 +2,7 @@
 //!
 //! The token is part of the URL Telegram wants, so no error leaves this module with the URL in it.
 
+use super::error::agent_error;
 use crate::egress::{self, Policy};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -45,18 +46,26 @@ async fn send(
     build: impl FnOnce(reqwest::RequestBuilder) -> reqwest::RequestBuilder,
 ) -> Result<Value> {
     let url = format!("{}/bot{token}/{method}", ep.api);
-    let client = egress::client(ep.policy, &url).await.map_err(|e| anyhow::anyhow!("Telegram {method}: {e:#}"))?;
-    let request = build(client.post(&url)).timeout(Duration::from_secs(ep.poll_seconds + 15));
-    let response =
-        request.send().await.map_err(|e| anyhow::anyhow!("Telegram {method} failed: {}", e.without_url()))?;
-    let status = response.status();
-    let body = egress::json(response, 4 * 1024 * 1024)
-        .await
-        .with_context(|| format!("Telegram {method} answered {status}"))?;
-    if body["ok"] != true {
-        bail!("Telegram {method}: {}", body["description"].as_str().unwrap_or("refused"));
+    let outcome = async {
+        // The egress guard is the host's own service, not Telegram. Tag it so the agent is told
+        // what to check instead of blaming Telegram (OpenBot nightly triage-13542).
+        let client = egress::client(ep.policy, &url)
+            .await
+            .map_err(|e| anyhow::anyhow!("Telegram {method}: the service is unavailable: {e:#}"))?;
+        let request = build(client.post(&url)).timeout(Duration::from_secs(ep.poll_seconds + 15));
+        let response =
+            request.send().await.map_err(|e| anyhow::anyhow!("Telegram {method} failed: {}", e.without_url()))?;
+        let status = response.status();
+        let body = egress::json(response, 4 * 1024 * 1024)
+            .await
+            .with_context(|| format!("Telegram {method} answered {status}"))?;
+        if body["ok"] != true {
+            bail!("Telegram {method}: {}", body["description"].as_str().unwrap_or("refused"));
+        }
+        anyhow::Ok(body["result"].clone())
     }
-    Ok(body["result"].clone())
+    .await;
+    outcome.map_err(agent_error)
 }
 
 pub(super) async fn call(ep: &Endpoint, token: &str, method: &str, body: &Value) -> Result<Value> {

@@ -3,15 +3,41 @@ import Testing
 @testable import CodyncKit
 @testable import CodyncUI
 
-/// A provider's recording goes out in 20 s pieces that cover every byte in order; a tail under
-/// half a second (noise a model would invent words for) stays with the piece before.
-@Test @MainActor func dictationPiecesCoverTheRecording() {
-    let piece = Dictation.pieceBytes, min = Dictation.minBytes
-    #expect(Dictation.pieces(of: piece / 2) == [0..<piece / 2])
-    #expect(Dictation.pieces(of: piece * 2) == [0..<piece, piece..<piece * 2])
-    #expect(Dictation.pieces(of: piece * 2 + min) == [0..<piece, piece..<piece * 2, piece * 2..<piece * 2 + min])
-    #expect(Dictation.pieces(of: piece + min - 1) == [0..<piece + min - 1])
-    #expect(Dictation.pieces(of: piece * 2 + 2) == [0..<piece, piece..<piece * 2 + 2])
+/// A long recording is split at quiet points into parts no longer than 90 s, and the parts cover
+/// every byte in order. An even loudness cuts at the limit; a quiet window moves the cut back to it.
+@Test func dictationPartsCoverTheRecordingAndRespectTheLimit() {
+    let part = DictationSplit.partBytes
+    let loud = { (_: Range<Int>) in 1.0 }
+    #expect(DictationSplit.ranges(of: part / 2, loudness: loud) == [0..<(part / 2)])
+    #expect(DictationSplit.ranges(of: part * 2, loudness: loud) == [0..<part, part..<part * 2])
+    #expect(DictationSplit.ranges(of: 0, loudness: loud).isEmpty)
+    let ranges = DictationSplit.ranges(of: part * 2 + 1, loudness: loud)
+    #expect(ranges.count == 2)
+    #expect(ranges.first?.lowerBound == 0)
+    #expect(ranges.last?.upperBound == part * 2 + 1)
+    #expect(ranges.allSatisfy { $0.count <= part })
+}
+
+@Test func aLongDictationBreaksAtTheQuietestNearbyPoint() {
+    let part = DictationSplit.partBytes
+    let second = MicTap.bytesPerSecond
+    let count = part * 2 - second
+    let quiet = part - second
+    let ranges = DictationSplit.ranges(of: count) { range in
+        range.lowerBound == quiet ? 0 : 1
+    }
+    #expect(ranges.count == 2)
+    #expect(ranges[0] == 0..<quiet)
+    #expect(ranges[1] == quiet..<count)
+    // A recording can run for ten minutes; that is about four 90-second parts.
+    #expect(DictationSplit.maxBytes == second * 600)
+}
+
+@Test func dictationLoudnessReadsPcmAmplitude() {
+    var pcm = Data(repeating: 0, count: 20)
+    #expect(DictationSplit.level(of: pcm) == 0)
+    for i in 0..<10 { pcm.replaceSubrange(i * 2..<(i * 2 + 2), with: withUnsafeBytes(of: Int16.max) { Data($0) }) }
+    #expect(DictationSplit.level(of: pcm) > 0.6)
 }
 
 @Test @MainActor func dictatedWordsGoAfterTheBox() {

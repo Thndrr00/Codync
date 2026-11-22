@@ -87,6 +87,19 @@ public struct WhatsAppSheet: View {
                         .font(.footnote)
                         .foregroundStyle(Palette.secondary)
                 }
+                if link?.needsAttention == true {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.tr("Needs attention")).foregroundStyle(Palette.warning)
+                        Text(L10n.tr("Messages stopped three times in the last hour. Codync reconnects on its own; reconnect now if they still do not come in."))
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                        Button("Reconnect") {
+                            act { try await store.whatsappReconnect(); link = try? await store.whatsapp() }
+                        }
+                        .buttonStyle(.primary)
+                        .disabled(busy)
+                    }
+                }
                 SwitchRow("“Working on it…” message",
                           detail: "A request gets it while the bot works, then the answer. Off sends only the answer.",
                           isOn: Binding(

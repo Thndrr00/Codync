@@ -79,13 +79,20 @@ opens Voice chat settings before anything is recorded), then records; the pill (
 the microphone is open, so nothing said before it is lost; nothing is typed while recording. The
 pill's stop turns the pill into "Transcribing…" and the whole recording goes through
 `voiceTranscribe` with the call settings' speech-to-text model; the text lands after what's in the
-box when it arrives (typing goes on while it records). The recording goes in 20 s pieces (one
-channel message each on the iPhone; under the host's 2 MB request body on the desktop), three at a
-time, joined in order; a tail under half a second stays with the piece before, and the first piece
-that fails fails the dictation. Under half a second of audio in all is dropped. Sending a message,
+box when it arrives (typing goes on while it records). On the desktop the recording goes in 20 s
+pieces (under the host's 2 MB request body); on the phones it is cut at quiet points into parts of
+at most 90 s (below). Pieces are sent three at a time and joined in order; a tail under half a
+second stays with the piece before, and the first piece that fails fails the dictation. Under half a second of audio in all is dropped. Sending a message,
 starting a call or switching chats drops a dictation still recording or transcribing. The
 recording's length counts toward the provider's minutes this month. The island's mic stays
 on-device (its window doesn't reach the host).
+
+On the iPhone and Android with a provider picked, a dictation now records for up to ten minutes; the
+pill stops and transcribes at that limit instead of waiting for a tap (OpenBot nightly t3-b2cd3129).
+The recording is cut at the quietest half-second near each 90-second boundary, so a word is not split
+and a longer recording no longer fails the provider's length limit. The parts are transcribed a few
+at a time and joined in order, and a tail under half a second stays with the part before. The split
+and the PCM loudness are pure (`DictationSplit` on both phones) and tested without a microphone.
 
 Press Enter while a dictation is still recording or transcribing to send it (OpenBot 0.74.0):
 the mic has turned into the recording pill, and Return now takes the place of the send button,

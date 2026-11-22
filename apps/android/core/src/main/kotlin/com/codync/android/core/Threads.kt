@@ -9,6 +9,31 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
 /**
+ * A thread's state in a list, derived from what the host already sends (no new endpoint): a thread
+ * with unread lines waits for you, one whose last line is the bot's has been answered.
+ */
+enum class ThreadStatus { Waiting, Answered, Open, Archived;
+
+    companion object {
+        /** Pure so a list's status can be tested without a host or a view. */
+        fun of(unread: Int, archived: Boolean, lastAuthor: String?): ThreadStatus = when {
+            archived -> Archived
+            unread > 0 -> Waiting
+            !lastAuthor.isNullOrEmpty() && lastAuthor != "user" -> Answered
+            else -> Open
+        }
+    }
+
+    /** The English key a client localizes with `tr`. */
+    val label: String get() = when (this) {
+        Waiting -> "Waiting on you"
+        Answered -> "Answered"
+        Open -> "Open"
+        Archived -> "Archived"
+    }
+}
+
+/**
  * A chat's thread as the list shows it (host `threads`): never its lines, only where it ends and
  * what it was branched from. A thread is a side conversation of the chat; its replies stay out of it.
  */
@@ -29,6 +54,9 @@ data class ThreadInfo(
 ) {
     /** What the list calls it: its title, or the line it was branched from, or "Thread". */
     val name: String get() = title.ifBlank { branchText?.take(60)?.replace('\n', ' ') ?: "Thread" }
+
+    /** The state its list row shows (iOS `ThreadInfo.status`). */
+    val status: ThreadStatus get() = ThreadStatus.of(unread, archived, lastAuthor)
 
     companion object {
         fun decode(value: JsonObject): ThreadInfo = WireJson.decodeFromJsonElement(value)
