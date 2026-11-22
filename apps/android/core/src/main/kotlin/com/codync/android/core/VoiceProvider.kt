@@ -60,6 +60,17 @@ class VoiceChoices(private val read: (String) -> String?, private val write: (St
     var wakePhrase: Boolean
         get() = read("callWakePhrase") == "true"
         set(value) = write("callWakePhrase", if (value) "true" else null)
+
+    /** Push to talk (default) or the open microphone that sends at a pause; kept on this phone. */
+    var inputMode: VoiceInputMode
+        get() = VoiceInputMode.of(read("inputMode"))
+        set(value) = write("inputMode", value.id)
+
+    /** What the message box's dictation uses: on-device speech (null) or a provider on the user's key (iOS `dictationEngine`). */
+    var dictation: VoiceProvider?
+        get() = VoiceProvider.of(read("dictationEngine"))
+        set(value) = write("dictationEngine", value?.id)
+
     enum class Model(val prefix: String) { Realtime("callModel"), Transcribe("callSpeechToText"), Speech("callSpeechModel") }
 
     var provider: VoiceProvider?
@@ -97,9 +108,9 @@ class VoiceChoices(private val read: (String) -> String?, private val write: (St
 
     /** What a call's engine is built from (`language`: on device): a different one picked mid-call takes over the call. */
     fun engineChoice(provider: VoiceProvider?, language: String): String = when {
-        provider == null -> "device $language wake=$wakePhrase"
-        speechMode(provider) -> "${provider.id} speech ${model(provider, Model.Transcribe)} ${model(provider, Model.Speech)} ${voice(provider)} local=$localSpeech"
-        else -> "${provider.id} ${model(provider, Model.Realtime)} ${voice(provider)}"
+        provider == null -> "device $language wake=$wakePhrase input=${inputMode.id}"
+        speechMode(provider) -> "${provider.id} speech ${model(provider, Model.Transcribe)} ${model(provider, Model.Speech)} ${voice(provider)} local=$localSpeech input=${inputMode.id}"
+        else -> "${provider.id} ${model(provider, Model.Realtime)} ${voice(provider)} input=${inputMode.id}"
     }
 
     /** The provider's model list as last fetched with the user's key. */
@@ -184,6 +195,15 @@ class UtteranceDetector {
         utterance.write(pcm)
         val paused = quietSince?.let { now - it >= pauseMillis } ?: false
         if (!paused && utterance.size() < MAX_BYTES) return null
+        val wav = Pcm.wav(preroll + utterance.toByteArray())
+        val enough = voiced >= MIN_VOICED
+        reset()
+        return wav.takeIf { enough }
+    }
+
+    /** Push-to-talk: finish the utterance when the talk button is released instead of at a pause. */
+    fun commit(): ByteArray? {
+        if (!speaking) return null
         val wav = Pcm.wav(preroll + utterance.toByteArray())
         val enough = voiced >= MIN_VOICED
         reset()

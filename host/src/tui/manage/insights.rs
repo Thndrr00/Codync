@@ -27,7 +27,7 @@ impl App {
     }
 
     /// The fetched insights, shown in the open sheet.
-    pub(in crate::tui) fn insights_loaded(&mut self, bot: &str, data: Value) {
+    pub(in crate::tui) fn insights_loaded(&mut self, bot: &str, data: &Value) {
         for o in &mut self.overlays {
             if let Overlay::Insights(i) = o
                 && i.bot == bot

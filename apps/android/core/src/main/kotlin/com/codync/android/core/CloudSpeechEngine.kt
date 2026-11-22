@@ -12,11 +12,11 @@ import kotlinx.coroutines.flow.update
  */
 class CloudSpeechEngine(parent: CoroutineScope, provider: VoiceProvider, settings: VoiceSettings,
     private val mic: MicSource, private val player: ClipPlayer, private val speech: Speech,
-    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val clipCharacters: Int = provider.speechChunk,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ProviderEngine(parent, provider, settings, "${provider.title} speech") {
     class Speech(val transcribe: suspend (ByteArray) -> String, val synthesize: suspend (String) -> Pair<ByteArray, String>,
-        val send: (String) -> Unit, val stream: (suspend (String) -> Stream)? = null)
+        val stream: (suspend (String) -> Stream)? = null, val send: (String) -> Unit)
     interface Stream { suspend fun next(): Pair<ByteArray,String>?; suspend fun close() }
 
     private val detector = UtteranceDetector()
@@ -28,6 +28,8 @@ class CloudSpeechEngine(parent: CoroutineScope, provider: VoiceProvider, setting
     /** Playback just ended; the room's echo of it isn't speech. */
     private var deafUntil = 0L
     private val barge = java.io.ByteArrayOutputStream()
+    /** Push-to-talk: audio is only fed to the detector while the talk button is held. */
+    private var holding = false
 
     init {
         hop {
@@ -64,6 +66,23 @@ class CloudSpeechEngine(parent: CoroutineScope, provider: VoiceProvider, setting
         if (value) { detector.reset(); barge.reset(); level(0f) }
     }
     override fun interrupt() = hop { if (phase == VoicePhase.Speaking || speaking != null) { transcript?.interrupted(); stopSpeaking(); phase(VoicePhase.Listening) } }
+
+    /** Hold to capture, release to transcribe and send; a press stops a reply Android can't pause. */
+    override fun talk(action: TalkAction) = hop {
+        if (!pushToTalk) return@hop
+        when (action) {
+            TalkAction.Press -> {
+                holding = true
+                if (phase == VoicePhase.Speaking || speaking != null) interrupt()
+            }
+            TalkAction.Cancel -> { holding = false; detector.reset(); barge.reset(); level(0f) }
+            TalkAction.Release -> {
+                holding = false
+                detector.commit()?.let { stopSpeaking(); utterances.trySend(it) }
+            }
+        }
+    }
+
     override fun focus(active: Boolean) = hop {
         if (!active && this.active) { stopSpeaking(); detector.reset(); level(0f); phase(VoicePhase.Interrupted) }
         else if (active && phase == VoicePhase.Interrupted) { phase(VoicePhase.Listening); if (queue.isNotEmpty()) playQueue() }
@@ -73,6 +92,10 @@ class CloudSpeechEngine(parent: CoroutineScope, provider: VoiceProvider, setting
         // Listening once the microphone actually delivers.
         if (!ended && phase == VoicePhase.Starting) phase(VoicePhase.Listening)
         if (ended || muted) return
+        if (pushToTalk && !holding) {
+            if (phase == VoicePhase.Listening) level(0f)
+            return
+        }
         if (phase == VoicePhase.Speaking) {
             level(level)
             if (level > UtteranceDetector.THRESHOLD + .1f) barge.write(pcm) else barge.reset()

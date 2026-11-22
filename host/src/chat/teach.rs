@@ -133,13 +133,13 @@ fn teach_kv_key(bot: &str) -> String {
 pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "recorded_steps" => steps(hub, bot),
-        "start_teaching" => start_teaching(hub, bot, args).await,
-        "finish_teaching" => finish_teaching(hub, bot, args).await,
+        "start_teaching" => start_teaching(hub, bot, args),
+        "finish_teaching" => finish_teaching(hub, bot, args),
         _ => bail!("unknown teach tool: {name}"),
     }
 }
 
-async fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let url = args["url"].as_str().map(str::trim).filter(|s| !s.is_empty());
     let goal = args["goal"].as_str().map(str::trim).filter(|s| !s.is_empty());
     // Ideas 38–39: arm the recorder in the browser panel before the person starts clicking.
@@ -176,7 +176,7 @@ async fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     }))
 }
 
-async fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let session = hub
         .store
         .kv_get(&teach_kv_key(bot))

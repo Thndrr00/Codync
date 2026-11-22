@@ -150,7 +150,7 @@ impl App {
             }
             Reply::Flow(bot) => self.flow_loaded(&bot, &v),
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
-            Reply::Insights(bot) => self.insights_loaded(&bot, v.clone()),
+            Reply::Insights(bot) => self.insights_loaded(&bot, &v),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
                     self.overlays.truncate(i);

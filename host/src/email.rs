@@ -46,8 +46,7 @@ pub fn is_auto_reply(from: &str) -> bool {
 /// A safe file name: no path separators, no leading dots, bounded length.
 pub fn file_name(from: &str, subject: &str, at_ms: i64) -> String {
     let day = chrono::DateTime::from_timestamp_millis(at_ms)
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .unwrap_or_else(|| "undated".to_owned());
+        .map_or_else(|| "undated".to_owned(), |d| d.format("%Y-%m-%d").to_string());
     let clean = |text: &str| -> String {
         let out: String =
             text.chars().map(|c| if c.is_alphanumeric() || matches!(c, '-' | '_' | ' ') { c } else { '_' }).collect();
@@ -111,9 +110,9 @@ mod tests {
         assert!(name.starts_with("2023-11-14-alice_example.com-"));
         assert!(!name.contains('/'));
         assert!(!name.contains('\\'));
-        assert!(name.ends_with(".eml"));
-        assert_eq!(is_auto_reply("MAILER-DAEMON@example.com"), true);
-        assert_eq!(is_auto_reply("alice@example.com"), false);
+        assert!(name.to_ascii_lowercase().ends_with(".eml"));
+        assert!(is_auto_reply("MAILER-DAEMON@example.com"));
+        assert!(!is_auto_reply("alice@example.com"));
     }
 
     #[test]

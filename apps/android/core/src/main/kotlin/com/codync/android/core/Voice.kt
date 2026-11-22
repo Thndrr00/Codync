@@ -72,7 +72,8 @@ object VoiceRates {
     fun nearest(rate: Float): Float = values.minByOrNull { kotlin.math.abs(it - rate) } ?: 1f
 }
 
-data class VoiceSettings(val pauseMillis: Long = 1_500, val rate: Float = 1f) {
+data class VoiceSettings(val pauseMillis: Long = 1_500, val rate: Float = 1f,
+    val inputMode: VoiceInputMode = VoiceInputMode.PushToTalk) {
     init { require(pauseMillis in VoicePause.MIN..VoicePause.MAX); require(rate in .5f..2f) }
 }
 data class VoiceState(val phase: VoicePhase = VoicePhase.Starting, val muted: Boolean = false,
@@ -99,9 +100,9 @@ interface VoiceAudio {
 /** Serial audio ownership: no late recognizer/TTS callback can submit or restart a retired call. */
 class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settings: VoiceSettings,
     wakePhrase: Boolean = false,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val send: (String) -> Unit) : VoiceEngine {
     override var transcript: CallReceiptTranscript? = null
-    private val clock: () -> Long = { System.nanoTime() / 1_000_000 }
     private sealed interface Event {
         data class Input(val value: VoiceInput) : Event
         data class Submit(val generation: Long, val revision: Long) : Event
@@ -110,6 +111,7 @@ class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settin
         data class Mute(val value: Boolean) : Event
         data class Settings(val value: VoiceSettings) : Event
         data class Focus(val active: Boolean) : Event
+        data class Talk(val action: TalkAction) : Event
         data object Interrupt : Event
     }
     private val job = SupervisorJob(parent.coroutineContext[Job])
@@ -123,6 +125,8 @@ class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settin
     private var listenedAt: Long? = null; private var quickFailures = 0
     private val replies = ArrayDeque<String>()
     private val wake = WakePhrase(wakePhrase)
+    /** Push-to-talk: recognition opens only while the talk button is held. */
+    private var holding = false
     init { scope.launch {
         try {
             val engine = audio.initialize()
@@ -153,6 +157,7 @@ class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settin
     override fun settings(value: VoiceSettings) { post(Event.Settings(value)) }
     override fun focus(active: Boolean) { post(Event.Focus(active)) }
     override fun interrupt() { post(Event.Interrupt) }
+    override fun talk(action: TalkAction) { post(Event.Talk(action)) }
     override fun end() { job.cancel() }
     override suspend fun awaitEnd() { job.join() }
 
@@ -166,6 +171,8 @@ class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settin
     private suspend fun listen() {
         mutableState.update { it.copy(phase = VoicePhase.Listening, heard = "", level = 0f) }
         if (state.value.muted) return
+        // Push-to-talk: ready for the next press, but no recognizer until the button is held.
+        if (state.value.settings.inputMode == VoiceInputMode.PushToTalk && !holding) return
         generation++; listenedAt = clock()
         audio.listen(generation) { post(Event.Input(it)) }
     }
@@ -214,11 +221,12 @@ class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settin
                     if (input.value != state.value.heard) {
                         mutableState.update { it.copy(heard = input.value) }; revision++; silence?.cancel()
                         val owner = generation; val version = revision
-                        if (input.value.isNotBlank()) silence = scope.launch {
+                        // Push-to-talk words wait for the button's release, not a pause.
+                        if (input.value.isNotBlank() && state.value.settings.inputMode != VoiceInputMode.PushToTalk) silence = scope.launch {
                             delay(state.value.settings.pauseMillis); post(Event.Submit(owner, version))
                         }
                     }
-                    if (input.final) submit()
+                    if (input.final && state.value.settings.inputMode != VoiceInputMode.PushToTalk) submit()
                 }
                 is VoiceInput.Level -> if (input.generation == generation && state.value.phase == VoicePhase.Listening && !state.value.muted)
                     mutableState.update { it.copy(level = if (input.value.isFinite()) input.value.coerceIn(0f, 1f) else 0f) }
@@ -245,6 +253,26 @@ class VoiceSession(parent: CoroutineScope, private val audio: VoiceAudio, settin
                 if (state.value.phase == VoicePhase.Listening) { stopListening(); listen() }
             }
             is Event.Settings -> mutableState.update { it.copy(settings = event.value) }
+            is Event.Talk -> {
+                if (state.value.settings.inputMode != VoiceInputMode.PushToTalk) return
+                when (event.action) {
+                    TalkAction.Press -> {
+                        holding = true
+                        if (state.value.phase == VoicePhase.Speaking) {
+                            // Android's on-device TTS has no pause: a press stops the reply and opens the mic.
+                            transcript?.interrupted()
+                            utterance++; replies.clear(); audio.stopSpeaking()
+                            listen()
+                        } else if (state.value.phase == VoicePhase.Listening) listen()
+                    }
+                    TalkAction.Cancel -> { holding = false; stopListening() }
+                    TalkAction.Release -> {
+                        holding = false
+                        if (state.value.heard.isNotBlank()) submit()
+                        else { stopListening(); mutableState.update { it.copy(heard = "") } }
+                    }
+                }
+            }
             is Event.Focus -> if (!event.active) {
                 wake.reset()
                 stopListening(); utterance++; replies.clear(); audio.stopSpeaking()

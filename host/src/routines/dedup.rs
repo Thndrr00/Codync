@@ -28,7 +28,7 @@ pub(super) fn result_key(routine_id: &str, text: &str) -> String {
 pub(super) fn already_reported(hub: &Hub, bot_id: &str, routine_id: &str, text: &str) -> bool {
     let key = result_key(routine_id, text);
     hub.store
-        .was_reported(bot_id, &[key.clone()], Some(WINDOW_HOURS))
+        .was_reported(bot_id, std::slice::from_ref(&key), Some(WINDOW_HOURS))
         .is_ok_and(|check| check["reported"].as_array().is_some_and(|reported| !reported.is_empty()))
 }
 

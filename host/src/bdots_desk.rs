@@ -44,8 +44,7 @@ pub fn without_title(markdown: &str, title: &str) -> String {
 /// Drop trailing markdown links, shown as chips instead (`withoutTrailingLinks`).
 pub fn without_trailing_links(markdown: &str) -> String {
     let mut out = markdown.trim_end().to_owned();
-    loop {
-        let Some(start) = out.rfind('[') else { break };
+    while let Some(start) = out.rfind('[') {
         let Some(mid) = out[start..].find("](") else { break };
         let close = start + mid + 2;
         let Some(end) = out[close..].find(')') else { break };

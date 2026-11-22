@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 //! The trace pane: one turn's narration, thoughts, tools and plan.
 
 use ratatui::buffer::Buffer;

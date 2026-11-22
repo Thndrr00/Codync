@@ -215,8 +215,7 @@ extension AppLanguageTests {
     }
 }
 
-extension AppLanguageTests {
-    @Test func filledTemplatesPreserveNamesAndSubstituteValuesOnlyOnce() {
+@Test func filledTemplatesPreserveNamesAndSubstituteValuesOnlyOnce() {
         for language in AppLanguage.allCases where language != .system && language != .en {
             for name in ["Plan", "connected", "Standby", "$&", "{hint}"] {
                 let expected = L10n.tr("Routine · {name}", preference: language)
@@ -233,4 +232,4 @@ extension AppLanguageTests {
             #expect(L10n.tr("{hint} isn't set up on this computer. \(hint)", preference: language) == expected)
         }
     }
-}
+
