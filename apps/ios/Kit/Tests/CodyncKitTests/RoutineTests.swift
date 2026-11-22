@@ -116,7 +116,7 @@ import Testing
 }
 
 @Test func aRunSaysWhatItStoodForSkippedMissedOrWaitingOnTheUser() throws {
-    func run(_ status: String, extra: String = "") -> RoutineRun {
+    func run(_ status: String, extra: String = "") throws -> RoutineRun {
         let json = #"""
         {"id":"r","routineId":"x","botId":"b","status":"\#(status)","createdAt":0,\#(extra)}
         """#
