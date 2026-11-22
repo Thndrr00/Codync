@@ -162,8 +162,10 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
     public var workingMessage: Bool
     /// React with 👀 on arrival and ✅ / ❌ / 🫡 at the end (missing: on). Off sends no status reactions.
     public var statusReactions: Bool
+    /// Three stops in an hour while messages still flow: show "Needs attention" with Reconnect.
+    public var needsAttention: Bool
 
-    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed, workingMessage, statusReactions }
+    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed, workingMessage, statusReactions, needsAttention }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -177,6 +179,7 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
         allowed = try c.decodeIfPresent([String].self, forKey: .allowed) ?? []
         workingMessage = try c.decodeIfPresent(Bool.self, forKey: .workingMessage) ?? true
         statusReactions = try c.decodeIfPresent(Bool.self, forKey: .statusReactions) ?? true
+        needsAttention = try c.decodeIfPresent(Bool.self, forKey: .needsAttention) ?? false
     }
 }
 

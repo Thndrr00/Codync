@@ -68,6 +68,11 @@ public final class BotStore {
     public internal(set) var bots: [String: Bot] = [:]
     public internal(set) var rosterStopping: Set<String> = []
     public internal(set) var rosterThreadRequest: RosterSearchHit?
+    /// Bumped when a roster row for the open bot is tapped, so its chat closes any side thread
+    /// (OpenBot nightly triage-13632). Tapping the already selected row used to do nothing.
+    public internal(set) var mainChatRequest = 0
+    /// Asks the open bot's chat to show the main conversation again.
+    public func openMainChat() { mainChatRequest += 1 }
     public internal(set) var entries: [String: [Entry]] = [:]
     /// Each chat's live threads, newest first; their lines stay in `threadEntries`.
     public internal(set) var threads: [String: [ThreadInfo]] = [:]

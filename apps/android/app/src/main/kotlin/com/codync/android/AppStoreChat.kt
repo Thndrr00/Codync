@@ -10,6 +10,11 @@ import kotlinx.serialization.json.*
 
 // Conversations: opening a bot or thread, history, sending and its retries.
 
+/**
+ * Opens a bot's chat; with no [thread] it always returns to the main chat. Tapping the roster row
+ * of the already open bot therefore closes any side thread instead of doing nothing (OpenBot
+ * nightly triage-13632).
+ */
 fun AppStore.openBot(id: String?, thread: String? = null) {
     if (id != state.value.selectedBot) stopReading()
     mutableState.update { it.copy(selectedBot = id, thread = thread, threadInfo = null, trace = false, removedComputer = false) }
