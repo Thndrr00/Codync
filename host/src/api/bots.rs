@@ -128,7 +128,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             } else if crate::chat::scratchpad::TOOLS.contains(&name) {
                 crate::chat::scratchpad::call(hub, bot, name, &b["arguments"])?
             } else if crate::chat::teach::TOOLS.contains(&name) {
-                crate::chat::teach::call(hub, bot, name, &b["arguments"])?
+                crate::chat::teach::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::apps::TOOLS.contains(&name) {
                 crate::chat::apps::call(hub, bot, name, &b["arguments"])?
             } else if crate::chat::ask_user::TOOLS.contains(&name) {

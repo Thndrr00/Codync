@@ -237,7 +237,7 @@ fn normalize_history(result: &Value) -> Vec<Value> {
         .flatten()
         .filter_map(|entry| {
             let url = entry["url"].as_str()?;
-            if url.is_empty() || *url == "about:blank" {
+            if url.is_empty() || url == "about:blank" {
                 return None;
             }
             Some(json!({"url": url, "title": entry["title"].as_str().unwrap_or_default()}))

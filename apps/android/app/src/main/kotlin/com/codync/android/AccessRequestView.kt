@@ -100,17 +100,6 @@ private enum class AccessPhase { Renew, Asking, Code, Approved, Ended }
                         AccessPhase.Ended -> {
                             Text(ended.orEmpty(), style = Type.body, color = Palette.secondary, textAlign = TextAlign.Center)
                             SecondaryButton("Ask again") { ended = null; store.requestAccess(computer, renew = renewRequest) }
-                                Text(tr("Waiting for approval…"), style = Type.subheadline, color = Palette.secondary)
-                                IconButton("Cancel request", "xmark.circle.fill") { store.cancelAccess(computer.computerId); dismiss() }
-                            }
-                        }
-                        AccessPhase.Failed -> {
-                            Text(tr(failed.orEmpty()), style = Type.body, color = Palette.danger, textAlign = TextAlign.Center)
-                            SecondaryButton("Try again") { failed = null; store.requestAccess(computer, renew = renewRequest) }
-                        }
-                        AccessPhase.Ended -> {
-                            Text(tr(ended.orEmpty()), style = Type.body, color = Palette.secondary, textAlign = TextAlign.Center)
-                            SecondaryButton("Ask again") { ended = null; sawTicket = false; store.requestAccess(computer, renew = renewRequest) }
                         }
                         AccessPhase.Asking -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Spinner()

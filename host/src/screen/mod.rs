@@ -151,13 +151,13 @@ pub struct Screen {
 impl Screen {
     /// Pages the browser panel visited, for a teaching session's navigation trace.
     #[cfg(windows)]
-    pub async fn history(&self, tab: Option<&str>) -> anyhow::Result<Vec<Value>> {
+    pub async fn history(&self, tab: Option<&str>) -> Result<Vec<Value>> {
         browser_panel::navigation_history(self, tab).await
     }
 
     /// Injects a script into the browser panel, for the teaching recorder.
     #[cfg(windows)]
-    pub async fn inject_script(&self, tab: Option<&str>, script: &str) -> anyhow::Result<()> {
+    pub async fn inject_script(&self, tab: Option<&str>, script: &str) -> Result<()> {
         browser_panel::inject_script(self, tab, script).await
     }
 

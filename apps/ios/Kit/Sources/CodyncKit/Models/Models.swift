@@ -364,6 +364,8 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var verifyCommand: String?
     public var backgroundModel: String?
     public var saver: Bool?
+    /// Nil where the host has no compaction setting, so it isn't sent.
+    public var compaction: CompactionThreshold?
     public var personality: Personality?
     /// Only sent when the user changes it: unset, the host picks by the bot's folder.
     public var sharedMemory: Bool?
@@ -412,6 +414,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         verifyCommand = bot.verifyCommand
         backgroundModel = bot.backgroundModel
         saver = bot.saver
+        compaction = bot.compaction
         personality = bot.personality
     }
 
@@ -428,7 +431,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         follow(\.fastMode); follow(\.fallbacks); follow(\.selfFallbacks); follow(\.pinned); follow(\.hidden)
         follow(\.notify); follow(\.connectors); follow(\.skills); follow(\.computer); follow(\.manageTeam)
         follow(\.sharedMemory); follow(\.harnessMemory); follow(\.offeredToNetwork); follow(\.reachableByAssistants)
-        follow(\.verifyCommand); follow(\.backgroundModel); follow(\.saver); follow(\.personality)
+        follow(\.verifyCommand); follow(\.backgroundModel); follow(\.saver); follow(\.compaction); follow(\.personality)
         return draft
     }
 }

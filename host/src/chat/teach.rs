@@ -130,7 +130,8 @@ fn teach_kv_key(bot: &str) -> String {
     format!("teach.session.{bot}")
 }
 
-pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
+#[allow(clippy::unused_async)]
+pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "recorded_steps" => steps(hub, bot),
         "start_teaching" => start_teaching(hub, bot, args),
@@ -139,7 +140,8 @@ pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     }
 }
 
-fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+#[allow(clippy::unused_async)]
+async fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let url = args["url"].as_str().map(str::trim).filter(|s| !s.is_empty());
     let goal = args["goal"].as_str().map(str::trim).filter(|s| !s.is_empty());
     // Ideas 38–39: arm the recorder in the browser panel before the person starts clicking.
@@ -176,7 +178,8 @@ fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     }))
 }
 
-fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+#[allow(clippy::unused_async)]
+async fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let session = hub
         .store
         .kv_get(&teach_kv_key(bot))
