@@ -504,19 +504,37 @@ impl Actor {
 
     pub(super) fn complete_request(&mut self, result: Result<String>, cancelled: bool) {
         if let Some(request) = self.active_request.take() {
+            // triage-14330: knowledge of an earlier answer survives a restart in `kv`, so a replay
+            // that was already handled can be told from a first, still-open result.
+            let previous = super::results::last_result(&self.hub, request.id());
+            if result.is_err()
+                && super::team_rules::replays_started_result(&super::team_rules::ReplayedResult {
+                    restarted: self.turn_replayed_result,
+                    had_provider_turn: true, // the marker is only written after session/prompt
+                    answers_request: self.request_last_result.contains_key(request.id()) || previous.is_some(),
+                })
+            {
+                // The requester already took this result before the restart and the agent had nothing new
+                // to add. End quietly instead of failing every result with "no answer".
+                tracing::info!(bot = %self.cfg.id, request = request.id(), "a restart-replayed teammate result ended quietly");
+                return;
+            }
             if let Ok(text) = &result {
                 let fingerprint = super::team_rules::ResultFingerprint {
                     agent: self.cfg.id.clone(),
                     text: text.clone(),
                     files: Vec::new(),
                 };
-                if super::team_rules::repeats_result(self.request_last_result.get(request.id()), &fingerprint) {
+                if super::team_rules::repeats_result(self.request_last_result.get(request.id()), &fingerprint)
+                    || previous.as_deref().is_some_and(|t| t.trim() == text.trim())
+                {
                     // The teammate sent the same result again. End quietly: its message stays in the chat, but it
                     // must not wake the requester with a new answer and start the loop over (triage-13130).
                     tracing::info!(bot = %self.cfg.id, request = request.id(), "a teammate repeated a result; ending quietly");
                     return;
                 }
                 self.request_last_result.insert(request.id().to_owned(), fingerprint);
+                super::results::save_last_result(&self.hub, request.id(), text);
                 self.bound_request_history();
             }
             request.complete(result, cancelled);

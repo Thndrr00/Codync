@@ -112,14 +112,17 @@ impl SelfCheck {
 }
 
 /// Whether a completion check may run now. Pure, so every stopping rule has a test without agent I/O.
+/// `promised` is the triage-14327 path: a short answer that promises work earns the check even
+/// though the turn used no tool (`plan_continuation::promises_work`).
 pub(super) fn may_check(
     used_tools: bool,
+    promised: bool,
     has_answer: bool,
     stopped: bool,
     pending_input: bool,
     checks_done: u32,
 ) -> bool {
-    used_tools && has_answer && !stopped && !pending_input && checks_done < MAX_SELF_CHECKS
+    (used_tools || promised) && has_answer && !stopped && !pending_input && checks_done < MAX_SELF_CHECKS
 }
 
 /// A short "continue" (OpenBot's "keep going"/"go on") is unfinished work, not a new request:
@@ -188,19 +191,23 @@ mod tests {
     #[test]
     fn at_most_three_checks_for_one_request() {
         for done in 0..MAX_SELF_CHECKS {
-            assert!(may_check(true, true, false, false, done), "check {} should run", done + 1);
+            assert!(may_check(true, false, true, false, false, done), "check {} should run", done + 1);
         }
-        assert!(!may_check(true, true, false, false, MAX_SELF_CHECKS), "no fourth check");
-        assert!(!may_check(true, true, false, false, MAX_SELF_CHECKS + 1));
+        assert!(!may_check(true, false, true, false, false, MAX_SELF_CHECKS), "no fourth check");
+        assert!(!may_check(true, false, true, false, false, MAX_SELF_CHECKS + 1));
     }
 
     #[test]
     fn a_pending_question_or_approval_stops_the_check() {
-        assert!(!may_check(true, true, false, true, 0), "a question, approval or permission card waits for the person");
-        assert!(!may_check(true, true, true, false, 0), "Stop ends the chain at once");
-        assert!(!may_check(false, true, false, false, 0), "a turn that used no tools doesn't check");
-        assert!(!may_check(true, false, false, false, 0), "a turn with no final answer doesn't check");
-        assert!(may_check(true, true, false, false, 0));
+        assert!(
+            !may_check(true, false, true, false, true, 0),
+            "a question, approval or permission card waits for the person"
+        );
+        assert!(!may_check(true, false, true, true, false, 0), "Stop ends the chain at once");
+        assert!(!may_check(false, false, true, false, false, 0), "a turn that used no tools and promised nothing");
+        assert!(!may_check(false, true, false, false, false, 0), "a turn with no final answer doesn't check");
+        assert!(may_check(false, true, true, false, false, 0), "triage-14327: a promise with no tool is checked");
+        assert!(may_check(true, false, true, false, false, 0));
     }
 
     #[test]

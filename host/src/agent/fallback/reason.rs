@@ -16,7 +16,15 @@ pub enum Reason {
     RateLimited,
     /// The provider is overloaded or failing.
     Overloaded,
+    /// The connection to the provider dropped (OpenBot nightly triage-14512). A Codex stream that
+    /// disconnects with no HTTP status is a network error even when its text names HTTP 503.
+    Network,
+    /// A request to the provider timed out after work began (triage-14512).
+    Timeout,
     SignedOut,
+    /// The provider refused a saved API key or sign-in; the user has to replace it in Settings
+    /// (OpenBot nightly triage-14253). The rest backs off up to an hour and ends when the key changes.
+    RefusedKey,
     /// The agent didn't start, stopped answering, or exited.
     NotStarting,
     /// The agent doesn't have the step's model.
@@ -31,7 +39,10 @@ impl Reason {
             Self::OutOfCredits => "is out of credits",
             Self::RateLimited => "is rate limited",
             Self::Overloaded => "is overloaded",
+            Self::Network => "lost its connection",
+            Self::Timeout => "timed out",
             Self::SignedOut => "is signed out",
+            Self::RefusedKey => "refused the saved API key",
             Self::NotStarting => "couldn't start",
             Self::ModelMissing => "doesn't have this bot's model",
         }
@@ -72,12 +83,86 @@ fn gone_text(message: &str) -> bool {
     has_410 || (lower.contains("model") && GONE_WORDS.iter().any(|word| lower.contains(word)))
 }
 
+/// A dropped connection, named in the error text. A Codex stream that disconnects with no HTTP
+/// status is a network error even when the text names HTTP 503 (triage-14512): a structured
+/// `overloaded` kind is read first, so only a bare status falls through to this check.
+const CONNECTION_WORDS: [&str; 12] = [
+    "connection error",
+    "connection reset",
+    "connection closed",
+    "disconnect",
+    "network error",
+    "socket hang up",
+    "econnreset",
+    "broken pipe",
+    "unexpected eof",
+    "eof occurred",
+    "fetch failed",
+    "stream ended unexpectedly",
+];
+
+/// Whether an error text names a dropped connection rather than a refusal or a usage limit.
+pub fn network_text(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    CONNECTION_WORDS.iter().any(|word| lower.contains(word)) || lower.contains("http 503")
+}
+
+/// Whether an error text names a timeout (triage-14512).
+pub fn timeout_text(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    ["timed out", "timeout", "time out", "deadline exceeded"].iter().any(|word| lower.contains(word))
+}
+
+/// Words a provider uses when it refuses a saved key or sign-in rather than just reporting that
+/// nobody is signed in (triage-14253). Such a failure is told to the user and backed off, not
+/// retried every ten minutes like an outage.
+const REFUSED_KEY_WORDS: [&str; 10] = [
+    "invalid api key",
+    "invalid_api_key",
+    "api key is invalid",
+    "api key has been revoked",
+    "please run /login",
+    "bad credentials",
+    "invalid credentials",
+    "authentication failed",
+    "credentials are invalid",
+    "key was refused",
+];
+
+/// Whether an authentication error text names a refused saved credential.
+pub fn refused_credential_text(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    REFUSED_KEY_WORDS.iter().any(|word| lower.contains(word))
+}
+
+/// The reasons that let a turn which already started work move on to the backup model
+/// (OpenBot's `CONTINUE_CAUSES`, extended with network and timeout in triage-14512). A turn that
+/// did nothing may be retried on the backup for any fallback reason; one that did work needs a
+/// cause the backup can plausibly carry on from. Pure, so the set has a test.
+pub fn continues_after_work(reason: Reason) -> bool {
+    matches!(
+        reason,
+        Reason::UsageLimit
+            | Reason::OutOfCredits
+            | Reason::RateLimited
+            | Reason::Overloaded
+            | Reason::Network
+            | Reason::Timeout
+            | Reason::SignedOut
+            | Reason::RefusedKey
+            | Reason::NotStarting
+    )
+}
+
 /// Why `error` moves the bot on, or `None` when it shouldn't (a stop, a refusal, a bug in the request).
 pub fn of(error: &anyhow::Error) -> Option<Reason> {
     for cause in error.chain() {
         if let Some(f) = cause.downcast_ref::<Failure>() {
             return Some(match f.kind {
-                FailureKind::NotSetUp | FailureKind::Timeout | FailureKind::Exited => Reason::NotStarting,
+                FailureKind::NotSetUp | FailureKind::Exited => Reason::NotStarting,
+                // triage-14512: a request that timed out after work began carries on on the backup,
+                // so it needs its own reason rather than the start-time "couldn't start".
+                FailureKind::Timeout => Reason::Timeout,
                 FailureKind::NoModel => Reason::ModelMissing,
             });
         }
@@ -113,9 +198,18 @@ pub fn of_rpc(r: &RpcError) -> Option<Reason> {
             | "internal_server_error"
             | "response_too_many_failed_attempts",
         ) => Reason::Overloaded,
+        Some("authentication_failed" | "unauthorized" | "auth" | "custom_model_auth")
+            if refused_credential_text(&r.message) =>
+        {
+            Reason::RefusedKey
+        }
         Some("authentication_failed" | "oauth_org_not_allowed" | "unauthorized" | "auth") => Reason::SignedOut,
         Some("model_not_found") => Reason::ModelMissing,
         _ if usage_text => Reason::UsageLimit,
+        // triage-14512: a dropped connection (even one whose text names HTTP 503 with no status)
+        // or a timeout is a fallback cause, so the backup carries the work the turn already did.
+        _ if network_text(&r.message) => Reason::Network,
+        _ if timeout_text(&r.message) => Reason::Timeout,
         _ => return None,
     })
 }
@@ -169,6 +263,36 @@ mod tests {
         // An unrelated number that merely contains 410, and a non-model error, still stay put.
         assert_eq!(of(&rpc(-32603, "request 1410 rejected", None)), None);
         assert_eq!(of(&rpc(-32603, "The file has been retired from the index", None)), None);
+    }
+
+    #[test]
+    fn a_dropped_connection_or_a_timeout_carries_work_to_the_backup() {
+        // triage-14512: with no structured status, a Codex stream that disconnects is a network
+        // error even when it names HTTP 503.
+        assert_eq!(of(&rpc(-32603, "API Error: Connection error.", None)), Some(Reason::Network));
+        assert_eq!(of(&rpc(-32603, "HTTP 503: stream disconnected", None)), Some(Reason::Network));
+        assert_eq!(of(&rpc(-32603, "Request timed out after 30s", None)), Some(Reason::Timeout));
+        // A structured overload is read before the bare 503 text.
+        assert_eq!(of(&rpc(-32603, "HTTP 503: overloaded", Some("overloaded"))), Some(Reason::Overloaded));
+        // A host-side timeout is its own reason now, not a start failure.
+        let timed_out = Failure::error(FailureKind::Timeout, "no answer");
+        assert_eq!(of(&timed_out), Some(Reason::Timeout));
+        for reason in [Reason::Network, Reason::Timeout, Reason::Overloaded, Reason::SignedOut, Reason::UsageLimit] {
+            assert!(continues_after_work(reason), "{reason:?} continues a turn that did work");
+        }
+        assert!(!continues_after_work(Reason::ModelMissing), "a missing model is a setup issue");
+    }
+
+    #[test]
+    fn a_refused_saved_key_is_told_to_the_user_not_treated_as_a_plain_sign_out() {
+        // triage-14253: the e2e failure text is "Invalid API key · Please run /login".
+        assert_eq!(
+            of(&rpc(-32603, "Invalid API key · Please run /login", Some("authentication_failed"))),
+            Some(Reason::RefusedKey)
+        );
+        assert_eq!(of(&rpc(AUTH_REQUIRED, "Authentication required", None)), Some(Reason::SignedOut));
+        assert_eq!(of(&rpc(-32603, "Authentication failed", Some("oauth_org_not_allowed"))), Some(Reason::SignedOut));
+        assert!(continues_after_work(Reason::RefusedKey));
     }
 
     #[test]

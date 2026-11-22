@@ -197,6 +197,7 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         request_last_result: HashMap::new(),
         detached_questions: HashMap::new(),
         no_answer_empty: false,
+        turn_replayed_result: false,
     };
     let task = tokio::spawn(actor.run(rx, interrupted));
     BotHandle { tx, task }
@@ -440,6 +441,9 @@ struct Actor {
     detached_questions: HashMap<String, DetachedQuestion>,
     /// The turn is being handed to a backup because it wrote no answer: say that, not a generic failure.
     no_answer_empty: bool,
+    /// The messages this turn answers include a teammate result that restart recovery gave again after its
+    /// provider turn had started (OpenBot nightly triage-14330). An empty replay then ends quietly.
+    turn_replayed_result: bool,
 }
 
 struct DetachedQuestion {

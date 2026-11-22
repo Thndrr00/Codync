@@ -155,6 +155,16 @@ impl Actor {
         }
         self.turn_text = from_user.then(|| text.to_owned());
         self.turn_entries = if from_user { entry_ids.to_vec() } else { Vec::new() };
+        // triage-14330: a teammate result recovery gave again after its provider turn started ends
+        // quietly if the agent has nothing new to say. Consume the one-shot replay marker here.
+        self.turn_replayed_result = super::results::was_replayed(&self.hub, &self.cfg.id, entry_ids)
+            || (hidden && super::results::was_replayed_any(&self.hub, &self.cfg.id));
+        if self.turn_replayed_result {
+            super::results::consume_replays(&self.hub, &self.cfg.id, entry_ids);
+            if hidden {
+                super::results::consume_all_replays(&self.hub, &self.cfg.id);
+            }
+        }
         // Whether the messages this turn answers came from a chat app, so a teammate's internal result is not posted
         // to the contact (OpenBot nightly triage-13131).
         self.external_chat = entry_ids.iter().any(|id| {
@@ -309,6 +319,9 @@ impl Actor {
         memory::turns::begin_turn(&self.cfg.id, &sid, self.hub.runtime(&self.cfg.id).message);
         // Written before this returns, so a Stop right after is sent after the prompt.
         let answer = acp.send("session/prompt", params).await?;
+        // triage-14330: the provider saw these entries; a restart that cuts this turn short may give
+        // a teammate result again, and only then may its empty replay end quietly.
+        super::results::note_provider_turn(&self.hub, &self.cfg.id, entry_ids);
         if !self.turn_memory_revision.is_empty()
             && let Err(error) = memory::mark_announced(&self.hub.store, &self.cfg.id, &sid, &self.turn_memory_revision)
         {
@@ -428,12 +441,17 @@ impl Actor {
             && stop_reason == "end_turn"
             && !stopped
             && final_text.as_ref().is_some_and(|text| !text.trim().is_empty());
+        // triage-14327: a short answer that only promises work ("I'll research it") in a turn with
+        // no tool still gets the bounded check, so the request does not end on the promise. A short
+        // closing ("Let me know…") is not a promise and ends the request.
+        let promised = final_text.as_deref().is_some_and(super::plan_continuation::promises_work);
         if !grouped
             && !delegated
             && !self.proactive_turn
             && !self.task_started
             && super::self_check::may_check(
                 self.watchdog.tool_calls() > 0,
+                promised,
                 has_answer,
                 stopped,
                 pending_input,

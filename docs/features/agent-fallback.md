@@ -65,7 +65,9 @@ Read from the ACP answer: the JSON-RPC code, the adapter's category (Claude's `d
 | `usageLimit` | Claude: `rate_limit`/`billing_error` with the Agent SDK's usage-limit text ("You've hit your…"). Codex: `usageLimitExceeded` | Until the reset the agent reported (`usage` windows at 100%); unknown: 1 h |
 | `outOfCredits` | Claude `billing_error`, `account_on_hold` | 6 h |
 | `rateLimited`, `overloaded` | Claude `rate_limit`, `overloaded`, `server_error`; codex-acp `rateLimitExceeded`, `serverOverloaded` | 1, 5, 25, then 60 min for failures in a row |
+| `network`, `timeout` | A dropped connection named in the error text (a Codex stream disconnect with no HTTP status is a network error even when it names HTTP 503), or a request that timed out (OpenBot nightly triage-14512) | A network error follows the transient backoff; a timeout waits 5 min. Both carry the work the turn already did to the backup, instead of stopping with an error and making the person resend |
 | `signedOut` | ACP `-32000`, `authentication_failed`, CodeBuddy's `auth` category | Until it's signed in, looking again after 1 h; an agent Codync can't sign in to (no sign-in card): 10 min. The chat of each bot that moves past it gets the agent's sign-in card (holding no message: the fallback answers it), and signing in there brings the bot back |
+| `refusedKey` | The provider refuses a saved API key or sign-in, not just a missing login: "Invalid API key · Please run /login", `custom_model_auth`, and similar (OpenBot nightly triage-14253) | 10, 20, 40, then at most 60 min for refusals in a row; a turn that succeeds on that agent starts over. The chat says the key was refused and to replace or remove it in Settings. Signing in again or replacing the key ends the hold at once, so the next message tries it |
 | `notStarting` | `FailureKind::NotSetUp`, `Timeout`, `Exited`. An ACP agent silent for 5 min while its session is opened is ended with "did not answer in time", so the start fails and queued work is freed; agents with one process per session (Mistral, Antigravity) keep their behavior (OpenBot 0.75.0, #12871) | 5 min |
 | `modelMissing` | `model_not_found`, HTTP 410 Gone or a retired model ("model … is no longer available/supported", "models/<id> is not found"), or the agent refusing the step's model (`FailureKind::NoModel`) (OpenBot 0.75.0, #12998) | None: it's the bot's setup, not the agent's. The bot skips that step until its settings change |
 
@@ -90,7 +92,10 @@ finishing, a re-check), for each of its accounts; a usage rest stays.
 Usage windows only time a usage limit's rest; they never skip an agent on their own (extra usage can go past 100%).
 A read with no data (an idle process was stopped, the read waited, failed or timed out) keeps the reset time of the
 last real reading, so a backup model isn't sent back to its main account before the limit resets; a fresh reading
-with its own reset replaces it (OpenBot 0.75.0, #13018).
+with its own reset replaces it (OpenBot 0.75.0, #13018). A reset held only from that older reading is waited out
+for no more than 15 minutes at a time: once it passes, the agent is tried again and the limit read afresh. Messages
+that queued behind a limit ended early therefore start within about 15 minutes, not hours or days later when the
+stale reset was due (OpenBot nightly triage-14386; `fallback::rest::usage_wait`).
 
 ## Carrying the turn over
 

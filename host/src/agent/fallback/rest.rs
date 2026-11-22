@@ -13,6 +13,15 @@ use serde::{Deserialize, Serialize};
 const MINUTE: i64 = 60_000;
 /// Transient failures in a row rest 1, 5, 25, then 60 minutes.
 const BACKOFF: [i64; 4] = [MINUTE, 5 * MINUTE, 25 * MINUTE, 60 * MINUTE];
+/// A provider that refused a saved key or sign-in rests 10, 20, 40, then at most 60 minutes
+/// (OpenBot nightly triage-14253). A completed turn on that agent starts the count over.
+const REFUSED_BACKOFF: [i64; 4] = [10 * MINUTE, 20 * MINUTE, 40 * MINUTE, 60 * MINUTE];
+/// Past the last refused hold, a new refusal starts the count again.
+const REFUSED_RESET_AFTER: i64 = 60 * MINUTE;
+/// How long a usage-limit hold waits for a recheck when its reset was kept from an older reading
+/// and no fresh one is available (triage-14386). Without this, an idle provider whose program was
+/// stopped leaves queued messages waiting for a reset that may be hours or days away.
+pub const USAGE_RECHECK: i64 = 15 * MINUTE;
 /// A usage limit whose reset time isn't known: try again in an hour.
 const UNKNOWN_RESET: i64 = 60 * MINUTE;
 /// No credits: the user has to add some, so don't look again for a while.
@@ -24,6 +33,8 @@ const SIGNED_OUT: i64 = 60 * MINUTE;
 /// again soon.
 const SIGNED_OUT_ELSEWHERE: i64 = 10 * MINUTE;
 const NOT_STARTING: i64 = 5 * MINUTE;
+/// A request that timed out mid-task: give the provider a short breather before trying again.
+const TIMEOUT: i64 = 5 * MINUTE;
 
 /// How long an ACP agent may stay silent while Codync opens its session before the start is given up on.
 /// OpenBot 0.75.0 (#12871): `session/new` had no bound, so an agent that never answered left the work at
@@ -61,6 +72,22 @@ pub struct Rest {
 pub fn held_reset(fresh: Option<i64>, held: Option<i64>, now: i64) -> Option<i64> {
     let fresh = fresh.filter(|t| *t > now);
     fresh.or_else(|| held.filter(|t| *t > now))
+}
+
+/// How long a usage-limit rest waits, and the reset time it keeps. A fresh reading wins; a held
+/// one is kept as the reset (so a later fresh reading can replace it) but its wait is capped at
+/// [`USAGE_RECHECK`] when no fresh data is available, so queued messages start within about 15
+/// minutes instead of waiting for a stale reset hours away (OpenBot nightly triage-14386).
+pub fn usage_wait(fresh: Option<i64>, held: Option<i64>, now: i64) -> (i64, Option<i64>) {
+    let reset = held_reset(fresh, held, now);
+    let wait = reset.map_or(UNKNOWN_RESET, |t| t - now);
+    let wait = if fresh.is_none() && reset.is_some() { wait.min(USAGE_RECHECK) } else { wait };
+    (wait, reset)
+}
+
+/// The wait for the `n`-th refusal in a row (1-based), capped at an hour (triage-14253).
+pub fn refused_wait(n: u32) -> i64 {
+    REFUSED_BACKOFF[(n.saturating_sub(1) as usize).min(REFUSED_BACKOFF.len() - 1)]
 }
 
 /// The kv key of an agent's rest. `account` is one isolated profile of the agent, joined with `:` the
@@ -167,17 +194,24 @@ fn record_at(
 ) -> Option<Rest> {
     let before = saved_key(store, name);
     // An hour after its last rest ended, a failure starts the backoff over.
-    let failures = before.filter(|r| now - r.until < BACKOFF[3]).map_or(0, |r| r.failures) + 1;
+    let mut failures = before.filter(|r| now - r.until < BACKOFF[3]).map_or(0, |r| r.failures) + 1;
     let held = before.filter(|r| r.reason == Reason::UsageLimit).and_then(|r| r.reset_at);
     let (wait, reset_at) = match reason {
         Reason::ModelMissing => return None,
-        Reason::UsageLimit => {
-            let reset = held_reset(resets_at, held, now);
-            (reset.map_or(UNKNOWN_RESET, |t| t - now), reset)
-        }
+        Reason::UsageLimit => usage_wait(resets_at, held, now),
         Reason::OutOfCredits => (OUT_OF_CREDITS, None),
         Reason::SignedOut if crate::agent::backends::harness(backend_of(account)).is_some() => (SIGNED_OUT, None),
         Reason::SignedOut => (SIGNED_OUT_ELSEWHERE, None),
+        // triage-14253: a refused credential has its own, longer ladder, counted from the last
+        // refusal and reset once no hold has been active for an hour or a turn succeeded.
+        Reason::RefusedKey => {
+            failures = before
+                .filter(|r| r.reason == Reason::RefusedKey && now - r.until < REFUSED_RESET_AFTER)
+                .map_or(1, |r| r.failures + 1);
+            (refused_wait(failures), None)
+        }
+        Reason::Network => (BACKOFF[(failures as usize - 1).min(BACKOFF.len() - 1)], None),
+        Reason::Timeout => (TIMEOUT, None),
         Reason::NotStarting => (NOT_STARTING, None),
         Reason::RateLimited | Reason::Overloaded => (BACKOFF[(failures as usize - 1).min(BACKOFF.len() - 1)], None),
     };
@@ -243,6 +277,19 @@ pub fn signed_out(store: &Store, backend: &str) -> Vec<String> {
         .collect()
 }
 
+/// The agent's accounts whose last rest was a refused credential, so replacing the key or signing
+/// in can end the hold at once instead of waiting out the backoff (triage-14253).
+pub fn refused(store: &Store, backend: &str) -> Vec<String> {
+    store
+        .kv_prefix(&key(backend))
+        .iter()
+        .filter_map(|k| k.strip_prefix("rest."))
+        .filter(|a| !a.contains(':') && backend_of(a) == backend)
+        .filter(|a| saved(store, a).is_some_and(|r| r.reason == Reason::RefusedKey))
+        .map(str::to_owned)
+        .collect()
+}
+
 /// The agent answered (or the user asked for it again): its rest and backoff are over. Whether it was resting.
 pub fn clear(store: &Store, account: &str) -> bool {
     if store.kv_get(&key(account)).is_none() {
@@ -297,13 +344,46 @@ mod tests {
         let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
         let first = record(&store, "claude", Reason::UsageLimit, 1_000, Some(7_200_000)).expect("rests");
         assert_eq!(first.reset_at, Some(7_200_000));
-        // A later read with no data still rests until the same reset, not for the unknown-reset hour.
+        // triage-14386: a later read with no data keeps the held reset for later reads, but waits
+        // only one recheck window so queued messages start within ~15 minutes of an early reset.
         let later = record(&store, "claude", Reason::UsageLimit, 2_000, None).expect("rests");
-        assert_eq!(later.until, 7_200_000);
-        assert_eq!(later.reset_at, Some(7_200_000));
-        // A fresh read with its own reset replaces the held one.
+        assert_eq!(later.until, 2_000 + USAGE_RECHECK);
+        assert_eq!(later.reset_at, Some(7_200_000), "the stale reset is still kept");
+        // A fresh read with its own reset replaces the held one and lasts until that reset.
         let fresh = record(&store, "claude", Reason::UsageLimit, 2_000, Some(8_000_000)).expect("rests");
         assert_eq!(fresh.until, 8_000_000);
+    }
+
+    #[test]
+    fn a_held_usage_reset_is_rechecked_within_fifteen_minutes() {
+        // triage-14386: the fresh reading wins, but a held one with no fresh data is capped.
+        assert_eq!(usage_wait(Some(9_000), Some(7_200_000), 1_000), (8_000, Some(9_000)));
+        assert_eq!(usage_wait(None, Some(7_200_000), 1_000), (USAGE_RECHECK, Some(7_200_000)));
+        assert_eq!(usage_wait(None, None, 1_000), (UNKNOWN_RESET, None));
+        assert_eq!(usage_wait(None, Some(900), 1_000), (UNKNOWN_RESET, None));
+    }
+
+    #[test]
+    fn a_refused_credential_backs_off_ten_twenty_forty_then_sixty_minutes() {
+        // triage-14253: a refused key is not retried every ten minutes forever.
+        assert_eq!(refused_wait(1), 10 * MINUTE);
+        assert_eq!(refused_wait(2), 20 * MINUTE);
+        assert_eq!(refused_wait(3), 40 * MINUTE);
+        assert_eq!(refused_wait(4), 60 * MINUTE);
+        assert_eq!(refused_wait(9), 60 * MINUTE);
+
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let first = record(&store, "claude", Reason::RefusedKey, 1_000, None).expect("rests");
+        assert_eq!(first.until, 1_000 + 10 * MINUTE);
+        // A second refusal while the hold is active moves to the next rung.
+        let second = record(&store, "claude", Reason::RefusedKey, 1_000 + MINUTE, None).expect("rests");
+        assert_eq!(second.until, 1_000 + MINUTE + 20 * MINUTE);
+        assert_eq!(second.failures, 2);
+        // A successful turn clears the hold and the count.
+        assert!(clear(&store, "claude"));
+        let again = record(&store, "claude", Reason::RefusedKey, 1_000 + 2 * MINUTE, None).expect("rests");
+        assert_eq!(again.until, 1_000 + 2 * MINUTE + 10 * MINUTE);
+        assert_eq!(refused(&store, "claude"), ["claude".to_owned()]);
     }
 
     #[test]
