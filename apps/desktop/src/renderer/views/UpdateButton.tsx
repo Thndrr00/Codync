@@ -3,7 +3,7 @@ import type { UpdateState } from '@shared/ipc'
 import { updateAction } from '@shared/update-action'
 import { Button, ProgressRing, Spinner } from '../components/Controls'
 import { Icon } from '../components/Icon'
-import { VStack } from '../components/Stack'
+import { HStack, VStack } from '../components/Stack'
 import { Text } from '../components/Text'
 import { useStore } from '../store/context'
 import { liveClient } from './settings/parts'
@@ -39,13 +39,19 @@ export function useHostRestartWait() {
     if (!client) return
     void client.call('cancelHostRestartWait').then(() => setWaitingFor([])).catch(() => {})
   }
-  return { waitingFor, cancel }
+  // A wait that could go on forever (a routine waiting for an answer, say) can be ended here:
+  // the host accepts an update forced past the idle check.
+  const restartNow = () => {
+    store.requestHostUpdate(true)
+    setWaitingFor([])
+  }
+  return { waitingFor, cancel, restartNow }
 }
 
 /** Check, update, download progress, then Restart to update: whatever the update state offers. */
 export function UpdateButton({ updates, kind = 'secondary' }: { updates: UpdateState; kind?: 'primary' | 'secondary' }) {
   const action = updateAction(updates)
-  const { waitingFor, cancel } = useHostRestartWait()
+  const { waitingFor, cancel, restartNow } = useHostRestartWait()
   const waiting = waitingFor.length > 0
   return (
     <VStack gap={6} align="flex-start">
@@ -60,7 +66,10 @@ export function UpdateButton({ updates, kind = 'secondary' }: { updates: UpdateS
       {waiting ? (
         <>
           <Text size="caption" tone="secondary">{`Waiting to restart: ${waitingFor.join(', ')}`}</Text>
-          <Button kind="secondary" onClick={cancel}>Cancel restart wait</Button>
+          <HStack gap={8}>
+            <Button kind="secondary" onClick={restartNow}>Restart now</Button>
+            <Button kind="secondary" onClick={cancel}>Cancel restart wait</Button>
+          </HStack>
         </>
       ) : null}
     </VStack>

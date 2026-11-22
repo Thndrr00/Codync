@@ -30,6 +30,10 @@ interface Props {
   onMove: (nodeKey: string, x: number, y: number) => void
   /** A whole group (and its members) was dragged to a new origin. */
   onMoveGroup: (groupId: string, x: number, y: number) => void
+  /** Puts the steps back in run-order columns (Shift+T, or the toolbar button). */
+  onTidy: () => void
+  /** Undoes a tidy by restoring the places it replaced; absent until one has run. */
+  onUndoTidy?: () => void
   /** Runs this routine's flow now, from its card. */
   onRun: (routineId: string) => void
   /** Stops the routine run in flight, from its card (OpenBot 0.71.0). */
@@ -113,7 +117,7 @@ function MiniMap({ nodes, view, box, onCenter }: {
 }
 
 /** The canvas: routine and bot nodes, their edges, groups, pan, zoom (wheel and buttons) and gestures. */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onRun, onStop, menuItems, onRenameStep, query, composer }: Props) {
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onTidy, onUndoTidy, onRun, onStop, menuItems, onRenameStep, query, composer }: Props) {
   const tr = useTr()
   const groups = groupsOf(canvas)
   const nodes = useMemo(() => groupedNodes(canvas), [canvas])
@@ -272,6 +276,11 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
 
   /** Group / ungroup from the keyboard, over any focused node or the canvas itself. */
   const canvasKeys = (event: KeyboardEvent) => {
+    if (event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 't') {
+      event.preventDefault()
+      onTidy()
+      return
+    }
     if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'g') return
     event.preventDefault()
     if (event.shiftKey) {
@@ -540,6 +549,8 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
         <IconButton title={tr('Zoom in')} icon="plus" onClick={() => zoom(1.25)} />
         <span className="flow-toolbar-separator" aria-hidden />
         <IconButton title={tr('Fit to view')} icon="arrow.up.left.and.arrow.down.right" onClick={() => setView(fitView(nodes, box.width, box.height))} />
+        <IconButton title={tr('Tidy up')} icon="square.grid.2x2" onClick={onTidy} />
+        {onUndoTidy ? <IconButton title={tr('Undo tidy up')} icon="arrow.uturn.backward" onClick={onUndoTidy} /> : null}
       </div>
     </div>
   )

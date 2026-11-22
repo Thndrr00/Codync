@@ -2748,5 +2748,14 @@
   "Older messages": "Mensajes anteriores",
   "Copy result": "Copiar resultado",
   "Learn skills": "Aprender skills",
-  "Stop learning skills": "Dejar de aprender skills"
+  "Stop learning skills": "Dejar de aprender skills",
+  "Startup animation": "Animación de inicio",
+  "Opens with the agent pile. Turn it off to show one agent with bouncing dots while a computer opens or connects. Only changes this device.": "Se abre con la pila de agentes. Desactívala para mostrar un agente con puntos que saltan mientras se abre o conecta un ordenador. Solo cambia este dispositivo.",
+  "Opening a computer": "Abriendo un ordenador",
+  "Tidy up": "Ordenar",
+  "Undo tidy up": "Deshacer ordenación",
+  "Scope": "Alcance",
+  "Risks": "Riesgos",
+  "Recommendation": "Recomendación",
+  "Restart now": "Reiniciar ahora"
 }

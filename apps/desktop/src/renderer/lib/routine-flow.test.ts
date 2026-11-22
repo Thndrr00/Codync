@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   NODE_WIDTH, botKey, connectProblem, depths, edgePath, fitView, flowEdges, flowRows, layoutNodes, mediaKey, mediaTitle, nodeAt,
-  portCarry, routineKey, stepNameOf, stepProgress, zoomAt, type FlowCanvas, type FlowLink, type FlowMedia, type FlowNode, type FlowStep,
+  portCarry, routineKey, stepNameOf, stepProgress, tidyLayout, zoomAt, type FlowCanvas, type FlowLink, type FlowMedia, type FlowNode, type FlowStep,
 } from './routine-flow.ts'
 
 const link = (from: string, to: string, extra: Partial<FlowLink> = {}): FlowLink =>
@@ -49,6 +49,33 @@ test('nodes never moved sit in columns by depth, and a saved position wins', () 
   const fan = layoutNodes(canvas([link('a', 'b'), link('a', 'c')]))
   const [nb, nc] = [botKey('b'), botKey('c')].map((key) => fan.find((n) => n.key === key)!)
   assert.ok(nb.x === nc.x && nb.y !== nc.y, 'nodes of one column don\'t overlap')
+})
+
+test('tidy puts steps in run-order columns, stacks branches, and ignores saved places', () => {
+  const c = canvas([link('a', 'b'), link('a', 'c'), link('b', 'd')], {
+    positions: [{ nodeKey: botKey('b'), x: 9999, y: 9999 }],
+    placedBotIds: ['z'],
+  })
+  const at = new Map(tidyLayout(c).positions.map((p) => [p.nodeKey, p]))
+  const x = (key: string) => at.get(key)!.x
+  assert.ok(x(routineKey('r')) < x(botKey('a')), 'the routine card starts the first column')
+  assert.ok(x(botKey('a')) < x(botKey('b')), 'the next step is one column right')
+  assert.equal(x(botKey('b')), x(botKey('c')), 'branches share a column')
+  assert.equal(at.get(botKey('b'))!.y < at.get(botKey('c'))!.y, true, 'branches sit below each other')
+  assert.ok(x(botKey('d')) > x(botKey('b')), 'a later step is farther right')
+  assert.notEqual(at.get(botKey('b'))!.x, 9999, 'a saved position does not win')
+  assert.ok(x(botKey('z')) > x(botKey('d')), 'a hand-placed bot comes after the flows')
+})
+
+test('tidy moves a group as one block and brings its card along', () => {
+  const c = canvas([link('a', 'b'), link('b', 'c'), link('c', 'd')])
+  const layout = tidyLayout(c, [{ id: 'g1', members: [botKey('b'), botKey('c')] }])
+  const at = new Map(layout.positions.map((p) => [p.nodeKey, p]))
+  assert.equal(at.get(botKey('b'))!.x, at.get(botKey('c'))!.x, 'the group stays in one column')
+  assert.equal(at.get(botKey('c'))!.y - at.get(botKey('b'))!.y, 160, 'its members keep their spacing')
+  assert.deepEqual(layout.groups, [{ id: 'g1', x: at.get(botKey('b'))!.x, y: at.get(botKey('b'))!.y }])
+  const places = layout.positions.map((p) => `${p.x}:${p.y}`)
+  assert.equal(new Set(places).size, places.length, 'no two steps land on the same place')
 })
 
 test('edges: each routine to its bot, then one per link', () => {

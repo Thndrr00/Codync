@@ -19,7 +19,7 @@ function snapshot(appearance: Appearance): SettingsSource {
     theme: { appearance },
     roster: { rosterViewFilter: prefs.rosterViewFilter.get() },
     bubbles: { yourBubbles: prefs.yourBubbles.get() },
-    motion: { movingAgentFaces: prefs.movingAgentFaces.get(), backgroundBlur: prefs.backgroundBlur.get() },
+    motion: { movingAgentFaces: prefs.movingAgentFaces.get(), backgroundBlur: prefs.backgroundBlur.get(), startupAnimation: prefs.startupAnimation.get() },
     voice: { inputMode: inputMode.get(), talkKey: talkKey.get() },
     appearance: { accentColor: prefs.accentColor.get() },
   }
@@ -101,6 +101,7 @@ export function SettingsIOSection() {
     if (picked.has('motion') && groups.motion) {
       if (typeof groups.motion.movingAgentFaces === 'boolean') prefs.movingAgentFaces.set(groups.motion.movingAgentFaces)
       if (typeof groups.motion.backgroundBlur === 'boolean') prefs.backgroundBlur.set(groups.motion.backgroundBlur)
+      if (typeof groups.motion.startupAnimation === 'boolean') prefs.startupAnimation.set(groups.motion.startupAnimation)
     }
     if (picked.has('voice') && groups.voice) {
       if (typeof groups.voice.inputMode === 'string') inputMode.set(groups.voice.inputMode as VoiceInputMode)

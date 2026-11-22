@@ -710,5 +710,14 @@
   "Older messages": "Older messages",
   "Copy result": "Copy result",
   "Learn skills": "Learn skills",
-  "Stop learning skills": "Stop learning skills"
+  "Stop learning skills": "Stop learning skills",
+  "Startup animation": "Startup animation",
+  "Opens with the agent pile. Turn it off to show one agent with bouncing dots while a computer opens or connects. Only changes this device.": "Opens with the agent pile. Turn it off to show one agent with bouncing dots while a computer opens or connects. Only changes this device.",
+  "Opening a computer": "Opening a computer",
+  "Tidy up": "Tidy up",
+  "Undo tidy up": "Undo tidy up",
+  "Scope": "Scope",
+  "Risks": "Risks",
+  "Recommendation": "Recommendation",
+  "Restart now": "Restart now"
 }

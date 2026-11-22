@@ -1,4 +1,5 @@
 import type { Bot } from '@shared/models'
+import { briefStatus } from './status-report.ts'
 
 /**
  * The small line that stays beside a bot's avatar until its first text or step (OpenBot nightly,
@@ -7,5 +8,5 @@ import type { Bot } from '@shared/models'
  * the person still knows the bot is working on their request.
  */
 export function activityLine(bot: Bot | null | undefined): string {
-  return bot?.activity || 'Thinking it through…'
+  return briefStatus(bot?.activity) || 'Thinking it through…'
 }

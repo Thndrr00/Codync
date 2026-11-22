@@ -347,6 +347,29 @@ html[data-platform="win32"] .sidebar.compact .sidebar-header {
   max-width: 420px;
   text-align: center;
 }
+/* The opening dots replace the agent pile when Startup animation is off. */
+.startup-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.startup-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--secondary);
+  animation: startup-dot-bounce 1s ease-in-out infinite;
+}
+.startup-dots i:nth-child(2) { animation-delay: 0.15s; }
+.startup-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes startup-dot-bounce {
+  0%,
+  100% { transform: translateY(3px); opacity: 0.5; }
+  50% { transform: translateY(-3px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .startup-dots i { animation: none; }
+}
 
 .context-layer {
   position: fixed;

@@ -10,6 +10,7 @@ import { useTr } from '../../lib/use-language'
 import { AutoTextArea } from '../bots/parts'
 import { trNow } from '../../lib/l10n.ts'
 import { fill } from '../../lib/fill.ts'
+import { approvalBrief } from './status-report.ts'
 
 
 /** What the agent wants, from the tool's kind (also the notch island's headline). */
@@ -109,7 +110,10 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
   const guidance = toolGuidance(d.toolKind, d.title)
   const pending = d.status === 'pending'
   const deletion = isDeletionApproval(d)
-  const hasDetail = !!d.command || !!d.detail || !!d.diffs?.length
+  // The agent's scope, risks and recommendation sit in this card, not behind a Details step.
+  const brief = approvalBrief(d.detail)
+  const detailText = brief?.rest ?? d.detail ?? ''
+  const hasDetail = !!d.command || !!detailText || !!d.diffs?.length
   const options = sortedOptions(d.options ?? [])
   const once = options.find((o) => o.kind === 'allow_once')
   // "Always" shows the rule it would keep, which the person may edit, before anything is answered.
@@ -145,6 +149,13 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
             <Text size="caption" tone="secondary" title={tr(guidance)}>{tr(guidance)}</Text>
           </HStack>
         ) : null}
+        {brief ? (
+          <VStack gap={6} className="permission-brief">
+            <BriefRow label="Scope" value={brief.scope} />
+            <BriefRow label="Risks" value={brief.risks} />
+            <BriefRow label="Recommendation" value={brief.recommendation} />
+          </VStack>
+        ) : null}
         {deletion ? (
           <VStack gap={4}>
             <Text size="caption" tone="secondary">{tr(deletionNote)}</Text>
@@ -156,7 +167,7 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
           <Disclosure expanded={expanded} onToggle={() => setExpanded((e) => !e)} label={<Text size="caption" weight="medium" tone="secondary">{tr(`Details`)}</Text>}>
             <VStack gap={8} className={`permission-card-details t-resize ${expanded ? "is-open" : ""}`}>
               {d.command ? <CodeBox text={d.command} /> : null}
-              {d.detail ? <CodeBox text={d.detail} /> : null}
+              {detailText ? <CodeBox text={detailText} /> : null}
               {(d.diffs ?? []).map((diff, i) => <DiffView key={i} diff={diff} />)}
             </VStack>
           </Disclosure>
@@ -210,6 +221,18 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
         ) : null}
       </VStack>
     </div>
+  )
+}
+
+/** One labelled part of the agent's approval brief, shown without a disclosure. */
+function BriefRow({ label, value }: { label: string; value: string }) {
+  const tr = useTr()
+  if (!value) return null
+  return (
+    <VStack gap={2}>
+      <Text size="caption" weight="semibold" tone="secondary">{tr(label)}</Text>
+      <Text size="callout" tone="text">{value}</Text>
+    </VStack>
   )
 }
 

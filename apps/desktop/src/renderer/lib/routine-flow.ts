@@ -257,6 +257,87 @@ export function layoutNodes(canvas: FlowCanvas): FlowNode[] {
   return nodes
 }
 
+/** A drawing-only group's members, which tidy must move as one block. */
+export interface TidyGroup {
+  id: string
+  members: readonly string[]
+}
+
+/** A tidy canvas: every node's new place, and the new origin of each group's card. */
+export interface TidyLayout {
+  positions: FlowPosition[]
+  groups: { id: string; x: number; y: number }[]
+}
+
+/**
+ * Puts a canvas in columns from left to right in the order the steps run, with each branch on its
+ * own row below its siblings. A group's members occupy consecutive rows of one column and move as
+ * one block, and its card follows them. Nothing depends on saved positions, so "Tidy up" is the
+ * same arrangement every time; the view keeps the old places to offer Undo. The host holds no
+ * locked steps or free-floating notes on this canvas, so there is nothing to leave behind.
+ */
+export function tidyLayout(canvas: FlowCanvas, groups: readonly TidyGroup[] = []): TidyLayout {
+  const nodes: { key: string; col: number }[] = canvas.routines.map((card) => ({ key: routineKey(card.routine.id), col: 0 }))
+  const column = new Map<string, number>()
+  for (const card of canvas.routines) {
+    const reached = depths(card.routine.botId, canvas.links.filter((l) => l.routineId === card.routine.id))
+    for (const [id, depth] of reached) {
+      const key = id.startsWith('media:') ? id : botKey(id)
+      column.set(key, Math.max(column.get(key) ?? 0, depth + 1))
+    }
+  }
+  const lastColumn = Math.max(1, ...column.values()) + 1
+  for (const id of canvasBotIds(canvas)) nodes.push({ key: botKey(id), col: column.get(botKey(id)) ?? lastColumn })
+  for (const media of canvas.mediaNodes) {
+    const key = mediaKey(media.id)
+    nodes.push({ key, col: column.get(key) ?? lastColumn })
+  }
+  // Run order comes from the same depth-first walk the list uses; nodes placed by hand come last.
+  const order = new Map<string, number>()
+  for (const row of flowRows(canvas)) {
+    const key = row.kind === 'media' ? row.nodeId : botKey(row.nodeId)
+    if (!order.has(key)) order.set(key, order.size)
+  }
+  const sequence = new Map(nodes.map((node, index) => [node.key, index]))
+  const sorted = [...nodes].sort((a, b) => a.col - b.col || (order.get(a.key) ?? Infinity) - (order.get(b.key) ?? Infinity) || sequence.get(a.key)! - sequence.get(b.key)!)
+
+  const byKey = new Map(sorted.map((node) => [node.key, node]))
+  const groupOfNode = new Map<string, TidyGroup>()
+  for (const group of groups) for (const key of group.members) groupOfNode.set(key, group)
+  const units: { keys: string[]; col: number }[] = []
+  const placed = new Set<string>()
+  const usedGroups = new Set<string>()
+  for (const node of sorted) {
+    if (placed.has(node.key)) continue
+    const group = groupOfNode.get(node.key)
+    if (group && !usedGroups.has(group.id)) {
+      usedGroups.add(group.id)
+      const keys = group.members.filter((key) => byKey.has(key))
+      for (const key of keys) placed.add(key)
+      units.push({ keys, col: Math.min(...keys.map((key) => byKey.get(key)!.col)) })
+    } else if (!group) {
+      placed.add(node.key)
+      units.push({ keys: [node.key], col: node.col })
+    }
+  }
+
+  const rows = new Map<number, number>()
+  const groupAt = new Map<string, { x: number; y: number }>()
+  const positions: FlowPosition[] = []
+  for (const unit of units) {
+    const row = rows.get(unit.col) ?? 0
+    rows.set(unit.col, row + unit.keys.length)
+    unit.keys.forEach((key, index) => {
+      const x = unit.col * (NODE_WIDTH + COLUMN_GAP)
+      const y = (row + index) * (NODE_HEIGHT + ROW_GAP)
+      positions.push({ nodeKey: key, x, y })
+      const group = groupOfNode.get(key)
+      if (group && !groupAt.has(group.id)) groupAt.set(group.id, { x, y })
+    })
+  }
+  return { positions, groups: [...groupAt].map(([id, at]) => ({ id, ...at })) }
+}
+
 /** Each routine's fixed edge to its bot, then the links (whose ends are bots or media steps). */
 export function flowEdges(canvas: FlowCanvas): FlowEdge[] {
   const starts = canvas.routines.map((card) => ({ id: `start:${card.routine.id}`, from: routineKey(card.routine.id), to: botKey(card.routine.botId), linkId: null }))

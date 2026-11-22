@@ -9,6 +9,7 @@ import { errorText, market } from './market-models'
 import { ErrorText } from './pieces'
 import { usePlugins } from './plugins'
 import { useTr } from '../../lib/use-language'
+import { skillDetailsTarget } from './skill-read.ts'
 
 
 /** The skill a details sheet shows: an installed one (`id`) or one from the catalog (`source`). */
@@ -22,7 +23,7 @@ export function SkillSheet({ skill }: { skill: SkillRef }) {
   const [markdown, setMarkdown] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
-  const which = skill.source !== undefined ? { source: skill.source } : { id: skill.id }
+  const which = skillDetailsTarget(skill, plugins.installedSkills)
   const source = skill.source ?? null
   const added = source === null || skill.installed === true || plugins.installedSkills.some((s) => s.id === source.toLowerCase())
 

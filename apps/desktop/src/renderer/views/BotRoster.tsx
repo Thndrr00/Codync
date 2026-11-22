@@ -236,7 +236,12 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
         selected={isSelected}
         dragKey={key}
         onHover={(on) => setHovered((h) => (on ? key : h === key ? null : h))}
-        onClick={() => app.select(item.ref)}
+        onClick={() => {
+          // Selecting an already-open bot is a no-op; close its side thread so the click still
+          // takes the person back to that bot's main chat.
+          app.select(item.ref)
+          if (threadOpen?.store === item.store && threadOpen.botId === item.bot.id) setThreadOpen(null)
+        }}
         onContext={(x, y) => onContext(item.bot, item.store, x, y)}
         lifted={held && lift !== null}
         onPreview={() => setPreview(item)}

@@ -8,8 +8,8 @@ import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
 import {
-  NODE_WIDTH, botKey, canvasBotIds, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle, stepNameOf,
-  type FlowCanvas, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
+  NODE_WIDTH, botKey, canvasBotIds, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle, stepNameOf, tidyLayout,
+  type FlowCanvas, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard, type FlowStep,
 } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
@@ -133,6 +133,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   /** Keys being grouped, waiting for a name (Ctrl/Cmd+G). */
   const [groupDraft, setGroupDraft] = useState<string[] | null>(null)
   const [groupName, setGroupName] = useState('')
+  /** The drawing a tidy replaced, so Undo can put the steps back. */
+  const [tidyUndo, setTidyUndo] = useState<{ positions: FlowPosition[]; groups: FlowGroup[] } | null>(null)
   const offline = store.isOffline
   const rev = store.flowRev(botId)
 
@@ -258,26 +260,46 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }
   }
 
-  // Groups are drawing-only data on the host's canvas. The save carries the whole flow document
-  // with the revision we started from, so the host can merge someone else's edits field by field
-  // and writes the merged groups back to the canvas in the same transaction.
-  const saveGroups = async (next: FlowGroup[]) => {
-    if (!canvas || offline) return
+  // Groups and step positions are drawing-only data on the host's canvas. The save carries the
+  // whole flow document with the revision we started from, so the host can merge someone else's
+  // edits field by field and writes the merged drawing back in the same transaction.
+  const saveDocument = async (document: FlowDocument): Promise<boolean> => {
+    if (!canvas || offline) return false
     setMergeNote(false)
     try {
-      const answer = await (await store.ready()).call<FlowSaveAnswer>('saveRoutineFlow', {
-        botId, baseRev: canvas.rev, document: documentFromCanvas(canvas, next),
-      })
+      const answer = await (await store.ready()).call<FlowSaveAnswer>('saveRoutineFlow', { botId, baseRev: canvas.rev, document })
       if (answer.conflicts?.length) {
         setConflict({ document: answer.document, conflicts: answer.conflicts })
         setChoices({})
-        return
+        return false
       }
       if (answer.merged) setMergeNote(true)
     } catch {
       setNote(tr('Could not save the group.'))
+      return false
     }
     await flow.load()
+    return true
+  }
+  const saveGroups = async (next: FlowGroup[]) => {
+    if (!canvas) return
+    await saveDocument(documentFromCanvas(canvas, next))
+  }
+
+  /** One tidy (and its Undo) saves the whole drawing at once, so the steps never land half moved. */
+  const tidy = async () => {
+    if (!canvas || offline) return
+    const before = { positions: canvas.positions, groups: groupsOf(canvas) }
+    const layout = tidyLayout(canvas, before.groups)
+    const groups = before.groups.map((group) => {
+      const at = layout.groups.find((place) => place.id === group.id)
+      return at ? { ...group, x: at.x, y: at.y } : group
+    })
+    if (await saveDocument(documentFromCanvas({ ...canvas, positions: layout.positions }, groups))) setTidyUndo(before)
+  }
+  const undoTidy = async () => {
+    if (!canvas || !tidyUndo || offline) return
+    if (await saveDocument(documentFromCanvas({ ...canvas, positions: tidyUndo.positions }, tidyUndo.groups))) setTidyUndo(null)
   }
   const createGroup = async (keys: string[], name: string) => {
     if (!canvas) return
@@ -517,6 +539,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 onSelect={setSelection}
                 onMove={(key, x, y) => void flow.move(key, x, y)}
                 onMoveGroup={(id, x, y) => void moveGroup(id, x, y)}
+                onTidy={() => void tidy()}
+                onUndoTidy={tidyUndo ? () => void undoTidy() : undefined}
                 onConnect={dropped}
                 onGroup={(keys) => { setGroupDraft(keys); setGroupName('') }}
                 onUngroup={(id) => void ungroup(id)}

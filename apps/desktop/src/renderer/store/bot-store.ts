@@ -185,11 +185,11 @@ export class BotStore extends BotSync {
     })()
   }
 
-  /** Asks this computer to update itself while it's behind this app (`installHostUpdate`). */
-  requestHostUpdate() {
+  /** Asks this computer to update itself while it's behind this app (`installHostUpdate`). `force` restarts even while a bot is still working. */
+  requestHostUpdate(force = false) {
     this.hostUpdate = { kind: 'requested', at: Date.now() }
     this.changed()
-    void this.withLink((c) => c.call('installHostUpdate', {})).catch((error: unknown) => {
+    void this.withLink((c) => c.call('installHostUpdate', { force })).catch((error: unknown) => {
       this.hostUpdate = { kind: 'failed', message: error instanceof Error ? error.message : String(error) }
       this.changed()
     })

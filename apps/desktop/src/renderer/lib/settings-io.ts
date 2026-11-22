@@ -32,7 +32,7 @@ const FIELDS: Record<SettingsGroup, readonly string[]> = {
   theme: ['appearance'],
   roster: ['rosterViewFilter'],
   bubbles: ['yourBubbles'],
-  motion: ['movingAgentFaces', 'backgroundBlur'],
+  motion: ['movingAgentFaces', 'backgroundBlur', 'startupAnimation'],
   voice: ['inputMode', 'talkKey'],
   appearance: ['accentColor'],
 }
@@ -93,7 +93,7 @@ function validate(id: SettingsGroup, raw: unknown): Values | null {
     case 'roster': return isRosterFilter(value.rosterViewFilter) ? value : null
     case 'bubbles': return oneOf(value.yourBubbles, ['solid', 'tint', 'classic']) ? value : null
     case 'motion':
-      return Object.keys(value).length > 0 && ['movingAgentFaces', 'backgroundBlur'].every((k) => !(k in value) || typeof value[k] === 'boolean') ? value : null
+      return Object.keys(value).length > 0 && ['movingAgentFaces', 'backgroundBlur', 'startupAnimation'].every((k) => !(k in value) || typeof value[k] === 'boolean') ? value : null
     case 'voice':
       return Object.keys(value).length > 0 && (!('inputMode' in value) || oneOf(value.inputMode, ['pushToTalk', 'openMic']))
         && (!('talkKey' in value) || isTalkKey(value.talkKey)) ? value : null

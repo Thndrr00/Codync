@@ -9,7 +9,7 @@ const snapshot = {
   theme: { appearance: 'dark' },
   roster: { rosterViewFilter: { show: 'agents', unread: true, working: false, attention: false, pinned: false, sections: ['Work'], sort: 'recent' } },
   bubbles: { yourBubbles: 'tint' },
-  motion: { movingAgentFaces: false, backgroundBlur: true },
+  motion: { movingAgentFaces: false, backgroundBlur: true, startupAnimation: false },
   voice: { inputMode: 'pushToTalk', talkKey: 'ctrlOption' },
   appearance: { accentColor: '#1084FE' },
 }
@@ -26,6 +26,21 @@ test('device prefs survive an export and import round-trip', () => {
   if (!result.ok) return
   assert.deepEqual(result.groups, snapshot)
   assert.deepEqual(result.skipped, [])
+})
+
+test('the startup animation switch travels with the motion group and only as a boolean', () => {
+  const json = exportSettings({ motion: { startupAnimation: false } }, ['motion'], now)
+  const result = parseSettings(json)
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.deepEqual(result.groups.motion, { startupAnimation: false })
+
+  const bad = JSON.parse(json)
+  bad.groups.motion.startupAnimation = 'off'
+  const skipped = parseSettings(JSON.stringify(bad))
+  assert.equal(skipped.ok, true)
+  if (!skipped.ok) return
+  assert.equal(skipped.groups.motion, undefined, 'a string switch makes the whole motion group unusable')
 })
 
 test('a person can export only the groups they chose', () => {

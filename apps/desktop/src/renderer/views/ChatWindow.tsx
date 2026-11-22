@@ -243,6 +243,7 @@ function ChatSplitView() {
   const [compact, setCompact] = usePref(prefs.sidebarCompact)
   const [sidebarWidth, setSidebarWidth] = usePref(prefs.sidebarWidth)
   const [hidden, setHidden] = usePref(prefs.hiddenComputers)
+  const [startupAnimation] = usePref(prefs.startupAnimation)
   const [searching, setSearching] = useState(false)
   const [palette, setPalette] = useState(false)
   const [cheatsheet, setCheatsheet] = useState(false)
@@ -525,11 +526,18 @@ function ChatSplitView() {
     detail = (
       <div className="empty-detail">
         <div className="detail-drag drag" />
-        <HStack align="stretch" gap={12}>
-          <CharacterAvatar shape="blob" color="blue" size={60} mood="working" />
-          <CharacterAvatar shape="squircle" color="orange" size={60} />
-          <CharacterAvatar shape="teardrop" color="violet" size={60} mood="working" />
-        </HStack>
+        {startupAnimation ? (
+          <HStack align="stretch" gap={12}>
+            <CharacterAvatar shape="blob" color="blue" size={60} mood="working" />
+            <CharacterAvatar shape="squircle" color="orange" size={60} />
+            <CharacterAvatar shape="teardrop" color="violet" size={60} mood="working" />
+          </HStack>
+        ) : (
+          <HStack gap={10} className="startup-dots-row" aria-label={tr('Opening a computer')}>
+            <CharacterAvatar shape="squircle" color="blue" size={60} mood="working" />
+            <span className="startup-dots" aria-hidden><i /><i /><i /></span>
+          </HStack>
+        )}
         <Text as="div" size="title2" weight="semibold">{connecting ? tr(`Connecting to your computers…`) : tr(`Your coding agents, as teammates.`)}</Text>
         <Text as="div" tone="secondary" className="empty-detail-message">{connecting ? tr(`Your bots will appear once connected. Manage computers to see connection progress.`) : tr(`Pick a bot, or create one for each kind of work and point it at a project.`)}</Text>
         <Button onClick={() => create('bot')} disabled={!onlineStores.length}>

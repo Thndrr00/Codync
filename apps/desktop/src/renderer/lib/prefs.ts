@@ -95,6 +95,8 @@ export const prefs = {
   backgroundBlur: pref('backgroundBlur', true),
   /** Bot faces blink, look around and breathe; off keeps their still frame. */
   movingAgentFaces: pref('movingAgentFaces', true),
+  /** The opening agent pile; off shows one agent with bouncing dots while a computer opens or connects. */
+  startupAnimation: pref('startupAnimation', true),
   /** The roster's filter and sort, saved together on this device. */
   rosterViewFilter: pref<RosterViewFilter>('rosterViewFilter', NO_ROSTER_VIEW_FILTER),
   /** Your bubbles take the agent's avatar colour: Solid fills them, Tint mixes a little in, Classic keeps the chat's grey. */

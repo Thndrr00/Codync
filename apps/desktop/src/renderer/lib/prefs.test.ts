@@ -12,6 +12,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
     ['computerAccessSetup', '"ready"'],
     ['accentColor', '"#1084FE"'],
     ['restoreLastWorkspace', '"yes"'],
+    ['startupAnimation', '"yes"'],
     ['openTabsByChat', '[]'],
   ])
   const events = new EventTarget()
@@ -30,6 +31,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
   assert.equal(prefs.computerAccessSetup.get(), 'ready')
   assert.equal(prefs.accentColor.get(), '#1084FE')
   assert.equal(prefs.restoreLastWorkspace.get(), true, 'a non-boolean switch reads as its default')
+  assert.equal(prefs.startupAnimation.get(), true, 'a non-boolean startup switch reads as its default')
   assert.deepEqual(prefs.openTabsByChat.get(), {}, 'an array is not a tab map')
 })
 
