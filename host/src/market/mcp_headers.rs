@@ -59,15 +59,38 @@ pub(super) fn mask(value: &str) -> String {
     format!("{head}…{tail}")
 }
 
+/// Why a header name is refused, in the words the form and the agent both show.
+/// Ported from OpenBot nightly triage-13174: a name with a space or a symbol is not
+/// an HTTP header name; the key or token belongs in the value, not the name.
+pub(crate) const HEADER_NAME_MESSAGE: &str = "Header names cannot contain spaces or symbols such as : ( ) /. Use a name such as Authorization, and put the key or token in Value.";
+
+/// Whether `name` is an HTTP token (RFC 9110): letters, digits and a fixed set of
+/// separators, with no space, colon, slash or other symbol. The form skips blank
+/// rows before saving; the host refuses an empty name.
+pub(crate) fn valid_header_name(name: &str) -> bool {
+    const TOKEN: &str = "!#$%&'*+.^_`|~-";
+    !name.is_empty()
+        && name.len() <= 64
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || TOKEN.as_bytes().contains(&b))
+}
+
 /// A header a person may set: a valid token, not one the transport or host owns.
 pub(super) fn check_header(name: &str) -> Result<()> {
-    let valid =
-        !name.is_empty() && name.len() <= 64 && reqwest::header::HeaderName::from_bytes(name.as_bytes()).is_ok();
-    if valid && !RESERVED.contains(&name.to_ascii_lowercase().as_str()) {
+    if valid_header_name(name) && !RESERVED.contains(&name.to_ascii_lowercase().as_str()) {
         Ok(())
     } else {
-        bail!("`{name}` can't carry a secret header")
+        bail!("{HEADER_NAME_MESSAGE}")
     }
+}
+
+/// Every name of a saved or about-to-be-saved header set must be usable. Used when
+/// a connector is added or tested, so a name saved by an older client is refused
+/// the next time it is edited or checked too.
+pub(crate) fn check_headers(headers: &BTreeMap<String, String>) -> Result<()> {
+    for name in headers.keys() {
+        check_header(name)?;
+    }
+    Ok(())
 }
 
 /// Splits the agent's headers into the real values (stored encrypted) and a masked copy (shown).
@@ -200,6 +223,23 @@ mod tests {
         assert!(check_header("Host").is_err());
         assert!(check_header("bad header").is_err());
         assert!(check_header("").is_err());
+    }
+
+    #[test]
+    fn a_name_with_a_space_or_symbol_gets_the_form_message() {
+        for bad in ["Authorization Bearer", "X:Key", "X/Key", "X(Key)", "X@Key", ""] {
+            assert!(!valid_header_name(bad), "`{bad}` is not an HTTP token");
+            let error = check_header(bad).unwrap_err().to_string();
+            assert_eq!(error, HEADER_NAME_MESSAGE);
+            assert!(error.contains("Authorization") && error.contains("Value"), "the message points at the value");
+        }
+        for good in ["Authorization", "X-Api-Key", "X_API_KEY", "X.Api.Key", "X~Key", "X1"] {
+            assert!(valid_header_name(good), "`{good}` is an HTTP token");
+        }
+        let saved = BTreeMap::from([("Authorization Bearer".to_owned(), "sk-live".to_owned())]);
+        assert!(check_headers(&saved).is_err(), "a bad saved header is refused on test or edit");
+        let fine = BTreeMap::from([("Authorization".to_owned(), "Bearer sk-live".to_owned())]);
+        assert!(check_headers(&fine).is_ok());
     }
 
     #[test]

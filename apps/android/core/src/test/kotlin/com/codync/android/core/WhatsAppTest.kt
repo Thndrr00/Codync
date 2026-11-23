@@ -17,4 +17,18 @@ class WhatsAppTest {
         assertEquals("Enter the code on your phone.", WhatsApp.stateText("pairing"))
         assertNull(WhatsApp.decode(Json.parseToJsonElement("""{"state":"starting"}""")).pairCode)
     }
+
+    @Test fun `the owners own chat is a place even on a dedicated number`() {
+        val me = "5215555555555@s.whatsapp.net"
+        assertEquals(listOf(WhatsAppPlace(me, true)), WhatsApp.places(me, emptyList()))
+        assertEquals(
+            listOf(WhatsAppPlace(me, true), WhatsAppPlace("friend@s.whatsapp.net", false)),
+            WhatsApp.places(me, listOf("friend@s.whatsapp.net")),
+        )
+        assertEquals(
+            listOf(WhatsAppPlace(me, true), WhatsAppPlace("friend@s.whatsapp.net", false)),
+            WhatsApp.places(me, listOf(me, "friend@s.whatsapp.net")),
+        )
+        assertEquals(listOf(WhatsAppPlace("friend@s.whatsapp.net", false)), WhatsApp.places(null, listOf("friend@s.whatsapp.net")))
+    }
 }

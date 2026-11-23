@@ -179,11 +179,16 @@ import kotlinx.coroutines.launch
                 }
             }
             if (link?.state == "connected") {
-                CardSection(tr("Allowed chats"), footer = tr("Anyone can write while this is empty. The owner always can.")) {
-                    link?.allowed.orEmpty().forEach { entry ->
+                CardSection(tr("Allowed chats"), footer = tr("Your “Message yourself” chat and the people you allow reach the bot. Others get no reply.")) {
+                    WhatsApp.places(link?.me, link?.allowed.orEmpty()).forEach { place ->
                         row {
-                            Text(entry, style = Type.caption.monospaced, color = Palette.text, modifier = Modifier.weight(1f))
-                            SecondaryButton(tr("Remove"), enabled = !busy) { act { store.whatsappSetAllowed(entry, false); link = store.whatsapp() } }
+                            Text(if (place.own) tr("Message yourself") else place.id,
+                                style = Type.caption.monospaced, color = Palette.text, modifier = Modifier.weight(1f))
+                            if (place.own) {
+                                Text(tr("This chat still reaches the bot."), style = Type.caption, color = Palette.secondary)
+                            } else {
+                                SecondaryButton(tr("Remove"), enabled = !busy) { act { store.whatsappSetAllowed(place.id, false); link = store.whatsapp() } }
+                            }
                         }
                     }
                     row {
@@ -194,7 +199,8 @@ import kotlinx.coroutines.launch
                         }
                     }
                     row {
-                        Text(tr("People you did not allow get no reply."), style = Type.caption, color = Palette.secondary)
+                        Text(tr("Your “Message yourself” chat and the people you allow reach the bot. People you did not allow get no reply."),
+                            style = Type.caption, color = Palette.secondary)
                     }
                 }
             }

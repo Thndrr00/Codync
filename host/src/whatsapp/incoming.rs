@@ -1,6 +1,6 @@
 //! Incoming `WhatsApp` messages, routed through the host bot actor.
 
-use super::{Arc, Hub, Value, WhatsApp, allowed, entry_id, inbox, json, save_media, voice_notes};
+use super::{Arc, Hub, Value, WhatsApp, allowed, entry_id, inbox, json, save_media, settings, voice_notes};
 
 /// OpenBot 0.74.0: the status reactions a number puts on a person's message — 👀 when it arrives,
 /// then ✅ / ❌ / 🫡 when the request ends. Replies and error messages are not reactions and are
@@ -75,7 +75,7 @@ impl WhatsApp {
         // With a list, only the owner, allowed people and allowed groups get through.
         let allowed = allowed(hub);
         let me = self.state.lock().await.me.clone().unwrap_or_default();
-        let own = !me.is_empty() && (chat == me || sender == me);
+        let own = settings::is_own_chat(&me, chat, sender);
         if !allowed.is_empty() && !own {
             let listed = if group { allowed.iter().any(|a| a == chat) } else { allowed.iter().any(|a| a == sender) };
             if !listed {

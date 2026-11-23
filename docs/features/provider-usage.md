@@ -104,6 +104,32 @@ host restarts, while a newer version is still eligible. **Update all** applies
 every eligible provider at once on this computer; there is no joined-server
 part because providers belong to a computer.
 
+## Turn trace counts (OpenBot nightly triage-7101)
+
+The host's turn-usage trace reports **Tokens** as only the new tokens — fresh
+input, output and cache writes, the same count the daily budget and the Usage tab
+spend — and **Cached input** as the cache reads, which each model call repeats
+when it rereads the conversation. A short task can no longer show a million-token
+total just because the cached conversation was read many times. One pure split in
+`usage/tokens.rs` feeds the trace; the provider's own cost report is unchanged,
+and a turn from an older host that never reported a cache-read count keeps the
+total it had.
+
+## Turned-off models (OpenBot nightly triage-12582)
+
+A model turned off in a provider's Models settings is hidden from an agent's
+picker and Backup models list only when no agent still uses it. A model an agent
+still answers on (as its own model or a fallback) stays visible for that agent;
+a new agent, with no model chosen yet, does not start on it. The host computes
+the effective hidden list from the saved bots and the phones apply the same
+per-agent rule when they render the picker. On a joined server that server must
+also run this version for the host-side decision.
+
+Codync has no OpenBot-style Custom provider settings page with a "Checking"
+state or an OpenCode enable button (triage-12259): OpenCode is an agent CLI
+listed under Settings › Providers, and custom OpenAI-compatible endpoints are an
+opt-in per bot as described above.
+
 ## Model lists, accounts and approvals (OpenBot nightly 0.70.0)
 
 `agent::auth::models` caches the last model list for the agents whose catalog can

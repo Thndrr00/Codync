@@ -28,6 +28,17 @@ class AgentSettingsTest {
         assertEquals(listOf(ModelChoice(null, "Default")), AgentModels(emptyList()).options(null))
     }
 
+    @Test fun `a turned off model is offered only to the agent still using it`() {
+        val catalog = AgentModels(
+            listOf(AgentModel("m1", "One"), AgentModel("m2", "Two")),
+            hidden = listOf("m1", "m2"),
+        )
+        assertEquals(emptyList<String>(), catalog.visibleModels(null).map { it.id })
+        assertEquals(listOf("m1"), catalog.visibleModels("m1").map { it.id })
+        assertEquals(listOf(null, "m1"), catalog.options("m1").map { it.id })
+        assertEquals(listOf(null, "m1", "m2"), catalog.options(null, includeHidden = true).map { it.id })
+    }
+
     @Test fun `new bot defaults preserve host connectors and a nullable notification toggle turns off`() {
         val draft = BotDraft(command = "stale custom command")
         assertFalse("an unnamed bot is only created, never saved", draft.isValid)

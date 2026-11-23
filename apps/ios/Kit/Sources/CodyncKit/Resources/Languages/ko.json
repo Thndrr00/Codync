@@ -2782,5 +2782,9 @@
   "Loading older threads…": "Loading older threads…",
   "Requests ended": "Requests ended",
   "{done} replied · {failed} failed": "{done} replied · {failed} failed",
-  "Completed": "Completed"
+  "Completed": "Completed",
+  "Header names cannot contain spaces or symbols such as : ( ) /. Use a name such as Authorization, and put the key or token in Value.": "Header names cannot contain spaces or symbols such as : ( ) /. Use a name such as Authorization, and put the key or token in Value.",
+  "Message yourself": "Message yourself",
+  "This chat still reaches the bot.": "This chat still reaches the bot.",
+  "Your “Message yourself” chat and the people you allow reach the bot. People you did not allow get no reply.": "Your “Message yourself” chat and the people you allow reach the bot. People you did not allow get no reply."
 }

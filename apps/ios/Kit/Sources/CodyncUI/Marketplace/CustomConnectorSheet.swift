@@ -15,10 +15,14 @@ struct CustomConnectorSheet: View {
     @State private var saving = false
     @State private var error: String?
 
+    private var badHeader: String? { mode == .url ? HeaderNames.invalidKey(in: envText) : nil }
+
     private var ready: Bool {
         mode == .config
             ? !config.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            : !name.trimmingCharacters(in: .whitespaces).isEmpty && !target.trimmingCharacters(in: .whitespaces).isEmpty
+            : !name.trimmingCharacters(in: .whitespaces).isEmpty
+                && !target.trimmingCharacters(in: .whitespaces).isEmpty
+                && badHeader == nil
     }
 
     var body: some View {
@@ -67,6 +71,11 @@ struct CustomConnectorSheet: View {
                         .lineLimit(2...6)
                         .font(.callout.monospaced())
                         .plainTextInput()
+                    if badHeader != nil {
+                        Text(L10n.tr(HeaderNames.message))
+                            .font(.caption)
+                            .foregroundStyle(Palette.danger)
+                    }
                 }
             } else if mode == .command {
                 CardSection("Environment", footer: L10n.tr("One KEY=value per line. Saved on {name} only.").replacingOccurrences(of: "{name}", with: model.hostName)) {

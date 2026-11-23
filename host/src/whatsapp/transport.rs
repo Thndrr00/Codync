@@ -85,7 +85,7 @@ impl WhatsApp {
         let Ok(raw) = hub.store.kv_read("whatsapp.allowed") else { return };
         let Ok(allowed) = raw.as_deref().map(serde_json::from_str::<Vec<String>>).transpose() else { return };
         let allowed = allowed.unwrap_or_default();
-        let own = state.me.as_deref().is_some_and(|me| me == chat || me == sender);
+        let own = super::settings::is_own_chat(state.me.as_deref().unwrap_or_default(), chat, sender);
         if !own && !allowed.is_empty() && !allowed.iter().any(|id| id == if group { chat } else { sender }) {
             return;
         }

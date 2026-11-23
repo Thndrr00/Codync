@@ -9,6 +9,7 @@ import { useStore } from '../../store/context'
 import { useTr } from '../../lib/use-language'
 import { useModel } from '../../lib/observable'
 import { ErrorText } from './pieces'
+import { whatsappPlaces } from './whatsapp-places'
 
 /**
  * Linking a WhatsApp number to this computer. WhatsApp has no official desktop client API: the
@@ -116,7 +117,7 @@ export function WhatsAppSheet() {
                 <HStack gap={8}>
                   <Button kind="secondary" onClick={() => void store.whatsappLogout()}>{tr('Unlink')}</Button>
                 </HStack>
-                <AllowedChats allowed={state.allowed ?? []} onSet={(jid, allowed) => void store.whatsappSetAllowed(jid, allowed)} />
+                <AllowedChats me={state.me} allowed={state.allowed ?? []} onSet={(jid, allowed) => void store.whatsappSetAllowed(jid, allowed)} />
               </>
             ) : state?.state === 'starting' ? (
               <>
@@ -182,26 +183,29 @@ function ValueRow({ label, children }: { label: string; children: React.ReactNod
 }
 
 /** Who may write to the number: the owner always, and these chats and people when the list is not empty. */
-function AllowedChats({ allowed, onSet }: { allowed: string[]; onSet: (jid: string, allowed: boolean) => void }) {
+function AllowedChats({ me, allowed, onSet }: { me?: string | null; allowed: string[]; onSet: (jid: string, allowed: boolean) => void }) {
   const tr = useTr()
   const [jid, setJid] = useState('')
   const add = () => { const value = jid.trim(); if (value) { onSet(value, true); setJid('') } }
+  const places = whatsappPlaces(me, allowed)
   return (
     <VStack gap={6}>
       <Text size="caption" tone="secondary">
         {allowed.length === 0 ? tr('Anyone can write right now. Add a chat or person to restrict it.') : tr('Allowed chats')}
       </Text>
-      {allowed.map((entry) => (
-        <HStack key={entry} gap={8}>
-          <Text grow size="caption" mono>{entry}</Text>
-          <Button kind="secondary" onClick={() => onSet(entry, false)}>{tr('Remove')}</Button>
+      {places.map((place) => (
+        <HStack key={place.id} gap={8}>
+          <Text grow size="caption" mono>{place.own ? tr('Message yourself') : place.id}</Text>
+          {place.own
+            ? <Text size="caption" tone="secondary">{tr('This chat still reaches the bot.')}</Text>
+            : <Button kind="secondary" onClick={() => onSet(place.id, false)}>{tr('Remove')}</Button>}
         </HStack>
       ))}
       <HStack gap={8}>
         <input className="field-box" value={jid} placeholder="5215555555555@s.whatsapp.net" onChange={(e) => setJid(e.target.value)} />
         <Button kind="secondary" disabled={!jid.trim()} onClick={add}>{tr('Allow')}</Button>
       </HStack>
-      <Text size="caption" tone="secondary">{tr('People you did not allow get no reply.')}</Text>
+      <Text size="caption" tone="secondary">{tr('Your “Message yourself” chat and the people you allow reach the bot. People you did not allow get no reply.')}</Text>
     </VStack>
   )
 }

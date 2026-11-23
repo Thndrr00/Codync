@@ -88,7 +88,7 @@ pub(super) fn snapshot(hub: &Hub, event: &Value, me: &str) -> Result<Option<Stri
         hub.store.kv_read("whatsapp.allowed")?.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default();
     allowed.sort();
     let (Some(chat), Some(sender)) = (event["chat"].as_str(), event["sender"].as_str()) else { return Ok(None) };
-    let own = chat == me || sender == me;
+    let own = super::settings::is_own_chat(me, chat, sender);
     let principal = if event["group"] == true { chat } else { sender };
     if !own && !allowed.is_empty() && !allowed.iter().any(|id| id == principal) {
         return Ok(None);
@@ -150,7 +150,7 @@ pub(super) async fn receive(app: &WhatsApp, hub: &Arc<Hub>, event: &Value) -> Re
     }
     let allowed: Vec<String> =
         hub.store.kv_read("whatsapp.allowed")?.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default();
-    let own = !me.is_empty() && (me == chat || me == sender);
+    let own = super::settings::is_own_chat(me, chat, sender);
     if !own && !allowed.is_empty() && !allowed.iter().any(|id| id == if group { chat } else { sender }) {
         return Ok(());
     }

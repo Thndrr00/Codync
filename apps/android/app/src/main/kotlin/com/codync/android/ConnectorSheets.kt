@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.codync.android.core.HeaderNames
 import com.codync.android.core.InstalledConnector
 import com.codync.android.core.MarketConnector
 import com.codync.android.core.fill
@@ -130,7 +131,9 @@ private enum class CustomMode { Command, Url, Config }
     var config by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val ready = if (mode == CustomMode.Config) config.isNotBlank() else name.isNotBlank() && target.isNotBlank()
+    val badHeader = if (mode == CustomMode.Url) HeaderNames.invalidKey(envText) else null
+    val ready = if (mode == CustomMode.Config) config.isNotBlank()
+        else name.isNotBlank() && target.isNotBlank() && badHeader == null
     fun save() {
         saving = true; error = null
         val remote = mode == CustomMode.Url
@@ -174,6 +177,7 @@ private enum class CustomMode { Command, Url, Config }
             }
             if (mode == CustomMode.Url) CardSection("Headers", tr("Optional, one Name: value per line. Leave empty if the service has you sign in. Saved on {name} only.").replace("{name}", host)) {
                 row { PlainInput(envText, { envText = it }, "Authorization: Bearer …", style = Type.callout.monospaced, minLines = 2, maxLines = 6) }
+                badHeader?.let { row { Text(tr(HeaderNames.MESSAGE), style = Type.caption, color = Palette.danger) } }
             } else if (mode == CustomMode.Command) CardSection("Environment", tr("One KEY=value per line. Saved on {name} only.").replace("{name}", host)) {
                 row { PlainInput(envText, { envText = it }, "API_KEY=…", style = Type.callout.monospaced, minLines = 2, maxLines = 6) }
             }

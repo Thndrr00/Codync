@@ -215,9 +215,14 @@ impl Actor {
             // How well the prompt cache held: the first thing to look at when a turn costs more than it should.
             let usage = &answer["usage"];
             self.count_spend(usage);
+            // The turn trace: "Tokens" is the fresh spend, not cache reads; those
+            // are reported apart as "Cached input" (OpenBot triage-7101).
+            let counts = crate::usage::tokens::split(usage);
             tracing::info!(
                 bot = %self.cfg.id,
                 session = self.turn_session.as_deref().unwrap_or_default(),
+                tokens = counts.new,
+                cached_input = counts.cached_input,
                 cached_read = usage["cachedReadTokens"].as_u64().unwrap_or(0),
                 cached_write = usage["cachedWriteTokens"].as_u64().unwrap_or(0),
                 input = usage["inputTokens"].as_u64().unwrap_or(0),

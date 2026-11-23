@@ -43,7 +43,8 @@ struct AgentModelPicker: View {
     }
 
     private var modelChoices: [(String, String)] {
-        let available = (catalog?.models ?? []).filter { $0.id != agentDefault?.id }
+        // A turned-off model stays only for the agent still using it (triage-12582).
+        let available = (catalog?.visibleModels(used: selection) ?? []).filter { $0.id != agentDefault?.id }
         let current = available.first { $0.id == catalog?.currentModelId }?.name
         var result = [("", agentDefault?.name ?? current.map { "Default · \($0)" } ?? "Default")]
         result += available.map { ($0.id, $0.name) }

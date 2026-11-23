@@ -7,6 +7,7 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { errorText, market, needsSignIn, type InstalledConnector, type MarketConnector, type MarketInput } from './market-models'
 import { ErrorText, Field, WebLink } from './pieces'
+import { HEADER_NAME_MESSAGE, invalidHeaderKey } from './header-names'
 import { usePlugins } from './plugins'
 import { signInCode } from './sign-in-code'
 import { useTr } from '../../lib/use-language'
@@ -157,7 +158,10 @@ export function CustomConnectorSheet() {
   const [config, setConfig] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const ready = mode === 'config' ? config.trim() !== '' : name.trim() !== '' && target.trim() !== ''
+  const badHeader = mode === 'url' ? invalidHeaderKey(envText) : null
+  const ready = mode === 'config'
+    ? config.trim() !== ''
+    : name.trim() !== '' && target.trim() !== '' && badHeader === null
 
   const onHost = (template: string) => tr(template).replaceAll('{name}', store.hostName)
   const footer = {
@@ -202,6 +206,7 @@ export function CustomConnectorSheet() {
         {mode === 'url' ? (
           <CardSection title="Headers" footer={onHost('Optional, one Name: value per line. Leave empty if the service has you sign in. Saved on {name} only.')}>
             <Field value={envText} onChange={setEnvText} placeholder="Authorization: Bearer …" lines={[2, 6]} mono />
+            {badHeader ? <ErrorText text={tr(HEADER_NAME_MESSAGE)} /> : null}
           </CardSection>
         ) : mode === 'command' ? (
           <CardSection title="Environment" footer={onHost('One KEY=value per line. Saved on {name} only.')}>

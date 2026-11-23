@@ -2782,5 +2782,9 @@
   "Loading older threads…": "Cargando hilos anteriores…",
   "Requests ended": "Peticiones terminadas",
   "{done} replied · {failed} failed": "{done} respondieron · {failed} fallaron",
-  "Completed": "Completado"
+  "Completed": "Completado",
+  "Header names cannot contain spaces or symbols such as : ( ) /. Use a name such as Authorization, and put the key or token in Value.": "Los nombres de cabecera no pueden tener espacios ni símbolos como : ( ) /. Usa un nombre como Authorization y pon la clave o el token en Valor.",
+  "Message yourself": "Mensaje a ti mismo",
+  "This chat still reaches the bot.": "Este chat sigue llegando al bot.",
+  "Your “Message yourself” chat and the people you allow reach the bot. People you did not allow get no reply.": "Tu chat «Mensaje a ti mismo» y las personas que permites llegan al bot. Quienes no hayas permitido no reciben respuesta."
 }

@@ -171,19 +171,25 @@ public struct WhatsAppSheet: View {
         }
     }
 
-    /// Anyone can write while this is empty; the owner always can.
+    /// Anyone can write while this is empty; the owner always can, in "Message yourself" too.
     private var allowedSection: some View {
-        CardSection("Allowed chats", footer: "Anyone can write while this is empty. The owner always can.") {
-            ForEach(link?.allowed ?? [], id: \.self) { entry in
-                ValueRow(entry) {
-                    Button("Remove") {
-                        act {
-                            _ = try await store.whatsappSetAllowed(entry, allowed: false)
-                            link = try? await store.whatsapp()
+        CardSection("Allowed chats", footer: "Your “Message yourself” chat and the people you allow reach the bot. Others get no reply.") {
+            ForEach(WhatsAppPlaces.list(me: link?.me, allowed: link?.allowed ?? []), id: \.id) { place in
+                ValueRow(place.own ? L10n.tr("Message yourself") : place.id) {
+                    if place.own {
+                        Text(L10n.tr("This chat still reaches the bot."))
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                    } else {
+                        Button("Remove") {
+                            act {
+                                _ = try await store.whatsappSetAllowed(place.id, allowed: false)
+                                link = try? await store.whatsapp()
+                            }
                         }
+                        .buttonStyle(.secondary)
+                        .disabled(busy)
                     }
-                    .buttonStyle(.secondary)
-                    .disabled(busy)
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -206,7 +212,7 @@ public struct WhatsAppSheet: View {
                 .disabled(busy || jid.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.vertical, 2)
-            Text(L10n.tr("People you did not allow get no reply."))
+            Text(L10n.tr("Your “Message yourself” chat and the people you allow reach the bot. People you did not allow get no reply."))
                 .font(.caption)
                 .foregroundStyle(Palette.secondary)
         }

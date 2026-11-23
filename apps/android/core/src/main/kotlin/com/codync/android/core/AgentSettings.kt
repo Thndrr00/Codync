@@ -14,9 +14,17 @@ import kotlinx.serialization.Serializable
 /** `fastMode`: the agent offers Fast mode (absent on older hosts). */
 @Serializable data class AgentModels(val models: List<AgentModel>, val modes: List<AgentMode>? = null, val currentModelId: String? = null, val fastMode: Boolean? = null, val defaultModelOptions: Boolean? = null, val hidden: List<String> = emptyList()) {
     val agentDefault: AgentModel? get() = models.firstOrNull { it.name.lowercase().startsWith("default") }
+
+    /**
+     * A model turned off in the provider's Models settings stays only for the
+     * agent that still uses it; a new agent (no [used]) never starts on it
+     * (OpenBot nightly triage-12582).
+     */
+    fun visibleModels(used: String?): List<AgentModel> = models.filter { it.id !in hidden || it.id == used }
+
     fun options(selected: String?, includeHidden: Boolean = false): List<ModelChoice> {
         val default = agentDefault
-        val available = models.filter { it.id != default?.id && (includeHidden || it.id !in hidden) }
+        val available = (if (includeHidden) models else visibleModels(selected)).filter { it.id != default?.id }
         val current = available.firstOrNull { it.id == currentModelId }
         val choices = mutableListOf(ModelChoice(null, default?.name ?: current?.let { "Default · ${it.name}" } ?: "Default", default?.description))
         choices += available.map { ModelChoice(it.id, it.name, it.description) }

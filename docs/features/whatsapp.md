@@ -23,6 +23,17 @@ the same restart on demand. The flag clears on a manual reconnect; the stop coun
 window after an hour. A number on a joined server needs that server on this version too, since the
 host owns the decision and the clients only show its state.
 
+## The owner's own chat
+
+The linked number's "Message yourself" chat always reaches the bot, whether the
+number is personal or used only for OpenBot, and even when an allowlist of other
+chats is set (OpenBot nightly triage-13865). The same pure decision is used by the
+host's inbox, live and routine paths, so the chat cannot be filtered out by a
+change to the allowlist. It is shown as the first place in the number's settings
+on desktop, iPhone and Android, labelled **Message yourself**, and cannot be
+removed with **Remove**. The number's settings say that this chat and the people
+you allow reach the bot; the other chats still get no reply.
+
 ## Status reactions
 
 A number's **Status reactions** switch is on by default. While it is on, a request gets a 👀 on

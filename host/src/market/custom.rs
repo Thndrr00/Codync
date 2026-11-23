@@ -31,6 +31,8 @@ pub(super) async fn custom(name: &str, b: &Value, all: &[Connector]) -> Result<C
     let map = |v: &Value| -> BTreeMap<String, String> {
         v.as_object().into_iter().flatten().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_owned()))).collect()
     };
+    let headers = map(&b["headers"]);
+    super::mcp_headers::check_headers(&headers)?;
     let mut c = Connector {
         id: unique_id(name, &all.iter().map(|c| c.id.clone()).collect::<Vec<_>>()),
         name: name.to_owned(),
@@ -42,7 +44,7 @@ pub(super) async fn custom(name: &str, b: &Value, all: &[Connector]) -> Result<C
         login: vec![],
         env: map(&b["env"]),
         url: None,
-        headers: map(&b["headers"]),
+        headers,
         oauth: None,
     };
     let url =

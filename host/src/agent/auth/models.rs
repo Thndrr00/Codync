@@ -375,9 +375,34 @@ fn hidden_map(store: &Store) -> HashMap<String, Vec<String>> {
     store.kv_read(KV_HIDDEN).ok().flatten().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or_default()
 }
 
-/// The models of `backend` turned off in the picker.
+/// Hidden models that no agent on this computer still uses. A turned-off model
+/// stays in the picker and the Backup models list for the agent that uses it as
+/// its own model or a fallback; agents that never chose it (a new agent among
+/// them) do not start on it (OpenBot nightly triage-12582). Pure so both sides
+/// of the decision can be tested without a store.
+pub(crate) fn hidden_except_used(hidden: &[String], used: &[String]) -> Vec<String> {
+    hidden.iter().filter(|id| !used.contains(id)).cloned().collect()
+}
+
+/// Models `backend`'s agents still use, as the primary model or a fallback.
+fn used_models(store: &Store, backend: &str) -> Vec<String> {
+    store
+        .bots()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|row| !row.deleted && row.config.backend == backend)
+        .flat_map(|row| {
+            std::iter::once(row.config.model.clone())
+                .chain(row.config.fallbacks.into_iter().filter(|f| f.backend == backend).map(|f| f.model))
+                .flatten()
+        })
+        .collect()
+}
+
+/// The models of `backend` turned off in the picker that no agent still uses.
 pub fn hidden(store: &Store, backend: &str) -> Vec<String> {
-    hidden_map(store).remove(backend).unwrap_or_default()
+    let stored = hidden_map(store).remove(backend).unwrap_or_default();
+    hidden_except_used(&stored, &used_models(store, backend))
 }
 
 /// Turns one model off or back on in the picker.
@@ -586,4 +611,14 @@ fn hidden_models_are_saved_and_forgotten() {
     assert_eq!(hidden(&store, "codex"), Vec::<String>::new());
     set_hidden(&store, "claude", "m1", false).expect("show");
     assert_eq!(hidden(&store, "claude"), Vec::<String>::new());
+}
+
+#[test]
+fn a_turned_off_model_is_kept_only_for_an_agent_that_uses_it() {
+    let hidden = vec!["m1".to_owned(), "m2".to_owned()];
+    // One agent still answers on m1; m2 has no user, and a new agent has no model yet.
+    let used = vec!["m1".to_owned()];
+    assert_eq!(hidden_except_used(&hidden, &used), ["m2"]);
+    assert_eq!(hidden_except_used(&hidden, &[]), ["m1", "m2"]);
+    assert_eq!(hidden_except_used(&hidden, &["m1".to_owned(), "m2".to_owned()]), Vec::<String>::new());
 }

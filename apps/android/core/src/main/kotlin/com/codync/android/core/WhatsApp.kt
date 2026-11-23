@@ -42,4 +42,14 @@ object WhatsApp {
 
     /** The code in two groups of four, as WhatsApp shows its field for it. */
     fun groupedCode(code: String): String = if (code.length == 8) "${code.take(4)}-${code.drop(4)}" else code
+
+    /**
+     * The bot's places: the owner's own "Message yourself" chat is always one of
+     * them, even on a dedicated number with a non-empty allowlist (triage-13865).
+     */
+    fun places(me: String?, allowed: List<String>): List<WhatsAppPlace> =
+        (if (me.isNullOrBlank()) emptyList() else listOf(WhatsAppPlace(me, true))) +
+            allowed.filter { it != me }.map { WhatsAppPlace(it, false) }
 }
+
+data class WhatsAppPlace(val id: String, val own: Boolean)

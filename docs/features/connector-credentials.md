@@ -244,3 +244,20 @@ Android renders this approval showing only header names and masked values (nothi
 same cards show a delete-agents approval with the agent names and an owner-only note. A saved login
 with 2FA offers **Copy code** in Credentials, which copies just the current code from
 `credentialBotLoginCode`, never the seed.
+
+A header **name** is an HTTP token: letters, digits and a small set of separators,
+never a space or a symbol such as `:`, `(`, `)` or `/` (OpenBot nightly
+triage-13174). The custom-server form on desktop, iPhone and Android marks the
+first bad key and says: "Header names cannot contain spaces or symbols such as :
+( ) /. Use a name such as Authorization, and put the key or token in Value." Add
+is disabled until it is fixed. The host applies the same test when a connector is
+saved or checked, so a server saved by an older client or an agent is refused on
+its next edit or test, and an agent that adds a server gets the same message. On
+a joined server that server must also run this version to refuse a name submitted
+by an older client.
+
+The upstream Vault card also accepts an expiry typed as `05-28`, `05.28`,
+`05 28`, `0528` or with full-width digits, and explains "Enter the month and year
+as MM/YY." when it still cannot read the expiry (triage-7212). Codync has no Vault
+card or Expiry field, so there is no surface for that rule here; the Credentials
+screens keep sign-ins, bot secrets and bot logins only.

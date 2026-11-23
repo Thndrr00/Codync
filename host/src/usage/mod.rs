@@ -33,6 +33,7 @@ mod omp;
 mod opencode;
 mod reading;
 mod services;
+pub mod tokens;
 mod vibe;
 
 pub use claude::{ingest_claude_rate_limit, ingest_statusline};

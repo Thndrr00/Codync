@@ -168,6 +168,9 @@ async fn verify_inner(store: &Store, id: &str, port: u16) -> Result<Value> {
 
 /// The same check for a definition that doesn't have to be saved yet.
 pub(super) async fn check_connector(store: &Store, c: &super::Connector, port: u16) -> Result<Value> {
+    // A header name saved by an older client (or an agent) is refused on the next
+    // test/edit too, with the same message the form shows (OpenBot triage-13174).
+    super::mcp_headers::check_headers(&c.headers)?;
     if c.oauth.as_ref().is_some_and(|o| !o.signed_in()) {
         bail!("Sign in before checking this connection.");
     }

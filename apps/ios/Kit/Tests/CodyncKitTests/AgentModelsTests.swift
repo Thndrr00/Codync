@@ -47,6 +47,16 @@ import Testing
     #expect(body["modelOptions"] as? [String: String] == ["fast": "false"])
 }
 
+@Test func a_turned_off_model_is_offered_only_to_an_agent_that_uses_it() throws {
+    let data = Data(#"{"models":[{"id":"m1","name":"One"},{"id":"m2","name":"Two"}],"hidden":["m1","m2"]}"#.utf8)
+    let catalog = try JSONDecoder().decode(AgentModels.self, from: data)
+    #expect(catalog.visibleModels(used: nil).isEmpty, "a new agent starts on neither")
+    #expect(catalog.visibleModels(used: "m1").map(\.id) == ["m1"], "only the agent still on m1 keeps it")
+    let older = try JSONDecoder().decode(AgentModels.self, from: Data(#"{"models":[{"id":"m1","name":"One"}]}"#.utf8))
+    #expect(older.hidden.isEmpty, "older hosts report no turn-off list")
+    #expect(older.visibleModels(used: nil).map(\.id) == ["m1"])
+}
+
 @Test func modelCatalogReportsFastModeAndOlderHostsOmitIt() throws {
     let offered = try JSONDecoder().decode(AgentModels.self, from: Data(#"{"models":[],"fastMode":true}"#.utf8))
     #expect(offered.fastMode == true)

@@ -65,6 +65,15 @@ pub(crate) fn set_allowed(hub: &Hub, jid: &str, allowed: bool) -> Result<Vec<Str
     Ok(list)
 }
 
+/// A message in the linked number's own "Message yourself" chat is always from its
+/// owner. Keeping this one decision here means the inbox, the live path and the
+/// routine path all treat that chat the same: it reaches the bot even when the
+/// number is used only for OpenBot and `whatsapp.allowed` is not empty
+/// (OpenBot nightly triage-13865).
+pub(crate) fn is_own_chat(me: &str, chat: &str, sender: &str) -> bool {
+    !me.is_empty() && (me == chat || me == sender)
+}
+
 /// The "Working on it…" acknowledgement is on unless its owner turned it off for this number.
 pub(crate) fn working_message(store: &crate::store::Store) -> bool {
     store.kv_get("whatsapp.workingMessage").is_none_or(|value| value != "0")
@@ -100,6 +109,15 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("temp dir");
         let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("store");
         (Hub::new(store, "whatsapp-test".into(), Identity::load_or_create(&dir).expect("identity"), "t".into(), 0), dir)
+    }
+
+    #[test]
+    fn the_owners_own_chat_is_a_place_even_on_a_number_only_for_openbot() {
+        let me = "5215555555555@s.whatsapp.net";
+        assert!(is_own_chat(me, me, "someone@s.whatsapp.net"), "chatting to yourself");
+        assert!(is_own_chat(me, "family-group", me), "posting in a group");
+        assert!(!is_own_chat(me, "family-group", "someone@s.whatsapp.net"));
+        assert!(!is_own_chat("", me, me), "no link, no owner");
     }
 
     #[test]
