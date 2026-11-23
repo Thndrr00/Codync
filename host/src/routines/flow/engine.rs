@@ -50,6 +50,28 @@ fn final_answer(replies: &[&str]) -> String {
         .join("\n\n---\n\n")
 }
 
+/// The `{{name}}` values an output template can read: the trigger's fixed fields and the checked
+/// answers the steps of this run gave, keyed by field name. A supplier's answer wins over a trigger
+/// field of the same name, the same as in a step's instruction.
+fn output_values(hub: &Hub, start: &Start) -> BTreeMap<String, String> {
+    let mut values = BTreeMap::new();
+    super::trigger_fields::merged_values(&mut values, &start.trigger_fields);
+    let Ok(steps) = hub.store.flow_run_steps(&start.run_id) else { return values };
+    for step in steps {
+        let Some(output) = step.output.as_deref() else { continue };
+        let Some(fields) = start.answer_specs.get(&step.bot_id).map(|spec| answers::fields_of(spec)) else { continue };
+        if fields.is_empty() {
+            continue;
+        }
+        let Some(value) = answers::last_json_object(output) else { continue };
+        let (answer, _) = answers::check_answer(&fields, &value, answers::ExtraKeys::Ignore);
+        for (name, field) in answer {
+            values.insert(name, answers::display_value(&field));
+        }
+    }
+    values
+}
+
 /// How the routine's own run ended.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Root {
@@ -155,6 +177,10 @@ pub struct Start {
     /// The answer fields of the trigger that started this run, also frozen for its whole life.
     #[serde(default)]
     pub run_fields: Vec<answers::AnswerField>,
+    /// Fixed fields the trigger gave the steps after it (`title`, `author`, `weekday`…), frozen on
+    /// the run so a retry or a run from one step sees the same values as the first attempt.
+    #[serde(default)]
+    pub trigger_fields: answers::Answer,
 }
 
 impl Start {
@@ -317,6 +343,21 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
     if !hub.routines.flow_allowed(&start) {
         return Ok(());
     }
+    // A paused workflow cannot start from a schedule, webhook, chat mention or GitHub event. A
+    // person running it by hand still goes through; an occurrence that came due while paused is
+    // skipped rather than made up later. The same rule applies to the flow of an automatic run.
+    let paused = super::pause::is_paused(&hub.store, &start.routine_id);
+    let manual = super::pause::manual_event(&start.event) || start.from_step.is_some();
+    if !super::pause::automatic_start_allowed(paused, manual) {
+        if super::pause::occurrence_skipped(paused) && start.event.get("scheduledFor").is_some() {
+            tracing::info!(
+                run = start.run_id,
+                routine = start.routine_id,
+                "skipped a schedule occurrence while paused"
+            );
+        }
+        return Ok(());
+    }
     let links: Vec<FlowLink> =
         hub.store.flow_links(&start.routine_id)?.into_iter().filter(|l| l.created_at <= start.run_at).collect();
     if links.is_empty() {
@@ -417,7 +458,9 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let text = final_answer(&replies);
+        let template = super::output_template::load(&hub.store, &start.routine_id);
+        let text =
+            super::output_template::message_or_input(&template, &final_answer(&replies), &output_values(hub, &start));
         if !text.is_empty() {
             hub.routines.queue_flow_outputs(&hub.store, &start, &text)?;
         }
@@ -511,13 +554,17 @@ fn begin(
         _ => String::new(),
     });
     let by_name = answer_paths::answers_from(&sources, &outputs);
-    let answer: answers::Answer = by_name.iter().map(|(name, (_, value))| (name.clone(), value.clone())).collect();
+    let mut answer: answers::Answer = by_name.iter().map(|(name, (_, value))| (name.clone(), value.clone())).collect();
+    // Trigger fields are fixed answer values, so a check such as `author = ana` works in a step
+    // with no model before it. A step's own answer wins if it gave the same field a value.
+    super::trigger_fields::merged_answer(&mut answer, &start.trigger_fields);
     if let Some(check) = graph.nodes.get(bot).and_then(answer_paths::node_check)
         && !answers::check_passes(&check, &answer)
     {
         return end(StepStatus::Skipped, "Skipped: the condition did not match");
     }
-    let values = answer_paths::template_values(&by_name, false);
+    let mut values = answer_paths::template_values(&by_name, false);
+    super::trigger_fields::merged_values(&mut values, &start.trigger_fields);
     let mut names: Vec<StepInput> = inputs
         .iter()
         .map(|(link, text)| {
@@ -1203,6 +1250,7 @@ pub fn start_for(
         run_time_text: run_time_text(run.created_at, &routine.triggers),
         answer_specs: BTreeMap::new(),
         run_fields: Vec::new(),
+        trigger_fields: super::trigger_fields::fixed_answers(run.created_at, &routine.triggers, &run.event),
     })
 }
 
@@ -1344,6 +1392,7 @@ mod tests {
             run_time_text: String::new(),
             answer_specs: BTreeMap::new(),
             run_fields: Vec::new(),
+            trigger_fields: answers::Answer::new(),
         }
     }
 

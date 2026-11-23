@@ -3,7 +3,9 @@
 use super::answer_paths;
 use super::answers;
 use super::merge::{FlowDocument, Version};
-use super::{FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, folders, graph, groups, merge};
+use super::{
+    FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, folders, format, graph, groups, merge, workflow_api,
+};
 use crate::LockExt;
 use crate::chat::team::flow::recipient;
 use crate::hub::Hub;
@@ -467,10 +469,17 @@ fn test(hub: &Arc<Hub>, routine: &Routine, reply: String, input: Option<&Value>)
         run_time_text: engine::run_time_text(now, &routine.triggers),
         answer_specs: specs,
         run_fields,
+        trigger_fields: super::trigger_fields::fixed_answers(now, &routine.triggers, &engine_start_event()),
     };
     hub.routines.stage_flow(&hub.store, start.clone())?;
     tokio::spawn(engine::execute(hub.clone(), start));
     Ok(run_id)
+}
+
+/// The event a test or step run carries: a manual start, with trigger fields from the routine's
+/// own triggers so a check that reads `{{weekday}}` works when testing a scheduled workflow.
+fn engine_start_event() -> Value {
+    json!({"source": "test"})
 }
 
 /// Starts a new run at `step` (a bot id or a `media:<id>` key), using the answers and settings of
@@ -539,6 +548,7 @@ fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String
         run_time_text: engine::run_time_text(now, &routine.triggers),
         answer_specs: specs,
         run_fields,
+        trigger_fields: super::trigger_fields::fixed_answers(now, &routine.triggers, &engine_start_event()),
     };
     hub.routines.stage_flow(&hub.store, start.clone())?;
     tokio::spawn(engine::execute(hub.clone(), start));
@@ -548,7 +558,7 @@ fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String
 /// Answers a routine-flow method, or hands the body back (`None`) when it isn't one.
 pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
     if !METHODS.contains(&method) {
-        return Ok(None);
+        return workflow_api::call(hub, method, b);
     }
     Ok(Some(match method {
         "routineFlowCanvas" => {
@@ -666,11 +676,43 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             let bot = id_arg(b, "botId")?;
             canvas_bot(hub, bot)?;
             let local = document_arg(b)?;
-            let base_rev = b["baseRev"].as_i64().context("`baseRev` must be a number")?;
+            let client_version =
+                b["formatVersion"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(format::FORMAT_VERSION);
+            let document_version = format::version(&hub.store, bot);
             let snapshots = document::history(&hub.store, bot);
             let empty = FlowDocument::default();
             let incoming = snapshots.last().map(|snapshot| &snapshot.document).unwrap_or(&empty);
-            let result = merge::merge(document::base_at(&snapshots, base_rev), &local, incoming);
+            // A server refuses a step setting from a newer editor instead of silently dropping it;
+            // one already saved here is carried back read-only by an older client and stays.
+            let unknown = format::new_unknown_settings(&local.settings, &incoming.settings);
+            if !unknown.is_empty() {
+                bail!("{}", format::refusal_text(&unknown));
+            }
+            format::save_version(&hub.store, bot, client_version)?;
+            let base_rev = b["baseRev"].as_i64().context("`baseRev` must be a number")?;
+            let mut result = merge::merge(document::base_at(&snapshots, base_rev), &local, incoming);
+            // An older client reads newer steps and settings as read-only: restore what it left
+            // out, so they survive this save and a transfer to another computer.
+            for (key, value) in
+                format::preserved_entries(client_version, document_version, &local.nodes, &incoming.nodes)
+            {
+                result.document.nodes.insert(key, value);
+            }
+            for (key, value) in
+                format::preserved_entries(client_version, document_version, &local.links, &incoming.links)
+            {
+                result.document.links.insert(key, value);
+            }
+            for (key, value) in
+                format::preserved_entries(client_version, document_version, &local.settings, &incoming.settings)
+            {
+                result.document.settings.insert(key, value);
+            }
+            for (key, value) in
+                format::preserved_entries(client_version, document_version, &local.groups, &incoming.groups)
+            {
+                result.document.groups.insert(key, value);
+            }
             if result.conflicts.is_empty() {
                 // A canvas that sends no groups keeps the ones on the host; one that does sends
                 // the whole list, so an older single editor and a new one both stay working.

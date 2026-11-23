@@ -58,6 +58,42 @@ seven days is dropped on the next load along with its snapshots, so an abandoned
 to a stale base; resolving a conflict saves it again and restarts that window. Saving the canvas's groups
 reports `routine_flow_grouped` (no document data) — see [analytics events](../reference/analytics-events.md).
 
+## Format version, pause and portability
+
+Workflows carry a **format version** (`formatVersion` on the canvas, currently 1). An older client
+reads a newer workflow as read-only and never changes its steps or settings; when it saves, the host
+restores the settings it left out, so they survive that save and a transfer between computers. A
+save that introduces a setting this host does not know is refused with an "update required" message
+instead of being silently dropped (`host/src/routines/flow/format.rs`).
+
+A workflow can be **paused** (`pauseRoutineWorkflow` / `resumeRoutineWorkflow`). While paused no
+schedule, webhook, chat mention or GitHub event starts its flow, an occurrence that came due is
+skipped, and the canvas card shows `paused: true` with a Resume action in the clients. A person can
+still test it or run it from a step; those manual starts are never blocked. Pausing also cancels a
+flow already running. `duplicateRoutineWorkflow` copies the routine, its links, media steps, answer
+specs and output template into a new **paused** copy, so the copy cannot fire from the original's
+triggers before it is ready. The pure decisions live in `host/src/routines/flow/pause.rs`.
+
+One workflow can be written to an **`openbot.workflow` file** and read back on this or another
+computer (`exportRoutineWorkflow` / `importRoutineWorkflow`, `host/src/routines/flow/portable.rs`).
+The file holds the steps, notes, asset files and the schedule's time zone. Agents and channels go
+in **by name**: an import requires a chosen id for each name (`names`), and connections and media
+accounts are absent because they belong to a computer and must be reconnected. A workflow with a
+secret in a step is not exported and the refused steps are named; a file with a secret is refused on
+import too. A file from a newer editor is refused with "update required" and the step kinds this
+version does not know. An imported workflow always starts paused; importing over an existing
+routine (`replaceRoutineId`) keeps settings that were saved locally but left out of the file.
+
+Trigger fields and output templates complete the step path: a schedule publishes `weekday` and
+`local_date`, GitHub publishes `title`, `author` and `labels`, and Discord/Telegram/Slack publish
+`channel`, `text` and `author` (`trigger_fields.rs`). They are checked answer values, so a condition
+such as `author = ana` works in a check step with no model before it, and the fields fill `{{name}}`
+in a step's instruction. An output step can send its own message in place of its input; `{{name}}`
+in the message, `title`, `labels` and `person` takes a field from an earlier step or the trigger,
+and the rendered title is what a notification shows (`output_template.rs`, `setRoutineFlowOutput`,
+`workflowOutputNotification`). These fields are optional on the wire and in storage, so an older
+host or client keeps working unchanged.
+
 ## Running a flow
 
 A routine's card on the canvas shows **Run** while it has no run in flight and **Stop** while one is
@@ -172,6 +208,16 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `renameRoutineFlowStep` | `botId`, `routineId`, `nodeKey` (`bot:` or `media:`), `name` (≤ 200 chars, empty clears) | `{"ok": true}` |
 | `workflowFolders` | — | `{revision, folders: [{id, name}], placement: {workflowId: folderId}}` |
 | `workflowFolderApply` | `action` (`create` with `id`/`name`/optional `workflowIds`; `rename` with `folderId`/`name`; `delete` with `folderId`; `place` with `workflowIds`/`folderId`, `null` = out of folder) | the new snapshot |
+| `setRoutineFlowAnswers` | `nodeKey` (`''` = trigger), `answer` and `check` text | `{"ok": true}` |
+| `setRoutineFlowPaused` | `routineId`, `paused` | `{"ok": true}` (the older host's `pauseRoutineWorkflow` / `resumeRoutineWorkflow` take `botId`, `routineId`) |
+| `exportRoutineFlow` | `routineId` | `{"name": "…", "content": "…"}` (the file) or `{"secrets": ["…"]}` (steps to change first); the older host's `exportRoutineWorkflow` also takes `botId` and answers `fileName`, base64 `file`, `workflow` |
+| `importRoutineFlow` | `{"action": "apply", "name", "content", "agents": {name: id}, "channels": {name: id}}` | `{"ok": true}`; the older host's `importRoutineWorkflow` takes `botId`, `name`, `file` and one `names` map of names to ids |
+| `pauseRoutineWorkflow` / `resumeRoutineWorkflow` | `botId`, `routineId` | `{"routineId": "…", "paused": bool}` |
+| `duplicateRoutineWorkflow` | `botId`, `routineId`, optional `name` | `{"routineId": "…", "paused": true}` |
+| `exportRoutineWorkflow` | `botId`, `routineId` | `{"fileName": "openbot.workflow", "formatVersion": 1, "file": base64, "workflow": …}` |
+| `importRoutineWorkflow` | `botId`, `file` (base64 or JSON), `names` (name → id), optional `name`, `replaceRoutineId` | `{"routineId": "…", "paused": true, "names": …, "assets": [name…]}` |
+| `setRoutineFlowOutput` | `botId`, `routineId`, optional `message`, `title`, `labels`, `person` (each ≤ 2000 chars) | `{"output": OutputTemplate}` |
+| `workflowOutputNotification` | `botId`, `routineId`, optional `input`, `fields` (name → text) | `{"message": "…", "title": "…", "labels": [], "person": null}` |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`
 (a sample sentence by default), so a link can be tried without spending a run. Its steps carry the returned
@@ -181,7 +227,7 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 
 ```json
 {
-  "botId": "…", "rev": 123,
+  "botId": "…", "rev": 123, "formatVersion": 1,
   "routines": [{
     "routine": { "id": "…", "botId": "…", "name": "…", "instruction": "…", "triggers": [], "enabled": true,
                  "timeoutSeconds": 3600, "lastError": null, "triggerDescriptions": [], "nextRunAt": 1730000000000,
@@ -189,7 +235,9 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
     "recentRuns": [ /* the newest 10 routine runs, newest first, as in `routines` */ ],
     "upcomingRuns": [1730000000000],
     "steps": [ { /* … */, "files": [ { "id": "…", "name": "…", "size": 0, "sha256": "…" } ] } ],
-    "stepSettings": { /* step id → the settings and inputs it ran with; absent for older runs */ }
+    "stepSettings": { /* step id → the settings and inputs it ran with; absent for older runs */ },
+    "paused": false,
+    "output": { "message": null, "title": null, "labels": null, "person": null }
   }],
   "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "name": "", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
   "mediaNodes": [ { "id": "…", "routineId": "…", "name": "", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],
@@ -199,8 +247,8 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 }
 ```
 
-`upcomingRuns` are the next fire times in the next 7 days (at most 400; empty while paused or for a webhook or
-watch routine). All times are Unix milliseconds.
+`upcomingRuns` are the next fire times in the next 7 days (at most 400; empty for a paused routine — see
+`paused` — or for a webhook or watch routine). All times are Unix milliseconds.
 
 **Event**: `{"type": "routineFlow", "rev": N, "botIds": ["…"]}` — the canvases of these bots changed (a link, a
 step, a position, a placement); fetch `routineFlowCanvas` again. The event carries no data on purpose: a client
@@ -278,3 +326,31 @@ OpenBot nightly's workflow answers.
 
 The validators live in `host/src/routines/flow/answers.rs` and `answer_paths.rs` and are called from the engine's
 step/run/answer path, the flow API and the flow tools.
+
+## Typed field editing on the desktop
+
+A step's prompt, task, question, message, instruction or image description shows each `{{name}}` as a chip.
+Backspace removes the whole chip; a chip the host reports a problem on uses the warning colour and explains the
+problem on hover. The saved text is still `{{name}}`, so copy, paste and older hosts are unchanged. Typing `{{`
+(or a single `{`) opens a one-line field list of what earlier steps and the trigger give: the step's icon, bold
+typed letters, prefix matches first, the field's choices or type, and "No matches" when nothing agrees. Arrow keys
+move, Enter or Tab inserts, and Insert field opens the same list with the giving step on every row. After a single
+`{`, Enter stays a new line until a letter or an arrow is used, so JSON and code stay easy to type. The step's
+Answer fields and Check controls live in its toolbar, in a popover; Answer fields shows one row per field (type
+glyph, name, values, "Add field", remove on hover) and keeps the host's `name: type` text, including lines the rows
+cannot show.
+
+The editor refuses a setting value the host's `nodeRegistry` does not know and shows the allowed values. A step
+setting from a newer version (a name the registry has never seen) makes the whole workflow read-only, so a save
+cannot change that step; a manual run still works.
+
+## Pause, duplicate and portable workflows
+
+The workflow menu offers **Pause**/**Resume**, **Duplicate**, **Export** and **Import workflow**. A paused workflow
+starts from no schedule, webhook, mention or GitHub event, but a manual run still works; the canvas shows **Paused**
+with a **Resume** button, and Duplicate makes a paused copy. Export writes the steps, notes, files, answer/check
+specs and output message to an `openbot.workflow` file; a step holding a secret blocks export until it is changed,
+and the message names those steps. Connections and media accounts are not in the file. Import asks which local
+agent or channel each name in the file means (matched by name first, "Choose later" otherwise), lists what must be
+connected again, and adds the copy paused. The interface reads the file's names on this computer and calls the host
+with the chosen ids; a secret is never written to a file.

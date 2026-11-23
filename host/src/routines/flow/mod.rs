@@ -21,12 +21,18 @@ mod canvas;
 mod document;
 mod engine;
 mod folders;
+pub mod format;
 pub mod graph;
 pub mod groups;
 mod merge;
+mod output_template;
+mod pause;
+mod portable;
 mod recover;
 mod registry;
 mod tools;
+mod trigger_fields;
+mod workflow_api;
 
 pub use api::{call as api_call, forget_bot, forget_routine};
 pub use canvas::catch_up;

@@ -85,6 +85,7 @@ impl Fixture {
             run_time_text: String::new(),
             answer_specs: BTreeMap::new(),
             run_fields: Vec::new(),
+            trigger_fields: answers::Answer::new(),
         }
     }
 
@@ -141,6 +142,62 @@ async fn a_reply_travels_the_chain_and_every_bot_leaves_a_step() {
     assert!(b.delivery_id.is_some() && f.step("run1", "a").delivery_id.is_none());
     assert_eq!(f.prompts_of("b").len(), 1);
     assert_eq!(f.hub.routines.flows.running(), 0, "a finished flow is no longer registered");
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_paused_workflow_exports_and_imports_as_a_paused_paused_copy() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.link(&r, "a", "b", "Summarize");
+
+    let paused = f.call("pauseRoutineWorkflow", json!({"botId": "a", "routineId": r})).await.expect("a pause");
+    assert_eq!(paused["paused"], true);
+    assert!(pause::is_paused(&f.hub.store, &r));
+
+    let exported = f.call("exportRoutineWorkflow", json!({"botId": "a", "routineId": r})).await.expect("an export");
+    assert_eq!(exported["fileName"], "openbot.workflow");
+    assert_eq!(exported["formatVersion"], format::FORMAT_VERSION);
+    let file = exported["file"].as_str().expect("base64 file bytes");
+
+    let imported = f
+        .call("importRoutineWorkflow", json!({"botId": "a", "file": file, "names": {"b": "b"}}))
+        .await
+        .expect("an import");
+    let new_id = imported["routineId"].as_str().expect("the imported routine id");
+    assert_eq!(imported["paused"], true);
+    assert!(pause::is_paused(&f.hub.store, new_id), "an import starts paused");
+    assert_eq!(f.hub.store.flow_links(new_id).expect("the imported links").len(), 1, "the steps came across");
+    assert_eq!(f.hub.store.flow_links(new_id).expect("the imported links")[0].to_bot_id, "b");
+
+    let duplicate =
+        f.call("duplicateRoutineWorkflow", json!({"botId": "a", "routineId": r})).await.expect("a duplicate");
+    let copy_id = duplicate["routineId"].as_str().expect("the copied routine id");
+    assert_eq!(duplicate["paused"], true);
+    assert!(pause::is_paused(&f.hub.store, copy_id));
+    assert_eq!(f.hub.store.flow_links(copy_id).expect("the copied links").len(), 1);
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_output_template_sends_its_message_and_names_the_notification() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.call(
+        "setRoutineFlowOutput",
+        json!({"botId": "a", "routineId": r, "message": "{{author}} opened {{title}}", "title": "New: {{title}}"}),
+    )
+    .await
+    .expect("a saved output template");
+    let note = f
+        .call(
+            "workflowOutputNotification",
+            json!({"botId": "a", "routineId": r, "input": "old result", "fields": {"author": "ana", "title": "Fix login"}}),
+        )
+        .await
+        .expect("a rendered notification");
+    assert_eq!(note["message"], "ana opened Fix login");
+    assert_eq!(note["title"], "New: Fix login");
     f.shutdown().await;
 }
 

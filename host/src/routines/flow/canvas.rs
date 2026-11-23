@@ -1,7 +1,7 @@
 //! One bot's canvas as clients load it: its routines and those whose flow passes through it, the
 //! links, where the nodes sit and the bots placed before any link reaches them.
 
-use super::{folders, groups};
+use super::{folders, format, groups, output_template, pause};
 use crate::LockExt;
 use crate::hub::{Hub, flows::flow_event};
 use crate::routines::{Routine, Routines, Run, public};
@@ -39,10 +39,12 @@ impl Routines {
         }
         Ok(json!({
             "routine": public(r),
+            "paused": pause::is_paused(store, &r.id),
+            "upcomingRuns": if r.enabled && !pause::is_paused(store, &r.id) { upcoming(r, now) } else { vec![] },
             "recentRuns": runs,
-            "upcomingRuns": if r.enabled { upcoming(r, now) } else { vec![] },
             "steps": steps,
             "stepSettings": step_settings,
+            "output": output_template::load(store, &r.id),
         }))
     }
 
@@ -75,6 +77,7 @@ pub(super) fn canvas(hub: &Hub, bot: &str) -> Result<Value> {
         "placedBotIds": store.flow_placed_bots(bot)?,
         "mediaNodes": store.flow_media_for(&ids)?,
         "groups": groups::load(store, bot),
+        "formatVersion": format::version(store, bot),
     });
     // An older canvas has no folder blob at all, so the field is omitted rather than sent empty.
     if let Some(snapshot) = folders::load(store) {
