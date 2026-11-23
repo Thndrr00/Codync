@@ -16,11 +16,15 @@ slow-account models, Codex Ask first and CJK memory search (`27a28f392`), and do
 answer placement, requests-ended state and subagent cards (`6190f45df`). The media batch,
 availability and three-day reference retention from this tag landed in this branch as well.
 
-The remaining portable items are being integrated in disjoint batches on this branch: idle
-compaction and cache policy, the location-request tool, WhatsApp read-only chats and contact cards,
-Gemini's own-tool permissions, browser sign-in/takeover cards, and the last workflow fixes.
+The remaining portable items are integrated in disjoint batches on this branch and pushed:
+idle compaction and cache policy (`codync-mem` bumped to 0.5.1), the location-request tool,
+WhatsApp read-only chats and contact cards, Gemini's own-tool permissions, browser
+sign-in/takeover cards, and the last workflow fixes. The eleven catalogs carry the new labels.
 
-Nothing in this plan has been compiled or run end to end on this machine.
+Nothing in this plan has been compiled or run end to end on this machine. Static checks pass:
+`rustfmt`, `tsc`, the pure tests and catalog parsing. The desktop suite's four failures are
+locale-sensitive assertions on this Spanish-locale machine (`En cola`, `En marcha`, `Escrito`,
+`Tiempo de conexión agotado`) and are unrelated to these changes.
 
 ## Ported before this tag shipped (fragments)
 
