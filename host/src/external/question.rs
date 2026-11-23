@@ -1,9 +1,14 @@
-//! A question or a plan of Claude Code in a terminal, answered from any Codync client.
+//! A question or a plan of a terminal agent, answered from any Codync client.
 //!
 //! The `PreToolUse` hook installed to wait (`hook --ask`, matching `AskUserQuestion` and `ExitPlanMode`) posts the
 //! tool's input here. Each question becomes a card whose options are the question's own; the picked labels go back
 //! as `updatedInput.answers`, which is how a hook answers `AskUserQuestion`. A plan becomes an Approve / Reject card.
 //! With no answer in time, or for anything this does not understand, the reply is silence and the terminal asks.
+//!
+//! Following OpenBot nightly (`8d94d815e`), a question that asks for `multiSelect` takes several options:
+//! the card collects them up to [`MAX_SELECTED`] and commits them when the person taps *Done*. Claude's
+//! native multi-select questions already carry the flag; the shared `ask_user` tool now carries it on
+//! every other provider too, so a card can accept several answers across providers.
 
 use super::event::Event;
 use super::permission::{target, wait_card};
@@ -15,9 +20,25 @@ use std::sync::Arc;
 /// Claude Code asks at most this many questions at once, each with at most this many options.
 const MAX_QUESTIONS: usize = 4;
 const MAX_OPTIONS: usize = 4;
+/// The most options one multi-answer card collects. A question has at most [`MAX_OPTIONS`] anyway.
+pub(super) const MAX_SELECTED: usize = MAX_OPTIONS;
 
 const APPROVE: &str = "allow";
 const REJECT: &str = "deny";
+/// The extra option of a multi-answer card that commits the options the person picked.
+pub(super) const DONE: &str = "done";
+
+/// Whether a card may take several selected options. `provider` is the hook's agent tag (`""` is
+/// Claude Code); the card records the provider that asked, so a tap cannot answer another agent's
+/// card. Claude's native `AskUserQuestion` and the shared `ask_user` tool on every other provider
+/// both carry `multiSelect`, so the choice is driven by the card, not by the provider. Pure, tested.
+pub(super) fn multi_answer_allowed(provider: &str, card: &Value) -> bool {
+    card["answerAgent"].as_str() == Some(provider)
+        && card["multiSelect"].as_bool() == Some(true)
+        && card["options"]
+            .as_array()
+            .is_some_and(|options| options.iter().filter(|o| o["optionId"].as_str() != Some(DONE)).count() >= 2)
+}
 
 /// The verdict to print for the hook, or `None` when nobody answered and the terminal should ask.
 pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
@@ -32,17 +53,41 @@ pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
             Decision::Deny => {
                 Some(json!({"permissionDecision": "deny", "reason": "The plan was rejected from Codync."}))
             }
-            Decision::Pick(_) => None,
+            Decision::Pick(_) | Decision::Picks(_) => None,
         };
     }
     let questions = questions(&ev.input)?;
     let mut answers = Map::new();
     for question in &questions {
-        let data = question_card(question, &bot, &config.cwd);
-        let Decision::Pick(index) = wait_card(hub, ev, &bot, &config, &data, &question.text).await? else {
-            return None;
+        let mut data = question_card(question, &bot, &config.cwd);
+        // The card keeps the agent that asked, so the answer is only ever committed to that one.
+        data["answerAgent"] = ev.agent.as_str().into();
+        data["multiSelect"] = question.multi_select.into();
+        let multi = multi_answer_allowed(&ev.agent, &data);
+        if multi {
+            data["options"]
+                .as_array_mut()
+                .expect("a question has options")
+                .push(json!({"optionId": DONE, "name": "Done", "kind": "allow_once"}));
+            data["selected"] = json!([]);
+        }
+        let decision = wait_card(hub, ev, &bot, &config, &data, &question.text).await?;
+        let picks = match decision {
+            Decision::Pick(index) => vec![index],
+            Decision::Picks(picks) => picks,
+            _ => return None,
         };
-        answers.insert(question.text.clone(), question.options.get(index)?.label.clone().into());
+        let labels: Option<Vec<String>> =
+            picks.iter().map(|i| question.options.get(*i).map(|o| o.label.clone())).collect();
+        let labels = labels?;
+        if labels.is_empty() {
+            return None;
+        }
+        // A single-answer card keeps the string Claude's hook expects; a multi-answer card sends an
+        // array of the labels the person picked, in tap order, capped by the card's own decision.
+        let answer =
+            if multi { Value::Array(labels.into_iter().map(Value::from).collect()) } else { labels[0].clone().into() };
+        answers.insert(question.text.clone(), answer);
     }
     let mut input = ev.input.clone();
     input["answers"] = Value::Object(answers);
@@ -53,6 +98,9 @@ struct Question {
     text: String,
     header: String,
     options: Vec<Choice>,
+    /// The question asked for more than one answer (Claude's `AskUserQuestion` or another provider's
+    /// `ask_user` with `multiSelect`).
+    multi_select: bool,
 }
 
 struct Choice {
@@ -60,15 +108,14 @@ struct Choice {
     description: String,
 }
 
-/// The questions of an `AskUserQuestion`, when every one can be answered by tapping a single option. A multi-select
-/// question, one without two to four options, or too many questions are left to the terminal.
+/// The questions of a terminal agent's ask, when each has two to four options and there are at most four
+/// questions. A `multiSelect` question is answerable too: its card collects several options up to
+/// [`MAX_SELECTED`]. Anything else is left to the terminal.
 fn questions(input: &Value) -> Option<Vec<Question>> {
     let list = input.get("questions")?.as_array().filter(|q| (1..=MAX_QUESTIONS).contains(&q.len()))?;
     list.iter()
         .map(|q| {
-            if q.get("multiSelect").and_then(Value::as_bool) == Some(true) {
-                return None;
-            }
+            let multi_select = q.get("multiSelect").and_then(Value::as_bool) == Some(true);
             let options: Vec<Choice> = q
                 .get("options")?
                 .as_array()?
@@ -86,6 +133,7 @@ fn questions(input: &Value) -> Option<Vec<Question>> {
                 text,
                 header: q.get("header").and_then(Value::as_str).unwrap_or_default().to_owned(),
                 options,
+                multi_select,
             })
         })
         .collect()
@@ -162,14 +210,28 @@ mod tests {
         assert_eq!(card["detail"], "SQLite: one file\nPostgres: a server");
     }
 
+    fn card(provider: &str, multi: bool) -> Value {
+        let mut question = pick();
+        question["multiSelect"] = multi.into();
+        let list = questions(&input(&question)).expect("answerable");
+        let mut card = question_card(&list[0], "bot", "/work");
+        card["answerAgent"] = provider.into();
+        card["multiSelect"] = multi.into();
+        if multi_answer_allowed(provider, &card) {
+            card["options"]
+                .as_array_mut()
+                .expect("options")
+                .push(json!({"optionId": DONE, "name": "Done", "kind": "allow_once"}));
+            card["selected"] = json!([]);
+        }
+        card
+    }
+
     #[test]
     fn what_a_tap_cannot_answer_is_left_to_the_terminal() {
-        let mut many = pick();
-        many["multiSelect"] = true.into();
         let one_option = json!({"question": "Sure?", "options": [{"label": "Yes"}]});
         let too_many: Vec<Value> = (0..5).map(|_| pick()).collect();
         for input in [
-            input(&many),
             input(&one_option),
             json!({"questions": too_many}),
             json!({"questions": []}),
@@ -178,6 +240,35 @@ mod tests {
         ] {
             assert!(questions(&input).is_none(), "{input}");
         }
+    }
+
+    #[test]
+    fn a_multi_select_question_is_answerable_on_every_provider() {
+        let mut many = pick();
+        many["multiSelect"] = true.into();
+        let list = questions(&input(&many)).expect("a multi-select question is answerable");
+        assert!(list[0].multi_select);
+        for provider in ["", "gemini", "antigravity", "codex", "copilot", "my-tool"] {
+            let card = card(provider, true);
+            assert!(multi_answer_allowed(provider, &card), "{provider:?} can take several answers");
+            assert_eq!(card["options"].as_array().map(Vec::len), Some(3), "the options plus Done");
+        }
+    }
+
+    #[test]
+    fn a_single_answer_card_keeps_claudes_shape() {
+        let single = card("", false);
+        assert!(!multi_answer_allowed("", &single));
+        assert_eq!(single["options"].as_array().map(Vec::len), Some(2));
+        assert!(single["selected"].is_null());
+    }
+
+    #[test]
+    fn only_the_agent_the_card_belongs_to_can_take_several_answers() {
+        assert!(!multi_answer_allowed("gemini", &card("", true)), "another agent's card is not ours");
+        let mut malformed = card("", true);
+        malformed["options"] = json!([{"optionId": "0"}]);
+        assert!(!multi_answer_allowed("", &malformed), "one choice is not a multi-answer question");
     }
 
     #[test]

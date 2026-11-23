@@ -293,3 +293,19 @@ no longer current (`chat/memory/switch.rs`), and the built-in memory tools refus
 memory app connected as an MCP server keeps working. Skill learning is a separate setting and is
 unaffected: a bot with memory off still learns skills. The pure decisions and their tests live in
 `host/src/chat/memory/switch.rs`; the field is stored in `host/src/store/model.rs`.
+
+The pure `enabled()` decides whether the switch is on (only an explicit `false` turns it off), and
+`tool_visible()` decides whether one tool may run: with the switch off only the built-in memory tools
+are hidden, so chat history and a connected memory app's tools are the ones the agent still sees.
+The built-in tool call path (`chat/memory/tools.rs`) asks that decision before it runs anything; no
+second memory store is created.
+
+**Mem0** is in Apps (`host/src/market/openbot/apps.json`), installable like the other hosted MCP
+apps: browser sign-in, no key or local command. It lets an agent add, search, update and delete
+memories in the signed-in account, and other AI tools connected to that account share them. Its MCP
+tools reach the agent through the same connector and OAuth bridge as any other app; nothing about
+memories is copied into Codync's own files. The bundled listing assumes Mem0's hosted MCP endpoint
+is `https://api.mem0.ai/mcp` (noted in `host/src/market/openbot.rs`); change that one entry if Mem0
+publishes a different URL. Turning a bot's OpenBot memory off is the way to have it use only Mem0:
+its saved Codync memories stay on this computer, the built-in memory tools refuse, and skill
+learning continues.

@@ -44,20 +44,22 @@ pub fn is_external(cfg: &BotConfig) -> bool {
 }
 
 /// What a person chose for a permission request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Decision {
     Allow,
     Deny,
-    /// The index of the option picked on a question card.
+    /// The index of the single option picked on a question card.
     Pick(usize),
+    /// The indexes of the several options picked on a multi-answer question card, in tap order.
+    Picks(Vec<usize>),
 }
 
 impl Decision {
-    pub const fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::Allow => "allow",
             Self::Deny => "deny",
-            Self::Pick(_) => "pick",
+            Self::Pick(_) | Self::Picks(_) => "pick",
         }
     }
 }
@@ -81,7 +83,7 @@ struct State {
 pub async fn ingest(hub: &Arc<Hub>, body: &Value) -> Value {
     let Some(event) = event::Event::parse(body) else { return json!({"decision": null}) };
     if event.name == "PermissionRequest" {
-        return json!({"decision": permission::request(hub, &event).await.map(Decision::as_str)});
+        return json!({"decision": permission::request(hub, &event).await.map(|d| d.as_str())});
     }
     // Only the hook installed to wait (`hook --ask`) asks; the plain one only reports.
     if body["ask"].as_bool() == Some(true) && event.name == "PreToolUse" {

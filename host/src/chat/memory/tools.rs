@@ -89,8 +89,9 @@ pub fn tools() -> Value {
 pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Result<Value> {
     let cfg = hub.store.bot(bot_id)?.filter(|b| !b.deleted).ok_or_else(|| anyhow!("unknown bot"))?.config;
     // Per-bot OpenBot memory switch: saved memories and the built-in memory tools go away together.
-    // Chat-history tools stay, and skill learning is a separate setting that keeps working.
-    if !super::switch::enabled(&cfg) && super::switch::gates(name) {
+    // Chat-history tools and a connected memory app's MCP tools stay; skill learning is a separate
+    // setting that keeps working. The decision is pure (`switch::tool_visible`) and tested there.
+    if !super::switch::tool_visible(&cfg, name) {
         bail!("{}", super::switch::REFUSAL);
     }
     match name {

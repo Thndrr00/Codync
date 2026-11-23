@@ -277,6 +277,45 @@ async fn questions_are_asked_one_card_at_a_time_and_answered_by_label() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+fn multi_question() -> Value {
+    json!({"questions": [{"question": "Which checks should run?", "header": "Checks", "multiSelect": true,
+        "options": [{"label": "Typecheck"}, {"label": "Tests"}, {"label": "Lint"}, {"label": "Audit"}]}]})
+}
+
+#[tokio::test]
+async fn a_multi_answer_card_collects_options_until_done() {
+    let (hub, dir) = hub();
+    super::ingest(&hub, &prompt("check")).await;
+    let task = tokio::spawn({
+        let hub = hub.clone();
+        let body = asking("AskUserQuestion", &multi_question(), true);
+        async move { super::ingest(&hub, &body).await }
+    });
+    let card = cards(&hub, 1).await.pop().unwrap();
+    assert_eq!(card.data["multiSelect"], true, "the card offers several answers");
+    assert_eq!(card.data["options"].as_array().map(Vec::len), Some(5), "four options and Done");
+    // Repeated or extra taps never change the pending card until Done; the cap is the option count.
+    for id in ["0", "0", "1", "2", "3"] {
+        assert!(hub.external.answer(&hub, &card.id, Some(id)));
+    }
+    assert_eq!(hub.store.entry(&card.id).expect("card").data["status"], "pending");
+    assert_eq!(hub.store.entry(&card.id).expect("card").data["selected"], json!(["0", "1", "2", "3"]));
+    assert!(hub.external.answer(&hub, &card.id, Some("done")));
+    let reply = task.await.unwrap();
+    assert_eq!(reply["preToolUse"]["permissionDecision"], "allow");
+    assert_eq!(
+        reply["preToolUse"]["updatedInput"]["answers"]["Which checks should run?"],
+        json!(["Typecheck", "Tests", "Lint", "Audit"])
+    );
+    let answered = hub.store.entry(&card.id).expect("card");
+    assert_eq!(answered.data["status"], "answered");
+    assert_eq!(answered.data["selected"], "done");
+    assert_eq!(answered.data["selectedOptions"], json!(["0", "1", "2", "3"]));
+    // A repeated Done is a retry of the same answer, not a second choice.
+    assert!(hub.external.answer(&hub, &card.id, Some("done")));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[tokio::test]
 async fn a_cancelled_question_leaves_the_terminal_to_ask() {
     let (hub, dir) = hub();

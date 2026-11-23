@@ -120,6 +120,23 @@ which would refuse `rm -rf /tmp/build` and `rd /s /q C:\Users\me\proj\build`. He
 star, so only the root, the home folder and their contents are refused. The matcher is the same one the user's rules
 use (`approval_rules::glob`); `?` means one character only in this list, not in the user's rules.
 
+## Multi-answer question cards
+
+A terminal agent's question can ask for more than one answer (OpenBot nightly `8d94d815e`): Claude's
+`AskUserQuestion` has always had a `multiSelect` flag, and the shared `ask_user` tool now carries the
+same flag on every other provider. `host/src/external/question.rs` builds the card from the question's
+own options, and the pure `multi_answer_allowed(provider, card)` decides whether it may take several
+options: the card must name the provider that asked, carry `multiSelect`, and offer at least two real
+choices. Single-answer cards keep their old shape — one tap commits one string — so Claude's existing
+behavior is unchanged.
+
+A multi-answer card adds a *Done* option and keeps the earlier taps in its `selected` array. Taps are
+deduplicated and capped at four (the most options a question can offer); the card stays pending until
+*Done*, then the hook gets the picked option indexes and the agent gets their labels as an array.
+Cancelling before *Done* sends no decision and leaves the terminal to ask as usual. The decision and
+the commit are tested in `host/src/external/question.rs` and `host/src/external/tests.rs`; no question
+text is logged as analytics.
+
 ## Cards nobody answers
 
 A card left `pending` pushes one reminder after 4 hours (`NeedsInput`, with the card's own options) and

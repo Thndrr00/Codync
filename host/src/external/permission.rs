@@ -119,6 +119,10 @@ pub(super) fn answer(external: &External, hub: &Hub, entry_id: &str, option_id: 
     if option_id.is_some_and(|id| !known(id)) {
         return external.state.locked().waiting.contains_key(entry_id) || is_ours(hub, entry_id);
     }
+    let provider = entry.data["answerAgent"].as_str().unwrap_or_default();
+    if super::question::multi_answer_allowed(provider, &entry.data) {
+        return answer_multi(external, hub, entry, entry_id, option_id);
+    }
     let Some(waiting) = external.state.locked().waiting.remove(entry_id) else {
         return is_ours(hub, entry_id);
     };
@@ -138,6 +142,75 @@ pub(super) fn answer(external: &External, hub: &Hub, entry_id: &str, option_id: 
     });
     // The hook may already be gone (answered in the terminal): nobody is left to tell.
     let _ = waiting.send(decision);
+    true
+}
+
+/// A multi-answer card takes taps on its options, deduplicated and capped, until the person taps Done.
+/// Only then does the hook get the indexes; a cancelled card gives it no decision.
+fn answer_multi(
+    external: &External,
+    hub: &Hub,
+    mut entry: crate::store::Entry,
+    entry_id: &str,
+    option_id: Option<&str>,
+) -> bool {
+    if !external.state.locked().waiting.contains_key(entry_id) {
+        return is_ours(hub, entry_id);
+    }
+    let mut selected: Vec<String> = entry.data["selected"]
+        .as_array()
+        .map(|ids| ids.iter().filter_map(|id| id.as_str().map(str::to_owned)).collect())
+        .unwrap_or_default();
+    let done = option_id == Some(super::question::DONE);
+    if !done && option_id.is_none() {
+        return settle_multi(external, hub, entry, entry_id, Vec::new(), Vec::new(), false);
+    }
+    // Keep accumulating: the card stays pending until Done. Extra or repeated taps change nothing.
+    if !done
+        && let Some(id) = option_id
+        && !selected.iter().any(|p| p == id)
+        && selected.len() < super::question::MAX_SELECTED
+    {
+        selected.push(id.to_owned());
+        entry.data["selected"] = json!(selected);
+        hub.set_entry(entry_id, &entry.data);
+        return true;
+    }
+    if !done {
+        return true;
+    }
+    let picks = selected.iter().filter_map(|id| id.parse::<usize>().ok()).collect();
+    settle_multi(external, hub, entry, entry_id, selected, picks, true)
+}
+
+/// Settles a multi-answer card: close it, wake the bot and send the indexes (or nothing on a cancel).
+fn settle_multi(
+    external: &External,
+    hub: &Hub,
+    mut entry: crate::store::Entry,
+    entry_id: &str,
+    selected: Vec<String>,
+    picks: Vec<usize>,
+    done: bool,
+) -> bool {
+    let waiting = external.state.locked().waiting.remove(entry_id);
+    let decision = (!picks.is_empty()).then_some(Decision::Picks(picks));
+    entry.data["status"] = if decision.is_some() { "answered" } else { "cancelled" }.into();
+    // Keep `selected` a string on the settled card: `respondPermission` treats the same answer
+    // again as a retry, not as a second, different choice. The picked options live beside it.
+    entry.data["selected"] = if done { super::question::DONE.into() } else { Value::Null };
+    if done {
+        entry.data["selectedOptions"] = json!(selected);
+    }
+    hub.set_entry(entry_id, &entry.data);
+    let bot = entry.data["author"].as_str().unwrap_or(&entry.bot_id).to_owned();
+    hub.set_runtime(&bot, |r| {
+        r.status = BotStatus::Working;
+        r.activity = "Continuing…".into();
+    });
+    if let Some(waiting) = waiting {
+        let _ = waiting.send(decision);
+    }
     true
 }
 

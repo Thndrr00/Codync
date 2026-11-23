@@ -172,6 +172,10 @@ static AGENTS: LazyLock<Agents> =
     LazyLock::new(|| serde_json::from_str(include_str!("openbot/agents.json")).expect("valid agent catalog"));
 static SKILLS: LazyLock<Skills> =
     LazyLock::new(|| serde_json::from_str(include_str!("openbot/skills.json")).expect("valid skill catalog"));
+// Assumption: the Mem0 listing in `openbot/apps.json` uses https://api.mem0.ai/mcp as its hosted
+// MCP endpoint. The bundled catalog has no signed-in app to confirm it; if Mem0 publishes a different
+// URL, change that one entry. No new HTTP client is needed: `setup: "link"` uses the normal MCP OAuth
+// connector bridge, so sign-in and the agent's tools flow through the existing infrastructure.
 static APPS: LazyLock<Apps> =
     LazyLock::new(|| serde_json::from_str(include_str!("openbot/apps.json")).expect("valid app catalog"));
 /// Every skill folder, for installing without a network.
@@ -396,6 +400,16 @@ mod tests {
                 other => panic!("{} has the unknown setup {other}", a.id),
             }
         }
+    }
+
+    #[test]
+    fn mem0_is_an_installable_browser_sign_in_app() {
+        let app = apps().iter().find(|a| a.id == "mem0").expect("Mem0 is in the catalog");
+        assert_eq!(app.setup, "link", "Mem0 signs in through the browser");
+        assert_eq!(app.server.transport, "http", "it is a hosted remote MCP server");
+        assert_eq!(app.server.url.as_deref(), Some("https://api.mem0.ai/mcp"));
+        assert!(app.fields.is_empty() && app.steps.is_empty(), "no keys or local steps to set up");
+        assert_eq!(app.prompts.len(), 4, "add, search, update and delete are offered as prompts");
     }
 
     #[test]

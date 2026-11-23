@@ -44,6 +44,13 @@ pub fn gates(tool: &str) -> bool {
     MEMORY_TOOLS.contains(&tool)
 }
 
+/// Whether the agent may use `tool` with this bot's settings. Only the built-in memory tools go away
+/// when the switch is off: chat history and a connected memory app's MCP tools (for example Mem0's)
+/// are not in [`MEMORY_TOOLS`], so the agent sees those and only those for memory.
+pub fn tool_visible(cfg: &BotConfig, tool: &str) -> bool {
+    enabled(cfg) || !gates(tool)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -53,10 +60,36 @@ mod tests {
     }
 
     #[test]
-    fn only_an_explicit_false_turns_memory_off() {
+    fn memory_is_on_by_default_and_when_explicitly_on() {
         assert!(enabled(&bot(None)), "bots saved before the switch keep their memories");
         assert!(enabled(&bot(Some(true))));
-        assert!(!enabled(&bot(Some(false))));
+        for tool in MEMORY_TOOLS {
+            assert!(tool_visible(&bot(None), tool), "{tool} works with the switch on");
+        }
+    }
+
+    #[test]
+    fn an_explicit_false_turns_memory_off_and_hides_only_the_built_in_tools() {
+        let off = bot(Some(false));
+        assert!(!enabled(&off));
+        for tool in MEMORY_TOOLS {
+            assert!(!tool_visible(&off, tool), "{tool} must refuse while memory is off");
+        }
+        assert!(tool_visible(&off, "search_history"));
+        assert!(tool_visible(&off, "read_history"));
+        // A memory app connected as an MCP server keeps its tools, even with the switch off.
+        for app_tool in ["mcp__mem0__add_memory", "mcp__mem0__search_memories", "mcp__mem0__update_memory"] {
+            assert!(tool_visible(&off, app_tool), "{app_tool} belongs to the external app");
+        }
+    }
+
+    #[test]
+    fn skills_still_learn_while_memory_is_off() {
+        let mut off = bot(Some(false));
+        off.learn_skills = true;
+        assert!(!enabled(&off), "the memory switch stays off");
+        assert!(off.learn_skills, "skill learning is a separate setting and is untouched");
+        assert!(tool_visible(&off, "save_skill"), "learning skills does not use a gated memory tool");
     }
 
     #[test]

@@ -671,6 +671,45 @@
       ]
     },
     {
+      "id": "mem0",
+      "name": "Mem0",
+      "tagline": "Memory shared across your AI tools",
+      "description": "Mem0 lets agents add, search, update and delete memories in your Mem0 account. Other AI tools connected to the same account share those memories, so what one learns is there for the others. Each user signs in to their own Mem0 account through the browser. Turn off an agent's OpenBot memory in its settings to have that agent use only a memory app like this one: its saved Codync memories stay on this computer and it still learns skills.",
+      "category": "productivity",
+      "creator": "Mem0",
+      "version": "1.0.0",
+      "updated": "2026-11-23",
+      "icon": "https://mem0.ai/favicon.ico",
+      "website": "https://mem0.ai",
+      "featured": false,
+      "setup": "link",
+      "server": {
+        "name": "mem0",
+        "transport": "http",
+        "url": "https://api.mem0.ai/mcp"
+      },
+      "fields": [],
+      "steps": [],
+      "prompts": [
+        {
+          "id": "prompt-remember",
+          "text": "Remember that I prefer short answers with the result first."
+        },
+        {
+          "id": "prompt-search",
+          "text": "What have you saved about my preferred meeting times?"
+        },
+        {
+          "id": "prompt-update",
+          "text": "Update the memory about my travel preferences: I now prefer window seats."
+        },
+        {
+          "id": "prompt-delete",
+          "text": "Delete the memory that says I prefer early meetings."
+        }
+      ]
+    },
+    {
       "id": "neon",
       "name": "Neon",
       "tagline": "Postgres projects, branches and migrations",
