@@ -199,7 +199,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return documents::call(hub, method, b);
     }
     if tasks::METHODS.contains(&method) {
-        return tasks::call(hub, caller, method, b);
+        return tasks::call(hub, caller, method, b).await;
     }
     if matches!(method, "listComputerActivity" | "exportComputerActivity") {
         return computer_activity::read(hub, method, &b);

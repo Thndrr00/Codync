@@ -27,16 +27,31 @@ pub(super) const METHODS: &[&str] = &[
     "taskBranch",
     "taskDeleteMessage",
     "taskSend",
+    "taskSplit",
+    "taskFollowUp",
+    "taskCollectResults",
+    "taskAwaitEvent",
 ];
 
 /// Stopping, sending and branching drive the shared agent; deleting removes its transcript lines.
-const LOCAL: &[&str] = &["taskStart", "taskStop", "taskSend", "taskBranch", "taskDeleteMessage", "taskDelete"];
+const LOCAL: &[&str] = &[
+    "taskStart",
+    "taskStop",
+    "taskSend",
+    "taskBranch",
+    "taskDeleteMessage",
+    "taskDelete",
+    "taskSplit",
+    "taskFollowUp",
+    "taskCollectResults",
+    "taskAwaitEvent",
+];
 
 fn seq(b: &Value, key: &str) -> Result<Option<i64>> {
     b.get(key).map(|v| v.as_i64().with_context(|| format!("`{key}` must be an integer"))).transpose()
 }
 
-pub(super) fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
+pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
     if LOCAL.contains(&method) && !matches!(caller, Caller::Local) {
         return Err(Forbidden.into());
     }
@@ -81,6 +96,19 @@ pub(super) fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> R
             let nonce = b["clientNonce"].as_str();
             let reply = b["replyToMessageId"].as_str();
             tasks::task_send(hub, str_arg(&b, "botId")?, str_arg(&b, "taskId")?, text, nonce, reply)?
+        }
+        "taskSplit" => {
+            let specs = b["tasks"].as_array().context("`tasks` must be an array")?;
+            tasks::task_split(hub, str_arg(&b, "botId")?, specs, b["parentChat"].as_str(), b["parentThread"].as_str())?
+        }
+        "taskFollowUp" => {
+            tasks::task_follow_up(hub, str_arg(&b, "botId")?, str_arg(&b, "taskId")?, str_arg(&b, "text")?)?
+        }
+        "taskCollectResults" => tasks::task_collect_results(hub, str_arg(&b, "botId")?)?.into(),
+        "taskAwaitEvent" => {
+            let wait = tasks::parse_wait(b["runId"].as_str(), b["source"].as_str(), b["event"].as_str())?;
+            let timeout = tasks::clamp_wait(b["timeoutSeconds"].as_u64());
+            tasks::task_await_event(hub, str_arg(&b, "taskId")?, wait, timeout).await?
         }
         _ => bail!("unknown task method"),
     })
