@@ -12,10 +12,13 @@
 //! Idea from rakazo's `packages/core/src/action-approval.ts` (Apache-2.0); no code copied.
 //! Its automated review of low-risk requests isn't here: no model decides for the user.
 
+use super::security_profile::SecurityProfile;
 use crate::store::{ActionClass, Permission, RulePolicy};
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 /// Rules one bot may have.
 const MAX_RULES: usize = 100;
@@ -70,6 +73,104 @@ pub fn codex_approval_policy(backend: &str, permission: Permission, auto_approve
         return None;
     }
     Some(if permission == Permission::Ask && !auto_approved { "untrusted" } else { "on-request" })
+}
+
+/// OpenBot 0.77.0: with this many MCP tools Antigravity's schema budget is tight enough that its CLI may
+/// leave the tool search out, so own tools must stay findable through the declarations it does keep.
+pub const MANY_MCP_TOOLS: usize = 20;
+
+/// OpenBot 0.77.0: Codync's own MCP servers. `computer` (Computer Use) and `manage` (bot changes) are
+/// deliberately absent: they keep their always-manual card (`approval_automation::always_manual`).
+const OWN_SERVERS: [&str; 5] = ["chat", "team", "memory", "routines", "connectors"];
+
+/// OpenBot 0.77.0: Gemini and Antigravity are the ACP backends that name an own-tool call in their own
+/// way, so they are the ones that need the card-free shortcut.
+pub fn is_gemini_backend(backend: &str) -> bool {
+    matches!(backend, "gemini" | "antigravity")
+}
+
+/// An absolute path in a tool's input that lies outside `workspace` is a file write the confined path
+/// must never approve. Relative paths stay inside by definition (OpenBot 0.77.0).
+fn writes_outside_workspace(raw: &Value, workspace: &Path) -> bool {
+    ["path", "filePath", "file_path", "TargetFile"]
+        .into_iter()
+        .filter_map(|key| raw[key].as_str())
+        .chain(raw["locations"].as_array().into_iter().flatten().filter_map(|v| v["path"].as_str()))
+        .chain(raw["diffs"].as_array().into_iter().flatten().filter_map(|v| v["path"].as_str()))
+        .any(|path| {
+            let path = Path::new(path);
+            path.is_absolute() && !path.starts_with(workspace)
+        })
+}
+
+/// OpenBot 0.77.0: whether a permission request is a call of one of Codync's own tools. ACP titles come
+/// as `mcp__<server>__<tool>`, `<server>.<tool>` or, for Antigravity, `Run mcp_<server>_<tool>`;
+/// Antigravity also sends `ServerName`/`ToolName` in `rawInput` with tool kind `execute`. A command line,
+/// a file change, a path outside the workspace and every server that isn't ours keep their card, so a
+/// shell command named like a tool can never take the shortcut.
+fn is_own_tool(backend: &str, kind: &str, title: &str, raw: &Value, workspace: &Path) -> bool {
+    if matches!(kind, "edit" | "delete" | "move" | "computer") || raw.get("CommandLine").is_some() {
+        return false;
+    }
+    if writes_outside_workspace(raw, workspace) {
+        return false;
+    }
+    let named = is_gemini_backend(backend)
+        && raw["ServerName"].as_str().is_some_and(|name| OWN_SERVERS.iter().any(|s| name.eq_ignore_ascii_case(s)))
+        && raw["ToolName"].as_str().is_some_and(|tool| !tool.is_empty());
+    if named {
+        return true;
+    }
+    if kind != "other" {
+        return false;
+    }
+    let title = title.trim().trim_end_matches('?');
+    OWN_SERVERS.iter().any(|server| {
+        title.starts_with(&format!("mcp__{server}__"))
+            || title.starts_with(&format!("{server}."))
+            || (is_gemini_backend(backend) && title.starts_with(&format!("Run mcp_{server}_")))
+    })
+}
+
+/// OpenBot 0.77.0: Gemini agents with Full access use Codync's own tools (memory, browser, channels,
+/// messages to other agents) without an approval card, the same as Claude agents. Shell commands and
+/// other tools still ask when automatic approval is off; an already auto-approved backend is handled by
+/// `approval_automation`, which this decision does not replace. A confined agent uses
+/// [`workspace_only_tool_allowed`] instead. Pure and shared by the real `on_permission` path and its tests.
+pub fn own_tool_allowed(
+    backend: &str,
+    profile: SecurityProfile,
+    auto_approved: bool,
+    confined: bool,
+    kind: &str,
+    title: &str,
+    raw: &Value,
+    workspace: &Path,
+) -> bool {
+    if auto_approved || !is_gemini_backend(backend) || !profile.permits_tool(kind) {
+        return false;
+    }
+    if !is_own_tool(backend, kind, title, raw, workspace) {
+        return false;
+    }
+    profile == SecurityProfile::Full || (confined && workspace_only_tool_allowed(backend, kind, title, raw, workspace))
+}
+
+/// OpenBot 0.77.0: a Gemini agent in Workspace only still sends messages to other agents and uses
+/// Codync's own tools without a card. The safe request shape is the whole guard: a command line, a file
+/// change (including one that names an own tool) and a path outside the workspace are refused here, so
+/// the existing sandbox stays the authority on file writes. `kind` and `raw` come from the permission
+/// request; the title alone is never enough for an `execute` request.
+pub fn workspace_only_tool_allowed(backend: &str, kind: &str, title: &str, raw: &Value, workspace: &Path) -> bool {
+    is_gemini_backend(backend) && is_own_tool(backend, kind, title, raw, workspace)
+}
+
+/// OpenBot 0.77.0: Antigravity's CLI drops `tool_search` when its schema budget is full (Computer Use or
+/// many MCP tools), leaving the browser file-upload tool undiscoverable. Keep tool search in the
+/// declarations when that happens. Gemini keeps it even with few tools; other backends keep their own
+/// direct-declaration behaviour unless they too have many tools or Computer Use.
+pub fn tool_search_visible(backend: &str, mcp_tools: usize, computer_use: bool) -> bool {
+    is_gemini_backend(backend) || computer_use || mcp_tools >= MANY_MCP_TOOLS
 }
 
 /// The rule that decides a request of `kind` doing `subject` (its command, or its title).
@@ -224,6 +325,7 @@ pub(super) fn glob(pattern: &str, text: &str, single: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn rule(pattern: &str, decision: Decision) -> ApprovalRule {
         ApprovalRule { pattern: pattern.into(), kind: None, decision }
@@ -343,6 +445,185 @@ mod tests {
         let many: Vec<ApprovalRule> = std::iter::repeat_n(rule("x", Decision::Ask), MAX_RULES + 1).collect();
         assert!(validate(&many).is_err());
         assert!(validate(&[rule("npm test", Decision::Allow)]).is_ok());
+    }
+
+    #[test]
+    fn own_tools_are_recognised_by_title_or_by_antigravity_input() {
+        let workspace = Path::new("/w");
+        for title in ["mcp__chat__send_message", "chat.send_message", "Run mcp_team_ask?"] {
+            assert!(is_own_tool("antigravity", "other", title, &json!({}), workspace), "{title}");
+        }
+        let named = json!({"ServerName": "memory", "ToolName": "search_memory"});
+        assert!(is_own_tool("antigravity", "execute", "MCP Tool search_memory", &named, workspace));
+        assert!(!is_own_tool("claude", "execute", "MCP Tool search_memory", &named, workspace));
+        assert!(is_gemini_backend("gemini") && is_gemini_backend("antigravity") && !is_gemini_backend("claude"));
+    }
+
+    #[test]
+    fn a_command_a_file_change_or_another_server_is_not_an_own_tool() {
+        let workspace = Path::new("/w");
+        for (kind, title, raw) in [
+            ("execute", "Run mcp_chat_send_message", json!({})),
+            ("edit", "Edit notes.md", json!({"ServerName": "chat", "ToolName": "send_message"})),
+            ("delete", "mcp__chat__send_message", json!({})),
+            ("move", "mcp__chat__send_message", json!({})),
+            ("computer", "mcp__chat__send_message", json!({})),
+            ("other", "Run mcp_github_create_issue", json!({})),
+            ("other", "mcp__computer__click", json!({})),
+            ("other", "mcp__chat__send_message", json!({"CommandLine": "rm -rf /"})),
+            ("other", "mcp__chat__send_message", json!({"path": "/elsewhere/notes.md"})),
+            ("other", "mcp__chat__send_message", json!({"diffs": [{"path": "/elsewhere/notes.md"}]})),
+        ] {
+            assert!(!is_own_tool("antigravity", kind, title, &raw, workspace), "{kind} {title} {raw}");
+        }
+        // The same name on a server of our own, with a path inside the workspace, is still ours.
+        let inside = json!({"path": "/w/notes.md"});
+        assert!(is_own_tool("gemini", "other", "mcp__memory__edit_memory", &inside, workspace));
+    }
+
+    #[test]
+    fn full_access_gemini_uses_own_tools_without_a_card() {
+        let workspace = Path::new("/w");
+        let own = json!({});
+        for backend in ["gemini", "antigravity"] {
+            assert!(own_tool_allowed(
+                backend,
+                SecurityProfile::Full,
+                false,
+                false,
+                "other",
+                "mcp__chat__send_message",
+                &own,
+                workspace,
+            ));
+            assert!(own_tool_allowed(
+                backend,
+                SecurityProfile::Full,
+                false,
+                false,
+                "other",
+                "mcp__memory__search_memory",
+                &own,
+                workspace,
+            ));
+        }
+        // Shell commands, file changes, other servers and a profile's denial never take this path.
+        for (kind, title, raw) in [
+            ("execute", "git push", json!({})),
+            ("execute", "Run mcp_chat_send_message", json!({})),
+            ("edit", "mcp__chat__send_message", json!({})),
+            ("other", "mcp__github__create_issue", json!({})),
+            ("other", "mcp__chat__send_message", json!({"CommandLine": "rm -rf /"})),
+        ] {
+            assert!(
+                !own_tool_allowed("antigravity", SecurityProfile::Full, false, false, kind, title, &raw, workspace),
+                "{kind} {title} {raw}"
+            );
+        }
+        // An own-tool shape whose kind the profile denies is refused too.
+        let named = json!({"ServerName": "chat", "ToolName": "send_message"});
+        assert!(
+            !own_tool_allowed(
+                "antigravity",
+                SecurityProfile::Builder,
+                false,
+                true,
+                "execute",
+                "MCP Tool send_message",
+                &named,
+                workspace,
+            ),
+            "Builder denies execute"
+        );
+    }
+
+    #[test]
+    fn no_other_backend_or_auto_approved_backend_changes() {
+        let workspace = Path::new("/w");
+        let own = json!({});
+        for backend in ["claude", "codex", "grok", "pi", "custom"] {
+            assert!(
+                !own_tool_allowed(
+                    backend,
+                    SecurityProfile::Full,
+                    false,
+                    true,
+                    "other",
+                    "mcp__chat__send_message",
+                    &own,
+                    workspace
+                ),
+                "{backend} keeps its own behaviour"
+            );
+            assert!(!workspace_only_tool_allowed(backend, "other", "mcp__chat__send_message", &own, workspace));
+        }
+        assert!(
+            !own_tool_allowed(
+                "antigravity",
+                SecurityProfile::Full,
+                true,
+                false,
+                "other",
+                "mcp__chat__send_message",
+                &own,
+                workspace
+            ),
+            "automation already answers"
+        );
+        assert!(
+            !own_tool_allowed(
+                "antigravity",
+                SecurityProfile::Operator,
+                false,
+                false,
+                "other",
+                "mcp__chat__send_message",
+                &own,
+                workspace
+            ),
+            "Ask first still asks for an own tool"
+        );
+    }
+
+    #[test]
+    fn workspace_only_gemini_keeps_messages_and_own_tools_but_not_writes() {
+        let workspace = Path::new("/w");
+        let message = json!({"ServerName": "chat", "ToolName": "send_message"});
+        assert!(workspace_only_tool_allowed("gemini", "execute", "MCP Tool send_message", &message, workspace));
+        assert!(workspace_only_tool_allowed("antigravity", "other", "Run mcp_team_ask?", &json!({}), workspace));
+        // A file change that names an own tool, a command line and a path outside the workspace stay denied.
+        assert!(
+            !workspace_only_tool_allowed("antigravity", "edit", "Edit notes.md", &message, workspace),
+            "an edit with an own-tool input is still an edit"
+        );
+        for raw in [json!({"CommandLine": "ls"}), json!({"path": "/elsewhere/x.md"})] {
+            assert!(
+                !workspace_only_tool_allowed("antigravity", "other", "mcp__memory__edit_memory", &raw, workspace),
+                "{raw}"
+            );
+        }
+        // The confined branch of the one decision agrees with its helper.
+        assert!(own_tool_allowed(
+            "antigravity",
+            SecurityProfile::Operator,
+            false,
+            true,
+            "other",
+            "mcp__chat__send_message",
+            &json!({}),
+            workspace,
+        ));
+    }
+
+    #[test]
+    fn tool_search_stays_visible_when_the_schema_budget_is_tight() {
+        assert!(tool_search_visible("gemini", 0, false));
+        assert!(tool_search_visible("antigravity", 0, false));
+        assert!(tool_search_visible("antigravity", MANY_MCP_TOOLS, false));
+        assert!(tool_search_visible("pi", MANY_MCP_TOOLS, false), "many tools need search on pi too");
+        assert!(tool_search_visible("pi", 0, true), "Computer Use fills the budget");
+        assert!(!tool_search_visible("claude", MANY_MCP_TOOLS - 1, false));
+        assert!(!tool_search_visible("codex", 0, false), "no behaviour change for Codex");
     }
 
     #[test]

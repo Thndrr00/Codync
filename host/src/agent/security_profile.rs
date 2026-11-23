@@ -75,6 +75,25 @@ impl SecurityProfile {
         }
     }
 
+    /// The profile implied by a bot that has no explicit one, for the own-tool shortcut only
+    /// (OpenBot 0.77.0). It never grants a tool by itself: the shortcut still has to recognise an
+    /// own-tool call. `Ask` maps to `Operator` so an Antigravity MCP call sent with tool kind
+    /// `execute` is not mistaken for a denied shell command.
+    pub const fn from_permission(permission: Permission) -> Self {
+        match permission {
+            Permission::Auto => Self::Full,
+            Permission::Ask => Self::Operator,
+        }
+    }
+
+    /// OpenBot 0.77.0: an own-tool shortcut never grants a tool kind this profile denies (a shell
+    /// command at Read-only or Builder). A kind the profile only asks about is left to the caller.
+    pub fn permits_tool(self, kind: &str) -> bool {
+        !self.rules().iter().any(|rule| {
+            rule.decision == Decision::Deny && rule.kind.as_deref().is_some_and(|k| k.eq_ignore_ascii_case(kind))
+        })
+    }
+
     /// The rules, first match first.
     pub fn rules(self) -> Vec<ApprovalRule> {
         let mut out = rules(Decision::Allow, &READS);
@@ -179,6 +198,19 @@ mod tests {
         for p in SecurityProfile::ALL {
             assert!(matches!(say(p, "execute", Some("sudo reboot")), Outcome::Forbidden { .. }), "{p:?}");
         }
+    }
+
+    #[test]
+    fn an_own_tool_shortcut_never_grants_a_kind_the_profile_denies() {
+        assert!(!SecurityProfile::ReadOnly.permits_tool("execute"));
+        assert!(!SecurityProfile::Builder.permits_tool("execute"));
+        assert!(SecurityProfile::Operator.permits_tool("execute"));
+        for profile in SecurityProfile::ALL {
+            assert!(profile.permits_tool("other"), "{profile:?}: own tools have no tool kind to deny");
+            assert_eq!(profile.permits_tool("EXECUTE"), profile.permits_tool("execute"), "{profile:?}");
+        }
+        assert_eq!(SecurityProfile::from_permission(Permission::Auto), SecurityProfile::Full);
+        assert_eq!(SecurityProfile::from_permission(Permission::Ask), SecurityProfile::Operator);
     }
 
     #[test]

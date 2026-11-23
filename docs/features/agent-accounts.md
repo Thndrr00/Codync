@@ -74,6 +74,25 @@ skip that profile and keep the others eligible; out-of-credits and signed-out re
 on the provider-wide `rest.<agent>` key that older hosts wrote. The old key remains
 readable after the change.
 
+## Gemini's own tools and permissions
+
+From OpenBot 0.77.0: a Gemini agent with Full access uses Codync's own tools — memory,
+browser, channels and messages to other agents — without an approval card, the same as a
+Claude agent. Shell commands, file changes and tools of other MCP servers still ask when
+automatic approval is off. A Gemini agent confined to its workspace keeps sending messages
+and using those tools without a card, but a command line, a file change or a path outside
+the workspace still asks; the sandbox remains the authority on file writes. Other backends
+keep their existing behaviour.
+
+`host/src/agent/approval_rules.rs` holds the three pure decisions (`own_tool_allowed`,
+`workspace_only_tool_allowed`, `tool_search_visible`) and recognises a call of one of
+Codync's own built-in MCP servers by its ACP title or, for Antigravity, by
+`ServerName`/`ToolName` in the request input. `on_permission` calls the
+decision only after the ordinary rule check has refused forbidden and rule-denied requests,
+and `SecurityProfile::permits_tool` keeps a profile's denial in force. `pi_tools.rs` keeps
+tool search in the declared MCP tools when there are many of them or Computer Use is on,
+so tools such as browser file upload stay discoverable.
+
 From OpenBot nightly (`triage-13749`, `triage-13877`): a failed usage reading — a busy
 provider or a timed-out read — does not sign an account out. It keeps its connection and
 its last reading, so it stays available to rotation and backups; only a real sign-in error

@@ -270,12 +270,33 @@ impl Actor {
             evaluation.outcome,
             Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
         );
+        let map = crate::approval_automation::load(&self.hub.store);
+        let auto_approved = crate::approval_automation::enabled(&map, &self.cfg.backend);
         // An opted-in backend can auto-approve its ordinary tools, but never a deletion, secret,
         // computer-use or public-post card (approval_automation::always_manual).
         if !allowed {
-            let map = crate::approval_automation::load(&self.hub.store);
             let card = json!({"title": title, "toolKind": kind});
             allowed = crate::approval_automation::should_auto_approve(&map, &self.cfg.backend, &card);
+        }
+        // OpenBot 0.77.0: Gemini (incl. Antigravity) uses Codync's own tools without a card at Full
+        // access or while workspace-confined, the same as Claude agents. Shell commands, file changes,
+        // other servers and every other backend keep their card. `evaluate` has already refused a
+        // forbidden command or one denied by the person's rules, so this can only add an own tool.
+        if !allowed {
+            use crate::agent::security_profile::SecurityProfile;
+            let profile =
+                self.cfg.security_profile.unwrap_or_else(|| SecurityProfile::from_permission(self.cfg.permission));
+            let confined = self.cfg.permission == Permission::Ask && profile != SecurityProfile::Full;
+            allowed = approval_rules::own_tool_allowed(
+                &self.cfg.backend,
+                profile,
+                auto_approved,
+                confined,
+                kind,
+                &title,
+                raw,
+                std::path::Path::new(&self.cfg.cwd),
+            );
         }
         // Like the bot's automatic setting always did: with no allow option, its first option.
         if allowed

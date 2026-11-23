@@ -89,11 +89,16 @@ fn write_launcher(dir: &Path) -> Result<PathBuf> {
     Ok(launcher)
 }
 
-/// ACP's `[{name, command, args, env: [{name, value}]}]` as pi's `{name: {command, args, env: {name: value}}}`,
-/// declared to the model like built-in tools (`direct`), as every other harness has them.
+/// ACP's `[{name, command, args, env: [{name, value}]}]` as pi's `{name: {command, args, env: {name: value}}}`.
+/// Tools are declared directly (`direct`) while they fit. OpenBot 0.77.0: when there are many of them or
+/// Computer Use fills the schema budget, the CLI may drop its tool search, leaving file upload and other
+/// own tools undiscoverable, so `tool_search_visible` keeps the declaration's search path instead.
 fn pi_servers(servers: &Value) -> Value {
+    let list: Vec<&Value> = servers.as_array().into_iter().flatten().collect();
+    let computer_use = list.iter().any(|s| s["name"].as_str() == Some("computer"));
+    let keep_search = crate::agent::approval_rules::tool_search_visible("pi", list.len(), computer_use);
     let mut out = Map::new();
-    for s in servers.as_array().into_iter().flatten() {
+    for s in list {
         let Some(name) = s["name"].as_str() else { continue };
         let env: Map<String, Value> = s["env"]
             .as_array()
@@ -101,10 +106,11 @@ fn pi_servers(servers: &Value) -> Value {
             .flatten()
             .filter_map(|e| Some((e["name"].as_str()?.to_owned(), e["value"].clone())))
             .collect();
-        out.insert(
-            name.to_owned(),
-            json!({"command": s["command"], "args": s["args"], "env": env, "exposure": "direct", "timeout": CALL_TIMEOUT}),
-        );
+        let mut server = json!({"command": s["command"], "args": s["args"], "env": env, "timeout": CALL_TIMEOUT});
+        if !keep_search {
+            server["exposure"] = json!("direct");
+        }
+        out.insert(name.to_owned(), server);
     }
     Value::Object(out)
 }
@@ -122,6 +128,18 @@ mod tests {
             json!({"manage": {"command": "/bin/codync-host", "args": ["mcp", "manage"],
                 "env": {"CODYNC_HOME": "/h"}, "exposure": "direct", "timeout": 330}})
         );
+    }
+
+    #[test]
+    fn many_or_computer_use_tools_keep_pis_tool_search() {
+        let computer = json!([{"name": "computer", "command": "x"}]);
+        assert!(pi_servers(&computer)["computer"].get("exposure").is_none());
+        let many: Value = (0..crate::agent::approval_rules::MANY_MCP_TOOLS)
+            .map(|i| json!({"name": format!("mcp-{i}"), "command": "x"}))
+            .collect();
+        let declared = pi_servers(&many);
+        assert_eq!(declared.as_object().map_or(0, Map::len), crate::agent::approval_rules::MANY_MCP_TOOLS);
+        assert!(declared["mcp-0"].get("exposure").is_none(), "tool search stays available");
     }
 
     #[test]
