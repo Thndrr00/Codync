@@ -15,6 +15,7 @@
 //! (Codex's tool makes clear pixels, Grok's cannot, so it gets one flat colour), and a video names
 //! its frames, its pictures and its voice by the tool's own inputs.
 
+pub mod batch;
 pub mod catalog;
 pub mod command;
 pub mod flow;
@@ -22,6 +23,11 @@ pub mod output;
 pub mod size;
 pub mod sunra;
 
+pub use batch::{
+    BATCH_SIZES, BatchResult, BatchStatus, DEFAULT_BATCH, MAX_BATCH, MAX_STEP_FILES, MODEL_UNAVAILABLE,
+    REFERENCE_RETENTION, REFERENCE_RETENTION_DAYS, batch_credits, batch_credits_view, batch_results, default_batch,
+    kept_files, media_batch, model_available, reference_expired,
+};
 pub use output::{Output, decode_base64, display_name, kind, output};
 
 use anyhow::{Result, bail, ensure};
@@ -131,6 +137,7 @@ pub fn check_settings(node: &crate::store::FlowMedia) -> Result<Request> {
         kind,
         prompt: node.prompt.trim().to_owned(),
         aspect: (*aspect).to_owned(),
+        batch: media_batch(node.batch),
         duration: node.duration,
         resolution: (kind == Kind::Video).then(|| {
             catalog::resolutions(model)
@@ -184,5 +191,17 @@ mod tests {
         let model = catalog::model("gpt-image").unwrap();
         let error = unsupported("a video", "", model).unwrap_err().to_string();
         assert!(error.contains("GPT Image"), "{error}");
+    }
+
+    #[test]
+    fn a_step_request_bounds_its_batch_and_needs_a_description() {
+        let mut node = crate::store::flow_media::new_media("m".into(), "r".into(), "b".into());
+        node.model = "gpt-image".into();
+        node.batch = 9;
+        assert!(check_settings(&node).is_err(), "a step without a description is not ready");
+        node.prompt = "a red fox".into();
+        assert_eq!(check_settings(&node).unwrap().batch, 4);
+        node.batch = 0;
+        assert_eq!(request(&node).unwrap().batch, 1);
     }
 }

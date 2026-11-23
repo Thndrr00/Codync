@@ -59,6 +59,10 @@ pub struct FlowStep {
     /// The pictures or clips a media step made, as shared files of the owner bot.
     #[serde(default)]
     pub files: Vec<crate::chat::files::SharedFile>,
+    /// One status per result of a batched media step, read from its saved settings. Older steps
+    /// have none, which a client reads as one result made before batches existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub results: Option<Vec<crate::media::BatchResult>>,
     pub created_at: i64,
     pub updated_at: i64,
     #[serde(skip)]
@@ -93,6 +97,9 @@ pub struct NewStep<'a> {
 
 const COLUMNS: &str = "id, run_id, bot_id, delivery_id, input, output, status, error, created_at, updated_at, \
                        routine_id, owner_bot_id, run_at, files";
+/// The insert columns plus the settings a media step uses for its per-result progress.
+const READ_COLUMNS: &str = "id, run_id, bot_id, delivery_id, input, output, status, error, created_at, updated_at, \
+                            routine_id, owner_bot_id, run_at, files, settings";
 
 fn row_step(r: &rusqlite::Row) -> rusqlite::Result<FlowStep> {
     Ok(FlowStep {
@@ -110,12 +117,17 @@ fn row_step(r: &rusqlite::Row) -> rusqlite::Result<FlowStep> {
         owner_bot_id: r.get(11)?,
         run_at: r.get(12)?,
         files: r.get::<_, Option<String>>(13)?.and_then(|files| serde_json::from_str(&files).ok()).unwrap_or_default(),
+        results: r
+            .get::<_, Option<String>>(14)?
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .and_then(|settings| settings.get("results").cloned())
+            .and_then(|results| serde_json::from_value(results).ok()),
     })
 }
 
 fn query(c: &Connection, filter: &str, args: impl rusqlite::Params) -> Result<Vec<FlowStep>> {
     let mut st =
-        c.prepare(&format!("SELECT {COLUMNS} FROM routine_flow_steps WHERE {filter} ORDER BY created_at, rowid"))?;
+        c.prepare(&format!("SELECT {READ_COLUMNS} FROM routine_flow_steps WHERE {filter} ORDER BY created_at, rowid"))?;
     Ok(st.query_map(args, row_step)?.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -256,5 +268,38 @@ impl Store {
             tx.commit()?;
             Ok((orphans, change))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_batch_progress_is_read_with_the_step_for_clients() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let new = NewStep {
+            run_id: "run",
+            routine_id: "r",
+            owner_bot_id: "a",
+            bot_id: "media:m",
+            run_at: 1,
+            input: "",
+            status: StepStatus::Running,
+            output: None,
+            error: None,
+        };
+        let (step, _) = store.flow_add_step(&new).unwrap().unwrap();
+        assert!(step.results.is_none(), "a step made before a batch has no per-result status");
+        let results = crate::media::batch_results(
+            2,
+            &std::collections::BTreeSet::from([0u32]),
+            &std::collections::BTreeMap::new(),
+        );
+        store.flow_set_step_settings(&step.id, Some(json!({"kind": "image", "batch": 2, "results": results}))).unwrap();
+        let read = store.flow_run_steps("run").unwrap().pop().unwrap();
+        assert_eq!(read.results.unwrap().len(), 2);
+        assert_eq!(serde_json::to_value(&read).unwrap()["results"][0]["status"], json!("succeeded"));
     }
 }

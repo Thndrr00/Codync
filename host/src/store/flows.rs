@@ -25,7 +25,7 @@ const MERGE_NODES_CAP: usize = 1000;
 const MERGE_MEDIA_CAP: usize = 500;
 const MERGE_INSTRUCTION_CAP: usize = 8_000;
 /// The media columns, in the order `row_media` of `flow_media` reads them.
-const MEDIA_COLUMNS: &str = "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id, name";
+const MEDIA_COLUMNS: &str = "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id, name, batch";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,7 +96,8 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             model TEXT NOT NULL, prompt TEXT NOT NULL DEFAULT '', aspect TEXT NOT NULL DEFAULT '1:1',
             duration INTEGER NOT NULL DEFAULT 6, resolution TEXT NOT NULL DEFAULT '480p',
             transparent INTEGER NOT NULL DEFAULT 0, voice TEXT, created_at INTEGER NOT NULL,
-            routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '');
+            routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '',
+            batch INTEGER NOT NULL DEFAULT 1);
          CREATE INDEX IF NOT EXISTS routine_flow_media_routine ON routine_flow_media(routine_id);",
     )?;
     // A database built before a step kept its settings has the table but not the column. `open` runs
@@ -119,6 +120,15 @@ pub(super) fn open(c: &Connection) -> Result<()> {
         if !has_name {
             c.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN name TEXT NOT NULL DEFAULT '';"))?;
         }
+    }
+    // A media step added after batches existed still keeps its old database readable.
+    let has_batch: bool = c.query_row(
+        "SELECT count(*) > 0 FROM pragma_table_info('routine_flow_media') WHERE name = 'batch'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_batch {
+        c.execute_batch("ALTER TABLE routine_flow_media ADD COLUMN batch INTEGER NOT NULL DEFAULT 1;")?;
     }
     Ok(())
 }
@@ -242,6 +252,24 @@ impl Store {
         self.with_connection(|c| {
             c.execute("UPDATE routine_flow_steps SET settings = ?2 WHERE id = ?1", params![step_id, value])?;
             Ok(())
+        })
+    }
+
+    /// Saves a media step's progress and stamps the canvas rev, so a client can show which results
+    /// of a batch are done while the others are still being made.
+    pub fn flow_progress_step(&self, step_id: &str, settings: &serde_json::Value) -> Result<Option<FlowChange>> {
+        let value = settings.to_string();
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let (routine, owner): (String, String) = tx.query_row(
+                "SELECT routine_id, owner_bot_id FROM routine_flow_steps WHERE id = ?1",
+                [step_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            tx.execute("UPDATE routine_flow_steps SET settings = ?2 WHERE id = ?1", params![step_id, value])?;
+            let change = touch(&tx, audience(&tx, &routine, &owner)?)?;
+            tx.commit()?;
+            Ok(change)
         })
     }
 
@@ -597,6 +625,9 @@ impl Store {
                     bail!("merged media step {} has too long a description", step.id);
                 }
                 check_name(&step.name).with_context(|| format!("merged media step {}", step.id))?;
+                if !(1..=crate::media::MAX_BATCH).contains(&step.batch) {
+                    bail!("merged media step {} has a batch outside 1 to 4", step.id);
+                }
                 if !routine_ids.contains(&step.routine_id) {
                     bail!("merged media step {} names a routine that is not on this canvas", step.id);
                 }
@@ -616,10 +647,10 @@ impl Store {
                     current.get(&step.id).map(|(o, at)| (o.as_str(), *at)).unwrap_or((step.owner_bot_id.as_str(), step.created_at));
                 tx.execute(
                     &format!(
-                        "INSERT INTO routine_flow_media({MEDIA_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                        "INSERT INTO routine_flow_media({MEDIA_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                          ON CONFLICT(id) DO UPDATE SET kind = ?2, model = ?3, prompt = ?4, aspect = ?5,
                          duration = ?6, resolution = ?7, transparent = ?8, voice = ?9, created_at = ?10,
-                         routine_id = ?11, name = ?13"
+                         routine_id = ?11, name = ?13, batch = ?14"
                     ),
                     params![
                         step.id,
@@ -634,7 +665,8 @@ impl Store {
                         at,
                         step.routine_id,
                         owner,
-                        step.name
+                        step.name,
+                        step.batch
                     ],
                 )?;
                 bots.insert(owner.to_owned());

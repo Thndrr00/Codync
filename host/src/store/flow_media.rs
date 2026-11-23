@@ -6,7 +6,7 @@
 
 use super::flows::{audience, touch};
 use super::{Store, now_ms};
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use rusqlite::{Connection, Transaction, params};
 use serde::Serialize;
 
@@ -28,6 +28,9 @@ pub struct FlowMedia {
     pub model: String,
     pub prompt: String,
     pub aspect: String,
+    /// How many results the step makes, 1 to 4. Older steps read as 1.
+    #[serde(default = "crate::media::default_batch")]
+    pub batch: u32,
     /// Seconds; only a video uses it.
     pub duration: u32,
     /// Only a video uses it.
@@ -63,10 +66,11 @@ fn row_media(r: &rusqlite::Row) -> rusqlite::Result<FlowMedia> {
         routine_id: r.get(10)?,
         owner_bot_id: r.get(11)?,
         name: r.get(12)?,
+        batch: r.get(13)?,
     })
 }
 
-const COLUMNS: &str = "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id, name";
+const COLUMNS: &str = "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id, name, batch";
 
 fn media_of(c: &Connection, routine_id: &str) -> Result<Vec<FlowMedia>> {
     let mut st =
@@ -114,6 +118,13 @@ fn check_prompt(prompt: &str) -> Result<()> {
     Ok(())
 }
 
+/// A write through the store refuses an out-of-range batch; a request from a client is bounded
+/// before it gets here.
+fn check_batch(batch: u32) -> Result<()> {
+    ensure!((1..=crate::media::MAX_BATCH).contains(&batch), "the batch must be 1 to 4");
+    Ok(())
+}
+
 impl Store {
     /// The media nodes of a routine.
     pub fn flow_media(&self, routine_id: &str) -> Result<Vec<FlowMedia>> {
@@ -137,10 +148,11 @@ impl Store {
 
     pub fn flow_add_media(&self, media: &FlowMedia) -> Result<super::flows::FlowChange> {
         check_prompt(&media.prompt)?;
+        check_batch(media.batch)?;
         self.with_connection(|c| {
             let tx = c.unchecked_transaction()?;
             tx.execute(
-                &format!("INSERT INTO routine_flow_media({COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"),
+                &format!("INSERT INTO routine_flow_media({COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"),
                 params![
                     media.id,
                     media.kind,
@@ -154,7 +166,8 @@ impl Store {
                     media.created_at,
                     media.routine_id,
                     media.owner_bot_id,
-                    media.name
+                    media.name,
+                    media.batch
                 ],
             )?;
             let bots = audience(&tx, &media.routine_id, &media.owner_bot_id)?;
@@ -167,11 +180,12 @@ impl Store {
     /// Rewrites a node's settings; the kind never changes.
     pub fn flow_update_media(&self, media: &FlowMedia) -> Result<Option<super::flows::FlowChange>> {
         check_prompt(&media.prompt)?;
+        check_batch(media.batch)?;
         self.with_connection(|c| {
             let tx = c.unchecked_transaction()?;
             let gone = tx.execute(
                 "UPDATE routine_flow_media SET model = ?2, prompt = ?3, aspect = ?4, duration = ?5,
-                 resolution = ?6, transparent = ?7, voice = ?8 WHERE id = ?1",
+                 resolution = ?6, transparent = ?7, voice = ?8, batch = ?9 WHERE id = ?1",
                 params![
                     media.id,
                     media.model,
@@ -180,7 +194,8 @@ impl Store {
                     media.duration,
                     media.resolution,
                     media.transparent,
-                    media.voice
+                    media.voice,
+                    media.batch
                 ],
             )?;
             if gone == 0 {
@@ -245,6 +260,7 @@ pub fn new_media(id: String, routine_id: String, owner_bot_id: String) -> FlowMe
         model: String::new(),
         prompt: String::new(),
         aspect: "1:1".into(),
+        batch: crate::media::DEFAULT_BATCH,
         duration: 6,
         resolution: "480p".into(),
         transparent: false,
@@ -271,5 +287,24 @@ mod tests {
         assert_eq!(store.flow_media_node("m1").unwrap().unwrap().model, "gpt-image", "settings are untouched");
         store.flow_rename_media("m1", "").unwrap();
         assert_eq!(store.flow_media_node("m1").unwrap().unwrap().name, "");
+    }
+
+    #[test]
+    fn a_step_batch_is_saved_and_an_out_of_range_one_is_refused() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let mut media = new_media("m2".into(), "r".into(), "a".into());
+        media.model = "gpt-image".into();
+        assert_eq!(media.batch, 1, "a new step makes one result");
+        store.flow_add_media(&media).expect("the step is added");
+        media.batch = 4;
+        media.prompt = "a fox".into();
+        store.flow_update_media(&media).expect("the batch is saved");
+        assert_eq!(store.flow_media_node("m2").unwrap().unwrap().batch, 4);
+        media.batch = 5;
+        assert!(store.flow_update_media(&media).is_err());
+        let mut other = new_media("m3".into(), "r".into(), "a".into());
+        other.model = "gpt-image".into();
+        other.batch = 0;
+        assert!(store.flow_add_media(&other).is_err());
     }
 }

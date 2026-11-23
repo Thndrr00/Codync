@@ -45,7 +45,11 @@ out. A backend without a media model (Claude, others) answers a refusal that nam
 
 `mediaModels {botId}` (`host/src/api/media.rs`) answers what that bot can make: `agent`, `installed`,
 and a `models` list with `id`, `name`, `maker`, `subscription`, `kinds` and `capabilities`
-(`aspects`, `durations`, `resolutions`, `transparent`, `voices`). A group is refused as "unknown bot":
+(`aspects`, `durations`, `resolutions`, `transparent`, `voices`). Each entry also carries
+`available`, `batchSizes` (`[1, 2, 3, 4]`) and `batchCredits`: when the service prices the model,
+`credits` is the price of one result and `totals` is that price times each batch size, computed by
+the pure `media::batch_credits`. A subscription model has no price, so its totals are `null`; no
+price, token or description is written to logs or analytics. A group is refused as "unknown bot":
 media is offered to a bot only. The usual `control` scope applies.
 
 ## Sharing
@@ -62,15 +66,28 @@ description ([analytics events](../reference/analytics-events.md)).
 
 A routine flow can hold a **media step** (`host/src/store/flow_media.rs`,
 `host/src/routines/flow/`): a picture or clip node keyed `media:<id>` with `routineId`, `kind`,
-`model`, `prompt`, `aspect`, `duration`, `resolution`, `voice` and `transparent`. Media nodes and bot
-nodes are interchangeable link ends — the same canvas rules, layout and edges apply — so a picture
-can be handed on to the next step and a bot can hand its reply to a media step. `check_settings`
+`model`, `prompt`, `aspect`, `batch`, `duration`, `resolution`, `voice` and `transparent`. Media nodes
+and bot nodes are interchangeable link ends — the same canvas rules, layout and edges apply — so a
+picture can be handed on to the next step and a bot can hand its reply to a media step. `check_settings`
 validates a step against its model before it runs; a run makes the file, shares it in the routine's
 thread and hands the file on.
 
-`addRoutineFlowMedia`, `updateRoutineFlowMedia` and `removeRoutineFlowMedia` are the methods; the
-canvas payload carries `mediaNodes` next to routines, links and positions, and the `routineFlow`
-event still announces a changed canvas.
+`batch` is 1 to 4 (default 1; an out-of-range value from a client is bounded by the pure
+`media::media_batch`, and the store refuses it). A batch of N makes N results through the same
+provider call path, one call at a time, checking the flow's cancellation before each and while one
+is running. Every made file is handed on, at most four files are stored on the step, and each result
+gets its own `pending`, `succeeded` or `failed` entry in the step's saved settings with the error
+text a client shows beside **Retry**. The statuses are re-saved and broadcast as the batch runs, so
+a client can show progress under still-pending results.
+
+A step whose model is not in the catalog the service can make now stops with the fixed error
+"The model of this step is not available" — first at `begin`, then again at `make` against the live
+Sunra list — before any provider call, so no credits are used. An unavailable Sunra model is not
+listed at all; the catalog entries a client receives carry `available: true`.
+
+`addRoutineFlowMedia`, `updateRoutineFlowMedia` and `removeRoutineFlowMedia` are the methods
+(`updateRoutineFlowMedia` also takes `batch`); the canvas payload carries `mediaNodes` next to
+routines, links and positions, and the `routineFlow` event still announces a changed canvas.
 
 ## Screens
 
@@ -128,7 +145,9 @@ A generation uploads each reference picture through `get_upload_url`, creates th
 `assets.sunra.ai` through the egress allowlist. Every hop must be https, every call has a timeout,
 and the result is kept as a bot file named `sunra-image.png` (or the matching extension). The model's
 live capabilities say how many references it takes and whether it takes frames or a clear
-background; a last frame is only sent with a first one.
+background; a last frame is only sent with a first one. The pictures uploaded for a step are kept
+by the service for up to **three days**, not one (`media::REFERENCE_RETENTION_DAYS` and the pure
+`reference_expired` decision; the window is also in the catalog JSON for clients to show).
 
 ## Not ported
 

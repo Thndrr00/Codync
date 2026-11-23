@@ -239,6 +239,11 @@ fn media_from_file(step: &portable::WorkflowStep, routine_id: &str, bot: &str) -
                     node.aspect = text.to_owned();
                 }
             }
+            "batch" => {
+                if let Some(number) = value.as_u64().and_then(u32::try_from).ok() {
+                    node.batch = crate::media::media_batch(number);
+                }
+            }
             "duration" => {
                 if let Some(seconds) = value.as_u64().and_then(u32::try_from).ok() {
                     node.duration = seconds;

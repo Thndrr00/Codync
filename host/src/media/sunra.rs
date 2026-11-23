@@ -10,7 +10,7 @@
 //! every call has a timeout and a size cap. When the connector is missing or signed out, `available`
 //! is false and a flow without Sunra behaves exactly as before.
 
-use super::{Kind, MAX_PROMPT_BYTES};
+use super::{Kind, MAX_PROMPT_BYTES, batch_credits_view, media_batch};
 use crate::egress::{self, Policy};
 use crate::hub::Hub;
 use crate::market::Connector;
@@ -91,6 +91,8 @@ pub struct Model {
     pub durations: Vec<u32>,
     pub resolutions: Vec<String>,
     pub transparent: bool,
+    /// Credits for one result when the live list prices the model; `None` when it does not.
+    pub credits: Option<u64>,
     /// Which pictures and which background the model takes.
     pub plan: Plan,
 }
@@ -143,6 +145,16 @@ fn numbers(value: &Value) -> Vec<u32> {
 
 fn count(value: &Value) -> Option<usize> {
     value.as_u64().and_then(|number| usize::try_from(number).ok()).filter(|number| *number > 0)
+}
+
+/// The credit price of one result in a `list_models` item, when it carries one. A missing or absurd
+/// number stays unknown, so the client shows no amount rather than a wrong one.
+fn model_credits(item: &Value) -> Option<u64> {
+    ["credits", "credit_cost", "creditCost", "price"]
+        .iter()
+        .find_map(|key| item[*key].as_f64().or_else(|| item[*key].as_u64().map(|number| number as f64)))
+        .filter(|number| number.is_finite() && (0.0..=1_000_000.0).contains(number))
+        .map(|number| number.floor() as u64)
 }
 
 fn valid_id(value: &str) -> bool {
@@ -239,6 +251,7 @@ fn entry(item: &Value) -> Option<Model> {
         durations,
         resolutions: resolutions(item),
         transparent,
+        credits: model_credits(item),
         plan: Plan {
             references,
             start: kind == Kind::Video && capabilities.contains("image-to-video"),
@@ -280,6 +293,9 @@ pub fn model_json(model: &Model) -> Value {
         "resolutions": resolutions,
         "transparent": model.transparent,
         "voices": Value::Null,
+        "available": true,
+        "batchCredits": batch_credits_view(model.credits),
+        "referenceRetentionDays": super::REFERENCE_RETENTION_DAYS,
         "thinkingLevels": [],
     });
     value["capabilities"] =
@@ -608,6 +624,8 @@ pub struct Request {
     pub kind: Kind,
     pub prompt: String,
     pub aspect: String,
+    /// How many results to make; one per provider call in the batch loop.
+    pub batch: u32,
     pub duration: u32,
     pub resolution: Option<String>,
     pub transparent: bool,
@@ -653,6 +671,7 @@ impl Request {
             kind,
             prompt: node.prompt.trim().to_owned(),
             aspect: node.aspect.clone(),
+            batch: media_batch(node.batch),
             duration: node.duration,
             resolution: (kind == Kind::Video).then(|| node.resolution.clone()).flatten(),
             transparent: node.transparent && kind == Kind::Image,
@@ -948,6 +967,7 @@ mod tests {
             "supported_aspect_ratios": ["9:16", "1:1", "7:9"],
             "capabilities": ["image-editing", "transparent-background"],
             "max_ref_images": 6,
+            "credits": 7,
             "supported_resolutions": ["2K", "1K", "A-VERY-LONG-RESOLUTION-NAME-THAT-IS-NOT-SHOWN"]
         })
     }
@@ -982,6 +1002,7 @@ mod tests {
         assert_eq!(models[0].aspects, ["1:1", "9:16"]);
         assert!(models[0].transparent);
         assert_eq!(models[0].plan, Plan { references: 6, start: false, end: false, transparent: true });
+        assert_eq!(models[0].credits, Some(7));
         assert_eq!(models[1].id, "sunra-veo-3");
         assert_eq!(models[1].kinds, [Kind::Video]);
         assert_eq!(models[1].durations, [4, 5, 10, 15, 20, 25, 30]);
@@ -991,7 +1012,27 @@ mod tests {
         let listed = model_json(&models[0]);
         assert_eq!(listed["capabilities"]["aspects"], json!(["1:1", "9:16"]));
         assert_eq!(listed["thinkingLevels"], json!([]));
+        assert_eq!(listed["available"], json!(true));
+        assert_eq!(listed["batchCredits"]["credits"], json!(7));
+        assert_eq!(listed["batchCredits"]["totals"][3]["credits"], json!(28));
+        assert_eq!(listed["referenceRetentionDays"], json!(super::REFERENCE_RETENTION_DAYS));
         assert!(parse_models(&json!({"models": 3})).is_empty());
+    }
+
+    #[test]
+    fn a_missing_or_absurd_price_is_unknown_and_a_batch_is_bounded() {
+        assert_eq!(model_credits(&json!({"price": 4.9})), Some(4));
+        assert_eq!(model_credits(&json!({"credit_cost": 3})), Some(3));
+        assert_eq!(model_credits(&json!({})), None);
+        assert_eq!(model_credits(&json!({"price": -1})), None);
+        assert_eq!(model_credits(&json!({"price": 1e9})), None);
+        let mut node = crate::store::flow_media::new_media("m".into(), "r".into(), "b".into());
+        node.model = "sunra-nano-banana-pro".into();
+        node.prompt = "a fox".into();
+        node.batch = 8;
+        let request = Request::from_node(&node).unwrap();
+        assert_eq!(request.batch, 4);
+        assert_eq!(request.model, "sunra-nano-banana-pro");
     }
 
     #[test]

@@ -35,6 +35,8 @@ pub struct Request {
     /// What the model is asked to make.
     pub prompt: String,
     pub aspect: String,
+    /// How many results to make; one for a chat command, the step's batch in a flow.
+    pub batch: u32,
     /// Seconds; only a video uses it.
     pub duration: u32,
     /// `None` for an image of a model without resolutions.
@@ -148,6 +150,7 @@ pub fn parse(kind: Kind, backend: &str, text: &str) -> Result<Request> {
         kind,
         prompt: prompt.trim().to_owned(),
         aspect,
+        batch: super::DEFAULT_BATCH,
         duration,
         resolution,
         transparent: transparent && kind == Kind::Image && model.transparent,
@@ -299,6 +302,7 @@ pub fn flags(kind: Kind, model: &catalog::Model, aspect: &str) -> String {
 /// Every validation problem of a request, before it reaches a bot.
 pub fn check(request: &Request) -> Result<()> {
     ensure!(!request.prompt.trim().is_empty(), "empty description");
+    ensure!(super::media_batch(request.batch) == request.batch, "unsupported batch");
     ensure!(catalog::aspects(request.model).contains(&request.aspect.as_str()), "unsupported aspect");
     if request.kind == Kind::Video {
         ensure!(
@@ -410,5 +414,15 @@ mod tests {
         assert!(check(&request).is_err());
         request.resolution = Some("720p".to_owned());
         assert!(check(&request).is_ok());
+        request.batch = 4;
+        assert!(check(&request).is_ok());
+        request.batch = 5;
+        assert!(check(&request).is_err(), "a batch past four is refused before a call");
+    }
+
+    #[test]
+    fn a_chat_command_asks_for_one_result() {
+        assert_eq!(image("a red fox").batch, 1);
+        assert_eq!(parse(Kind::Video, "grok", "a pan").unwrap().batch, 1);
     }
 }

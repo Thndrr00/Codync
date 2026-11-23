@@ -165,6 +165,18 @@ fn media(id: &str, value: &Value, bot: &str) -> Result<FlowMedia> {
     short(&aspect, &format!("{where_} aspect"))?;
     let resolution = text(entry, "resolution", &where_)?.to_owned();
     short(&resolution, &format!("{where_} resolution"))?;
+    // A document saved before batches existed has no field, so it keeps making one result.
+    let batch = entry
+        .get("batch")
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|number| u32::try_from(number).ok())
+                .with_context(|| format!("{where_}'s `batch` must be 1 to 4"))
+        })
+        .transpose()?
+        .map(crate::media::media_batch)
+        .unwrap_or_else(crate::media::default_batch);
     let duration = entry
         .get("duration")
         .and_then(Value::as_u64)
@@ -195,6 +207,7 @@ fn media(id: &str, value: &Value, bot: &str) -> Result<FlowMedia> {
         model: model.to_owned(),
         prompt,
         aspect,
+        batch,
         duration,
         resolution,
         transparent,
@@ -252,7 +265,7 @@ mod tests {
             },
             "settings": {
                 "pic": {"id": "pic", "routineId": "r1", "kind": "image", "model": "gpt-image",
-                        "prompt": "a picture", "aspect": "1:1", "duration": 6, "resolution": "480p",
+                        "prompt": "a picture", "aspect": "1:1", "batch": 2, "duration": 6, "resolution": "480p",
                         "transparent": false, "voice": null, "createdAt": 9}
             },
             "groups": {"g1": {"id": "g1", "name": "Pictures", "members": ["media:pic"]}}
@@ -363,6 +376,17 @@ mod tests {
         let state = runnable("owner", &sample()).expect("an old document");
         assert!(state.links.iter().all(|link| link.name.is_empty()));
         assert!(state.media.iter().all(|media| media.name.is_empty()));
+    }
+
+    #[test]
+    fn a_document_without_a_batch_makes_one_result_and_a_wide_one_is_bounded() {
+        let mut document = sample();
+        document.settings.get_mut("pic").unwrap().as_object_mut().unwrap().remove("batch");
+        assert_eq!(runnable("owner", &document).unwrap().media[0].batch, 1);
+        document.settings.get_mut("pic").unwrap().as_object_mut().unwrap().insert("batch".into(), json!(9));
+        assert_eq!(runnable("owner", &document).unwrap().media[0].batch, 4);
+        document.settings.get_mut("pic").unwrap().as_object_mut().unwrap().insert("batch".into(), json!("four"));
+        assert!(runnable("owner", &document).is_err(), "a batch that is not a number is refused");
     }
 
     #[test]

@@ -548,6 +548,7 @@ async fn a_media_step_is_added_linked_on_the_canvas_and_removed_with_its_links()
     let key = format!("media:{id}");
     assert_eq!(added["media"]["model"], "gpt-image", "the first image model when the backend makes none");
     assert_eq!(added["media"]["aspect"], "1:1");
+    assert_eq!(added["media"]["batch"], 1, "a new step makes one result");
     assert!(f.call("connectRoutineFlow", json!({"routineId": r, "fromBotId": "a", "toBotId": key})).await.is_ok());
     f.call("saveRoutineFlowPosition", json!({"botId": "a", "nodeKey": key, "x": 2, "y": 3})).await.unwrap();
     assert!(
@@ -565,14 +566,16 @@ async fn a_media_step_is_added_linked_on_the_canvas_and_removed_with_its_links()
     assert!(f.call("updateRoutineFlowMedia", json!({"mediaId": video_id, "model": "gpt-image"})).await.is_err());
     assert!(f.call("updateRoutineFlowMedia", json!({"mediaId": id, "model": "nope"})).await.is_err());
     let changed = f
-        .call("updateRoutineFlowMedia", json!({"mediaId": id, "prompt": "a blue fox", "aspect": "16:9"}))
+        .call("updateRoutineFlowMedia", json!({"mediaId": id, "prompt": "a blue fox", "aspect": "16:9", "batch": 4}))
         .await
         .unwrap();
     assert_eq!(
         (changed["media"]["prompt"].as_str(), changed["media"]["aspect"].as_str()),
         (Some("a blue fox"), Some("16:9"))
     );
+    assert_eq!(changed["media"]["batch"], 4);
     assert_eq!(changed["changed"], true);
+    assert!(f.call("updateRoutineFlowMedia", json!({"mediaId": id, "batch": "four"})).await.is_err());
     assert!(f.call("updateRoutineFlowMedia", json!({"mediaId": "nope", "prompt": "x"})).await.is_err());
     f.call("removeRoutineFlowMedia", json!({"mediaId": id})).await.unwrap();
     assert!(f.hub.store.flow_links(&r).unwrap().is_empty(), "the links that named it go too");

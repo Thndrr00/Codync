@@ -17,7 +17,7 @@ from the graphical canvas of the desktop and phone apps, or in the terminal UI (
 | **Link** | `id`, `routineId`, `fromBotId`, `toBotId`, `name` (≤ 200 chars, empty = no name), `instruction` (≤ 8000 bytes, may be empty), `model` (`null` = the target bot's own), `modelOptions` (that model's settings, e.g. `effort`), `createdAt` (ms) |
 | **Step** | `id`, `runId`, `botId`, `deliveryId` (the bot request that carried the input; `null` for the routine's own bot), `input`, `output` (`null` until it replies), `status`, `error`, `files` (the pictures or clips a media step made), `createdAt`, `updatedAt` |
 | **Step status** | `running`, `succeeded`, `failed`, `skipped`, `cancelled` |
-| **Media step** | `id`, `routineId`, `name` (≤ 200 chars, empty = no name), `kind` (`image`/`video`), `model`, `prompt`, `aspect`, `duration`, `resolution`, `voice`, `transparent`, `createdAt`, `updatedAt`; node key `media:<id>` (see [media](media.md#routine-flow-steps)) |
+| **Media step** | `id`, `routineId`, `name` (≤ 200 chars, empty = no name), `kind` (`image`/`video`), `model`, `prompt`, `aspect`, `batch` (1–4, default 1), `duration`, `resolution`, `voice`, `transparent`, `createdAt`, `updatedAt`; node key `media:<id>` (see [media](media.md#routine-flow-steps)) |
 | **Position** | `nodeKey` (`routine:<id>`, `bot:<id>` or `media:<id>`), `x`, `y` (numbers, at most ±1 000 000) |
 | **Group** | `id`, `name` (≤ 120 chars), `members` (node keys, each in at most one group), `collapsed` (folded into a stack card), `x`, `y` (card position) — drawing only, never changes what runs |
 
@@ -50,6 +50,22 @@ A video step's **Length** menu lists the lengths its model declares. When the mo
 than one, **Custom** opens a slider over the range those lengths span (the smallest to the largest,
 one second per step), so the step can make a clip of exactly that length. The value is saved with the
 step; a host that doesn't know Custom keeps the short list.
+
+A picture or clip step's **Batch** (1–4) makes that many results in one run. It is saved on the media
+node with the other settings (`batch` on `updateRoutineFlowMedia`); only 1–4 count, and an older host
+that omits it makes one. When the host sends a price (`batchCredits.credits` on the model, or `price`
+on its `mediaModels` answer), the Run button shows price × batch and the number of results; a
+subscription model with no price shows no amount. The result area shows up to four results from the
+host's per-result states: pending ones keep spinning with their progress, failed ones show the host's
+own error and a **Retry** button priced for one result, and the finished files share one set of
+thumbnails whose prev/next arrows walk every result. The states are optional on the wire, so an older
+step with one status and one file list still shows as a single result.
+
+The model button follows the host's availability flag: when a saved model is marked unavailable, its
+button keeps the model's name and shows "Model not available", a run reaching it stops with the host's
+error ("The model of this step is not available"), and the picker lists only available models while
+the saved one stays visible with its marker so it can be replaced. The media switch-all change needs
+no other UI beyond this flag.
 
 ## Collaborative edits
 
@@ -128,7 +144,12 @@ Rules the host enforces:
   voice, transparency, and the backend that makes the kind). A step whose model id starts with
   `sunra-` runs through the installed, signed-in Sunra connector instead of an agent: the host spends
   that sign-in's credits, polls the job, and keeps the file like any other media step. Without the
-  connector the step fails with a sign-in message; flows that use other models are unchanged. See
+  connector the step fails with a sign-in message; flows that use other models are unchanged. A
+  `batch` of N makes N results through that same provider path, bounded at 4, and each result's
+  status is saved on the step (`pending`, `succeeded`, `failed`) so a client can show progress and
+  a Retry for a failed one; at most four files are kept. A model not in the catalog the service can
+  make now stops the step with "The model of this step is not available" before any provider call,
+  so it uses no credits. See
   [media](media.md#sunra) for the model list, credits and transfer rules.
 - **Connecting rules** (`graph.rs`): not to itself, never into the routine's own bot, only from a bot the flow
   already reaches, no duplicate link between the same two bots, no loop, no deeper than the limit.
@@ -198,7 +219,7 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `disconnectRoutineFlow` | `linkId` | `{"ok": true}` |
 | `updateRoutineFlowLink` | `linkId`, `instruction`, optional `model` and `modelOptions` (absent keeps, `null`/`{}` clears) | `{"link": Link}` |
 | `addRoutineFlowMedia` | `routineId`, `kind` (`image`/`video`) | `{"media": MediaStep}` |
-| `updateRoutineFlowMedia` | `mediaId` and any of `prompt`, `model`, `aspect`, `duration`, `resolution`, `voice`, `transparent` | `{"media": MediaStep}` |
+| `updateRoutineFlowMedia` | `mediaId` and any of `prompt`, `model`, `aspect`, `batch` (1–4), `duration`, `resolution`, `voice`, `transparent` | `{"media": MediaStep}` |
 | `removeRoutineFlowMedia` | `mediaId` | `{"ok": true}` |
 | `saveRoutineFlowGroups` | `botId`, `groups` (the whole list of Groups; every member must name an existing node) | `{"ok": true}` |
 | `saveRoutineFlow` | `botId`, `baseRev`, `document` (`nodes`, `links`, `settings`, `groups` as id → version maps, optional `rev`) | `{"saved": document, "merged": bool}` or `{"conflicts": [...], "document": merged}` |
@@ -240,7 +261,7 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
     "output": { "message": null, "title": null, "labels": null, "person": null }
   }],
   "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "name": "", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
-  "mediaNodes": [ { "id": "…", "routineId": "…", "name": "", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],
+  "mediaNodes": [ { "id": "…", "routineId": "…", "name": "", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "batch": 1, "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],
   "positions": [ { "nodeKey": "routine:…", "x": 0.0, "y": 0.0 } ],
   "placedBotIds": ["…"],
   "groups": [ { "id": "g1", "name": "Pictures", "members": ["media:…", "media:…"], "collapsed": false, "x": 0.0, "y": 0.0 } ]

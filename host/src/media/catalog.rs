@@ -2,7 +2,7 @@
 //! (`packages/contracts/src/ipc-workflows.ts`). The agent provider that owns the model makes the
 //! file with its own tool, so the model needs no key and no separate service.
 
-use super::Kind;
+use super::{Kind, batch_credits_view};
 use serde_json::{Value, json};
 
 /// OpenBot 0.74.0: a Mistral model's Effort menu shows the thinking levels that model has, such as
@@ -60,6 +60,9 @@ pub struct Model {
     pub transparent: bool,
     /// Whether a video can speak in a preset voice.
     pub voices: bool,
+    /// Credits for one result when the service prices this model; `None` for a subscription model,
+    /// which has no credit amount to multiply by a batch.
+    pub credits: Option<u64>,
 }
 
 const MODELS: [Model; 2] = [
@@ -75,6 +78,7 @@ const MODELS: [Model; 2] = [
         resolutions: &[],
         transparent: true,
         voices: false,
+        credits: None,
     },
     Model {
         id: "grok-imagine",
@@ -88,11 +92,18 @@ const MODELS: [Model; 2] = [
         resolutions: &[],
         transparent: true,
         voices: true,
+        credits: None,
     },
 ];
 
 pub fn all() -> &'static [Model] {
     &MODELS
+}
+
+/// The ids of the models the fixed catalog can make now: every one of them. A step checks this
+/// before it starts a run, with the same pure decision a live Sunra catalog uses.
+pub fn available_ids() -> impl Iterator<Item = &'static str> {
+    MODELS.iter().map(|model| model.id)
 }
 
 pub fn model(id: &str) -> Option<&'static Model> {
@@ -152,6 +163,9 @@ pub fn json(model: &Model) -> Value {
         "aspects": aspects(model),
         "transparent": model.transparent,
         "voices": model.voices,
+        "available": true,
+        "batchCredits": batch_credits_view(model.credits),
+        "referenceRetentionDays": super::REFERENCE_RETENTION_DAYS,
         "thinkingLevels": thinking_levels(model.backend),
         "capabilities": super::capabilities(model),
     })
@@ -196,9 +210,20 @@ mod tests {
         assert_eq!(aspects(node), super::super::ASPECTS);
         assert_eq!(durations(node), super::super::DURATIONS);
         let listed = json(node);
-        assert_eq!(listed["aspects"].as_array().unwrap().len(), 4);
+        assert_eq!(listed["aspects"].as_array().unwrap().len(), super::super::ASPECTS.len());
         assert_eq!(listed["kinds"].as_array().unwrap().len(), 2);
         assert_eq!(listed["capabilities"]["voices"].as_array().unwrap().len(), 4);
         assert!(json(model("gpt-image").unwrap())["capabilities"]["voices"].is_null());
+    }
+
+    #[test]
+    fn a_listed_model_is_available_and_shows_its_batch_totals() {
+        let listed = json(model("gpt-image").unwrap());
+        assert_eq!(listed["available"], json!(true));
+        assert_eq!(listed["batchCredits"]["batchSizes"], json!([1, 2, 3, 4]));
+        assert_eq!(listed["batchCredits"]["totals"], Value::Null, "a subscription has no credit price");
+        assert_eq!(listed["referenceRetentionDays"], json!(super::REFERENCE_RETENTION_DAYS));
+        assert!(super::super::model_available(available_ids(), "gpt-image"));
+        assert!(!super::super::model_available(available_ids(), "gpt-image-v2"));
     }
 }

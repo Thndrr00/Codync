@@ -335,6 +335,10 @@ fn apply_settings(b: &Value, node: &mut FlowMedia) -> Result<()> {
     if let Some(aspect) = text_arg(b, "aspect")? {
         node.aspect = aspect;
     }
+    if let Some(batch) = b.get("batch").filter(|value| !value.is_null()) {
+        let asked = batch.as_u64().and_then(|value| u32::try_from(value).ok()).context("`batch` must be 1 to 4")?;
+        node.batch = crate::media::media_batch(asked);
+    }
     if b.get("duration").is_some() {
         node.duration =
             b["duration"].as_u64().and_then(|value| u32::try_from(value).ok()).context("`duration` must be seconds")?;

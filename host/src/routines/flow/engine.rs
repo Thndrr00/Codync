@@ -6,12 +6,11 @@ use crate::chat::team::ModelOverride;
 use crate::chat::team::flow::{FlowCancelled, Handoff, handoff, recipient};
 use crate::hub::Hub;
 use crate::routines::{Routine, Run, Status, Trigger, local_zone};
-use crate::store::{FlowLink, FlowStep, NewStep, StepStatus, Store};
+use crate::store::{BotConfig, FlowLink, FlowStep, NewStep, StepStatus, Store};
 use answers::ValueProblem;
 use anyhow::{Context, Result};
-use futures::future::Either;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -114,6 +113,12 @@ pub struct StepSettings {
     pub prompt: String,
     #[serde(default)]
     pub aspect: String,
+    /// How many results a media step makes. Older runs show one.
+    #[serde(default = "crate::media::default_batch")]
+    pub batch: u32,
+    /// One status per result, so a client can show progress and a Retry on a failed one.
+    #[serde(default)]
+    pub results: Vec<crate::media::BatchResult>,
     #[serde(default)]
     pub duration: Option<u32>,
     #[serde(default)]
@@ -238,6 +243,8 @@ struct MediaPending {
     node: crate::store::FlowMedia,
     /// What the steps before it handed on.
     body: String,
+    /// What the canvas shows while the batch runs; updated after each result.
+    settings: StepSettings,
 }
 
 enum Begin {
@@ -274,6 +281,15 @@ pub(super) fn record(hub: &Hub, new: &NewStep) -> Result<Option<FlowStep>> {
 fn record_settings(hub: &Hub, step: &str, settings: &StepSettings) {
     if let Err(error) = hub.store.flow_set_step_settings(step, serde_json::to_value(settings).ok()) {
         tracing::warn!(step, error = format!("{error:#}"), "couldn't save a routine flow step's settings");
+    }
+}
+
+/// Saves a batch's per-result status and tells clients to reload the canvas. A progress write that
+/// fails does not undo the file already made.
+fn record_progress(hub: &Hub, step: &str, settings: &StepSettings) {
+    let Ok(value) = serde_json::to_value(settings) else { return };
+    if let Err(error) = hub.emit_flow_change(|| Ok(((), hub.store.flow_progress_step(step, &value)?))) {
+        tracing::warn!(step, error = format!("{error:#}"), "couldn't save a media batch's progress");
     }
 }
 
@@ -768,6 +784,23 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
         record_ended(hub, start, &crate::store::flow_media::key(id), StepStatus::Failed, "The media step is gone")?;
         return Ok(Begin::Done(Outcome::Nothing));
     };
+    // Stop before a step is recorded as running when its model is not one anyone can make. A live
+    // Sunra list is checked again in `make`, before any chargeable call.
+    let available = if crate::media::sunra::is_model(&node.model) {
+        true
+    } else {
+        crate::media::model_available(crate::media::catalog::available_ids(), &node.model)
+    };
+    if !available {
+        record_ended(
+            hub,
+            start,
+            &crate::store::flow_media::key(id),
+            StepStatus::Failed,
+            crate::media::MODEL_UNAVAILABLE,
+        )?;
+        return Ok(Begin::Done(Outcome::Nothing));
+    }
     let read: Vec<StepInput> = inputs
         .iter()
         .map(|(link, text)| StepInput {
@@ -784,11 +817,14 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
         .collect::<Vec<_>>()
         .join("\n\n---\n\n");
     body.push_str(&picture_note(&read));
+    let batch = crate::media::media_batch(node.batch);
     let settings = StepSettings {
         kind: node.kind.clone(),
         model: Some(node.model.clone()),
         prompt: node.prompt.clone(),
         aspect: node.aspect.clone(),
+        batch,
+        results: crate::media::batch_results(batch, &BTreeSet::new(), &BTreeMap::new()),
         duration: Some(node.duration),
         resolution: node.resolution.clone(),
         transparent: Some(node.transparent),
@@ -800,7 +836,7 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
     match record(hub, &new_step(start, &key, &body, StepStatus::Running))? {
         Some(step) => {
             record_settings(hub, &step.id, &settings);
-            Ok(Begin::Make(Box::new(MediaPending { step, node, body })))
+            Ok(Begin::Make(Box::new(MediaPending { step, node, body, settings })))
         }
         None => Ok(Begin::Done(earlier_outcome(hub, &start.run_id, &key)?)),
     }
@@ -849,7 +885,38 @@ fn sunra_frames(body: &str, kind: crate::media::Kind) -> crate::media::sunra::Fr
     frames
 }
 
-/// Makes a media step's file, keeps it in the routine's own bot and hands what was made on.
+/// The one provider path a media result takes: the installed Sunra connector or the bot's own
+/// agent CLI. Both are one call, so a batch repeats the same call, bounded by the step's batch.
+enum MediaRequest {
+    Sunra(crate::media::sunra::Request),
+    Agent(crate::media::command::Request),
+}
+
+impl MediaRequest {
+    fn prompt(&self) -> &str {
+        match self {
+            Self::Sunra(request) => &request.prompt,
+            Self::Agent(request) => &request.prompt,
+        }
+    }
+
+    async fn generate(
+        &self,
+        hub: &Arc<Hub>,
+        owner: &BotConfig,
+        handed: &str,
+        timeout: Duration,
+    ) -> anyhow::Result<Vec<crate::chat::files::SharedFile>> {
+        match self {
+            Self::Sunra(request) => crate::media::sunra::generate(hub, owner, request, timeout).await,
+            Self::Agent(request) => crate::media::flow::generate(hub, owner, request, handed, timeout).await,
+        }
+    }
+}
+
+/// Makes a media step's results, keeps them in the routine's own bot and hands them all on. A batch
+/// loops over the same provider call, checks cancellation between results, and gives every failed
+/// result its own status so the client can offer a Retry for just that one.
 async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watch::Receiver<bool>) -> Outcome {
     let step = pending.step.id.clone();
     let Some(owner) = hub.store.bot(&start.owner).ok().flatten().filter(|bot| !bot.deleted) else {
@@ -857,10 +924,32 @@ async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watc
         return Outcome::Nothing;
     };
     let mut cancel = cancel;
+    // A model the service cannot make now stops here: no provider call and no credits used. The
+    // live Sunra list is the catalog for a Sunra id; the fixed catalog is the one for an agent tool.
+    let sunra = crate::media::sunra::is_model(&pending.node.model);
+    let available = if sunra {
+        // Signed out is its own error, and `generate` gives that message before any call. Only a
+        // signed-in service has a live catalog to check the model against.
+        if !crate::media::sunra::available(&hub.store) {
+            true
+        } else {
+            let wanted = pending.node.model.strip_prefix("sunra-").unwrap_or(&pending.node.model);
+            let id = format!("sunra-{wanted}");
+            match tokio::time::timeout(start.timeout, crate::media::sunra::list_models(&hub.store)).await {
+                Ok(Ok(listed)) => crate::media::model_available(listed.iter().map(|model| model.id.as_str()), &id),
+                _ => false,
+            }
+        }
+    } else {
+        crate::media::model_available(crate::media::catalog::available_ids(), &pending.node.model)
+    };
+    if !available {
+        settle(hub, &step, StepStatus::Failed, None, Some(crate::media::MODEL_UNAVAILABLE));
+        return Outcome::Nothing;
+    }
     // A Sunra model is generated through the installed Sunra MCP connector, not the user's own
     // agent CLI (OpenBot nightly's Sunra media provider). Everything else keeps the CLI path.
-    let sunra = crate::media::sunra::is_model(&pending.node.model);
-    let work = if sunra {
+    let request = if sunra {
         let mut request = match crate::media::sunra::Request::from_node(&pending.node) {
             Ok(request) => request,
             Err(error) => {
@@ -871,45 +960,63 @@ async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watc
             }
         };
         request.frames = sunra_frames(&pending.body, request.kind);
-        let owner = owner.config.clone();
-        let timeout = start.timeout;
-        Either::Left(async move { crate::media::sunra::generate(hub, &owner, &request, timeout).await })
+        MediaRequest::Sunra(request)
     } else {
-        let request = match crate::media::request(&pending.node) {
-            Ok(request) => request,
+        match crate::media::request(&pending.node) {
+            Ok(request) => MediaRequest::Agent(request),
             Err(error) => {
                 let detail = format!("{error:#}");
                 let text = media_failure_text(&pending.node.kind, &detail);
                 settle(hub, &step, StepStatus::Failed, None, Some(&text));
                 return Outcome::Nothing;
             }
+        }
+    };
+    let batch = crate::media::media_batch(pending.node.batch);
+    let mut settings = pending.settings;
+    let mut succeeded = BTreeSet::new();
+    let mut failed: BTreeMap<u32, String> = BTreeMap::new();
+    let mut files = Vec::new();
+    let mut cancelled = false;
+    for index in 0..batch {
+        if *cancel.borrow() {
+            cancelled = true;
+            break;
+        }
+        let attempt = tokio::select! {
+            result = request.generate(hub, &owner.config, &pending.body, start.timeout) => Some(result),
+            _ = cancel.wait_for(|stopped| *stopped) => None,
         };
-        let owner = owner.config.clone();
-        let body = pending.body.clone();
-        let timeout = start.timeout;
-        Either::Right(async move { crate::media::flow::generate(hub, &owner, &request, &body, timeout).await })
-    };
-    tokio::pin!(work);
-    let made = tokio::select! {
-        made = &mut work => made,
-        _ = cancel.wait_for(|stopped| *stopped) => {
-            settle(hub, &step, StepStatus::Cancelled, None, Some("The flow was cancelled while the file was being made"));
-            return Outcome::Nothing;
+        let Some(result) = attempt else {
+            cancelled = true;
+            break;
+        };
+        match result {
+            Ok(made) => {
+                succeeded.insert(index);
+                files.extend(made);
+            }
+            Err(error) => {
+                let detail = format!("{error:#}");
+                failed.insert(index, media_failure_text(&pending.node.kind, &detail));
+            }
         }
-    };
-    match made {
-        Ok(files) => {
-            let text = made_text(&request.prompt, &files, &start.owner);
-            settle_with(hub, &step, StepStatus::Succeeded, Some(&text), None, &files);
-            Outcome::Replied(text)
-        }
-        Err(error) => {
-            let detail = format!("{error:#}");
-            let text = media_failure_text(&pending.node.kind, &detail);
-            settle(hub, &step, StepStatus::Failed, None, Some(&text));
-            Outcome::Nothing
-        }
+        settings.results = crate::media::batch_results(batch, &succeeded, &failed);
+        record_progress(hub, &step, &settings);
     }
+    if cancelled {
+        settle(hub, &step, StepStatus::Cancelled, None, Some("The flow was cancelled while the files were being made"));
+        return Outcome::Nothing;
+    }
+    let files = crate::media::kept_files(files);
+    if files.is_empty() {
+        let reason = failed.values().next().cloned().unwrap_or_else(|| "The media provider made no file".to_owned());
+        settle(hub, &step, StepStatus::Failed, None, Some(&reason));
+        return Outcome::Nothing;
+    }
+    let text = made_text(request.prompt(), &files, &start.owner);
+    settle_with(hub, &step, StepStatus::Succeeded, Some(&text), None, &files);
+    Outcome::Replied(text)
 }
 
 /// What a made file hands on: what it is and where the next bot finds it.
@@ -1266,6 +1373,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_old_step_reads_as_one_result_and_a_batch_saves_one_status_each() {
+        let old: StepSettings = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(old.batch, 1);
+        assert!(old.results.is_empty());
+        let saved = StepSettings {
+            batch: 3,
+            results: crate::media::batch_results(3, &BTreeSet::new(), &BTreeMap::new()),
+            ..StepSettings::default()
+        };
+        let written = serde_json::to_value(&saved).unwrap();
+        assert_eq!(written["batch"], serde_json::json!(3));
+        assert_eq!(written["results"].as_array().unwrap().len(), 3);
+        assert_eq!(written["results"][0]["status"], serde_json::json!("pending"));
+    }
+
+    #[test]
     fn a_one_case_run_gives_its_case_text_to_the_first_steps_only() {
         let inputs = [StepInput {
             from: "a".to_owned(),
@@ -1430,6 +1553,7 @@ mod tests {
             status: StepStatus::Succeeded,
             error: None,
             files: Vec::new(),
+            results: None,
             created_at: 0,
             updated_at: 0,
             routine_id: "r".to_owned(),
