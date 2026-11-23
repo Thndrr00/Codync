@@ -35,6 +35,88 @@ fn routine_view(r: &crate::routines::Routine, now: i64) -> Value {
     })
 }
 
+/// The activity timeline: recent steps folded into labelled runs, with a summary and daily strip.
+/// Uses only pure helpers, so every client renders the same host-computed values.
+fn activity_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
+    use crate::bdots_activity as a;
+
+    let calls: Vec<a::Call> = hub
+        .store
+        .history(bot, i64::MAX, 48)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.kind == crate::store::EntryKind::Tool.as_str())
+        .filter(|e| now - e.created_at <= 86_400_000)
+        .rev()
+        .map(|e| {
+            let name = e.data["title"].as_str().unwrap_or("tool").to_owned();
+            let error = e.data["error"].as_str().map(a::strip_ansi);
+            let exit = e.data["exitCode"].as_i64();
+            a::Call {
+                kind: crate::bdots_more::step_kind(&name),
+                name,
+                input: e.data["rawInput"].clone(),
+                error,
+                exit,
+                at_ms: e.created_at,
+            }
+        })
+        .collect();
+
+    let groups: Vec<Value> = a::merge_adjacent(&a::group_calls(&calls))
+        .into_iter()
+        .map(|g| {
+            json!({
+                "kind": g.kind,
+                "label": g.label,
+                "icon": g.icon,
+                "tone": g.tone,
+                "count": g.count,
+            })
+        })
+        .collect();
+
+    let items: Vec<Value> = calls
+        .iter()
+        .take(12)
+        .map(|c| {
+            json!({
+                "text": crate::bdots_more::describe_call(&c.name, &c.input),
+                "detail": a::call_detail(&c.input),
+                "status": a::call_status(c.error.as_deref(), c.exit),
+                "icon": a::kind_icon(c.kind),
+                "tone": a::kind_tone(c.kind),
+            })
+        })
+        .collect();
+
+    let days: Vec<Value> = a::daily_counts(&calls)
+        .into_iter()
+        .map(|(day, count)| {
+            json!({
+                "day": day,
+                "label": a::day_label(&day, &a::bucket_day(now)),
+                "count": count,
+                "width": a::bar_width(count, calls.len(), 12),
+            })
+        })
+        .collect();
+
+    let counts = a::count_by_kind(&calls);
+    json!({
+        "headline": a::activity_headline(&calls),
+        "steps": calls.len(),
+        "errors": a::error_count(&calls),
+        "dominant": a::dominant_kind(&calls),
+        "span": a::window_span(&calls, now),
+        "total": calls.len(),
+        "counts": counts.iter().map(|(kind, n)| json!({"kind": kind, "count": n, "percent": a::percent(*n, calls.len())})).collect::<Vec<_>>(),
+        "groups": groups,
+        "items": items,
+        "days": days,
+    })
+}
+
 pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
     let row = hub.store.bot(bot)?.filter(|r| !r.deleted).context("Unknown bot")?;
     let now = crate::store::now_ms();
@@ -83,6 +165,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "model": model,
         "provider": provider,
         "recentWork": recent,
+        "activity": activity_view(hub, bot, now),
         "routines": routines,
         "usage": {
             "used": used,

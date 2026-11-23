@@ -42,6 +42,29 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val activity = insights.activity
+            CardSection("Activity") {
+                row { Text(activity.headline, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Steps", activity.steps.toString()) }
+                if (activity.errors > 0) row {
+                    Text("$activity.errors failed", style = Type.caption, color = Palette.danger)
+                }
+                if (activity.groups.isNotEmpty()) row {
+                    Text(activity.groups.take(6).joinToString(" · ") { "${it.count} ${it.label}" },
+                        style = Type.caption, color = Palette.secondary)
+                }
+                for (day in activity.days.takeLast(5)) row {
+                    Text("${day.label}  ${"▮".repeat(day.width.coerceAtLeast(1))}  ${day.count}",
+                        style = Type.caption, color = Palette.tertiary)
+                }
+                for (step in activity.items.take(6)) row {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(step.text, style = Type.caption,
+                            color = if (step.status == "error") Palette.danger else Palette.text)
+                        if (step.detail.isNotBlank()) Text(step.detail, style = Type.caption, color = Palette.tertiary)
+                    }
+                }
+            }
             if (insights.recentWork.isNotEmpty()) CardSection("Recent work") {
                 for (line in insights.recentWork) row {
                     Text(line, style = Type.caption, color = Palette.secondary)

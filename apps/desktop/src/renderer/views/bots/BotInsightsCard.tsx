@@ -31,7 +31,15 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills } = insights
+  const { usage, skills, activity } = insights
+  const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
+    if (tone === 'danger' || tone === 'error') return 'danger'
+    if (tone === 'accent') return 'accent'
+    if (tone === 'good') return 'added'
+    if (tone === 'warn') return 'attention'
+    if (tone === 'tertiary') return 'tertiary'
+    return 'secondary'
+  }
   return (
     <VStack gap={12}>
       {insights.description ? (
@@ -50,6 +58,48 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Activity')}>
+        <Text size="footnote" tone="secondary">{activity.headline}</Text>
+        <ValueRow label={tr('Steps')}>{String(activity.steps)}</ValueRow>
+        {activity.errors ? (
+          <Text size="footnote" tone="danger">
+            {tr('{count} failed').replace('{count}', String(activity.errors))}
+          </Text>
+        ) : null}
+        {activity.groups.length ? (
+          <HStack gap={8}>
+            {activity.groups.slice(0, 6).map((group) => (
+              <Text key={group.kind} size="footnote" tone={toneOf(group.tone)}>
+                {`${group.count} ${group.label}`}
+              </Text>
+            ))}
+          </HStack>
+        ) : null}
+        {activity.days.length ? (
+          <VStack gap={2}>
+            {activity.days.slice(-5).map((day) => (
+              <HStack key={day.day} gap={6}>
+                <Text size="footnote" tone="tertiary">{day.label}</Text>
+                <Text size="footnote" tone="accent">{'█'.repeat(Math.max(1, day.width))}</Text>
+                <Text size="footnote" tone="secondary">{String(day.count)}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
+        {activity.items.length ? (
+          <VStack gap={2}>
+            {activity.items.slice(0, 6).map((item, i) => (
+              <VStack key={`${item.text}-${i}`} gap={0}>
+                <Text size="footnote" tone={toneOf(item.status === 'error' ? 'danger' : item.tone)}>{item.text}</Text>
+                {item.detail ? (
+                  <Text size="footnote" tone="tertiary">{item.detail}</Text>
+                ) : null}
+              </VStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       {insights.recentWork.length ? (

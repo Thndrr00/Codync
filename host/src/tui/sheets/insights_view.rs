@@ -66,6 +66,67 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let activity = &data["activity"];
+    if activity.is_object() {
+        line(buf, &mut y, tr("Activity").into_owned(), t.bold.patch(t.panel));
+        let headline = activity["headline"].as_str().unwrap_or("");
+        let steps = activity["steps"].as_u64().unwrap_or(0);
+        let errors = activity["errors"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {steps} {}", tr("steps")), t.secondary.patch(t.panel));
+        if errors > 0 {
+            line(buf, &mut y, format!("{errors} {}", tr("failed")), t.red.patch(t.panel));
+        }
+        let groups: Vec<String> = activity["groups"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(6)
+                    .map(|g| format!("{} {}", g["count"].as_u64().unwrap_or(0), g["label"].as_str().unwrap_or("")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for group in groups {
+            line(buf, &mut y, format!("  • {group}"), t.secondary.patch(t.panel));
+        }
+        let days: Vec<String> = activity["days"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .rev()
+                    .take(5)
+                    .map(|d| {
+                        format!(
+                            "  {} {} {}",
+                            d["label"].as_str().unwrap_or(""),
+                            "▮".repeat(d["width"].as_u64().unwrap_or(0).max(1) as usize),
+                            d["count"].as_u64().unwrap_or(0)
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for day in days {
+            line(buf, &mut y, day, t.dim.patch(t.panel));
+        }
+        let items: Vec<String> = activity["items"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(6)
+                    .map(|i| {
+                        let text = i["text"].as_str().unwrap_or("");
+                        let detail = i["detail"].as_str().unwrap_or("");
+                        if detail.is_empty() { format!("  • {text}") } else { format!("  • {text} — {detail}") }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let recent: Vec<&str> =
         data["recentWork"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     if !recent.is_empty() {

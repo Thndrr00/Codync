@@ -10,10 +10,31 @@ data class BotInsights(
     val model: String = "",
     val provider: String? = null,
     val recentWork: List<String> = emptyList(),
+    val activity: InsightActivity = InsightActivity(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
 )
+
+/** A host-computed activity timeline: folded runs, a daily strip and a summary. */
+@Serializable
+data class InsightActivity(
+    val headline: String = "",
+    val steps: Int = 0,
+    val errors: Int = 0,
+    val dominant: String = "",
+    val span: String = "",
+    val total: Int = 0,
+    val counts: List<InsightCount> = emptyList(),
+    val groups: List<InsightGroup> = emptyList(),
+    val items: List<InsightStep> = emptyList(),
+    val days: List<InsightDay> = emptyList(),
+)
+
+@Serializable data class InsightCount(val kind: String = "", val count: Int = 0, val percent: Int = 0)
+@Serializable data class InsightGroup(val kind: String = "", val label: String = "", val icon: String = "", val tone: String = "", val count: Int = 0)
+@Serializable data class InsightStep(val text: String = "", val detail: String = "", val status: String = "", val icon: String = "", val tone: String = "")
+@Serializable data class InsightDay(val day: String = "", val label: String = "", val count: Int = 0, val width: Int = 0)
 
 @Serializable
 data class InsightRoutine(

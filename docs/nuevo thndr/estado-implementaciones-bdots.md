@@ -124,6 +124,20 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Timeline de actividad (23 helpers + UI en 4 clientes)
+
+`bdots_activity.rs` añade 23 helpers puros para dar forma a la actividad reciente de un bot:
+`kind_icon`, `kind_tone`, `is_write`, `call_detail`, `first_line`, `shorten`, `strip_ansi`,
+`call_status`, `group_label`, `group_calls`, `merge_adjacent`, `count_by_kind`, `dominant_kind`,
+`error_count`, `activity_headline`, `percent`, `bar_width`, `bucket_day`, `days_between`,
+`day_label`, `daily_counts`, `window_start` y `window_span`. Todos tienen tests y todos son
+llamados por `activity_view` en el endpoint `botInsights` — no hay `dead_code` nuevo.
+
+El endpoint existing `botInsights` incorpora un campo `activity` con resumen, grupos de pasos,
+tira diaria y hasta 12 pasos. La sección «Activity» se renderiza dentro de la pantalla de
+Insights que ya existe en Desktop, iOS, Android y TUI, reutilizando sus componentes: no se
+añadió ninguna pantalla ni método de host nuevo.
+
 ## Pantalla de insights
 
 Los helpers puros ya tienen una superficie real: el método de solo lectura `botInsights {botId}`
