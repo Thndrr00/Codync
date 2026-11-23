@@ -7,13 +7,16 @@ import type { YourBubbles } from './theme'
 import { NO_ROSTER_VIEW_FILTER, type RosterViewFilter } from './roster-view-filter.ts'
 import { inkOn } from './bubble-colors.ts'
 import type { SavedTabsByChat } from './open-tabs.ts'
+import { DEFAULT_BINDINGS, sanitizeBindings, type BindingMap } from '../components/keyboard-shortcuts.ts'
 
 /** A stored value, or the fallback when it's missing, unreadable or of another kind (a `null` where a string
- * belongs crashed the chat window). A `null` fallback takes any value. */
-function stored<T>(raw: string | null, fallback: T): T {
+ * belongs crashed the chat window). A `null` fallback takes any value. A validator can narrow a value
+ * whose JSON type is right but whose contents are not (a keyboard binding map, say). */
+function stored<T>(raw: string | null, fallback: T, validate?: (value: unknown, fallback: T) => T): T {
   if (raw === null) return fallback
   try {
     const value: unknown = JSON.parse(raw)
+    if (validate) return validate(value, fallback)
     const sameKind = value !== null && typeof value === typeof fallback && Array.isArray(value) === Array.isArray(fallback)
     return fallback === null || sameKind ? (value as T) : fallback
   } catch {
@@ -31,18 +34,18 @@ function savedChoice(oldKey: string): boolean {
 }
 
 /** A per-window preference in localStorage (kit's `@AppStorage`), observable by views. */
-export function pref<T>(key: string, fallback: T) {
+export function pref<T>(key: string, fallback: T, validate?: (value: unknown, fallback: T) => T) {
   const listeners = new Set<() => void>()
   let value: T = (() => {
     try {
-      return stored(localStorage.getItem(key), fallback)
+      return stored(localStorage.getItem(key), fallback, validate)
     } catch {
       return fallback
     }
   })()
   window.addEventListener('storage', (e) => {
     if (e.key !== key) return
-    value = stored(e.newValue, fallback)
+    value = stored(e.newValue, fallback, validate)
     for (const l of listeners) l()
   })
   return {
@@ -131,6 +134,8 @@ export const prefs = {
   openWorkflowTabs: pref<string[]>('openWorkflowTabs', []),
   /** The command palette's last picks, newest first, leading its Recent group. */
   recentCommands: pref<string[]>('recentCommands', []),
+  /** Global shortcut chords changed in Settings › Keyboard; every invalid or duplicate one falls back to its default. */
+  keyboardBindings: pref<BindingMap>('keyboardBindings', DEFAULT_BINDINGS, sanitizeBindings),
 }
 
 /** The Mac preference supplies one scale for conversation text and app chrome. */

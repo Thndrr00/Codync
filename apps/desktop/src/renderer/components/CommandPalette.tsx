@@ -56,6 +56,8 @@ function PaletteBody({ commands, onClose }: { commands: Command[]; onClose: () =
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [recent, setRecent] = usePref(prefs.recentCommands)
+  const [bindings] = usePref(prefs.keyboardBindings)
+  const keysFor = (id: string) => shortcutKeys(id, bindings, window.codync.platform)
   const list = useRef<HTMLDivElement>(null)
 
   // Keep the caller's group order, sort within a group by how well it matches.
@@ -139,8 +141,8 @@ function PaletteBody({ commands, onClose }: { commands: Command[]; onClose: () =
                   onClick={() => execute(command)}>
                   <Icon name={command.icon ?? 'bolt'} size={16} />
                   <Text grow truncate>{tr(command.title)}</Text>
-                  {command.shortcutId && shortcutKeys(command.shortcutId) ? (
-                    <span className="command-key" aria-hidden>{shortcutKeys(command.shortcutId)}</span>
+                  {command.shortcutId && keysFor(command.shortcutId) ? (
+                    <span className="command-key" aria-hidden>{keysFor(command.shortcutId)}</span>
                   ) : null}
                 </button>
               )

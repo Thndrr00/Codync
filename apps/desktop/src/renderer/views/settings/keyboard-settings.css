@@ -1,0 +1,22 @@
+/* Settings › Keyboard: a chord button per row; the fixed keys stay plain text. */
+.keyboard-chord,
+.keyboard-fixed-keys {
+  flex: none;
+  min-width: 96px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: var(--text-caption);
+  color: var(--secondary);
+  white-space: nowrap;
+}
+.keyboard-chord {
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  background: var(--field);
+  transition: background var(--hover), color var(--hover);
+}
+.keyboard-chord:hover,
+.keyboard-chord.capturing {
+  color: var(--text);
+  background: var(--surface);
+}

@@ -2818,5 +2818,20 @@
   "Unknown setting {name}. Use {values}.": "Ajuste desconocido {name}. Usa {values}.",
   "This step uses a setting from a newer version of Codync. The workflow is read-only.": "Este paso usa un ajuste de una versión más nueva de Codync. El flujo es de solo lectura.",
   "This workflow uses a setting from a newer version of Codync. Update Codync to change it; a manual run still works.": "Este flujo usa un ajuste de una versión más nueva de Codync. Actualiza Codync para cambiarlo; una ejecución manual sigue funcionando.",
-  "{step} · {detail}": "{step} · {detail}"
+  "{step} · {detail}": "{step} · {detail}",
+  "Keyboard": "Teclado",
+  "Add an agent": "Añadir un bot",
+  "Search in chat": "Buscar en el chat",
+  "Settings: Keyboard": "Ajustes: Teclado",
+  "Reset all": "Restablecer todo",
+  "Reset": "Restablecer",
+  "Change": "Cambiar",
+  "Press keys…": "Pulsa las teclas…",
+  "Recording shortcut": "Grabando atajo",
+  "Press the new keys, or Escape to cancel.": "Pulsa las teclas nuevas o Escape para cancelar.",
+  "Change a shortcut, then press the new keys. Escape cancels. The changes apply to this device only.": "Cambia un atajo y pulsa las teclas nuevas. Escape cancela. Los cambios solo afectan a este dispositivo.",
+  "Press a key as well as the modifier, not the modifier on its own.": "Pulsa una tecla además del modificador, no solo el modificador.",
+  "That key is reserved for the app.": "Esa tecla está reservada para la app.",
+  "That shortcut is already used by another row.": "Ese atajo ya lo usa otra fila.",
+  "Press a key combination.": "Pulsa una combinación de teclas."
 }

@@ -1,13 +1,16 @@
 import { useTr } from '../lib/use-language'
+import { prefs, usePref } from '../lib/prefs'
 import { ModalHeader } from './Overlay'
 import { VStack } from './Stack'
 import { Text } from './Text'
-import { KEYBOARD_SHORTCUTS } from './keyboard-shortcuts'
+import { KEYBOARD_SHORTCUTS, shortcutKeys } from './keyboard-shortcuts'
 import './keyboard-cheatsheet.css'
 
-/** The `?` sheet: every row comes from KEYBOARD_SHORTCUTS, the same list the palette's hints use. */
+/** The `?` sheet: every row comes from KEYBOARD_SHORTCUTS, showing the bindings this device uses. */
 export function KeyboardCheatsheet({ onClose }: { onClose?: () => void }) {
   const tr = useTr()
+  const [bindings] = usePref(prefs.keyboardBindings)
+  const keysFor = (id: string) => shortcutKeys(id, bindings, window.codync.platform) ?? ''
   const groups = [...new Set(KEYBOARD_SHORTCUTS.map((shortcut) => shortcut.group))].map((name) => ({
     name,
     rows: KEYBOARD_SHORTCUTS.filter((shortcut) => shortcut.group === name),
@@ -22,7 +25,7 @@ export function KeyboardCheatsheet({ onClose }: { onClose?: () => void }) {
             {group.rows.map((shortcut) => (
               <div key={shortcut.id} className="keyboard-cheatsheet-row">
                 <Text size="body" tone="text" grow>{tr(shortcut.label)}</Text>
-                <span className="keyboard-cheatsheet-keys" aria-label={shortcut.keys}>{shortcut.keys}</span>
+                <span className="keyboard-cheatsheet-keys" aria-label={keysFor(shortcut.id)}>{keysFor(shortcut.id)}</span>
               </div>
             ))}
           </section>

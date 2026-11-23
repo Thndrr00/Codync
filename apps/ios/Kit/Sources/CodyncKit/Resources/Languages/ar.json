@@ -789,5 +789,20 @@
   "Unknown setting {name}. Use {values}.": "Unknown setting {name}. Use {values}.",
   "This step uses a setting from a newer version of Codync. The workflow is read-only.": "This step uses a setting from a newer version of Codync. The workflow is read-only.",
   "This workflow uses a setting from a newer version of Codync. Update Codync to change it; a manual run still works.": "This workflow uses a setting from a newer version of Codync. Update Codync to change it; a manual run still works.",
-  "{step} · {detail}": "{step} · {detail}"
+  "{step} · {detail}": "{step} · {detail}",
+  "Keyboard": "Keyboard",
+  "Add an agent": "Add an agent",
+  "Search in chat": "Search in chat",
+  "Settings: Keyboard": "Settings: Keyboard",
+  "Reset all": "Reset all",
+  "Reset": "Reset",
+  "Change": "Change",
+  "Press keys…": "Press keys…",
+  "Recording shortcut": "Recording shortcut",
+  "Press the new keys, or Escape to cancel.": "Press the new keys, or Escape to cancel.",
+  "Change a shortcut, then press the new keys. Escape cancels. The changes apply to this device only.": "Change a shortcut, then press the new keys. Escape cancels. The changes apply to this device only.",
+  "Press a key as well as the modifier, not the modifier on its own.": "Press a key as well as the modifier, not the modifier on its own.",
+  "That key is reserved for the app.": "That key is reserved for the app.",
+  "That shortcut is already used by another row.": "That shortcut is already used by another row.",
+  "Press a key combination.": "Press a key combination."
 }

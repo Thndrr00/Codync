@@ -15,6 +15,7 @@ test('A stored preference of another kind reads as the fallback', async () => {
     ['startupAnimation', '"yes"'],
     ['openTabsByChat', '[]'],
     ['openWorkflowTabs', '{"a":1}'],
+    ['keyboardBindings', '{"commandPalette":{"mod":true,"alt":false,"shift":false,"key":"Shift"},"toggleSidebar":{"mod":true,"alt":false,"shift":false,"key":"y"},"unknown":{"mod":true,"alt":false,"shift":false,"key":"z"}}'],
   ])
   const events = new EventTarget()
   setMaxListeners(0, events)
@@ -35,6 +36,10 @@ test('A stored preference of another kind reads as the fallback', async () => {
   assert.equal(prefs.startupAnimation.get(), true, 'a non-boolean startup switch reads as its default')
   assert.deepEqual(prefs.openTabsByChat.get(), {}, 'an array is not a tab map')
   assert.deepEqual(prefs.openWorkflowTabs.get(), [], 'an object is not a workflow tab list')
+  const bindings = prefs.keyboardBindings.get()
+  assert.equal(bindings.commandPalette?.key, 'k', 'a lone modifier is not a usable binding')
+  assert.equal(bindings.toggleSidebar?.key, 'y', 'a well-formed override is kept')
+  assert.equal(Object.hasOwn(bindings, 'unknown'), false, 'an unknown shortcut id is dropped')
 })
 
 test('a custom accent writes the accent variables and clearing it removes them', async () => {
