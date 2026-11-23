@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  NODE_WIDTH, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
+  NODE_WIDTH, answerResultRows, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
   fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, groupMediaResults, insertFieldToken, isFlowPaused, isFlowReadOnly,
   problemsForStep,
   isNewerSetting, layoutNodes, matchingFields, mediaBatch, mediaKey, mediaRetryLabel, mediaRunLabel, mediaStepsFor,
   mediaTitle, mediaTotalCredits, mediaUnitPrice, missingMediaModel, nodeAt, parseAnswerSpec, parseWorkflowFile, portCarry,
-  routineKey, specKeyOf, specText, stepNameOf, stepProgress, tidyLayout, unknownSettings, unavailableMediaModel,
+  routineKey, specKeyOf, specText, statusLabel, stepNameOf, stepProgress, tidyLayout, unknownSettings, unavailableMediaModel,
   availableMediaModels, workflowFileBytes, workflowsInFolder, zoomAt,
   type FieldMatch, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowMediaCatalog, type FlowNode,
   type FlowNodeRegistry, type FlowStep, type WorkflowFoldersSnapshot,
@@ -191,6 +191,7 @@ test('a canvas is running when a step or a recent run is still active', () => {
   assert.equal(canvasRunning(null), false)
   assert.equal(canvasRunning(canvas([])), false)
   assert.equal(canvasRunning(canvas([], {}, [step('b', 'running')])), true)
+  assert.equal(canvasRunning(canvas([], {}, [step('b', 'queued')])), true, 'a posted message keeps the tab running')
   const run = { id: 'r1', routineId: 'r', botId: 'a', status: 'recovering', createdAt: 1 }
   assert.equal(canvasRunning(canvas([], { routines: [{ ...canvas([]).routines[0], recentRuns: [run] }] })), true)
   const done = { ...run, status: 'succeeded' }
@@ -339,6 +340,29 @@ test('answer rows keep the host\'s name: type text, with unshown lines kept apar
   assert.equal(parsed.unknown, 'free form')
   assert.equal(formatAnswerSpec(parsed.rows), 'count: int\npriority: one of high, low\nnote?: text')
   assert.deepEqual(parseAnswerSpec('priority: one of high').rows, [], 'a choice needs two values')
+})
+
+test('a queued step names the waiting state instead of counting as done', () => {
+  assert.equal(statusLabel('queued'), 'Queued')
+  assert.equal(statusLabel(null), 'Not run yet')
+  const c = canvas([], {}, [step('a', 'succeeded'), step('b', 'queued')])
+  assert.deepEqual(stepProgress(c.routines[0], c.routines[0].steps[1]!), { previous: c.routines[0].steps[0], done: 1, total: 2 })
+})
+
+test('an answer-field result shows one row per field with real line breaks', () => {
+  assert.deepEqual(answerResultRows('{"summary":"Line one\\nLine two","count":3,"urgent":true,"tags":["a","b"]}'), [
+    { name: 'summary', value: 'Line one\nLine two' },
+    { name: 'count', value: '3' },
+    { name: 'urgent', value: 'yes' },
+    { name: 'tags', value: 'a, b' },
+  ])
+  // A literal backslash-n in the value stays text; it is never rendered as a line break.
+  const literal = answerResultRows('{"note":"C:\\\\temp\\\\n"}')[0]!
+  assert.equal(literal.value, 'C:\\temp\\n')
+  assert.equal(literal.value.includes('\n'), false)
+  assert.deepEqual(answerResultRows('a plain answer'), [], 'a text answer has no field rows')
+  assert.deepEqual(answerResultRows(null), [])
+  assert.deepEqual(answerResultRows('[1,2]'), [], 'an array is not an answer object')
 })
 
 const registry: FlowNodeRegistry = {

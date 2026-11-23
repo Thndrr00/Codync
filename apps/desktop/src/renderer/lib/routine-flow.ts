@@ -9,7 +9,7 @@ import type { MediaKind, MediaModel } from '@shared/media'
 import type { SharedFile } from '@shared/models'
 import { isActiveRun, type Routine, type RoutineRun } from '../views/routines/routine.ts'
 
-export type StepStatus = 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'
+export type StepStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'
 
 export interface FlowLink {
   id: string
@@ -645,7 +645,7 @@ export function stepProgress(card: FlowRoutineCard, step: FlowStep): { previous:
   const index = card.steps.findIndex((candidate) => candidate.id === step.id)
   return {
     previous: index > 0 ? card.steps[index - 1] : null,
-    done: card.steps.filter((candidate) => candidate.status !== 'running').length,
+    done: card.steps.filter((candidate) => candidate.status !== 'running' && candidate.status !== 'queued').length,
     total: card.steps.length,
   }
 }
@@ -693,7 +693,7 @@ export function flowRows(canvas: FlowCanvas): FlowRow[] {
 /** Whether this canvas has a step still running: the run snapshot a workflow tab's dot reads. */
 export function canvasRunning(canvas: FlowCanvas | null): boolean {
   return !!canvas && canvas.routines.some((card) =>
-    card.steps.some((step) => step.status === 'running') || card.recentRuns.some(isActiveRun))
+    card.steps.some((step) => step.status === 'running' || step.status === 'queued') || card.recentRuns.some(isActiveRun))
 }
 
 /** The canvas point at the middle of the viewport: where steps pasted from elsewhere land. */
@@ -719,6 +719,7 @@ export function workflowsInFolder(
 /** What a step's status says, in the words the other clients use. */
 export function statusLabel(status: StepStatus | null): string {
   switch (status) {
+    case 'queued': return 'Queued'
     case 'running': return 'Running'
     case 'succeeded': return 'Succeeded'
     case 'failed': return 'Failed'
@@ -1065,6 +1066,40 @@ export function formatAnswerSpec(rows: readonly AnswerFieldRow[]): string {
     const type = row.type === 'choice' ? `${ANSWER_TYPE_TEXT.choice} ${row.values.join(', ')}` : ANSWER_TYPE_TEXT[row.type]
     return `${row.name}${row.optional ? '?' : ''}: ${type}`
   }).join('\n')
+}
+
+// MARK: answer-field results (OpenBot 0.77.0)
+
+/** One field of a step's typed answer, ready for its own row. */
+export interface AnswerResultRow {
+  name: string
+  /** The value as a person reads it: real line breaks, no raw JSON escapes. */
+  value: string
+}
+
+/**
+ * Turns a step's answer-field JSON into one row per field. A JSON `\n` in a value becomes a real
+ * line break; a literal backslash-n stays text. A plain text answer gives no rows, so the caller
+ * keeps showing it as text. "Copy result" copies the raw output, never these rows.
+ */
+export function answerResultRows(output: string | null): AnswerResultRow[] {
+  if (!output?.trim()) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(output)
+  } catch {
+    return []
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return []
+  const rows: AnswerResultRow[] = []
+  for (const [name, value] of Object.entries(parsed)) {
+    if (value === null || value === undefined) continue
+    if (Array.isArray(value)) rows.push({ name, value: value.map(String).join(', ') })
+    else if (typeof value === 'boolean') rows.push({ name, value: value ? 'yes' : 'no' })
+    else if (typeof value === 'object') rows.push({ name, value: JSON.stringify(value) })
+    else rows.push({ name, value: String(value) })
+  }
+  return rows
 }
 
 // MARK: node registry (values the host knows)

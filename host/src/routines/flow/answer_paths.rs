@@ -110,6 +110,80 @@ pub fn answer_sources(graph: &Graph, edges: &[GraphEdge], node_id: &str) -> Vec<
     sources
 }
 
+/// OpenBot 0.77.0: a workflow loop runs each step one time per round. A loop is the forward chain
+/// from just after a loop-back edge to the node that edge returns to; that chain is the order the
+/// steps run in one round. Loop-backs are excluded from `forward`.
+fn loop_rounds(graph: &Graph) -> Vec<Vec<String>> {
+    let forward = forward_edges(graph);
+    graph
+        .edges
+        .iter()
+        .filter(|edge| edge.is_loop)
+        .filter_map(|back| {
+            let mut order = vec![back.to.clone()];
+            let mut seen = BTreeSet::from([back.to.clone()]);
+            let mut at = back.to.as_str();
+            while at != back.from.as_str() {
+                let next = forward
+                    .iter()
+                    .filter(|edge| edge.from == at && !seen.contains(&edge.to))
+                    .filter(|edge| forward_reaches(&forward, &edge.to, &back.from))
+                    .map(|edge| edge.to.as_str())
+                    .min()?;
+                order.push(next.to_owned());
+                seen.insert(next.to_owned());
+                at = next;
+            }
+            Some(order)
+        })
+        .collect()
+}
+
+/// Whether `to` is reachable from `from` along forward edges, used to stay on a loop's chain.
+fn forward_reaches(forward: &[GraphEdge], from: &str, to: &str) -> bool {
+    let mut seen = BTreeSet::new();
+    let mut pending = vec![from];
+    while let Some(at) = pending.pop() {
+        if at == to {
+            return true;
+        }
+        if !seen.insert(at) {
+            continue;
+        }
+        pending.extend(forward.iter().filter(|edge| edge.from == at).map(|edge| edge.to.as_str()));
+    }
+    false
+}
+
+/// The supplier answers a step may read in a given round of a loop.
+///
+/// OpenBot 0.77.0: a step that reads an earlier and a later step of a loop could run on the later
+/// step's previous-round answer, then run a second time when that step ran again. A supplier inside
+/// a loop is readable only once it has run in this round; one outside a loop keeps its answer for
+/// the whole run. `ran_in_round` maps a node to the round of its newest answer.
+pub fn readable_sources_in_round(
+    graph: &Graph,
+    node_id: &str,
+    round: u32,
+    ran_in_round: &BTreeMap<String, u32>,
+) -> Vec<AnswerSource> {
+    let loops = loop_rounds(graph);
+    answer_sources(graph, &forward_edges(graph), node_id)
+        .into_iter()
+        .filter(|source| {
+            loops
+                .iter()
+                .all(|order| !order.contains(&source.node_id) || ran_in_round.get(&source.node_id) == Some(&round))
+        })
+        .collect()
+}
+
+/// OpenBot 0.77.0: a step runs once per round. A loop-back that reaches it again must wait for the
+/// next round instead of starting a second run with last round's answers.
+pub fn may_run_in_round(node_id: &str, round: u32, ran_in_round: &BTreeMap<String, u32>) -> bool {
+    ran_in_round.get(node_id).is_none_or(|last| *last != round)
+}
+
 /// All the fields a step can name, with every declaration that provides one (to spot conflicts).
 pub fn input_fields(graph: &Graph, edges: &[GraphEdge], node_id: &str) -> BTreeMap<String, Vec<AnswerField>> {
     let mut found = BTreeMap::new();

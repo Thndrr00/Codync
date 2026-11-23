@@ -46,6 +46,12 @@ fn spec_arg(args: &Value, key: &str) -> Result<Option<String>> {
     }
 }
 
+/// OpenBot 0.77.0: a step whose agent has not picked its message up yet is still waiting for an
+/// answer, so a tool call in that moment finds the same step as one already running.
+fn awaiting_agent(status: StepStatus) -> bool {
+    matches!(status, StepStatus::Queued | StepStatus::Running)
+}
+
 /// The newest run with a step of this bot still waiting for a reply.
 fn waiting_run(hub: &Hub, bot: &str) -> Result<String> {
     hub.store
@@ -54,7 +60,7 @@ fn waiting_run(hub: &Hub, bot: &str) -> Result<String> {
         .find(|run| {
             hub.store
                 .flow_run_steps(&run.run_id)
-                .map(|steps| steps.iter().any(|step| step.bot_id == bot && step.status == StepStatus::Running))
+                .map(|steps| steps.iter().any(|step| step.bot_id == bot && awaiting_agent(step.status)))
                 .unwrap_or(false)
         })
         .map(|run| run.run_id)
@@ -69,7 +75,7 @@ fn workflow_answer(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
         .store
         .flow_run_steps(&run)?
         .into_iter()
-        .find(|step| step.bot_id == bot && step.status == StepStatus::Running)
+        .find(|step| step.bot_id == bot && awaiting_agent(step.status))
         .context("no workflow step of yours is waiting for an answer in that run")?;
     let specs = answers::load_specs(&hub.store, &step.owner_bot_id);
     let fields = specs.get(&step.bot_id).map(answers::fields_of).unwrap_or_default();

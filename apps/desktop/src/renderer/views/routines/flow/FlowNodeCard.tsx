@@ -8,6 +8,7 @@ import { useTr } from '../../../lib/use-language'
 import { routineTint, statusLabel, mediaTitle, type FlowMedia, type FlowNode, type FlowRoutineCard, type FlowStep, type StepStatus } from '../../../lib/routine-flow.ts'
 
 const STATUS_ICON: Record<StepStatus, string> = {
+  queued: 'clock',
   running: 'arrow.triangle.2.circlepath',
   succeeded: 'checkmark.circle',
   failed: 'xmark.circle',

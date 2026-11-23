@@ -16,7 +16,7 @@ from the graphical canvas of the desktop and phone apps, or in the terminal UI (
 |---|---|
 | **Link** | `id`, `routineId`, `fromBotId`, `toBotId`, `name` (≤ 200 chars, empty = no name), `instruction` (≤ 8000 bytes, may be empty), `model` (`null` = the target bot's own), `modelOptions` (that model's settings, e.g. `effort`), `createdAt` (ms) |
 | **Step** | `id`, `runId`, `botId`, `deliveryId` (the bot request that carried the input; `null` for the routine's own bot), `input`, `output` (`null` until it replies), `status`, `error`, `files` (the pictures or clips a media step made), `createdAt`, `updatedAt` |
-| **Step status** | `running`, `succeeded`, `failed`, `skipped`, `cancelled` |
+| **Step status** | `queued` (message posted, agent has not taken it), `running`, `succeeded`, `failed`, `skipped`, `cancelled` |
 | **Media step** | `id`, `routineId`, `name` (≤ 200 chars, empty = no name), `kind` (`image`/`video`), `model`, `prompt`, `aspect`, `batch` (1–4, default 1), `duration`, `resolution`, `voice`, `transparent`, `createdAt`, `updatedAt`; node key `media:<id>` (see [media](media.md#routine-flow-steps)) |
 | **Position** | `nodeKey` (`routine:<id>`, `bot:<id>` or `media:<id>`), `x`, `y` (numbers, at most ±1 000 000) |
 | **Group** | `id`, `name` (≤ 120 chars), `members` (node keys, each in at most one group), `collapsed` (folded into a stack card), `x`, `y` (card position) — drawing only, never changes what runs |
@@ -347,6 +347,25 @@ OpenBot nightly's workflow answers.
 
 The validators live in `host/src/routines/flow/answers.rs` and `answer_paths.rs` and are called from the engine's
 step/run/answer path, the flow API and the flow tools.
+
+## Loop rounds, queued steps and result rows (OpenBot 0.77.0)
+
+- **One run per round.** A workflow loop runs each of its steps once per round. The pure decisions in
+  `answer_paths.rs` hold back a later step's previous-round answer until it has run again in this round,
+  so a step that reads both an earlier and a later step cannot run too soon and then a second time. The
+  engine calls them on the graph of every real step; tests use a synthetic loop graph. Stored flows are
+  still acyclic, so a run here is a single round.
+- **Queued.** An agent step is stored `queued` while its message is posted, and becomes `running` only
+  when the hand-off reaches the agent's queue. A message that never starts is settled or failed like a
+  running one; a media step starts `running` because it makes its own file. The desktop canvas and
+  inspector show **Queued** with the existing status styling; other clients keep their current labels
+  until they port the new status.
+- **Run one step** refuses a predecessor's stored answer when that predecessor failed or was stopped
+  most recently, and answers with "Run that step again first" (`stale_seed_problem`, wired into
+  `runRoutineFlowFromStep`).
+- **Result rows.** A step with answer fields shows each field on its own row with real line breaks instead
+  of one line of raw JSON with `\n` in it (`answerResultRows` in `lib/routine-flow.ts`). **Copy result**
+  still copies the raw JSON.
 
 ## Typed field editing on the desktop
 

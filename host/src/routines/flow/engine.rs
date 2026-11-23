@@ -19,6 +19,17 @@ use tokio::task::JoinSet;
 /// Why a step after a cancelled flow never ran.
 const CANCELLED_BEFORE: &str = "The flow was cancelled before this step started";
 
+/// OpenBot 0.77.0: a loop runs each step once per round. Stored flows are acyclic, so a run here is
+/// a single round; the pure round decisions still guard the answers a step reads and how often it
+/// runs if a loop graph ever reaches the engine.
+const RUN_ROUND: u32 = 0;
+
+/// OpenBot 0.77.0: an agent step waits `queued` while its message reaches the agent, and only the
+/// hand-off's delivery moves it to `running`. A media step makes its own file, so it starts running.
+fn initial_step_status(node: &str) -> StepStatus {
+    if node.starts_with(crate::store::flow_media::PREFIX) { StepStatus::Running } else { StepStatus::Queued }
+}
+
 /// OpenBot 0.74.0: a routine result that waits on a teammate's answer is posted with that answer,
 /// and never waits longer than a day for it. In Codync a teammate the routine handed work to is a
 /// flow step: the post below waits for the last step's reply, and each handoff is bounded by this
@@ -503,7 +514,10 @@ fn begin(
     // runnable. Resolve it before current recipient/input checks when replaying after a crash, but
     // check a stored answer against the fields this run started with: the workflow may have changed.
     let steps = if *cancel.borrow() { Vec::new() } else { hub.store.flow_run_steps(&start.run_id)? };
-    if let Some(step) = steps.iter().find(|step| step.bot_id == bot).cloned() {
+    let ran_in_round: BTreeMap<String, u32> = steps.iter().map(|step| (step.bot_id.clone(), RUN_ROUND)).collect();
+    if !answer_paths::may_run_in_round(bot, RUN_ROUND, &ran_in_round)
+        && let Some(step) = steps.iter().find(|step| step.bot_id == bot).cloned()
+    {
         if let Err(problem) = saved_answer_problem(start, bot, &step) {
             return end(StepStatus::Failed, &problem);
         }
@@ -558,8 +572,7 @@ fn begin(
         return end(StepStatus::Failed, &gap.text());
     }
     let fields = graph.nodes.get(bot).map(|node| answers::fields_of(&node.spec)).unwrap_or_default();
-    let forward = answer_paths::forward_edges(&graph);
-    let sources = answer_paths::answer_sources(&graph, &forward, bot);
+    let sources = answer_paths::readable_sources_in_round(&graph, bot, RUN_ROUND, &ran_in_round);
     let mut outputs: BTreeMap<String, String> = steps
         .iter()
         .filter(|step| step.status == StepStatus::Succeeded)
@@ -625,7 +638,7 @@ fn begin(
         inputs: names,
         ..StepSettings::default()
     };
-    match record(hub, &new_step(start, bot, &body, StepStatus::Running))? {
+    match record(hub, &new_step(start, bot, &body, initial_step_status(bot)))? {
         Some(step) => {
             record_settings(hub, &step.id, &settings);
             let hops = u8::try_from(depth).unwrap_or(u8::MAX);
@@ -833,7 +846,7 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
         ..StepSettings::default()
     };
     let key = crate::store::flow_media::key(id);
-    match record(hub, &new_step(start, &key, &body, StepStatus::Running))? {
+    match record(hub, &new_step(start, &key, &body, initial_step_status(&key)))? {
         Some(step) => {
             record_settings(hub, &step.id, &settings);
             Ok(Begin::Make(Box::new(MediaPending { step, node, body, settings })))
@@ -1135,6 +1148,15 @@ fn attach_delivery(hub: &Hub, step: &str, delivery: &str) {
     }
 }
 
+/// OpenBot 0.77.0: the hand-off has put the message in the agent's queue, so a queued step starts
+/// running now, not when it was first recorded. The delivery still goes on the step either way.
+fn handoff_sent(hub: &Hub, step: &str, delivery: &str) {
+    if let Err(e) = hub.emit_flow_change(|| Ok(((), hub.store.flow_start_queued_step(step, delivery)?))) {
+        tracing::warn!(step, error = format!("{e:#}"), "couldn't start a queued routine flow step");
+    }
+    attach_delivery(hub, step, delivery);
+}
+
 async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Receiver<bool>) -> Outcome {
     let (step, fields) = (pending.step.id.clone(), pending.fields);
     let request = Handoff {
@@ -1147,7 +1169,7 @@ async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Re
         timeout: teammate_wait(start.timeout),
         cancel: cancel.clone(),
     };
-    let first = handoff(hub, request, |delivery| attach_delivery(hub, &step, delivery)).await;
+    let first = handoff(hub, request, |delivery| handoff_sent(hub, &step, delivery)).await;
     match first {
         Ok(text) if fields.is_empty() || nothing_to_report(&text) => {
             if nothing_to_report(&text) {
@@ -1386,6 +1408,12 @@ mod tests {
         assert_eq!(written["batch"], serde_json::json!(3));
         assert_eq!(written["results"].as_array().unwrap().len(), 3);
         assert_eq!(written["results"][0]["status"], serde_json::json!("pending"));
+    }
+
+    #[test]
+    fn an_agent_step_waits_queued_while_a_media_step_starts_running() {
+        assert_eq!(initial_step_status("ada"), StepStatus::Queued);
+        assert_eq!(initial_step_status(&crate::store::flow_media::key("m1")), StepStatus::Running);
     }
 
     #[test]

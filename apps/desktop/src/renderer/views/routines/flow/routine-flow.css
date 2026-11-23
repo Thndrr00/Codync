@@ -558,6 +558,7 @@
 }
 .flow-run-dot[data-status='succeeded'] { background: var(--added); }
 .flow-run-dot[data-status='failed'] { background: var(--danger); }
+.flow-run-dot[data-status='queued'] { background: var(--attention); }
 .flow-run-dot[data-status='running'] { background: var(--accent); }
 .flow-run-dot[data-status='cancelled'],
 .flow-run-dot[data-status='skipped'] { background: var(--secondary); }
@@ -720,6 +721,9 @@
   border-radius: var(--radius-pill);
   background: rgba(var(--text-rgb), 0.07);
   color: var(--secondary);
+}
+.flow-status[data-status='queued'] {
+  color: var(--attention);
 }
 .flow-status[data-status='running'] {
   color: var(--accent);
@@ -1042,6 +1046,20 @@
 }
 .flow-empty-overlay .flow-empty button {
   pointer-events: auto;
+}
+
+/* OpenBot 0.77.0: a typed answer as one row per field, with real line breaks in the value. */
+.flow-answer-row {
+  align-items: flex-start;
+}
+.flow-answer-name {
+  flex: none;
+  min-width: 72px;
+  padding-top: 1px;
+}
+.flow-answer-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Round result thumbnails: larger when active, a thin ring coloured from the result. */

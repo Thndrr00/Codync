@@ -15,6 +15,8 @@ const KEPT_RUNS: i64 = 50;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StepStatus {
+    /// OpenBot 0.77.0: the message is posted but the agent has not taken it yet.
+    Queued,
     Running,
     Succeeded,
     Failed,
@@ -25,6 +27,7 @@ pub enum StepStatus {
 impl StepStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Queued => "queued",
             Self::Running => "running",
             Self::Succeeded => "succeeded",
             Self::Failed => "failed",
@@ -35,6 +38,7 @@ impl StepStatus {
 
     fn parse(s: &str) -> Self {
         match s {
+            "queued" => Self::Queued,
             "succeeded" => Self::Succeeded,
             "failed" => Self::Failed,
             "skipped" => Self::Skipped,
@@ -219,7 +223,28 @@ impl Store {
         })
     }
 
-    /// Ends a running step; a step that already ended stays as it is (`None`).
+    /// OpenBot 0.77.0: the hand-off has reached the agent's queue, so a queued step starts running
+    /// and keeps the delivery that carried its message. A step that already started keeps its status.
+    pub fn flow_start_queued_step(&self, step_id: &str, delivery_id: &str) -> Result<Option<FlowChange>> {
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let changed = tx.execute(
+                "UPDATE routine_flow_steps SET status = 'running', delivery_id = ?2, updated_at = ?3
+                 WHERE id = ?1 AND status = 'queued'",
+                params![step_id, delivery_id, now_ms()],
+            )?;
+            if changed == 0 {
+                return Ok(None);
+            }
+            let step = query(&tx, "id = ?1", [step_id])?.pop().expect("the step was just updated");
+            let bots = audience(&tx, &step.routine_id, &step.owner_bot_id)?;
+            let change = touch(&tx, bots)?.expect("the owner is always in the audience");
+            tx.commit()?;
+            Ok(Some(change))
+        })
+    }
+
+    /// Ends a running or queued step; a step that already ended stays as it is (`None`).
     pub fn flow_settle_step(
         &self,
         id: &str,
@@ -233,7 +258,7 @@ impl Store {
             let files = serde_json::to_string(files).ok();
             let changed = tx.execute(
                 "UPDATE routine_flow_steps SET status = ?2, output = ?3, error = ?4, updated_at = ?5, files = ?6
-                 WHERE id = ?1 AND status = 'running'",
+                 WHERE id = ?1 AND status IN ('running', 'queued')",
                 params![id, status.as_str(), output.map(kept), error, now_ms(), files],
             )?;
             if changed == 0 {
@@ -247,17 +272,17 @@ impl Store {
         })
     }
 
-    /// Steps still running when the host started belong to a process that is gone: they fail
-    /// with `reason`. Returns them as they were, and the change.
+    /// Steps still running or queued when the host started belong to a process that is gone: they
+    /// fail with `reason`. Returns them as they were, and the change.
     pub fn flow_fail_orphans(&self, reason: &str) -> Result<(Vec<FlowStep>, Option<FlowChange>)> {
         self.with_connection(|c| {
             let tx = c.unchecked_transaction()?;
-            let orphans = query(&tx, "status = 'running'", [])?;
+            let orphans = query(&tx, "status IN ('running', 'queued')", [])?;
             if orphans.is_empty() {
                 return Ok((orphans, None));
             }
             tx.execute(
-                "UPDATE routine_flow_steps SET status = 'failed', error = ?1, updated_at = ?2 WHERE status = 'running'",
+                "UPDATE routine_flow_steps SET status = 'failed', error = ?1, updated_at = ?2 WHERE status IN ('running', 'queued')",
                 params![reason, now_ms()],
             )?;
             let mut bots = std::collections::BTreeSet::new();
@@ -275,6 +300,59 @@ impl Store {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_queued_step_runs_when_its_delivery_reaches_the_agent_and_settles_either_way() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let new = NewStep {
+            run_id: "run",
+            routine_id: "r",
+            owner_bot_id: "a",
+            bot_id: "b",
+            run_at: 1,
+            input: "the task",
+            status: StepStatus::Queued,
+            output: None,
+            error: None,
+        };
+        let (step, _) = store.flow_add_step(&new).unwrap().unwrap();
+        assert_eq!(step.status, StepStatus::Queued);
+        assert_eq!(serde_json::to_value(&step).unwrap()["status"], json!("queued"));
+        assert!(store.flow_start_queued_step(&step.id, "delivery-1").unwrap().is_some());
+        let running = store.flow_run_steps("run").unwrap().pop().unwrap();
+        assert_eq!((running.status, running.delivery_id.as_deref()), (StepStatus::Running, Some("delivery-1")));
+        assert!(store.flow_start_queued_step(&step.id, "delivery-2").unwrap().is_none(), "it only starts once");
+        assert!(store.flow_settle_step(&step.id, StepStatus::Succeeded, Some("answer"), None, &[]).unwrap().is_some());
+        assert_eq!(store.flow_run_steps("run").unwrap().pop().unwrap().status, StepStatus::Succeeded);
+
+        // A message that never reached the agent is settled from queued with its error too.
+        let queued = NewStep {
+            run_id: "run2",
+            routine_id: "r",
+            owner_bot_id: "a",
+            bot_id: "c",
+            run_at: 1,
+            input: "",
+            status: StepStatus::Queued,
+            output: None,
+            error: None,
+        };
+        let (step, _) = store.flow_add_step(&queued).unwrap().unwrap();
+        assert!(
+            store
+                .flow_settle_step(&step.id, StepStatus::Failed, None, Some("the agent stopped"), &[])
+                .unwrap()
+                .is_some()
+        );
+
+        // A message still queued when the host restarts fails like a running one.
+        let stuck = NewStep { run_id: "run3", bot_id: "d", ..queued };
+        let (stuck, _) = store.flow_add_step(&stuck).unwrap().unwrap();
+        let (orphans, _) = store.flow_fail_orphans("host restarted").unwrap();
+        assert_eq!(orphans.len(), 1);
+        assert_eq!(orphans[0].id, stuck.id);
+        assert_eq!(store.flow_run_steps("run3").unwrap().pop().unwrap().status, StepStatus::Failed);
+    }
 
     #[test]
     fn a_batch_progress_is_read_with_the_step_for_clients() {

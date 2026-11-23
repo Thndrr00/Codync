@@ -23,6 +23,14 @@ fn status(pairs: &[(&str, StepStatus)]) -> BTreeMap<String, StepStatus> {
     pairs.iter().map(|(id, status)| ((*id).to_owned(), *status)).collect()
 }
 
+fn loop_edge(from: &str, to: &str) -> GraphEdge {
+    GraphEdge { from: from.to_owned(), to: to.to_owned(), branch: None, is_loop: true }
+}
+
+fn rounds(pairs: &[(&str, u32)]) -> BTreeMap<String, u32> {
+    pairs.iter().map(|(id, round)| ((*id).to_owned(), *round)).collect()
+}
+
 #[test]
 fn a_step_whose_only_supplier_failed_fails_clearly() {
     let mut graph = Graph::default();
@@ -99,6 +107,57 @@ fn a_retry_uses_the_answer_fields_of_the_run_not_the_edited_workflow() {
     let ran = answers::fields_of(&NodeSpec { answer: "old: int".to_owned(), check: String::new() });
     assert_eq!(with_run_spec(&current, Some(&ran))[0].name, "old");
     assert_eq!(with_run_spec(&current, None)[0].name, "new");
+}
+
+#[test]
+fn a_looped_step_reads_a_later_supplier_only_once_it_has_run_this_round() {
+    // a → b → c, with c reading both a (earlier in the round) and b (later), and c → a looping back.
+    let mut graph = Graph::default();
+    graph.nodes.insert("a".to_owned(), node("a", NodeKind::Agent, "a: text", "", ""));
+    graph.nodes.insert("b".to_owned(), node("b", NodeKind::Agent, "b: text", "", ""));
+    graph.nodes.insert("c".to_owned(), node("c", NodeKind::Agent, "", "", "Use {{a}} and {{b}}"));
+    graph.edges.push(edge("a", "b"));
+    graph.edges.push(edge("b", "c"));
+    graph.edges.push(edge("a", "c"));
+    graph.edges.push(loop_edge("c", "a"));
+
+    let all = answer_sources(&graph, &forward_edges(&graph), "c");
+    assert!(all.iter().any(|source| source.node_id == "a") && all.iter().any(|source| source.node_id == "b"));
+
+    // Round 2: a has a fresh answer, b still only has round 1's, so b must not be read yet.
+    let read = readable_sources_in_round(&graph, "c", 2, &rounds(&[("a", 2), ("b", 1)]));
+    assert!(read.iter().any(|source| source.node_id == "a"), "the earlier supplier is read");
+    assert!(!read.iter().any(|source| source.node_id == "b"), "the later supplier's stale answer is held back");
+    // When b runs again, c may read both answers and run once for this round.
+    let read = readable_sources_in_round(&graph, "c", 2, &rounds(&[("a", 2), ("b", 2)]));
+    assert_eq!(read.len(), 2);
+}
+
+#[test]
+fn a_step_outside_a_loop_keeps_stable_suppliers_and_waits_for_loop_ones() {
+    let mut graph = Graph::default();
+    graph.nodes.insert("a".to_owned(), node("a", NodeKind::Agent, "a: text", "", ""));
+    graph.nodes.insert("b".to_owned(), node("b", NodeKind::Agent, "", "", ""));
+    graph.nodes.insert("z".to_owned(), node("z", NodeKind::Agent, "z: text", "", ""));
+    graph.nodes.insert("d".to_owned(), node("d", NodeKind::Agent, "", "", "Use {{a}} and {{z}}"));
+    graph.edges.push(edge("a", "b"));
+    graph.edges.push(loop_edge("b", "a"));
+    graph.edges.push(edge("a", "d"));
+    graph.edges.push(edge("z", "d"));
+
+    let read = readable_sources_in_round(&graph, "d", 2, &rounds(&[("a", 1), ("z", 1)]));
+    assert!(read.iter().any(|source| source.node_id == "z"), "a supplier outside the loop never changes");
+    assert!(!read.iter().any(|source| source.node_id == "a"), "the loop's old answer is held back");
+    let read = readable_sources_in_round(&graph, "d", 2, &rounds(&[("a", 2), ("z", 1)]));
+    assert_eq!(read.len(), 2, "both are read once the loop has run again");
+}
+
+#[test]
+fn a_step_runs_at_most_once_in_one_round() {
+    let ran = rounds(&[("c", 2)]);
+    assert!(!may_run_in_round("c", 2, &ran), "a loop-back in the same round does not run it twice");
+    assert!(may_run_in_round("c", 3, &ran), "the next round runs it again");
+    assert!(may_run_in_round("d", 2, &ran), "a step that has not run still may");
 }
 
 #[test]

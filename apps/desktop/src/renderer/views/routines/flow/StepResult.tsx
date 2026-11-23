@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { isVideoName } from '@shared/models'
-import { Spinner } from '../../../components/Controls'
+import { IconButton, Spinner } from '../../../components/Controls'
 import { Icon } from '../../../components/Icon'
 import { HStack, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
-import type { FlowStep } from '../../../lib/routine-flow.ts'
+import { answerResultRows, statusLabel, type FlowStep } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 
 /**
@@ -17,14 +17,41 @@ export function StepResult({ step, compact = false }: { step: FlowStep; compact?
   const tr = useTr()
   const files = step.files ?? []
   const [index, setIndex] = useState(files.length - 1)
+  const [copied, setCopied] = useState(false)
   useEffect(() => setIndex(files.length - 1), [step.id, files.length])
+  useEffect(() => setCopied(false), [step.id])
   if (files.length === 0) {
-    if (step.status === 'running') {
+    if (step.status === 'running' || step.status === 'queued') {
       return (
         <HStack gap={6} align="center" className="flow-step-result">
           <Spinner size={12} />
-          <Text size="caption" tone="secondary">{tr('Making the result…')}</Text>
+          <Text size="caption" tone="secondary">
+            {step.status === 'queued' ? tr(statusLabel('queued')) : tr('Making the result…')}
+          </Text>
         </HStack>
+      )
+    }
+    // OpenBot 0.77.0: a typed answer shows one row per field with real line breaks. The copy button
+    // still puts the raw JSON on the clipboard; these rows are only how it is shown.
+    const rows = answerResultRows(step.output)
+    if (rows.length > 0) {
+      return (
+        <VStack gap={6} className="flow-step-result flow-answer-rows" data-status={step.status}>
+          <HStack gap={6} align="center">
+            <Text size="caption" tone="secondary" weight="semibold" grow>{tr('Result')}</Text>
+            <IconButton
+              title={tr(copied ? 'Copied' : 'Copy result')}
+              icon={copied ? 'checkmark' : 'doc.on.doc'}
+              onClick={() => { void navigator.clipboard.writeText(step.output ?? '').then(() => setCopied(true)) }}
+            />
+          </HStack>
+          {rows.map((row) => (
+            <HStack key={row.name} gap={8} align="flex-start" className="flow-answer-row">
+              <Text size="caption" tone="secondary" className="flow-answer-name">{row.name}</Text>
+              <Text size="callout" className="flow-answer-value" grow>{row.value}</Text>
+            </HStack>
+          ))}
+        </VStack>
       )
     }
     return step.output ? <Text size="caption" tone="secondary" lines={4}>{step.output}</Text> : null
