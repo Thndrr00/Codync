@@ -2,7 +2,7 @@
 
 use crate::hub::{BotStatus, Hub};
 use crate::remote::identity::Identity;
-use crate::store::{Entry, Store};
+use crate::store::{BotConfig, Entry, Store};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
@@ -362,5 +362,42 @@ async fn the_plain_hook_and_other_agents_never_ask() {
     let reply = super::ingest(&hub, &asking("Bash", &json!({"command": "ls"}), true)).await;
     assert!(reply.get("preToolUse").is_none());
     assert!(entries(&hub, "permission").is_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+fn voice_bot() -> BotConfig {
+    BotConfig { id: "b1".into(), name: "Mika".into(), cwd: "/w".into(), ..BotConfig::default() }
+}
+
+#[tokio::test]
+async fn a_location_answer_reaches_every_retry_of_the_same_call() {
+    let (hub, dir) = hub();
+    let cfg = voice_bot();
+    let first = super::location::request(&hub, "c1", "find restaurants", &cfg).expect("a card");
+    let retry = super::location::request(&hub, "c1", "find restaurants", &cfg).expect("the same card");
+    assert_eq!(first.entry_id, retry.entry_id, "a repeated call reuses the card");
+    assert_eq!(entries(&hub, "permission").len(), 1, "no second card");
+
+    assert!(super::location::share(&hub, &first.entry_id, "1 Main Street"));
+    assert_eq!(first.answer.await.expect("answered"), "1 Main Street");
+    assert_eq!(retry.answer.await.expect("answered"), "1 Main Street");
+    let card = hub.store.entry(&first.entry_id).unwrap();
+    assert_eq!((card.data["status"].as_str(), card.data["selected"].as_str()), (Some("answered"), Some("share")));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_location_answer_after_the_call_stopped_waiting_is_the_users_next_message() {
+    let (hub, dir) = hub();
+    let cfg = voice_bot();
+    let pending = super::location::request(&hub, "c1", "find restaurants", &cfg).expect("a card");
+    let id = pending.entry_id.clone();
+    drop(pending); // the call timed out or ended: nobody waits, but the card stays answerable
+    assert_eq!(hub.store.entry(&id).unwrap().data["status"], "expired");
+
+    assert!(super::location::share(&hub, &id, "2 Main Street"));
+    assert_eq!(hub.store.entry(&id).unwrap().data["status"], "answered");
+    let posted = entries(&hub, "user").into_iter().any(|e| e.data["text"] == "My location: 2 Main Street");
+    assert!(posted, "the late answer is posted to the agent as the user's next message");
     let _ = std::fs::remove_dir_all(dir);
 }

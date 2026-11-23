@@ -8,6 +8,7 @@
 //! The hook design follows the MIT-licensed Coucou (github.com/Louis-CFM/coucou): it never blocks the agent.
 
 pub mod install;
+pub mod location;
 pub mod normalize;
 pub mod reply;
 
@@ -74,6 +75,8 @@ struct State {
     sessions: HashMap<String, session::Session>,
     /// Approval card id → the hook request waiting for it.
     waiting: HashMap<String, oneshot::Sender<Option<Decision>>>,
+    /// Location card id → the broadcaster carrying the shared place to its voice tool calls.
+    location_waiting: HashMap<String, tokio::sync::broadcast::Sender<String>>,
     /// Sessions whose bot left the roster: not watched again until the terminal starts a new session.
     dismissed: std::collections::HashSet<String>,
 }
@@ -114,7 +117,7 @@ impl External {
                 state.sessions.remove(key);
                 state.dismissed.insert(key.clone());
             }
-            state.waiting.keys().cloned().collect()
+            state.waiting.keys().chain(state.location_waiting.keys()).cloned().collect()
         };
         for entry in entries {
             if hub.store.entry(&entry).is_none_or(|e| e.bot_id != bot_id) {
@@ -123,6 +126,8 @@ impl External {
             if let Some(waiting) = self.state.locked().waiting.remove(&entry) {
                 let _ = waiting.send(None);
             }
+            // Dropping the location broadcaster closes its waits; the card stays answerable.
+            let _ = self.state.locked().location_waiting.remove(&entry);
         }
     }
 }

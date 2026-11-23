@@ -23,6 +23,8 @@ pub fn declarations() -> Value {
          "parameters": {"type": "object", "properties": {}}},
         {"name": "search_memory", "description": "Search what the bot remembers about the user and their work.",
          "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Words to look for"}}, "required": ["query"]}},
+        {"name": "request_location", "description": "Ask the person to share a place or address when a request needs it, such as 'restaurants near me'. It shows a card in the chat; the answer reaches you only after they share it.",
+         "parameters": {"type": "object", "properties": {"purpose": {"type": "string", "description": "Why the location is needed, shown on the card"}}, "required": ["purpose"]}},
     ])
 }
 
@@ -42,6 +44,9 @@ pub async fn call(hub: &Arc<Hub>, call: &str, name: &str, args: &Value, lines: &
             "stop_bot" => stop(hub, &cfg),
             "search_memory" if !cfg.is_group() => {
                 crate::chat::memory::tool_call(hub, &cfg.id, "search_memory", args).await
+            }
+            "request_location" if !cfg.is_group() => {
+                Ok(super::location::perform(hub, call, &cfg, args["purpose"].as_str().unwrap_or_default()).await)
             }
             _ => Err(anyhow!("Unknown tool {name}.")),
         }
@@ -198,6 +203,19 @@ mod tests {
             (busy["status"].as_str(), busy["activity"].as_str()),
             (Some("working"), Some("Mika: Running tests"))
         );
+    }
+
+    #[test]
+    fn a_location_request_is_declared_with_its_purpose() {
+        let list = declarations();
+        let tool = list
+            .as_array()
+            .expect("a list")
+            .iter()
+            .find(|t| t["name"] == "request_location")
+            .expect("the voice can ask for a location");
+        assert_eq!(tool["parameters"]["required"], json!(["purpose"]));
+        assert!(tool["description"].as_str().is_some_and(|d| d.contains("card")));
     }
 
     #[test]

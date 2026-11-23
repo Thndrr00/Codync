@@ -137,6 +137,29 @@ Cancelling before *Done* sends no decision and leaves the terminal to ask as usu
 the commit are tested in `host/src/external/question.rs` and `host/src/external/tests.rs`; no question
 text is logged as analytics.
 
+## Location cards
+
+A voice call's `request_location` tool (OpenBot nightly v0.77.0, "an agent can now ask for your location")
+shows an approval-style card in the chat with the reason it needs a place — "restaurants near me", say.
+`host/src/chat/calls/location.rs` bounds that reason (blank or control-only reasons get no card), and
+`host/src/external/location.rs` builds the card through the existing `Permission` entry path. The reason
+is never an analytics property: `callTool` and `shareLocation` stand for no PostHog event. The card's id
+is a hash of the call and the reason, so a repeated tool call reuses the one card instead of adding another.
+
+The tool waits up to 30 seconds (inside the app's 60 second `callTool` budget). A shared place is its
+result, and only that place — never a credential or another tool's output. The pure `delivery(status,
+waiting)` decides where a tap goes: a waiting call gets it as its result; once the call has stopped
+waiting the card is `expired` but still answerable (the same rule as the nightly's browser/CAPTCHA fix),
+and the place is posted as the user's next message to that agent through `chat::messages::post`. A card
+already `answered` or `cancelled` ignores the tap. The decision and the card resolution are tested in
+`host/src/external/location.rs`, the answer path in `host/src/external/tests.rs`.
+
+`shareLocation {entryId, text}` is the answer method; it refuses blank, control-only or over-long text.
+The desktop card's *Share location* button opens the shared `LocationSheet`: type a place or an address,
+or use *Use current position* only where `navigator.geolocation` exists (a denied or missing API just
+hides the option or shows a line to type instead). No map library is added; a fix is shown as coordinates.
+This is a desktop-only UI addition; the phone apps and the terminal have no location card in this change.
+
 ## Cards nobody answers
 
 A card left `pending` pushes one reminder after 4 hours (`NeedsInput`, with the card's own options) and

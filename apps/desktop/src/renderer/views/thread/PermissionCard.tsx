@@ -3,6 +3,8 @@ import type { ApprovalRule, RuleProposal } from '@shared/approval-rules'
 import type { Entry, FileDiff, PermissionOption } from '@shared/models'
 import { Button, Disclosure, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
+import { Sheet } from '../../components/Overlay'
+import { LocationSheet } from '../../components/LocationSheet'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import './permission-card.css'
@@ -29,6 +31,8 @@ export const permissionHeadline = (toolKind?: string) => {
       return trNow('Wants to read files')
     case 'question':
       return trNow('Asks you a question')
+    case 'location':
+      return trNow('Asks for your location')
     case 'plan':
       return trNow('Wants your approval of a plan')
     default:
@@ -105,10 +109,14 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
   const tr = useTr()
   const [expanded, setExpanded] = useState(false)
   const [rejectedShake, setRejectedShake] = useState(false)
+  const [locationOpen, setLocationOpen] = useState(false)
   const [always, setAlways] = useState<{ option: PermissionOption; proposal: RuleProposal; pattern: string } | null>(null)
   const d = entry.data
   const guidance = toolGuidance(d.toolKind, d.title)
   const pending = d.status === 'pending'
+  const location = d.toolKind === 'location'
+  // An expired location card still answers (OpenBot nightly v0.77.0's CAPTCHA-card fix).
+  const answerable = location ? pending || d.status === 'expired' : pending
   const deletion = isDeletionApproval(d)
   // The agent's scope, risks and recommendation sit in this card, not behind a Details step.
   const brief = approvalBrief(d.detail)
@@ -134,7 +142,7 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
       <VStack gap={10} className={`permission-card t-input-shake ${rejectedShake ? "is-invalid" : ""}`}>
         <HStack gap={8}>
           <Text size="headline" tone="text">{deletion ? tr('Wants to delete agents') : permissionHeadline(d.toolKind)}</Text>
-          {pending ? <span className="permission-card-dot" /> : null}
+          {answerable ? <span className="permission-card-dot" /> : null}
         </HStack>
         <Text as="div" size="subheadline" mono tone="secondary" lines={expanded ? undefined : 3} className="selectable permission-card-title">
           {d.title ?? ''}
@@ -172,7 +180,18 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
             </VStack>
           </Disclosure>
         ) : null}
-        {pending ? (
+        {location ? (
+          answerable ? (
+            <VStack gap={8}>
+              <Text size="caption" tone="secondary">
+                {tr(d.status === 'expired' ? 'The agent moved on. Sharing still sends it as your next message.' : 'Nothing is sent until you share it.')}
+              </Text>
+              <Button kind="primary" disabled={answering !== null} onClick={() => setLocationOpen(true)}>{tr('Share location')}</Button>
+            </VStack>
+          ) : (
+            <Text as="div" size="caption" weight="medium" tone="secondary">{outcome(entry)}</Text>
+          )
+        ) : pending ? (
           <div className="permission-card-options">
             {options.map((o, i) => (
               <div key={o.optionId}>
@@ -220,6 +239,9 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
           </VStack>
         ) : null}
       </VStack>
+      <Sheet open={locationOpen} onClose={() => setLocationOpen(false)} width={420}>
+        <LocationSheet entry={entry} close={() => setLocationOpen(false)} />
+      </Sheet>
     </div>
   )
 }
@@ -238,6 +260,7 @@ function BriefRow({ label, value }: { label: string; value: string }) {
 
 function outcome(entry: Entry) {
   const d = entry.data
+  if (d.toolKind === 'location') return d.status === 'answered' ? trNow('Location shared') : trNow('Expired — you can still share')
   switch (d.status) {
     case 'answered': {
       const chosen = d.options?.find((o) => o.optionId === d.selected)

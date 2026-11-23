@@ -22,6 +22,7 @@ mod island_queue;
 mod island_resources;
 mod island_runtime;
 mod island_workspace;
+mod location;
 mod marketplace;
 mod media;
 mod message_link;
@@ -206,6 +207,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     }
     if method == "searchMessages" {
         return roster::search(hub, &b).await;
+    }
+    if crate::api::location::METHODS.contains(&method) {
+        return crate::api::location::call(hub, method, &b);
     }
     if matches!(method, "rosterPreview" | "messageContext") {
         return roster::read(hub, method, &b).await;
