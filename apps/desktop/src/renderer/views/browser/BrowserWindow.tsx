@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, IconButton } from '../../components/Controls'
+import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { HStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
+import {
+  PAGE_NOT_ANSWERING,
+  browserNotice,
+  finishSignInAddress,
+  pageStalled,
+  signInCardAction,
+} from '../../lib/browser-cards'
 import { useTr } from '../../lib/use-language'
 import { useApp } from '../../store/context'
 import './browser-window.css'
@@ -36,6 +44,11 @@ export function BrowserWindow() {
   }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [lastFrameAt, setLastFrameAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  const [finishOpen, setFinishOpen] = useState(false)
+  const [pasted, setPasted] = useState('')
   const active = useRef<string | null>(null)
   active.current = panel.activeId ?? null
   // The callbacks read these through refs, so they stay stable while the page renders.
@@ -49,15 +62,20 @@ export function BrowserWindow() {
     return local ? await local.ready() : null
   }
   const fail = (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason))
-  const call = useCallback(async (method: string, params: object = {}) => {
+  const call = useCallback(async <T = Panel,>(method: string, params: object = {}): Promise<T> => {
     const c = await client()
     if (!c) throw new Error(trRef.current('This computer’s host is not answering.'))
-    return c.call<Panel>(method, params)
+    return c.call<T>(method, params)
   }, [])
 
   const load = useCallback(async () => {
     try {
-      setPanel(await call('browserPanel'))
+      const current = await call('browserPanel')
+      setPanel(current)
+      const tab = current.tabs.find((item) => item.id === current.activeId)
+      // 0.77.0: the host owns the words for a sign-in page that is no longer active.
+      const answer = await call<{ text?: string }>('browserPanelNotice', { url: tab?.url ?? '', active: current.open })
+      setNotice(browserNotice(answer.text))
     } catch (reason) {
       fail(reason)
     }
@@ -70,6 +88,8 @@ export function BrowserWindow() {
       const c = await client()
       if (!c) return
       setImage((await c.call<{ image: string }>('browserPanelShot', { tabId: tab })).image)
+      // A frame that arrived means the page answered; no frame for a whole window means stalled.
+      setLastFrameAt(Date.now())
     } catch (reason) {
       // A page still loading gives no picture; the next tick tries again.
       fail(reason)
@@ -89,7 +109,10 @@ export function BrowserWindow() {
   }, [call])
 
   useEffect(() => {
-    const timer = setInterval(() => void load(), 3_000)
+    const timer = setInterval(() => {
+      setNow(Date.now())
+      void load()
+    }, 3_000)
     return () => clearInterval(timer)
   }, [load])
 
@@ -142,7 +165,9 @@ export function BrowserWindow() {
   const openTab = async () => {
     const url = address.trim()
     if (!url) return
-    await run('browserPanelOpen', { url })
+    // 0.77.0: a page shown from a chat keeps its tab, so its clicks and selections survive new
+    // messages in a long chat. The key is the page, not a new tab id.
+    await run('browserPanelOpenPage', { pageKey: url, url })
     setAddress('')
   }
 
@@ -152,6 +177,57 @@ export function BrowserWindow() {
     await run('browserPanelNavigate', { tabId: tab, url: address.trim() })
     setAddress('')
   }
+
+  const reloadStuck = async () => {
+    const tab = panel.activeId
+    if (!tab) return
+    setLastFrameAt(null)
+    await run('browserPanelReload', { tabId: tab })
+  }
+
+  const signInHere = async () => {
+    const tab = panel.tabs.find((item) => item.id === panel.activeId)
+    if (!tab) return
+    setBusy(true)
+    setError(null)
+    try {
+      const data = await call<{ closed?: boolean; message?: string }>('browserPanelSignInOpen', { url: tab.url })
+      if (data.closed) {
+        setPanel({ open: false, tabs: [] })
+        setImage(null)
+        setNotice(browserNotice(data.message))
+      } else {
+        await load()
+      }
+    } catch (reason) {
+      fail(reason)
+    }
+    setBusy(false)
+  }
+
+  const finishSignIn = async () => {
+    const parsed = finishSignInAddress(pasted)
+    if (!parsed) {
+      setError(tr('Paste the address the other browser showed at the end of the sign-in.'))
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      // The existing connector OAuth wait path finishes the sign-in from the pasted result.
+      await call('connectorSignInFinish', { state: parsed.state, code: parsed.code, error: parsed.error })
+      setFinishOpen(false)
+      setPasted('')
+      setNotice(tr('The sign-in from the other device is finished.'))
+    } catch (reason) {
+      fail(reason)
+    }
+    setBusy(false)
+  }
+
+  const stalled = image !== null && pageStalled(lastFrameAt, now)
+  const isSignInNotice = !!notice && /sign-in/i.test(notice)
+  const singleAction = signInCardAction(true, false)
 
   return (
     <div className="browser-window">
@@ -170,6 +246,8 @@ export function BrowserWindow() {
             onClick={() => void run('browserPanelOpen', { url: address.trim() ? address.trim() : 'about:blank' }).then(() => setAddress(''))} />
           <IconButton title={tr('Close all tabs')} icon="trash" size={16} disabled={busy || !panel.open}
             onClick={() => void run('browserPanelShutdown')} />
+          <IconButton title={tr('Finish a sign-in from another device')} icon="key" size={16}
+            onClick={() => { setError(null); setFinishOpen(true) }} />
         </HStack>
         <HStack gap={6} className="browser-address">
           <input className="field-box" value={address} spellCheck={false} aria-label={tr('Address')}
@@ -182,6 +260,14 @@ export function BrowserWindow() {
         </HStack>
       </header>
       {error ? <Text size="caption" role="alert" tone="danger" className="browser-error">{error}</Text> : null}
+      {notice ? <div className="browser-notice" role="status">
+        <Text size="caption" tone="secondary">{tr(notice)}</Text>
+        {isSignInNotice && singleAction ? <Button kind="primary" disabled={busy} onClick={() => void signInHere()}>{tr(singleAction.label)}</Button> : null}
+      </div> : null}
+      {stalled ? <div className="browser-notice" role="status">
+        <Text size="caption" tone="secondary">{tr(PAGE_NOT_ANSWERING)}</Text>
+        <IconButton title={tr('Reload this page')} icon="arrow.clockwise" size={16} disabled={busy} onClick={() => void reloadStuck()} />
+      </div> : null}
       {compact ? null : <div className="browser-page">
         {image ? <img src={image} alt={tr('Browser page')} draggable={false} /> : (
           <Text tone="secondary">{panel.open ? tr('Loading the page…') : tr('Opening the browser…')}</Text>
@@ -190,6 +276,19 @@ export function BrowserWindow() {
       <footer>
         <Text size="caption" tone="tertiary">{tr('Type and click in its own window; this panel shows it and keeps its tabs.')}</Text>
       </footer>
+      <Sheet open={finishOpen} onClose={() => setFinishOpen(false)} width={420}>
+        <SheetPage className="browser-finish">
+          <ModalHeader title={tr('Finish a sign-in from another device')} onClose={() => setFinishOpen(false)} />
+          <Text size="caption" tone="secondary">{tr('Paste the address the other device’s browser shows at the end of the sign-in.')}</Text>
+          <input className="field-box" value={pasted} spellCheck={false} aria-label={tr('Sign-in address')}
+            placeholder={tr('Paste the address')} onChange={(e) => setPasted(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void finishSignIn() }} />
+          <HStack gap={6}>
+            <Button kind="secondary" onClick={() => setFinishOpen(false)}>{tr('Cancel')}</Button>
+            <Button disabled={busy || !pasted.trim()} onClick={() => void finishSignIn()}>{tr('Finish sign-in')}</Button>
+          </HStack>
+        </SheetPage>
+      </Sheet>
     </div>
   )
 }

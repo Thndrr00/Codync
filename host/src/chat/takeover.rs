@@ -66,6 +66,21 @@ pub fn due(store: &Store, now: i64) -> Result<Vec<(String, Value)>> {
     Ok(waiting(store)?.into_iter().filter_map(|(id, data)| Some((id, lapsed(&data, now)?))).collect())
 }
 
+/// A bot's wait ends at the end of its turn, which can be long before the card's own deadline. Keep that card in
+/// the chat and mark a later answer as the bot's next message (OpenBot 0.77.0: "Keep a browser takeover card open
+/// when the agent stops waiting for it"). Cards already in that state and cards past their deadline are left alone.
+pub fn agent_stopped_waiting(hub: &Hub, bot_id: &str, now: i64) {
+    let Ok(cards) = waiting(&hub.store) else { return };
+    for (id, data) in cards
+        .into_iter()
+        .filter(|(_, data)| data["author"].as_str() == Some(bot_id))
+        .filter(|(_, data)| data["takeoverRequest"]["answerAsNextMessage"] != true)
+    {
+        let next = crate::api::browser_fix::takeover_card(&data, false, now);
+        hub.set_entry(&id, &next);
+    }
+}
+
 /// Tells the person a bot needs them, once, as the card is posted.
 pub fn notify(hub: &Hub, bot_id: &str, reason: &str) {
     let Some(config) = hub.store.bot(bot_id).ok().flatten().map(|row| row.config) else { return };
@@ -132,5 +147,36 @@ mod tests {
         let found = due(&store, TTL_MS + 1).expect("due");
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].1["takeoverRequest"]["reason"], "old");
+    }
+
+    #[test]
+    fn a_wait_that_ends_keeps_only_that_bots_card_answerable() {
+        let dir = std::env::temp_dir().join(format!("takeover-hub-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let store = Store::open(&dir.join("host.db")).expect("store");
+        let hub = Hub::new(
+            store,
+            "takeover-test".into(),
+            crate::remote::identity::Identity::load_or_create(&dir).expect("identity"),
+            "t".into(),
+            0,
+        );
+        let lane = Lane::main("b1");
+        let entry = hub.add_entry(&lane, EntryKind::Notice, 1, &card("b1", "log in", None, 1_000)).expect("card");
+        let other =
+            hub.add_entry(&lane, EntryKind::Notice, 1, &card("b2", "other bot", None, 1_000)).expect("other card");
+
+        agent_stopped_waiting(&hub, "b1", 2_000);
+        let kept = hub.store.entry(&entry.id).expect("kept").data;
+        assert_eq!(kept["takeoverRequest"]["status"], "waiting", "the card stays in the chat");
+        assert_eq!(kept["takeoverRequest"]["answerAsNextMessage"], true);
+        assert_eq!(
+            hub.store.entry(&other.id).expect("other").data["takeoverRequest"]["answerAsNextMessage"],
+            Value::Null,
+            "another bot's card is untouched"
+        );
+
+        agent_stopped_waiting(&hub, "b1", 2_000);
+        assert_eq!(hub.store.entry(&entry.id).expect("kept again").data, kept, "the update is idempotent");
     }
 }

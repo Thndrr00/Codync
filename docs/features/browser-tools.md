@@ -131,6 +131,37 @@ the user to close tabs it cannot see, and then to reload the page with `navigate
 before retrying. Codync's browser tools have no saved-logins or card-fill surface; the note is the
 guidance that a secure fill would need, and a secret would go only to the page, never to the agent.
 
+## Sign-in and takeover cards (OpenBot 0.77.0)
+
+The browser view and the card code share pure decisions in `host/src/screen/browser_cards.rs`, with
+the client-side copy decisions in `apps/desktop/src/renderer/lib/browser-cards.ts`. Every message is
+a fixed label; an address is read only to classify a page and is never logged or sent to analytics.
+
+- A browser that comes back from a sign-in page whose request has ended says *This sign-in is no
+  longer active. Go back to Codync and start a new sign-in.* instead of a dead page. The host answers
+  `browserPanelNotice` with the words; the desk only renders them.
+- A page whose script never ends is bounded. A tool call that gets no CDP answer after 20 seconds
+  reports *This page is not answering; a script may still be running. Reload it to continue.* and
+  names the fix. Navigation (`navigate` in either direction, reload, a new address) stops the stuck
+  page first (`Page.stopLoading`) before loading the next one, in the bot's browser and in the
+  Browser panel. The desk shows the same notice with a **Reload this page** action
+  (`browserPanelReload`).
+- When a site refuses a server sign-in, the card keeps one action, **Sign in on this computer**, and
+  never opens the server's browser preview. In a browser it drops Open and says **Sign in from the
+  desktop app**. The host method `browserPanelSignInOpen` closes the window and says *The sign-in
+  page could not load. Check the internet connection and open the sign-in window again.* if that
+  page fails instead of leaving a blank window.
+- A takeover or ask-help card stays open and answerable after the agent's wait ends; the answer goes
+  to the agent as the person's next message. Only the card's own deadline or an answer closes it.
+  The island says that Open shows the page in the main window, where it can be typed in.
+- An app sign-in started on a phone or another computer can be finished here: paste the address that
+  device's browser shows at the end. The client parses only `state`, `code` and `error` and passes
+  them to the existing connector OAuth finish path (`connectorSignInFinish`); no other part of the
+  pasted address leaves the computer.
+- A page an agent shows keeps its tab across new messages in a long chat. `browserPanelOpenPage`
+  activates the remembered tab by page key rather than loading the address again, so clicks and
+  selections on it survive; the map is bounded and forgets tabs that are closed.
+
 ## Privacy
 
 The browser is the bot's own: an isolated profile and context, no cookie of the owner's browser, and

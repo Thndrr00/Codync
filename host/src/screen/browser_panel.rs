@@ -2,15 +2,39 @@
 //! CDP pipe as protected entries. The page is shown as a screenshot; typing and clicking stay in the real window.
 
 use super::Screen;
+use super::browser_cards;
 use super::protected_browser::{browser_executable, pipe};
+use crate::LockExt as _;
 use crate::hub::Hub;
 use anyhow::{Context, Result, bail, ensure};
 use pipe::rpc;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::{LazyLock, Mutex};
 
 /// Tabs the panel allows before it asks to close one.
 const MAX_TABS: usize = 12;
+/// Pages a chat may pin to a tab. Bounded: a long chat must not grow this map for ever.
+const MAX_PAGE_KEYS: usize = 64;
+/// 0.77.0: a page an agent showed keeps its clicks and selections when new messages push it up a
+/// long chat. The tab holds the state; this only remembers which tab to activate next time.
+static PAGE_TABS: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn remember_page(key: &str, tab: &str) {
+    let mut pages = PAGE_TABS.locked();
+    if !pages.contains_key(key) && pages.len() >= MAX_PAGE_KEYS {
+        if let Some(oldest) = pages.keys().next().cloned() {
+            pages.remove(&oldest);
+        }
+    }
+    pages.insert(key.to_owned(), tab.to_owned());
+}
+
+fn forget_tab(tab: &str) {
+    PAGE_TABS.locked().retain(|_, id| id != tab);
+}
 
 pub struct Panel {
     process: crate::agent::process::Process,
@@ -81,6 +105,9 @@ pub async fn open(hub: &std::sync::Arc<Hub>, url: Option<&str>) -> Result<Value>
             let created =
                 rpc(&mut panel.pipe, "Target.createTarget", json!({"url":url,"browserContextId":panel.context}), None)
                     .await?;
+            if let Some(error) = created["errorText"].as_str() {
+                bail!("The page did not load: {error}");
+            }
             created["targetId"].as_str().context("The browser did not open a tab")?.clone_into(&mut panel.active);
             let _ = rpc(&mut panel.pipe, "Target.activateTarget", json!({"targetId":panel.active}), None).await;
             let targets = rpc(&mut panel.pipe, "Target.getTargets", json!({}), None).await?;
@@ -111,7 +138,21 @@ async fn spawn(hub: &std::sync::Arc<Hub>, url: &str) -> Result<Panel> {
     for page in targets["targetInfos"].as_array().into_iter().flatten().filter(|page| page["type"] == "page") {
         rpc(&mut socket, "Target.closeTarget", json!({"targetId":page["targetId"]}), None).await.ok();
     }
-    let target = rpc(&mut socket, "Target.createTarget", json!({"url":url,"browserContextId":context}), None).await?;
+    let target = rpc(&mut socket, "Target.createTarget", json!({"url":url,"browserContextId":context}), None).await;
+    let target = match target {
+        Ok(target) if target["errorText"].as_str().is_none() => target,
+        other => {
+            // A page that cannot load must not leave its browser window blank and open.
+            process.terminate_owned().await.ok();
+            let error = match &other {
+                Ok(target) => {
+                    format!("The page did not load: {}", target["errorText"].as_str().unwrap_or("unknown error"))
+                }
+                Err(error) => format!("{error:#}"),
+            };
+            bail!("{error}");
+        }
+    };
     let active = target["targetId"].as_str().context("The browser did not open a tab")?.to_owned();
     let _ = hub;
     Ok(Panel { process, folder: parent, pipe: socket, context, active })
@@ -159,6 +200,8 @@ pub async fn navigate(screen: &Screen, tab: &str, url: Option<&str>) -> Result<V
     rpc(&mut panel.pipe, "Target.activateTarget", json!({"targetId":tab}), None).await.ok();
     let attached = rpc(&mut panel.pipe, "Target.attachToTarget", json!({"targetId":tab,"flatten":true}), None).await?;
     let session = attached["sessionId"].as_str().context("Could not reach the tab")?.to_owned();
+    // 0.77.0: a page whose script never ends blocks the next address; stop it before loading.
+    let _ = rpc(&mut panel.pipe, "Page.stopLoading", json!({}), Some(&session)).await;
     let result = rpc(&mut panel.pipe, "Page.navigate", json!({"url":url}), Some(&session)).await;
     rpc(&mut panel.pipe, "Target.detachFromTarget", json!({"sessionId":session}), None).await.ok();
     result?;
@@ -175,6 +218,7 @@ pub async fn close(screen: &Screen, tab: &str) -> Result<Value> {
     let tabs = pages(&targets, &panel.context);
     ensure!(tabs.iter().any(|(id, _, _)| id == tab), "Unknown tab");
     rpc(&mut panel.pipe, "Target.closeTarget", json!({"targetId":tab}), None).await?;
+    forget_tab(tab);
     if tabs.len() == 1 {
         let created = rpc(
             &mut panel.pipe,
@@ -216,6 +260,7 @@ pub async fn shot(screen: &Screen, tab: Option<&str>) -> Result<Value> {
 
 /// Closes the panel's browser.
 pub async fn shutdown(screen: &Screen) -> Result<Value> {
+    PAGE_TABS.locked().clear();
     let mut current = screen.panel.lock().await;
     if let Some(mut panel) = current.take() {
         panel.process.terminate_owned().await?;
@@ -325,10 +370,74 @@ pub async fn recorder_events(screen: &Screen, session: &str, script_id: &str) ->
     Ok(value["result"]["value"].clone())
 }
 
+/// Reloads `tab`, stopping a stuck page first (0.77.0: navigation controls free a page whose script
+/// never ends).
+pub async fn reload(screen: &Screen, tab: &str) -> Result<Value> {
+    let mut current = screen.panel.lock().await;
+    let panel = current.as_mut().context("Open the browser panel first")?;
+    let targets = rpc(&mut panel.pipe, "Target.getTargets", json!({}), None).await?;
+    ensure!(pages(&targets, &panel.context).iter().any(|(id, _, _)| id == tab), "Unknown tab");
+    let attached = rpc(&mut panel.pipe, "Target.attachToTarget", json!({"targetId":tab,"flatten":true}), None).await?;
+    let session = attached["sessionId"].as_str().context("Could not reach the tab")?.to_owned();
+    let _ = rpc(&mut panel.pipe, "Page.stopLoading", json!({}), Some(&session)).await;
+    let result = rpc(&mut panel.pipe, "Page.reload", json!({"ignoreCache":false}), Some(&session)).await;
+    rpc(&mut panel.pipe, "Target.detachFromTarget", json!({"sessionId":session}), None).await.ok();
+    result?;
+    tab.clone_into(&mut panel.active);
+    let targets = rpc(&mut panel.pipe, "Target.getTargets", json!({}), None).await?;
+    Ok(answer(panel, pages(&targets, &panel.context)))
+}
+
+/// Opens a page shown from a chat. When its saved tab is still open, activate it instead of loading
+/// the address again, so what the person did on it survives new messages in a long chat (0.77.0).
+pub async fn open_page(hub: &Arc<Hub>, page_key: &str, url: Option<&str>) -> Result<Value> {
+    let saved = PAGE_TABS.locked().get(page_key).cloned();
+    if let Some(tab) = saved {
+        let tabs = state(&hub.screen).await?;
+        let ids = tabs["tabs"].as_array().into_iter().flatten().filter_map(|item| item["id"].as_str());
+        if browser_cards::page_reuses_tab(Some(tab.as_str()), ids) {
+            return activate(&hub.screen, &tab).await;
+        }
+    }
+    let value = open(hub, url).await?;
+    if let Some(tab) = value["activeId"].as_str() {
+        remember_page(page_key, tab);
+    }
+    Ok(value)
+}
+
+/// The words for a sign-in return page. The host decides; the desk only renders the label.
+pub async fn notice(body: &Value) -> Result<Value> {
+    let url = body["url"].as_str().unwrap_or_default();
+    let active = body["active"].as_bool().unwrap_or(false);
+    Ok(json!({"text": browser_cards::sign_in_notice(url, active).text()}))
+}
+
+/// Opens the "Sign in on this computer" page. If it cannot load, close the window and say so
+/// plainly instead of leaving a blank window whose Done reports no sign-in (0.77.0).
+pub async fn sign_in_open(hub: &Arc<Hub>, url: Option<&str>) -> Result<Value> {
+    match open(hub, url).await {
+        Ok(value) => Ok(value),
+        Err(error) if error.to_string().contains("The page did not load") => {
+            tracing::warn!(error = format!("{error:#}"), "the sign-in page could not load");
+            shutdown(&hub.screen).await.ok();
+            Ok(json!({"closed": true, "message": browser_cards::unavailable_sign_in_page(true)}))
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub async fn call(hub: &std::sync::Arc<Hub>, method: &str, body: &Value) -> Result<Value> {
     match method {
         "browserPanel" => state(&hub.screen).await,
         "browserPanelOpen" => open(hub, body["url"].as_str()).await,
+        "browserPanelOpenPage" => {
+            let key = body["pageKey"].as_str().context("`pageKey` is required")?;
+            open_page(hub, key, body["url"].as_str()).await
+        }
+        "browserPanelReload" => reload(&hub.screen, body["tabId"].as_str().context("`tabId` is required")?).await,
+        "browserPanelNotice" => notice(body).await,
+        "browserPanelSignInOpen" => sign_in_open(hub, body["url"].as_str()).await,
         "browserPanelActivate" => activate(&hub.screen, body["tabId"].as_str().context("`tabId` is required")?).await,
         "browserPanelNavigate" => {
             navigate(&hub.screen, body["tabId"].as_str().context("`tabId` is required")?, body["url"].as_str()).await

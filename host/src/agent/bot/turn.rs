@@ -380,6 +380,9 @@ impl Actor {
         }
         self.cancel_deadline = None;
         self.after_turn(done);
+        // OpenBot 0.77.0: a takeover card whose wait just ended stays in the chat; a later answer
+        // becomes this bot's next message instead of going nowhere.
+        crate::chat::takeover::agent_stopped_waiting(&self.hub, &self.cfg.id, crate::store::now_ms());
         // The bot's own edits to its memory files, checked and shown in the chat it made them from.
         memory::turns::scan_after_turn(self.hub.clone(), self.cfg.clone());
         if let (Some(conn), Some(sid)) = (self.conn.as_mut(), &self.turn_session)

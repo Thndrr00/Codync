@@ -11,6 +11,7 @@ import { useTr } from '../../lib/use-language'
 import { avatarColor, withAlpha } from '../../lib/theme'
 import type { IslandModel } from './island-model'
 import { useArrivals, useFlip, useSwap } from './island-motion'
+import { browserCardSubtitle } from './island-browser-card'
 import { AgentRow, AMBER, badgeOf, BigCharacter, GREEN, KeyHint, MiniColumn, moodOf, RED, StateBadge, StatusDot, stepIcon } from './island-parts'
 
 const veil = (color: string, alpha: number) => `radial-gradient(120% 90% at 50% 130%, ${withAlpha(color, alpha)}, ${withAlpha(color, 0)} 70%)`
@@ -145,6 +146,7 @@ export function Approval({ model, card }: { model: IslandModel; card: IslandPerm
   const swap = useSwap(card.entryId)
   const tr = useTr()
   const count = model.summary.permissions.length
+  const pageHint = browserCardSubtitle(card.headline, card.title, card.options)
   return (
     <div className="island-with-minis">
       <div className="island-card island-alert" style={{ background: `${veil(AMBER, 0.42)}, var(--island-card)` }}>
@@ -158,6 +160,7 @@ export function Approval({ model, card }: { model: IslandModel; card: IslandPerm
             </div>
             <AgentRow color={card.bot.color} name={card.bot.name} subtitle={`${card.bot.backend} ${card.headline.charAt(0).toLowerCase()}${card.headline.slice(1)}`} />
             {card.title ? <div className="island-code">{card.title}</div> : null}
+            {pageHint ? <div className="island-subtitle">{tr(pageHint)}</div> : null}
             {card.diffs.length ? <DiffPeek diffs={card.diffs} /> : null}
             <div className="island-buttons">
               {options.map((o) => (

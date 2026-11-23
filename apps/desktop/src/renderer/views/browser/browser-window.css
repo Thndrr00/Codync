@@ -53,6 +53,29 @@
   padding: 6px 12px;
 }
 
+/* 0.77.0: card copy slides in when a sign-in ends or a page stops answering. */
+.browser-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  animation: browser-notice-in 180ms ease-out;
+}
+
+@keyframes browser-notice-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.browser-finish {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 8px;
+}
+
 .browser-page {
   display: flex;
   flex: 1;

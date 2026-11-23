@@ -74,6 +74,9 @@ struct Session {
     target: String,
     /// Last time this tab saw a CDP call (a tool action, a live frame or an input event).
     last_activity: Instant,
+    /// Last time a CDP call actually answered. A page with a script that never ends keeps taking
+    /// calls but returns nothing, so only this clock can tell the agent the page is stalled.
+    last_response: Instant,
     /// Whether `Page.setWebLifecycleState('frozen')` is in effect and has not been undone.
     frozen: bool,
 }
@@ -103,11 +106,33 @@ pub(super) async fn perform(bot: &str, action: &Action) -> Result<Value> {
         timeout(action.timeout.saturating_add(HUNG), run(session, action)).await
     };
     match answered {
-        Ok(answer) => answer,
+        Ok(answer) => {
+            if let Some(session) = guard.as_mut().and_then(|held| held.as_mut()) {
+                session.last_response = Instant::now();
+            }
+            answer
+        }
         Err(_) => {
+            // 0.77.0: a page whose script never ends stops answering. If the last CDP answer was
+            // longer ago than the stall window, say so plainly and name the fix instead of only
+            // reporting a timeout.
+            let stalled = guard.as_ref().and_then(|held| held.as_ref()).is_some_and(|session| {
+                crate::screen::browser_cards::browser_page_stalled(
+                    session.last_response,
+                    Instant::now(),
+                    crate::screen::browser_cards::STALL_AFTER,
+                )
+            });
             // A cancelled read leaves the pipe unsure of where the next reply starts, so the browser
             // is stopped instead of reused.
             stop(guard.take()).await;
+            if stalled {
+                bail!(
+                    "{} The page was silent for over {} seconds, so the browser was closed. Open it again with navigate direction=reload, then take a new snapshot.",
+                    crate::screen::browser_cards::PAGE_NOT_ANSWERING,
+                    crate::screen::browser_cards::STALL_AFTER.as_secs()
+                )
+            }
             bail!(
                 "The browser did not answer within {} seconds, so it was closed. Open the page again with navigate.",
                 action.timeout.as_secs()
@@ -203,7 +228,16 @@ async fn spawn(bot: &str) -> Result<Session> {
     )
     .await?;
     let target = target["targetId"].as_str().context("The browser did not open a tab")?.to_owned();
-    Ok(Session { process, folder, pipe: socket, context, target, last_activity: Instant::now(), frozen: false })
+    Ok(Session {
+        process,
+        folder,
+        pipe: socket,
+        context,
+        target,
+        last_activity: Instant::now(),
+        last_response: Instant::now(),
+        frozen: false,
+    })
 }
 
 /// Stops a browser and removes its profile, retrying a profile Chrome still holds. The terminate
@@ -411,6 +445,9 @@ async fn navigate(
     direction: Option<Direction>,
     limit: Duration,
 ) -> Result<Value> {
+    // 0.77.0: "Reload, Back, Forward and a new address also failed" on a page whose script never
+    // ends. Stop that script first, so every navigation control can load the new page.
+    stop_loading(session, tab).await;
     let before = page(session, tab, "probe", &json!({})).await?["url"].as_str().unwrap_or_default().to_owned();
     match (url, direction) {
         (Some(url), None) => {
@@ -449,6 +486,12 @@ async fn navigate(
         answer["note"] = json!("The page was still loading when the wait ended; take a snapshot to see where it is.");
     }
     Ok(answer)
+}
+
+/// Stops a page that stopped answering before a navigation. A refused stop is not fatal: the
+/// navigation still gets its own bounded deadline (0.77.0).
+async fn stop_loading(session: &mut Session, tab: &str) {
+    let _ = rpc(&mut session.pipe, "Page.stopLoading", json!({}), Some(tab)).await;
 }
 
 /// Waits until the page reports itself loaded twice in a row, after it moved or had time to.

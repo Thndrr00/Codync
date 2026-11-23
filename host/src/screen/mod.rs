@@ -33,6 +33,7 @@
 //! `text`, `key` in display points, plus `down`/`up` for touch drags and `clipboard {text}`.
 
 mod activity;
+pub(crate) mod browser_cards;
 #[cfg(windows)]
 pub mod browser_panel;
 pub mod browser_tools;

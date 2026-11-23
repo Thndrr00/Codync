@@ -5,6 +5,7 @@
 mod apps_bridge;
 pub mod apps_runtime;
 mod bots;
+pub(crate) mod browser_fix;
 mod catalog;
 mod computer_activity;
 mod custom_provider;
@@ -137,6 +138,26 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         "mediaModels" => return media::models(hub, &b),
         "sunraModels" => return media::sunra_models(hub, &b).await,
         "sunraCredits" => return media::sunra_credits(hub, &b).await,
+        "browserCardSignIn" => {
+            return Ok(browser_fix::sign_in_card_action(
+                b["serverRefused"].as_bool().unwrap_or(false),
+                b["web"].as_bool().unwrap_or(false),
+            ));
+        }
+        "browserCardTakeover" => {
+            return Ok(browser_fix::takeover_card(
+                &b["data"],
+                b["waiting"].as_bool().unwrap_or(false),
+                b["now"].as_i64().unwrap_or_default(),
+            ));
+        }
+        "browserCardNotice" => {
+            return Ok(browser_fix::browser_notice(
+                b["url"].as_str().unwrap_or_default(),
+                b["active"].as_bool().unwrap_or(false),
+            ));
+        }
+        "browserCardFinishSignIn" => return browser_fix::finish_sign_in_address(b["url"].as_str().unwrap_or_default()),
         _ => {}
     }
     if custom_provider::METHODS.contains(&method) {
