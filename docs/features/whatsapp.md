@@ -34,6 +34,38 @@ on desktop, iPhone and Android, labelled **Message yourself**, and cannot be
 removed with **Remove**. The number's settings say that this chat and the people
 you allow reach the bot; the other chats still get no reply.
 
+## Read-only chats
+
+An allowed contact or group can be set to **Read only** on the WhatsApp page in the desktop app
+(OpenBot 0.77.0). The host still keeps that chat's messages, authors and files for an agent to read
+back, but opens no bot turn there: no answer, "Working on it…" line, acknowledgement or error post.
+The setting lives on the allowed-list entry (`whatsapp.allowed`), so older plain-jid lists keep
+working and are read as writable. It is additive over the API: `whatsappState` also reports
+`readOnly`, and `whatsappSetAllowed` takes an optional `readOnly` flag. The jid shape and the
+200-chat cap are unchanged.
+
+## Contact cards
+
+A contact card someone shares now reaches the agent as one readable line with the contact's name and
+phone numbers, in the live prompt and in the kept history (OpenBot 0.77.0). Before, it arrived as an
+empty message. The bridge sends only the name and vCard; the host parses them into text. The numbers
+go into the agent's prompt and the history row, never into a log. Cards saved before this release
+stay empty.
+
+## Replies to the number's own posts
+
+In an allowed group, a reply to a post an agent or a routine made reaches the configured WhatsApp
+bot (the orchestrator) even without a mention (OpenBot 0.77.0). The reply names the post it answers,
+so the orchestrator sees which agent wrote it and routes it. The bot is the one already chosen for
+the number; no second bot is created.
+
+## The busy note
+
+The "too many requests" note stays out of another person's chat or a group on a personal number and
+when the "Working on it…" message is off (OpenBot 0.77.0). Before, it appeared as the owner's own
+message there. The failed reaction is unchanged; the owner's "Message yourself" chat and a number
+used only for OpenBot still get the note while status posts are on.
+
 ## Status reactions
 
 A number's **Status reactions** switch is on by default. While it is on, a request gets a 👀 on

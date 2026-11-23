@@ -1,6 +1,6 @@
 //! Incoming `WhatsApp` messages, routed through the host bot actor.
 
-use super::{Arc, Hub, Value, WhatsApp, allowed, entry_id, inbox, json, save_media, settings, voice_notes};
+use super::{Arc, Hub, Value, WhatsApp, entry_id, inbox, json, save_media, settings, voice_notes};
 
 /// OpenBot 0.74.0: the status reactions a number puts on a person's message — 👀 when it arrives,
 /// then ✅ / ❌ / 🫡 when the request ends. Replies and error messages are not reactions and are
@@ -28,9 +28,93 @@ fn prompt(place: &str, note: &str) -> String {
     format!("WhatsApp message from {place}:\n\n{note}")
 }
 
+/// Unescapes the printable parts of a vCard value. Folded continuation lines are handled by the
+/// caller, and a literal newline becomes a space so the text stays one line in a prompt.
+fn unescape_vcard(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n' | 'N') => out.push(' '),
+                Some(other) => out.push(other),
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// OpenBot 0.77.0: a shared contact card used to reach the agent as an empty message. Turns the
+/// vCard the bridge sends into one readable line with the contact's name and phone numbers, for
+/// both the live prompt and the kept history. Pure so synthetic cards can be tested without a
+/// link. The numbers go only into the prompt and the history text, never into a log.
+pub(crate) fn contact_card_text(vcard: &str, display_name: &str) -> Option<String> {
+    let mut name = String::new();
+    let mut numbers: Vec<String> = Vec::new();
+    for line in vcard.lines() {
+        let line = line.trim_end_matches('\r');
+        if line.starts_with(' ') || line.starts_with('\t') {
+            continue; // a folded continuation of the previous line, already read
+        }
+        let Some((key, value)) = line.split_once(':') else { continue };
+        let key = key.split(';').next().unwrap_or_default().trim().to_ascii_uppercase();
+        let value = unescape_vcard(value.trim());
+        match key.as_str() {
+            "FN" if name.is_empty() && !value.is_empty() => name = value,
+            "TEL" => {
+                let plain = value.strip_prefix("tel:").unwrap_or(&value);
+                let number: String = plain.chars().filter(|c| c.is_ascii_digit() || *c == '+').take(32).collect();
+                if number.chars().count() > 1 && !numbers.contains(&number) && numbers.len() < 8 {
+                    numbers.push(number);
+                }
+            }
+            _ => {}
+        }
+    }
+    if name.is_empty() {
+        name = unescape_vcard(display_name.trim());
+    }
+    if name.is_empty() && numbers.is_empty() {
+        return None;
+    }
+    let mut text = format!("Contact card: {}", if name.is_empty() { "Unnamed contact" } else { &name });
+    if !numbers.is_empty() {
+        text = format!("{text} — {}", numbers.join(", "));
+    }
+    Some(text)
+}
+
+/// OpenBot 0.77.0: in an allowed group, a reply to a post an agent or a routine made goes to the
+/// configured WhatsApp bot (the orchestrator), even without a mention and even if the reply text
+/// names someone: the orchestrator sees which agent wrote the post and routes it. Every other
+/// message keeps the usual `@name`-then-default choice. Pure so the routing is testable without a
+/// store or a link.
+pub(crate) fn route_reply<'a>(
+    group: bool,
+    quoted: bool,
+    named: Option<&'a str>,
+    configured: Option<&'a str>,
+) -> Option<&'a str> {
+    if group && quoted {
+        return configured.or(named);
+    }
+    named.or(configured)
+}
+
 impl WhatsApp {
     pub(super) async fn on_message(&self, hub: &Arc<Hub>, event: &Value, expected: &str) {
-        let text = event["text"].as_str().unwrap_or_default().trim().to_owned();
+        // OpenBot 0.77.0: a contact card arrives with no text. Read it before the empty-message
+        // check so the card reaches both the history row and the agent's prompt.
+        let card = event["contact"].as_object().and_then(|contact| {
+            contact_card_text(
+                contact["vcard"].as_str().unwrap_or_default(),
+                contact["name"].as_str().unwrap_or_default(),
+            )
+        });
+        let text = card.unwrap_or_else(|| event["text"].as_str().unwrap_or_default().trim().to_owned());
         let Some(chat) = event["chat"].as_str().filter(|c| !c.is_empty()) else { return };
         if text.is_empty() && event["media"].is_null() {
             // OpenBot 0.70.0: a newly linked number may first get a group message it can't decrypt.
@@ -72,13 +156,15 @@ impl WhatsApp {
         if group && !event["mentioned"].as_bool().unwrap_or(false) && !event["quoted"].as_bool().unwrap_or(false) {
             return;
         }
-        // With a list, only the owner, allowed people and allowed groups get through.
-        let allowed = allowed(hub);
+        // With a list, only the owner, allowed people and allowed groups get through. A read-only
+        // entry still had its message kept above, but opens no bot turn (OpenBot 0.77.0).
+        let allowed = settings::read_allowed(&hub.store).unwrap_or_default();
         let me = self.state.lock().await.me.clone().unwrap_or_default();
         let own = settings::is_own_chat(&me, chat, sender);
+        let principal = if group { chat } else { sender };
         if !allowed.is_empty() && !own {
-            let listed = if group { allowed.iter().any(|a| a == chat) } else { allowed.iter().any(|a| a == sender) };
-            if !listed {
+            let Some(entry) = allowed.iter().find(|entry| entry.jid == principal) else { return };
+            if !settings::can_reply(Some(entry)) {
                 return;
             }
         }
@@ -129,13 +215,13 @@ impl WhatsApp {
         let note = if let Some(media) = media { voice_notes::append(&hub.store, media, note).await } else { note };
         // Audio work can outlive a configuration edit or unlink. Do not hand the old message
         // to a bot after its connection, allowlist, or default binding has been revoked.
-        let current_allowed = crate::whatsapp::allowed(hub);
+        let current_allowed = settings::read_allowed(&hub.store).unwrap_or_default();
         let current_link = self.state().await;
         if current_link.state != "connected"
             || current_link.me.as_deref().unwrap_or_default() != me
             || (!current_allowed.is_empty()
                 && !own
-                && !current_allowed.iter().any(|allowed| allowed == if group { chat } else { sender }))
+                && !current_allowed.iter().any(|entry| entry.jid == principal && settings::can_reply(Some(entry))))
             || (uses_default && hub.store.kv_get("whatsapp.bot").as_deref() != Some(bot.as_str()))
         {
             return;
@@ -313,5 +399,44 @@ mod tests {
             prompt(super::super::place_name(None, false, "sender"), note),
             "WhatsApp message from sender:\n\nPlease review the PR"
         );
+    }
+
+    #[test]
+    fn a_shared_contact_card_reaches_the_agent_with_its_name_and_numbers() {
+        let vcard = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ana García\r\nTEL;TYPE=CELL:+52 555 555 5555\r\n\
+                     TEL;TYPE=WORK;VALUE=uri:tel:+525556666666\r\nEND:VCARD";
+        let text = contact_card_text(vcard, "").unwrap();
+        assert!(text.starts_with("Contact card: Ana García"), "{text}");
+        assert!(text.contains("+525555555555"), "{text}");
+        assert!(text.contains("+525556666666"), "{text}");
+        assert_eq!(text.matches('+').count(), 2, "a number is not printed twice");
+        assert!(!text.contains("BEGIN:VCARD"), "only the name and numbers are shown");
+
+        // An unnamed card still says who sent it, and a repeated number is printed once.
+        let unnamed = "BEGIN:VCARD\nTEL:+525551111111\nTEL:+52 555 111 1111\nEND:VCARD";
+        let text = contact_card_text(unnamed, "  Pepe  ").unwrap();
+        assert_eq!(text, "Contact card: Pepe — +525551111111");
+        assert_eq!(contact_card_text("", ""), None, "an empty card is still empty");
+        assert_eq!(contact_card_text("FN:Ana", "").unwrap(), "Contact card: Ana");
+        assert_eq!(
+            contact_card_text("TEL:+525551111111", "").unwrap(),
+            "Contact card: Unnamed contact — +525551111111"
+        );
+    }
+
+    #[test]
+    fn a_group_reply_to_an_own_post_reaches_the_configured_bot() {
+        let configured = Some("orchestrator");
+        assert_eq!(route_reply(true, true, None, configured), configured, "a reply needs no mention");
+        assert_eq!(
+            route_reply(true, true, Some("named"), configured),
+            configured,
+            "the orchestrator sees the post's author"
+        );
+        assert_eq!(route_reply(true, false, Some("named"), configured), Some("named"), "an ordinary group @name wins");
+        assert_eq!(route_reply(true, false, None, configured), configured, "an ordinary group line uses the default");
+        assert_eq!(route_reply(false, false, None, configured), configured, "a direct chat uses the default");
+        assert_eq!(route_reply(true, true, None, None), None, "a reply with no bot configured has no route");
+        assert_eq!(route_reply(true, true, Some("named"), None), Some("named"), "a typed name still routes");
     }
 }

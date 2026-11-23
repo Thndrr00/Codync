@@ -836,11 +836,11 @@ export class BotStore extends BotSync {
     this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), statusReactions: result.statusReactions }
     this.changed()
   }
-  /** Lets a chat or person write, or takes them out; an empty list lets anyone in. */
-  async whatsappSetAllowed(jid: string, allowed: boolean) {
-    const result = await (await this.ready()).call<{ allowed: string[] }>('whatsappSetAllowed', { jid, allowed })
-    this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), allowed: result.allowed }
-    this.changed()
+  /** Lets a chat or person write, or takes them out; an empty list lets anyone in. `readOnly` keeps
+   * the chat readable to agents but stops replies (OpenBot 0.77.0). */
+  async whatsappSetAllowed(jid: string, allowed: boolean, readOnly?: boolean) {
+    await (await this.ready()).call('whatsappSetAllowed', { jid, allowed, readOnly })
+    await this.refreshWhatsApp()
   }
 
   /** Removes one message on the computer. */

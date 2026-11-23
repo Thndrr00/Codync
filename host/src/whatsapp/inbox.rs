@@ -1,6 +1,6 @@
 //! Ordered durable message metadata; the bridge reader remains free for link events and approvals.
 
-use super::{Hub, Value, WhatsApp, entry_id};
+use super::{Hub, Value, WhatsApp, entry_id, settings};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, json};
@@ -84,13 +84,16 @@ pub(super) fn snapshot(hub: &Hub, event: &Value, me: &str) -> Result<Option<Stri
     if uses_default && hub.store.kv_read("whatsapp.bot")?.as_deref() != Some(bot) {
         return Ok(None);
     }
-    let mut allowed: Vec<String> =
-        hub.store.kv_read("whatsapp.allowed")?.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default();
-    allowed.sort();
+    // OpenBot 0.77.0: the flag is part of the configuration so toggling it revokes a prompt queued
+    // while the chat was writable. Membership, not writability, decides authorization here: a
+    // read-only chat is still queued so `on_message` can keep its message in history before it
+    // stops the bot turn.
+    let mut allowed = settings::read_allowed(&hub.store)?;
+    allowed.sort_by(|a, b| a.jid.cmp(&b.jid));
     let (Some(chat), Some(sender)) = (event["chat"].as_str(), event["sender"].as_str()) else { return Ok(None) };
-    let own = super::settings::is_own_chat(me, chat, sender);
+    let own = settings::is_own_chat(me, chat, sender);
     let principal = if event["group"] == true { chat } else { sender };
-    if !own && !allowed.is_empty() && !allowed.iter().any(|id| id == principal) {
+    if !own && !allowed.is_empty() && !allowed.iter().any(|entry| entry.jid == principal) {
         return Ok(None);
     }
     let default_epoch = if uses_default { hub.store.kv_read("whatsapp.bot.generation")? } else { None };
@@ -148,10 +151,12 @@ pub(super) async fn receive(app: &WhatsApp, hub: &Arc<Hub>, event: &Value) -> Re
     if group && event["mentioned"] != true && event["quoted"] != true {
         return Ok(());
     }
-    let allowed: Vec<String> =
-        hub.store.kv_read("whatsapp.allowed")?.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default();
-    let own = super::settings::is_own_chat(me, chat, sender);
-    if !own && !allowed.is_empty() && !allowed.iter().any(|id| id == if group { chat } else { sender }) {
+    let allowed = settings::read_allowed(&hub.store)?;
+    let own = settings::is_own_chat(me, chat, sender);
+    let principal = if group { chat } else { sender };
+    // A read-only chat is allowed in: `on_message` keeps its message in history, then stops before
+    // any bot turn (OpenBot 0.77.0).
+    if !own && !allowed.is_empty() && !allowed.iter().any(|entry| entry.jid == principal) {
         return Ok(());
     }
     // Approval responses bypass only the slow input queue, with the usual sender/card checks.
@@ -171,11 +176,15 @@ pub(super) async fn receive(app: &WhatsApp, hub: &Arc<Hub>, event: &Value) -> Re
         })
         .collect();
     let (chosen, text) = super::mentioned_bot(&roster, event["text"].as_str().unwrap_or_default());
-    let bot = match chosen {
-        Some(row) => Some(row.config.id.clone()),
-        None => hub.store.kv_read("whatsapp.bot")?,
-    };
-    let Some(bot) = bot.filter(|bot| roster.iter().any(|row| row.config.id == *bot)) else {
+    let configured = hub.store.kv_read("whatsapp.bot")?;
+    // OpenBot 0.77.0: a reply to a post the number made goes to the configured orchestrator.
+    let route = super::incoming::route_reply(
+        group,
+        event["quoted"] == true,
+        chosen.as_ref().map(|row| row.config.id.as_str()),
+        configured.as_deref(),
+    );
+    let Some(bot) = route.map(str::to_owned).filter(|bot| roster.iter().any(|row| &row.config.id == bot)) else {
         app.send_message(chat, "No hay ningún bot asignado a este WhatsApp. Elige uno en Ajustes.", None, None, None)
             .await?;
         return Ok(());
@@ -232,7 +241,13 @@ pub(super) async fn receive(app: &WhatsApp, hub: &Arc<Hub>, event: &Value) -> Re
         }
     };
     if full {
-        app.send_message(chat, "The input queue is full. Please try again shortly.", None, None, None).await?;
+        // OpenBot 0.77.0: the busy note reads as the owner's own post in someone else's chat or a
+        // group on a personal number. Keep the failed reaction path, post no text there.
+        let personal_number = !allowed.is_empty();
+        let read_only = allowed.iter().any(|entry| entry.jid == principal && entry.read_only);
+        if !read_only && settings::post_busy_notice(own, personal_number, settings::working_message(&hub.store)) {
+            app.send_message(chat, "The input queue is full. Please try again shortly.", None, None, None).await?;
+        }
     }
     Ok(())
 }

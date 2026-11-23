@@ -11,6 +11,9 @@ import { useModel } from '../../lib/observable'
 import { ErrorText } from './pieces'
 import { whatsappPlaces } from './whatsapp-places'
 
+/** The host sends this additive field with `whatsappState` (OpenBot 0.77.0). */
+type WhatsAppStateWithReadOnly = { readOnly?: string[] }
+
 /**
  * Linking a WhatsApp number to this computer. WhatsApp has no official desktop client API: the
  * number becomes a linked device, and a separate number is safer because WhatsApp can block one it
@@ -117,7 +120,12 @@ export function WhatsAppSheet() {
                 <HStack gap={8}>
                   <Button kind="secondary" onClick={() => void store.whatsappLogout()}>{tr('Unlink')}</Button>
                 </HStack>
-                <AllowedChats me={state.me} allowed={state.allowed ?? []} onSet={(jid, allowed) => void store.whatsappSetAllowed(jid, allowed)} />
+                <AllowedChats
+                  me={state.me}
+                  allowed={state.allowed ?? []}
+                  readOnly={(state as WhatsAppStateWithReadOnly).readOnly ?? []}
+                  onSet={(jid, allowed, readOnly) => void store.whatsappSetAllowed(jid, allowed, readOnly)}
+                />
               </>
             ) : state?.state === 'starting' ? (
               <>
@@ -183,7 +191,12 @@ function ValueRow({ label, children }: { label: string; children: React.ReactNod
 }
 
 /** Who may write to the number: the owner always, and these chats and people when the list is not empty. */
-function AllowedChats({ me, allowed, onSet }: { me?: string | null; allowed: string[]; onSet: (jid: string, allowed: boolean) => void }) {
+function AllowedChats({ me, allowed, readOnly, onSet }: {
+  me?: string | null
+  allowed: string[]
+  readOnly: string[]
+  onSet: (jid: string, allowed: boolean, readOnly?: boolean) => void
+}) {
   const tr = useTr()
   const [jid, setJid] = useState('')
   const add = () => { const value = jid.trim(); if (value) { onSet(value, true); setJid('') } }
@@ -194,12 +207,22 @@ function AllowedChats({ me, allowed, onSet }: { me?: string | null; allowed: str
         {allowed.length === 0 ? tr('Anyone can write right now. Add a chat or person to restrict it.') : tr('Allowed chats')}
       </Text>
       {places.map((place) => (
-        <HStack key={place.id} gap={8}>
-          <Text grow size="caption" mono>{place.own ? tr('Message yourself') : place.id}</Text>
-          {place.own
-            ? <Text size="caption" tone="secondary">{tr('This chat still reaches the bot.')}</Text>
-            : <Button kind="secondary" onClick={() => onSet(place.id, false)}>{tr('Remove')}</Button>}
-        </HStack>
+        <VStack key={place.id} gap={4}>
+          <HStack gap={8}>
+            <Text grow size="caption" mono>{place.own ? tr('Message yourself') : place.id}</Text>
+            {place.own
+              ? <Text size="caption" tone="secondary">{tr('This chat still reaches the bot.')}</Text>
+              : <Button kind="secondary" onClick={() => onSet(place.id, false)}>{tr('Remove')}</Button>}
+          </HStack>
+          {place.own ? null : (
+            <Switch on={readOnly.includes(place.id)} onChange={(on) => onSet(place.id, true, on)}>
+              <RowLabel
+                label={tr('Read only')}
+                detail={tr('Agents can read this chat; the number never writes here.')}
+              />
+            </Switch>
+          )}
+        </VStack>
       ))}
       <HStack gap={8}>
         <input className="field-box" value={jid} placeholder="5215555555555@s.whatsapp.net" onChange={(e) => setJid(e.target.value)} />

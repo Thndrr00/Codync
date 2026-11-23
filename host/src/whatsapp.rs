@@ -425,11 +425,20 @@ impl WhatsApp {
 }
 
 /// The chats and people allowed to write, as `whatsapp.allowed` keeps them; empty means anyone.
+/// OpenBot 0.77.0: detailed entries carry a read-only flag, but the wire list stays plain strings.
 pub fn allowed(hub: &Hub) -> Vec<String> {
-    hub.store
-        .kv_get("whatsapp.allowed")
-        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+    settings::allowed_jids(hub).unwrap_or_default()
+}
+
+/// The allowed chats an agent may read but never answers (OpenBot 0.77.0). Additive to `allowed`,
+/// so a client that does not know the field still shows every allowed chat.
+pub fn read_only(hub: &Hub) -> Vec<String> {
+    settings::read_allowed(&hub.store)
         .unwrap_or_default()
+        .into_iter()
+        .filter(|entry| entry.read_only)
+        .map(|entry| entry.jid)
+        .collect()
 }
 
 /// A stable entry id from its parts (`whatsapp-<hash>`).
@@ -570,6 +579,25 @@ mod tests {
         assert!(normalize_phone("55555555").is_ok());
         assert!(normalize_phone("5555 555").is_err());
         assert!(normalize_phone("1234567890123456").is_err());
+    }
+
+    #[test]
+    fn the_wire_list_stays_plain_strings_beside_the_additive_read_only_field() {
+        use crate::remote::identity::Identity;
+        let dir = std::env::temp_dir().join(format!("codync-whatsapp-wire-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let hub = Hub::new(
+            crate::store::Store::open(std::path::Path::new(":memory:")).unwrap(),
+            "wire-test".into(),
+            Identity::load_or_create(&dir).unwrap(),
+            "t".into(),
+            0,
+        );
+        set_allowed(&hub, "a@s.whatsapp.net", true, None).unwrap();
+        set_allowed(&hub, "g@g.us", true, Some(true)).unwrap();
+        assert_eq!(allowed(&hub), vec!["a@s.whatsapp.net", "g@g.us"], "older clients still see plain jids");
+        assert_eq!(read_only(&hub), vec!["g@g.us"], "newer clients see the additive field");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

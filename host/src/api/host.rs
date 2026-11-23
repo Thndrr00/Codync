@@ -75,6 +75,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 view["bot"] = Value::String(bot);
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
+            // OpenBot 0.77.0: additive, so a client that does not show read-only still works.
+            view["readOnly"] = serde_json::to_value(crate::whatsapp::read_only(hub))?;
             view["workingMessage"] = json!(crate::whatsapp::working_message(&hub.store));
             view["statusReactions"] = json!(crate::whatsapp::status_reactions(&hub.store));
             view
@@ -96,6 +98,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 view["bot"] = Value::String(bot);
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
+            view["readOnly"] = serde_json::to_value(crate::whatsapp::read_only(hub))?;
             view["workingMessage"] = json!(crate::whatsapp::working_message(&hub.store));
             view["statusReactions"] = json!(crate::whatsapp::status_reactions(&hub.store));
             view
@@ -123,11 +126,19 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::whatsapp::set_bot(hub, bot)?;
             json!({"ok": true})
         }
-        "whatsappAllowed" => json!({"allowed": crate::whatsapp::allowed(hub)}),
+        "whatsappAllowed" => {
+            json!({"allowed": crate::whatsapp::allowed(hub), "readOnly": crate::whatsapp::read_only(hub)})
+        }
         "whatsappSetAllowed" => {
             let jid = str_arg(&b, "jid")?;
-            let list = crate::whatsapp::set_allowed(hub, jid, b["allowed"].as_bool().unwrap_or(true))?;
-            json!({"allowed": list})
+            // OpenBot 0.77.0: `readOnly` is additive; older clients leave it out.
+            let list = crate::whatsapp::set_allowed(
+                hub,
+                jid,
+                b["allowed"].as_bool().unwrap_or(true),
+                b["readOnly"].as_bool(),
+            )?;
+            json!({"allowed": list, "readOnly": crate::whatsapp::read_only(hub)})
         }
         "whatsappSend" => {
             let body: crate::whatsapp::SendBody = serde_json::from_value(b)?;

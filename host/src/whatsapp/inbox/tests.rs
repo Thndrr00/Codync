@@ -38,7 +38,7 @@ impl Fixture {
             LinkState { state: "connected".into(), me: Some(OWNER.into()), ..LinkState::default() };
         settings::record_account(&hub, OWNER).unwrap();
         settings::set_bot(&hub, "a").unwrap();
-        settings::set_allowed(&hub, SENDER, true).unwrap();
+        settings::set_allowed(&hub, SENDER, true, None).unwrap();
         Self { hub, root }
     }
 
@@ -69,6 +69,18 @@ fn hermes_whatsapp_notes_keep_their_target_when_other_bots_or_default_bindings_c
 }
 
 #[test]
+fn a_read_only_chat_still_authorizes_its_message_for_history_but_changes_the_fence() {
+    let fixture = Fixture::new();
+    let hub = &fixture.hub;
+    let event = Fixture::event();
+    let writable = snapshot(hub, &event, OWNER).unwrap().unwrap();
+    settings::set_allowed(hub, SENDER, true, Some(true)).unwrap();
+    let read_only = snapshot(hub, &event, OWNER).unwrap();
+    assert!(read_only.is_some(), "a read-only chat is still queued so its message reaches history");
+    assert_ne!(read_only.as_deref(), Some(writable.as_str()), "the toggle revokes a turn queued while writable");
+}
+
+#[test]
 fn hermes_whatsapp_revocation_cannot_be_undone_by_restoring_the_same_allowlist() {
     let fixture = Fixture::new();
     let hub = &fixture.hub;
@@ -77,9 +89,9 @@ fn hermes_whatsapp_revocation_cannot_be_undone_by_restoring_the_same_allowlist()
     hub.add_entry_once("input", &Lane::main("a"), EntryKind::User, 1,
         &json!({"text":"hello","status":"queued","source":"whatsapp", "whatsappFence":event,"whatsappGeneration":generation})).unwrap();
     assert!(claim_prompt(hub, "input").unwrap());
-    settings::set_allowed(hub, SENDER, false).unwrap();
+    settings::set_allowed(hub, SENDER, false, None).unwrap();
     assert!(!claim_prompt(hub, "input").unwrap());
-    settings::set_allowed(hub, SENDER, true).unwrap();
+    settings::set_allowed(hub, SENDER, true, None).unwrap();
     assert!(!claim_prompt(hub, "input").unwrap());
     assert_ne!(snapshot(hub, &event, OWNER).unwrap().as_deref(), Some(generation.as_str()));
 }

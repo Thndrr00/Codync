@@ -82,17 +82,24 @@ impl WhatsApp {
             return;
         }
         let state = self.state.lock().await.clone();
-        let Ok(raw) = hub.store.kv_read("whatsapp.allowed") else { return };
-        let Ok(allowed) = raw.as_deref().map(serde_json::from_str::<Vec<String>>).transpose() else { return };
-        let allowed = allowed.unwrap_or_default();
+        let Ok(allowed) = super::settings::read_allowed(&hub.store) else { return };
         let own = super::settings::is_own_chat(state.me.as_deref().unwrap_or_default(), chat, sender);
-        if !own && !allowed.is_empty() && !allowed.iter().any(|id| id == if group { chat } else { sender }) {
+        let principal = if group { chat } else { sender };
+        // OpenBot 0.77.0: a read-only chat gets no post, and the busy note is quiet in another
+        // person's chat or a group on a personal number. The failed reaction is separate.
+        if !own
+            && !allowed.is_empty()
+            && !allowed.iter().any(|entry| entry.jid == principal && super::settings::can_reply(Some(entry)))
+        {
             return;
         }
-        if let Err(error) =
-            self.send_message(chat, "The input queue is full. Please try again shortly.", None, None, None).await
-        {
-            tracing::warn!(%error, "WhatsApp could not report a full input queue");
+        let personal_number = !allowed.is_empty();
+        if super::settings::post_busy_notice(own, personal_number, super::settings::working_message(&hub.store)) {
+            if let Err(error) =
+                self.send_message(chat, "The input queue is full. Please try again shortly.", None, None, None).await
+            {
+                tracing::warn!(%error, "WhatsApp could not report a full input queue");
+            }
         }
     }
 

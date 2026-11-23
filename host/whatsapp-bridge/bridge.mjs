@@ -53,6 +53,16 @@ function textOf(message) {
     )
 }
 
+/** A shared contact card: only its name and vCard cross to the host, which parses them into text. */
+function contactOf(message) {
+    const m = message?.message
+    const contact = m?.contactsArrayMessage?.contacts?.[0] ?? m?.contactMessage
+    if (!contact) return null
+    const vcard = typeof contact.vcard === 'string' ? contact.vcard : ''
+    const name = typeof contact.displayName === 'string' ? contact.displayName : ''
+    return vcard || name ? { name, vcard } : null
+}
+
 function mediaOf(message) {
     const m = message?.message
     const media = m?.imageMessage ?? m?.videoMessage ?? m?.audioMessage ?? m?.documentMessage
@@ -141,6 +151,7 @@ async function start() {
                     quoted,
                     name: message.pushName ?? null,
                     text: textOf(message),
+                    contact: contactOf(message),
                     timestamp: Number(message.messageTimestamp ?? 0) * 1000,
                     media,
                 })
