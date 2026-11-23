@@ -7,6 +7,7 @@
 
 use super::Actor;
 use super::background_work::background_work;
+use super::compaction::LaneKind;
 use crate::analytics::Retired;
 use crate::store::now_ms;
 use serde_json::json;
@@ -91,7 +92,16 @@ impl Actor {
     /// Runs on the actor's tick: at most every [`CHECK_EVERY`], and only while the bot has nothing
     /// running, queued or waiting on the user. A compaction due while idle goes first.
     pub(super) async fn release_idle(&mut self) {
-        if self.idle_checked.elapsed() < CHECK_EVERY || !self.at_rest() {
+        if self.idle_checked.elapsed() < CHECK_EVERY {
+            return;
+        }
+        // OpenBot 0.77.0: a channel thread compacts while a message waits for its turn. That is an
+        // idle *conversation*, not an idle agent, so do not give its resources back yet.
+        if !self.at_rest() {
+            if self.idle_due().is_some_and(|target| target.kind == LaneKind::Channel) {
+                self.idle_checked = Instant::now();
+                self.tend_idle();
+            }
             return;
         }
         self.idle_checked = Instant::now();

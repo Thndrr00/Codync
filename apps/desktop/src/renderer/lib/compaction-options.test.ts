@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { compactionLabel, compactionMenu, fitSize, parseTypedSize } from './compaction-options.ts'
+import { BEFORE_EXPIRY_LABEL, beforeExpiryOn, compactionLabel, compactionMenu, fitSize, parseTypedSize } from './compaction-options.ts'
 
 const million = { min: 50_000, max: 960_000, step: 10_000, presets: [100_000, 200_000, 300_000] }
 
@@ -39,4 +39,9 @@ test('before the window is known the sizes wait for the next reply', () => {
 test('the pill shows a preset translated and a size as it is', () => {
   assert.deepEqual(compactionLabel('off'), { title: 'Auto (default)', verbatim: false })
   assert.deepEqual(compactionLabel(350_000), { title: '350K', verbatim: true })
+})
+
+test('compact before expiry is on unless the host says it is off', () => {
+  assert.equal(BEFORE_EXPIRY_LABEL, 'Compact before the cache expires')
+  assert.deepEqual([undefined, null, true, false].map(beforeExpiryOn), [true, true, true, false])
 })

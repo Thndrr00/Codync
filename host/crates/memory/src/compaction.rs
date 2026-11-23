@@ -15,8 +15,10 @@ const MINUTE_MS: i64 = 60_000;
 const HOUR_MS: i64 = 60 * MINUTE_MS;
 const DAY_MS: i64 = 24 * HOUR_MS;
 
-/// Idle compaction and rollover only pay for themselves past this much context.
+/// A cold rollover only pays for itself past this much context.
 const LARGE: u64 = 100_000;
+/// An idle chat compacts before expiry only from 200K on (OpenBot 0.77.0), well past the rollover's 100K.
+const IDLE_LARGE: u64 = 200_000;
 /// How long before a one-hour cache expires an idle conversation is compacted.
 const BEFORE_EXPIRY_MS: i64 = 5 * MINUTE_MS;
 /// Away this long with this many compactions behind it, a conversation is summaries of summaries.
@@ -87,6 +89,19 @@ pub enum Decision {
     Rollover,
 }
 
+/// The "Compact before the cache expires" switch persisted for a bot; on unless the user turns it off
+/// (OpenBot 0.77.0).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BeforeExpiry {
+    pub enabled: bool,
+}
+
+impl Default for BeforeExpiry {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 impl Conversation {
     /// The agent reported its context use.
     pub fn usage(&mut self, used: u64, size: u64) {
@@ -127,6 +142,14 @@ impl Conversation {
         }
     }
 
+    /// The idle rule's own floor: 200K, or the user's size when they asked for more (OpenBot 0.77.0).
+    fn idle_large(&self, at: Threshold) -> Option<u64> {
+        match at {
+            Threshold::Early => Some(IDLE_LARGE),
+            _ => at.trigger(self.size).map(|trigger| trigger.max(IDLE_LARGE)),
+        }
+    }
+
     /// Compacting again wouldn't help: too many today, too little gained last time, or too soon after the last.
     fn thrashing(&self, trigger: u64, now: i64) -> bool {
         let today = self.host_compactions.iter().filter(|at| now - **at < DAY_MS).count();
@@ -150,13 +173,16 @@ pub fn at_turn_end(c: &Conversation, at: Threshold, now: i64) -> Decision {
     }
 }
 
-/// While nothing runs: compact a large conversation just before a one-hour cache expires, which is cheaper than
-/// reading it cold when the user returns. A five-minute cache expires before this pays off.
-pub fn while_idle(c: &Conversation, at: Threshold, life: CacheLife, now: i64) -> Decision {
-    let (Some(trigger), Some(large)) = (at.trigger(c.size), c.large(at)) else { return Decision::Keep };
+/// While nothing runs: compact a conversation past 200K just before a one-hour cache expires, which is cheaper than
+/// reading it cold when the user returns. A five-minute cache expires before this pays off; the switch can keep the
+/// full context, and a context with nothing new since its last compaction is left alone (OpenBot 0.77.0).
+pub fn while_idle(c: &Conversation, at: Threshold, life: CacheLife, before_expiry: BeforeExpiry, now: i64) -> Decision {
+    let (Some(trigger), Some(large)) = (at.trigger(c.size), c.idle_large(at)) else { return Decision::Keep };
     let idle = now - c.last_turn;
-    let due = life == CacheLife::OneHour
+    let due = before_expiry.enabled
+        && life == CacheLife::OneHour
         && c.used >= large
+        && c.turns_since > 0
         && !c.idle_compacted
         && idle >= life.ms() - BEFORE_EXPIRY_MS
         && idle < life.ms();
@@ -299,17 +325,40 @@ mod tests {
 
     #[test]
     fn idle_compaction_runs_just_before_a_one_hour_cache_expires() {
-        let c = Conversation { used: 120_000, ..full() };
-        let at = |minutes: i64| while_idle(&c, E, CacheLife::OneHour, NOW + minutes * MINUTE_MS);
+        let c = Conversation { used: 250_000, ..full() };
+        let on = BeforeExpiry::default();
+        let at = |minutes: i64| while_idle(&c, E, CacheLife::OneHour, on, NOW + minutes * MINUTE_MS);
         assert_eq!(at(30), Decision::Keep);
         assert_eq!(at(56), Decision::Compact);
         assert_eq!(at(61), Decision::Keep, "already cold");
-        assert_eq!(while_idle(&c, E, CacheLife::FiveMinutes, NOW + 4 * MINUTE_MS), Decision::Keep);
-        let small = Conversation { used: 60_000, ..c.clone() };
-        assert_eq!(while_idle(&small, E, CacheLife::OneHour, NOW + 56 * MINUTE_MS), Decision::Keep);
+        assert_eq!(while_idle(&c, E, CacheLife::FiveMinutes, on, NOW + 4 * MINUTE_MS), Decision::Keep);
+        let small = Conversation { used: 199_999, ..c.clone() };
+        assert_eq!(while_idle(&small, E, CacheLife::OneHour, on, NOW + 56 * MINUTE_MS), Decision::Keep, "under 200K");
         let mut done = c;
         done.compacted(true, true, NOW + 56 * MINUTE_MS);
-        assert_eq!(while_idle(&done, E, CacheLife::OneHour, NOW + 57 * MINUTE_MS), Decision::Keep, "once");
+        assert_eq!(while_idle(&done, E, CacheLife::OneHour, on, NOW + 57 * MINUTE_MS), Decision::Keep, "once");
+    }
+
+    #[test]
+    fn the_switch_and_the_loop_guard_hold_back_idle_compaction() {
+        let c = Conversation { used: 250_000, ..full() };
+        let soon = NOW + 56 * MINUTE_MS;
+        let off = BeforeExpiry { enabled: false };
+        assert_eq!(while_idle(&c, E, CacheLife::OneHour, off, soon), Decision::Keep, "the full context stays");
+        let quiet = Conversation { turns_since: 0, ..c.clone() };
+        assert_eq!(
+            while_idle(&quiet, E, CacheLife::OneHour, BeforeExpiry::default(), soon),
+            Decision::Keep,
+            "nothing new"
+        );
+        let mut thrashing = c;
+        thrashing.compacted(true, false, NOW);
+        thrashing.usage(190_000, 1_000_000);
+        for _ in 0..THRASH_TURNS {
+            thrashing.turn_ended(NOW);
+        }
+        thrashing.used = 250_000;
+        assert_eq!(while_idle(&thrashing, E, CacheLife::OneHour, BeforeExpiry::default(), soon), Decision::Keep);
     }
 
     #[test]
@@ -350,14 +399,22 @@ mod tests {
         let c = Conversation { used: 300_000, ..full() };
         let idle = NOW + 56 * MINUTE_MS;
         let cold = NOW + 61 * MINUTE_MS;
-        assert_eq!(while_idle(&c, E, CacheLife::OneHour, idle), Decision::Compact);
+        assert_eq!(while_idle(&c, E, CacheLife::OneHour, BeforeExpiry::default(), idle), Decision::Compact);
         assert!(rollover_due(&c, E, CacheLife::OneHour, cold));
         for threshold in [Threshold::Tokens(500_000), Threshold::NearLimit, Threshold::Off] {
-            assert_eq!(while_idle(&c, threshold, CacheLife::OneHour, idle), Decision::Keep, "{threshold:?}");
+            assert_eq!(
+                while_idle(&c, threshold, CacheLife::OneHour, BeforeExpiry::default(), idle),
+                Decision::Keep,
+                "{threshold:?}"
+            );
             assert!(!rollover_due(&c, threshold, CacheLife::OneHour, cold), "{threshold:?}");
         }
         let low = Threshold::Tokens(60_000);
-        assert_eq!(while_idle(&c, low, CacheLife::OneHour, idle), Decision::Compact, "past 100k, as Early");
+        assert_eq!(
+            while_idle(&c, low, CacheLife::OneHour, BeforeExpiry::default(), idle),
+            Decision::Compact,
+            "past 200k, as Early"
+        );
         let summarized = Conversation { used: 30_000, compactions: 3, ..full() };
         let away = NOW + 9 * HOUR_MS;
         assert!(

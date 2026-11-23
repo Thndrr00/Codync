@@ -19,7 +19,7 @@ import { BotAgentKeys } from './BotAgentKeys'
 import { BotUsageRows } from './BotUsageRows'
 import { HermesRuntimeCard } from './HermesRuntimeCard'
 import { AgentModelPicker } from './AgentModelPicker'
-import { CompactionRow } from './CompactionRow'
+import { BeforeExpiryRow, CompactionRow } from './CompactionRow'
 import { agentChoice, AgentStepBanner, FallbacksRow } from './Fallbacks'
 import { useAgentSetup } from './agent-status'
 import { lastPathComponent } from '../../lib/path'
@@ -290,7 +290,12 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
     />,
   ] : null
   // Only where Codync summarizes the chat (its bot says): CardSection gives every child a row.
-  const compaction = saved && saved.compaction !== null ? <CompactionRow key="compaction" draft={draft} bot={saved} onChange={onChange} /> : null
+  const compaction = saved && saved.compaction !== null ? (
+    <>
+      <CompactionRow key="compaction" draft={draft} bot={saved} onChange={onChange} />
+      <BeforeExpiryRow key="before-expiry" botId={saved.id} />
+    </>
+  ) : null
 
   if (part === 'often') {
     return (

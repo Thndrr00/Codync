@@ -1,10 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Bot, BotDraft, CompactionSizes } from '@shared/models'
 import { DropdownMenu, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, DialogField } from '../../components/Overlay'
-import { compactionLabel, compactionMenu, fitSize, parseTypedSize } from '../../lib/compaction-options'
+import {
+  BEFORE_EXPIRY_DETAIL,
+  BEFORE_EXPIRY_LABEL,
+  beforeExpiryOn,
+  compactionLabel,
+  compactionMenu,
+  fitSize,
+  parseTypedSize,
+} from '../../lib/compaction-options'
 import { useTr } from '../../lib/use-language'
+import { useStore } from '../../store/context'
+import { SwitchRow } from './parts'
 
 /** When Codync summarizes the chat: a preset or a size the window allows. For a bot whose chat it summarizes. */
 export function CompactionRow({ draft, bot, onChange }: {
@@ -33,6 +43,34 @@ export function CompactionRow({ draft, bot, onChange }: {
       ) : null}
     </ValueRow>
   )
+}
+
+/**
+ * "Compact before the cache expires" (OpenBot 0.77.0): a host switch beside the compaction menu, on by default.
+ * Hidden when the host is too old to have it.
+ */
+export function BeforeExpiryRow({ botId }: { botId: string }) {
+  const store = useStore()
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [available, setAvailable] = useState(true)
+  useEffect(() => {
+    let live = true
+    void store
+      .ready()
+      .then((client) => client.call<{ enabled: boolean | null }>('compactBeforeExpiry', { botId }))
+      .then((answer) => { if (live) setEnabled(beforeExpiryOn(answer.enabled)) })
+      .catch(() => { if (live) setAvailable(false) })
+    return () => { live = false }
+  }, [botId, store])
+  if (!available) return null
+  const toggle = (on: boolean) => {
+    setEnabled(on)
+    void store
+      .ready()
+      .then((client) => client.call('setCompactBeforeExpiry', { botId, enabled: on }))
+      .catch(() => setEnabled(!on))
+  }
+  return <SwitchRow title={BEFORE_EXPIRY_LABEL} detail={BEFORE_EXPIRY_DETAIL} on={beforeExpiryOn(enabled)} onChange={toggle} />
 }
 
 /** "Custom size": a number of thousands of tokens, held to what the window takes. Open while `text` is set. */

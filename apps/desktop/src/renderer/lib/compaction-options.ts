@@ -1,6 +1,17 @@
 import type { CompactionSizes, CompactionThreshold } from '@shared/models'
 import type { MenuItem } from '../components/Menu'
 
+/** The switch beside the compaction menu (OpenBot 0.77.0). */
+export const BEFORE_EXPIRY_LABEL = 'Compact before the cache expires'
+
+/** What the switch does, as the apps say it. */
+export const BEFORE_EXPIRY_DETAIL = 'When a chat with 200K or more tokens of context is idle with a 1 hour cache, Codync compacts it before the cache expires. Turn this off to keep the full context.'
+
+/** The switch is on unless the host says it is off: an older host needs no saved value. */
+export function beforeExpiryOn(value: boolean | null | undefined): boolean {
+  return value !== false
+}
+
 const PRESETS: { id: Exclude<CompactionThreshold, number>; title: string }[] = [
   { id: 'off', title: 'Auto (default)' },
   { id: 'early', title: 'Early' },

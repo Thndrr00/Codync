@@ -2,7 +2,9 @@
 
 use super::devices::Caller;
 use super::str_arg;
-use crate::agent::bot::Cmd;
+use crate::agent::bot::{
+    Cmd, before_expiry_key, load_before_expiry, load_prompt_cache, save_before_expiry, save_prompt_cache,
+};
 use crate::hub::Hub;
 use crate::store::{EntryKind, Lane};
 use anyhow::{Context, Result, anyhow, bail};
@@ -298,6 +300,28 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"bot": tokio::task::spawn_blocking(move || hub.duplicate_bot(&id)).await??})
         }
         "botUsage" => hub.budget.bot_usage(str_arg(&b, "botId")?, crate::store::now_ms()),
+        // Additive per-bot switch: idle chats compact before a one-hour cache expires unless turned off
+        // (OpenBot 0.77.0). Lives in kv with the other compaction state, so no bot schema change.
+        "compactBeforeExpiry" => {
+            let bot = str_arg(&b, "botId")?;
+            hub.store.bot(bot)?.filter(|row| !row.deleted).context("unknown bot")?;
+            json!({"enabled": load_before_expiry(&hub.store, bot)})
+        }
+        "setCompactBeforeExpiry" => {
+            let bot = str_arg(&b, "botId")?.to_owned();
+            let enabled = b["enabled"].as_bool().context("enabled must be a boolean")?;
+            hub.store.bot(&bot)?.filter(|row| !row.deleted).context("unknown bot")?;
+            save_before_expiry(&hub.store, &bot, enabled)?;
+            json!({"enabled": enabled})
+        }
+        // The provider-level one-hour prompt cache, now read for Pi too (OpenBot 0.77.0).
+        "promptCacheLife" => json!({"setting": load_prompt_cache(&hub.store, str_arg(&b, "backend")?)}),
+        "setPromptCacheLife" => {
+            let backend = str_arg(&b, "backend")?.to_owned();
+            let setting = str_arg(&b, "setting")?.to_owned();
+            save_prompt_cache(&hub.store, &backend, &setting)?;
+            json!({"setting": setting.trim()})
+        }
         // What this bot waits on: open approvals, routine runs and threads with unread replies.
         "botTasks" => {
             let bot = str_arg(&b, "botId")?;
@@ -358,7 +382,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"text": crate::dev_servers::shown_logs(hub, str_arg(&b, "botId")?, str_arg(&b, "id")?).await?})
         }
         "deleteBot" => {
-            hub.delete_bot(str_arg(&b, "botId")?)?;
+            let bot = str_arg(&b, "botId")?;
+            hub.store.kv_delete(&before_expiry_key(bot))?;
+            hub.delete_bot(bot)?;
             json!({})
         }
         // The user makes this bot the lead, in place of the one before.

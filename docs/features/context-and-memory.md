@@ -160,16 +160,27 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   from `usage_update`, compactions, and when turns end. How long the provider keeps prompts cached is learned
   from turns that came after a pause (`cache.life.<bot>`); until then it is an hour for Claude on a subscription
   and five minutes otherwise. Each turn's cached read and write tokens are logged (`turn usage`).
-- **Compacting ahead of time**, when the user's threshold asks for it (Early's rules here), in the bot's own chat
-  only (never rooms, routines or bot requests):
-  - at the end of a turn past three quarters of the window or 200k tokens, whichever is less;
-  - while idle, with a one-hour cache and over 100k in use, five minutes before the cache expires.
+- **Compacting ahead of time**, when the user's threshold asks for it (Early's rules here):
+  - at the end of a turn past three quarters of the window or 200k tokens, whichever is less, in the bot's own
+    session only (never rooms, routines or bot requests);
+  - while idle, with a one-hour cache and **200K or more tokens** in use, five minutes before the cache expires —
+    in the bot's chat, its task threads and its channel threads, never while a message waits for its turn
+    (OpenBot 0.77.0). A context with nothing new since its last compaction is left alone.
 
   It runs as a hidden turn: dreaming first, then the opening rendered again (a Claude session reloads only when
   it changed), then `/compact <keep-list>` for Claude, or `/compact` for Codex, whose keep-list is its
-  `CODEX_CONFIG` `compact_prompt`. Other harnesses compact on their own. The keep-list is also in the opening.
-  A compaction queued behind another turn runs only if it is still due when its turn comes.
-- **The user's threshold** (*Summarize long chats* in a Claude Code or Codex bot's settings, the bot's
+  `CODEX_CONFIG` `compact_prompt`. **Pi** has no slash command, so it gets the same keep-list as a raw summary
+  prompt; its "Nothing to compact" answer is a quiet success with no notice. Other harnesses compact on their own.
+  The keep-list is also in the opening. A compaction queued behind another turn runs only if it is still due when
+  its turn comes.
+- **The "Compact before the cache expires" switch** (OpenBot 0.77.0) is per bot in `kv`
+  (`compact.beforeExpiry.<bot>`, on unless explicitly `false`; the desktop editor has the switch next to the
+  compaction menu, and `compactBeforeExpiry` / `setCompactBeforeExpiry` are the host methods). Turned off, idle
+  chats keep their full context; turn-end compaction and rollovers are unaffected. The provider's own one-hour
+  prompt-cache setting (`provider.promptCache.<backend>`, `"oneHour"` or `"providerDefault"`, with
+  `promptCacheLife` / `setPromptCacheLife` on the host API) now applies to Pi as well as Claude and wins over the
+  life learned from a turn's cache reads; without it the learned or guessed life stays as before.
+- **The user's threshold** (*Summarize long chats* in a Claude Code, Codex or Pi bot's settings, the bot's
   `compaction`): Auto (`"off"`, the default: no compaction or rollover from the host, the harness compacts on its
   own), Early (the rules above), Near the limit, or a size from 50k up to the window less 40k (the apps list 100k
   steps and take any other size typed, rounded to 10k). A size or Near the limit also keeps idle compaction and
@@ -186,9 +197,9 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   edit it (`editHandoff`) or keep the conversation (`keepConversation`); otherwise their next message there starts
   a new session that begins with it. A change of the threshold withdraws a card it no longer calls for (shown as
   kept, not counted as the user turning it down).
-- **After every compaction** the host records a notice ("Earlier context was summarized to make room.", its
-  `compaction` field carrying Claude's summary, which the next handoff starts from). The apps don't show it: the
-  same conversation goes on.
+- **After every compaction** the host records a notice ("Earlier context was summarized to make room.", or
+  "Context compacted before the prompt cache expired" for an idle one, its `compaction` field carrying Claude's
+  summary, which the next handoff starts from). The apps don't show it: the same conversation goes on.
 - **In the apps** the chat explains only a fresh conversation, in one line, left-aligned like the bot's messages.
   The iPhone and desktop show the draft card with *Keep this conversation* and a pencil that opens the editor
   sheet; once sent it folds to "Started a fresh conversation with this summary.", which unfolds to what it

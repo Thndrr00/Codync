@@ -65,7 +65,9 @@ mod watchdog;
 
 pub use cmd::Cmd;
 use cmd::Queued;
-pub use compaction::{context_window, offers_threshold};
+pub use compaction::{
+    context_window, load_before_expiry, load_prompt_cache, offers_threshold, save_before_expiry, save_prompt_cache,
+};
 pub(crate) use launch::{launch_commands, select_model, start_agent, start_first, system_prompt};
 pub(crate) use results::recover_results;
 pub(crate) use tool_entry::diff_summary;
@@ -239,6 +241,8 @@ pub(crate) enum Adapter {
     Claude,
     /// codex-acp: `/compact` (its keep-list is in `CODEX_CONFIG`).
     Codex,
+    /// pi-acp: no `/compact`, so the keep-list goes as a hidden prompt (OpenBot 0.77.0).
+    Pi,
     Other,
 }
 
