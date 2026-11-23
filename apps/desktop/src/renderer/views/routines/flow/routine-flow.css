@@ -46,6 +46,281 @@
   font: inherit;
 }
 
+/* Workflow actions on the canvas: pause skips triggers, a newer setting means no edits. */
+.flow-paused-badge,
+.flow-readonly-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--chrome-fill);
+  box-shadow: var(--shadow-m);
+  color: var(--text);
+}
+.flow-readonly-badge {
+  top: 52px;
+  padding: 5px 12px;
+  right: 12px;
+}
+
+/* A prompt with {{field}} chips. The mirror paints the chips over transparent textarea text, so the
+   saved string stays exactly what the host reads; both layers share the same text geometry. */
+.flow-field-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.flow-field-anchor {
+  position: relative;
+  min-width: 0;
+}
+.flow-field-surface {
+  position: relative;
+  min-width: 0;
+  border-radius: var(--radius-s);
+  background: var(--field);
+}
+.flow-field-surface.disabled {
+  opacity: 0.6;
+}
+.flow-field-mirror,
+.flow-field-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76px;
+  padding: 8px 10px;
+  border: 0;
+  font-family: var(--font);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.flow-field-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--text);
+}
+.flow-field-input {
+  position: relative;
+  display: block;
+  resize: vertical;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  outline: none;
+}
+.flow-field-input::placeholder {
+  color: var(--secondary);
+}
+.flow-field-input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.flow-field-chip {
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: background var(--hover);
+}
+.flow-field-chip.problem {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  box-shadow: 0 0 0 1px var(--danger);
+  color: var(--danger);
+}
+.flow-field-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 6;
+}
+.flow-field-picker {
+  max-height: 200px;
+  overflow: auto;
+  padding: 4px;
+  border-radius: var(--radius-s);
+  background: var(--chrome-fill);
+  box-shadow: var(--shadow-m);
+}
+.flow-field-empty {
+  padding: 10px;
+}
+.flow-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-callout);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--hover);
+}
+.flow-field-row:hover,
+.flow-field-row[aria-selected='true'] {
+  background: var(--field);
+}
+.flow-field-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-field-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The Answer fields and Check popovers: one row per field, a type glyph, name, values. */
+.flow-popover {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  opacity: 0;
+  transition: opacity var(--morph);
+}
+.flow-popover.shown {
+  opacity: 1;
+}
+.flow-popover-card {
+  position: absolute;
+  max-height: min(480px, 80vh);
+  overflow: auto;
+  padding: 10px;
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-l);
+  transform: scale(0.97);
+  transition: transform var(--morph);
+}
+.flow-popover.shown .flow-popover-card {
+  transform: scale(1);
+}
+.flow-popover-body {
+  padding-top: 8px;
+}
+.flow-answer-rows,
+.flow-check-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.flow-answer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--radius-s);
+  transition: background var(--hover);
+}
+.flow-answer-row:hover,
+.flow-answer-row:focus-within {
+  background: var(--field);
+}
+.flow-answer-type {
+  flex: none;
+  width: 30px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-callout);
+  cursor: pointer;
+}
+.flow-answer-name {
+  flex: 1 1 40%;
+  min-width: 0;
+  padding: 5px 7px;
+}
+.flow-answer-values {
+  flex: 1 1 35%;
+  min-width: 0;
+  padding: 5px 7px;
+}
+.flow-answer-detail {
+  flex: 1 1 35%;
+}
+.flow-answer-optional {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.flow-answer-optional.on {
+  background: var(--field);
+  color: var(--accent);
+}
+.flow-answer-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--secondary);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--hover);
+}
+.flow-answer-row:hover .flow-answer-remove,
+.flow-answer-row:focus-within .flow-answer-remove,
+.flow-answer-remove:focus-visible {
+  opacity: 1;
+}
+.flow-answer-remove:hover {
+  color: var(--danger);
+}
+.flow-answer-unknown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.flow-answer-raw {
+  width: 100%;
+  resize: vertical;
+}
+.flow-answer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Import: the file's agent and channel names get a local choice before the paused copy is made. */
+.flow-import-sheet {
+  height: 100%;
+  min-height: 0;
+}
+.flow-import-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
 /* The canvas */
 .flow-viewport {
   position: relative;

@@ -2,12 +2,29 @@ import type { MediaKind } from '@shared/media'
 import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable.ts'
 import {
-  clampCoordinate, type FlowCanvas, type FlowLink, type FlowMedia,
-  type WorkflowFolderAction, type WorkflowFoldersSnapshot,
+  clampCoordinate, parseWorkflowFile, type FlowCanvas, type FlowLink, type FlowMedia,
+  type WorkflowFileInfo, type WorkflowFolderAction, type WorkflowFoldersSnapshot,
 } from '../lib/routine-flow.ts'
 
 /** What a view needs after a move: the node's new place, shown at once and saved on the host. */
 type Client = () => Promise<Pick<HostClient, 'call'>>
+
+/** A workflow file the host made, or the steps that must lose their secrets first. */
+export type WorkflowExport = { name: string; content: string } | { secrets: string[] }
+
+/** What a workflow file holds, before the person maps its agent and channel names. */
+export interface WorkflowImportInfo extends WorkflowFileInfo {
+  /** Connections and media accounts left out of the file, shown as "step: app". */
+  links: { step: string; app: string }[]
+}
+
+/** The fixed body of `importRoutineFlow` with the person's name choices. */
+export interface WorkflowImportBody {
+  name: string
+  content: string
+  agents: Record<string, string>
+  channels: Record<string, string>
+}
 
 /**
  * One bot's routine-flow canvas. The host owns the flow (rules, runs, steps); this keeps what is
@@ -90,6 +107,42 @@ export class RoutineFlowStore extends Observable {
     }
   }
 
+  /**
+   * Tries the workflow method name this client was given first, then the older host's name.
+   * Both are live paths: a host on the new protocol answers the first, an older one the second.
+   */
+  private async firstAnswer<T>(calls: readonly { method: string; body: object }[], map: (answer: unknown) => T | null): Promise<T | null> {
+    if (this.disposed) return null
+    this.busy = true
+    this.error = null
+    this.changed()
+    try {
+      for (const call of calls) {
+        try {
+          const value = map(await (await this.client()).call<unknown>(call.method, call.body))
+          if (value !== null) return value
+        } catch (error) {
+          const text = error instanceof Error ? error.message : String(error)
+          if (!/unknown method|404|not found/i.test(text)) {
+            this.error = text
+            return null
+          }
+        }
+      }
+      return null
+    } finally {
+      this.busy = false
+      this.changed()
+    }
+  }
+
+  /** A workflow change: the first method that answers wins, then the canvas is read again. */
+  private async firstChange<T>(calls: readonly { method: string; body: object }[], map: (answer: unknown) => T | null): Promise<T | null> {
+    const value = await this.firstAnswer(calls, map)
+    if (value !== null) await this.load()
+    return value
+  }
+
   /** A change the user made: runs it, then loads the canvas again. Whether it worked. */
   private async change<T>(method: string, body: object): Promise<T | null> {
     if (this.disposed) return null
@@ -157,6 +210,11 @@ export class RoutineFlowStore extends Observable {
     await this.change('updateRoutineFlowMedia', { mediaId, ...settings })
   }
 
+  /** Saves a step's "name: type" answer fields and its check; an empty nodeKey is the trigger. */
+  async setAnswers(routineId: string, nodeKey: string, answer: string, check: string) {
+    await this.change('setRoutineFlowAnswers', { botId: this.botId, routineId, nodeKey, answer, check })
+  }
+
   async removeMedia(mediaId: string) {
     await this.change('removeRoutineFlowMedia', { mediaId })
   }
@@ -169,6 +227,54 @@ export class RoutineFlowStore extends Observable {
   /** Pauses or resumes a routine from the inspector. */
   async setEnabled(routineId: string, enabled: boolean) {
     await this.change('setRoutineEnabled', { botId: this.botId, id: routineId, enabled })
+  }
+
+  /**
+   * Pauses or resumes a whole workflow: its triggers stop starting runs, a manual run still works.
+   * The fixed body is `{ routineId, paused }`; the older host's two methods take `{botId, routineId}`.
+   */
+  async setPaused(routineId: string, paused: boolean) {
+    await this.firstChange<boolean>([
+      { method: 'setRoutineFlowPaused', body: { routineId, paused } },
+      { method: paused ? 'pauseRoutineWorkflow' : 'resumeRoutineWorkflow', body: { botId: this.botId, routineId } },
+    ], (answer) => answer && typeof answer === 'object' ? true : null)
+  }
+
+  /** Makes a workflow file; the host answers with its bytes or names the steps holding a secret. */
+  async exportFlow(routineId: string): Promise<WorkflowExport | null> {
+    const file = await this.firstAnswer<WorkflowExport>([
+      { method: 'exportRoutineFlow', body: { routineId } },
+      { method: 'exportRoutineWorkflow', body: { botId: this.botId, routineId } },
+    ], (answer) => {
+      const value = answer as { name?: string; content?: string; secrets?: string[]; fileName?: string; file?: string }
+      if (Array.isArray(value?.secrets)) return { secrets: value.secrets }
+      if (typeof value?.content === 'string') return { name: value.name ?? '', content: value.content }
+      if (typeof value?.file === 'string') return { name: value.fileName ?? '', content: value.file }
+      return null
+    })
+    if (file) return file
+    // The older host refuses a secret with a message that names the steps to change.
+    const message = this.error ?? ''
+    if (/secret in a step/i.test(message)) {
+      const steps = (message.split('Change the secret in:')[1] ?? '').replace(/\.$/, '')
+      return { secrets: steps.split(',').map((step) => step.trim()).filter(Boolean) }
+    }
+    return null
+  }
+
+  /** Reads a file's name and the agent/channel names to choose before an import, on this computer. */
+  async inspectImport(content: string): Promise<WorkflowImportInfo | null> {
+    const info = parseWorkflowFile(content)
+    return info ? { ...info, links: [] } : null
+  }
+
+  /** Imports the file with the person's name choices; the host adds it paused. */
+  async importFlow(body: WorkflowImportBody): Promise<boolean> {
+    const names = Object.fromEntries(Object.entries({ ...body.agents, ...body.channels }).filter(([, id]) => id))
+    return (await this.firstChange<boolean>([
+      { method: 'importRoutineFlow', body: { action: 'apply', ...body } },
+      { method: 'importRoutineWorkflow', body: { botId: this.botId, name: body.name, file: body.content, names } },
+    ], (answer) => answer && typeof answer === 'object' ? true : null)) === true
   }
 
   /** The routines (the host's workflows) of these bots, for the All workflows menu. */

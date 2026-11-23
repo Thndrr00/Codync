@@ -341,8 +341,8 @@ glyph, name, values, "Add field", remove on hover) and keeps the host's `name: t
 cannot show.
 
 The editor refuses a setting value the host's `nodeRegistry` does not know and shows the allowed values. A step
-setting from a newer version (a name the registry has never seen) makes the whole workflow read-only, so a save
-cannot change that step; a manual run still works.
+setting from a newer version (a name the registry has never seen, or a canvas `formatVersion` above this client's)
+makes the whole workflow read-only, so a save cannot change that step; a manual run still works.
 
 ## Pause, duplicate and portable workflows
 

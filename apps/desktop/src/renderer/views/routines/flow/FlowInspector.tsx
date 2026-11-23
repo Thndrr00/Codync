@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { onModel, type MediaAnswer, type MediaKind, type MediaModel } from '@shared/media'
 import type { Bot } from '@shared/models'
 import { Button, ChipChoice, DropdownMenu, Switch } from '../../../components/Controls'
@@ -7,13 +7,16 @@ import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
 import {
   botKey, latestStep, mediaKey, mediaTitle, statusLabel, stepNameOf, stepOf,
-  type FlowCanvas, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
+  type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
 } from '../../../lib/routine-flow.ts'
 import { useStore } from '../../../store/context'
 import { useAgentModels } from '../../bots/agent-models'
 import { AgentModelPicker } from '../../bots/AgentModelPicker'
 import { runLabel } from '../routine'
+import { AnswerFieldsPanel, CheckPanel } from './AnswerFields'
 import type { FlowSelection } from './FlowCanvas'
+import { FieldTextArea } from './FieldTextArea'
+import { FlowPopover } from './FlowPopover'
 import { groupsOf, type FlowGroup } from './flow-groups'
 import { StatusChip } from './FlowNodeCard'
 import { StepResult } from './StepResult'
@@ -55,6 +58,17 @@ interface Props {
   selection: FlowSelection
   busy: boolean
   offline: boolean
+  /** A setting from a newer version is on this workflow: none of its steps may be saved. */
+  readOnly: boolean
+  /** Fields earlier steps (and the trigger) give this step, for `{{` completion and Insert field. */
+  fieldsFor: (nodeKey: string) => FlowField[]
+  /** Problems with those fields, by name, shown in the warning chip and on hover. */
+  problemsFor: (nodeKey: string) => Record<string, string>
+  /** The step's saved "name: type" answer text and check, edited from the toolbar only. */
+  answerFor: (nodeKey: string) => string
+  checkFor: (nodeKey: string) => string
+  onSaveAnswer: (nodeKey: string, text: string) => void
+  onSaveCheck: (nodeKey: string, text: string) => void
   onSaveInstruction: (link: FlowLink, instruction: string, model: string | null, modelOptions: Record<string, string>) => void
   onDisconnect: (link: FlowLink) => void
   onTest: (routineId: string) => void
@@ -73,6 +87,51 @@ interface Props {
   onUngroup: (groupId: string) => void
   /** The steps and bots `from` may hand work to, in some routine of this canvas. */
   targets: (fromBotId: string) => FlowTarget[]
+}
+
+/** The step toolbar's Answer fields and Check buttons; the prompt below stays a single text box. */
+function StepFieldsToolbar({ nodeKey, disabled, answerFor, checkFor, onSaveAnswer, onSaveCheck }: Pick<Props,
+  'answerFor' | 'checkFor' | 'onSaveAnswer' | 'onSaveCheck'> & { nodeKey: string; disabled: boolean }) {
+  const tr = useTr()
+  const answerButton = useRef<HTMLButtonElement>(null)
+  const checkButton = useRef<HTMLButtonElement>(null)
+  const [showAnswer, setShowAnswer] = useState(false)
+  const [showCheck, setShowCheck] = useState(false)
+  return (
+    <HStack gap={6}>
+      <button
+        ref={answerButton}
+        type="button"
+        className="flow-menu-button"
+        aria-haspopup="dialog"
+        aria-expanded={showAnswer}
+        disabled={disabled}
+        onClick={() => setShowAnswer(!showAnswer)}
+      >
+        <Text size="caption">{tr('Answer fields')}</Text>
+      </button>
+      <button
+        ref={checkButton}
+        type="button"
+        className="flow-menu-button"
+        aria-haspopup="dialog"
+        aria-expanded={showCheck}
+        disabled={disabled}
+        onClick={() => setShowCheck(!showCheck)}
+      >
+        <Text size="caption">{tr('Check')}</Text>
+      </button>
+      <FlowPopover open={showAnswer} onClose={() => setShowAnswer(false)} anchor={answerButton} title="Answer fields">
+        <AnswerFieldsPanel
+          text={answerFor(nodeKey)}
+          onSave={(text) => { onSaveAnswer(nodeKey, text); setShowAnswer(false) }}
+        />
+      </FlowPopover>
+      <FlowPopover open={showCheck} onClose={() => setShowCheck(false)} anchor={checkButton} title="Check">
+        <CheckPanel text={checkFor(nodeKey)} onSave={(text) => { onSaveCheck(nodeKey, text); setShowCheck(false) }} />
+      </FlowPopover>
+    </HStack>
+  )
 }
 
 /** The side panel: what the selected routine, bot, media step or link says, and the actions on it. */
@@ -109,7 +168,7 @@ export function FlowInspector(props: Props) {
 }
 
 /** A group of nodes: a name, its collapse state and the gesture that ends the group. */
-function GroupPanel({ group, busy, offline, onRenameGroup, onToggleGroup, onUngroup }: Props & { group: FlowGroup }) {
+function GroupPanel({ group, busy, offline, readOnly, onRenameGroup, onToggleGroup, onUngroup }: Props & { group: FlowGroup }) {
   const tr = useTr()
   const [name, setName] = useState(group.name)
   useEffect(() => setName(group.name), [group.id, group.name])
@@ -124,18 +183,22 @@ function GroupPanel({ group, busy, offline, onRenameGroup, onToggleGroup, onUngr
         placeholder={tr('Group name')}
         value={name}
         maxLength={120}
-        disabled={offline}
+        disabled={offline || readOnly}
         onChange={(event) => setName(event.target.value)}
       />
-      <Button disabled={busy || offline || !changed} onClick={() => onRenameGroup(group.id, name.trim())}>{tr('Save name')}</Button>
-      <Button kind="secondary" disabled={busy || offline} onClick={() => onToggleGroup(group.id)}>{tr(group.collapsed ? 'Open group' : 'Collapse group')}</Button>
-      <Button kind="secondary" disabled={busy || offline} onClick={() => onUngroup(group.id)}>{tr('Ungroup')}</Button>
+      <Button disabled={busy || offline || readOnly || !changed} onClick={() => onRenameGroup(group.id, name.trim())}>{tr('Save name')}</Button>
+      <Button kind="secondary" disabled={busy || offline || readOnly} onClick={() => onToggleGroup(group.id)}>{tr(group.collapsed ? 'Open group' : 'Collapse group')}</Button>
+      <Button kind="secondary" disabled={busy || offline || readOnly} onClick={() => onUngroup(group.id)}>{tr('Ungroup')}</Button>
     </VStack>
   )
 }
 
-function LinkPanel({ link, bots, busy, offline, onSaveInstruction, onDisconnect }: Props & { link: FlowLink }) {
+function LinkPanel({ link, bots, busy, offline, readOnly, fieldsFor, problemsFor, answerFor, checkFor, onSaveAnswer, onSaveCheck, onSaveInstruction, onDisconnect }: Props & { link: FlowLink }) {
   const tr = useTr()
+  const nodeKey = botKey(link.toBotId)
+  const fields = fieldsFor(nodeKey)
+  const problems = problemsFor(nodeKey)
+  const locked = busy || offline || readOnly
   const [text, setText] = useState(link.instruction)
   useEffect(() => setText(link.instruction), [link.id, link.instruction])
   // Saved with the button, like the instruction; the step keeps them for its one turn.
@@ -156,13 +219,22 @@ function LinkPanel({ link, bots, busy, offline, onSaveInstruction, onDisconnect 
     <VStack gap={10} className="flow-inspector">
       <Text weight="semibold">{name(link.fromBotId)} → {name(link.toBotId)}</Text>
       <Text size="caption" tone="secondary">{tr('What the next bot is asked to do with the reply. It can be empty.')}</Text>
-      <textarea
-        className="routine-input flow-instruction"
-        aria-label={tr('Instruction')}
+      <FieldTextArea
         value={text}
-        maxLength={8000}
-        disabled={offline}
-        onChange={(event) => setText(event.target.value)}
+        onChange={setText}
+        fields={fields}
+        problems={problems}
+        disabled={locked}
+        label="Instruction"
+        placeholder={tr('Type your prompt here')}
+      />
+      <StepFieldsToolbar
+        nodeKey={nodeKey}
+        disabled={locked}
+        answerFor={answerFor}
+        checkFor={checkFor}
+        onSaveAnswer={onSaveAnswer}
+        onSaveCheck={onSaveCheck}
       />
       <VStack gap={4}>
         <Text size="caption" tone="secondary">{tr('Model')}</Text>
@@ -171,15 +243,15 @@ function LinkPanel({ link, bots, busy, offline, onSaveInstruction, onDisconnect 
           options={modelOptions} onOptionsChange={setModelOptions} sessionNote={false} />
       </VStack>
       <HStack gap={8}>
-        <Button disabled={busy || offline || !changed} onClick={() => onSaveInstruction(link, text.trim(), model, modelOptions)}>{tr('Save')}</Button>
+        <Button disabled={locked || !changed} onClick={() => onSaveInstruction(link, text.trim(), model, modelOptions)}>{tr('Save')}</Button>
         <Spacer />
-        <Button kind="secondary" disabled={busy || offline} onClick={() => onDisconnect(link)}>{tr('Disconnect')}</Button>
+        <Button kind="secondary" disabled={locked} onClick={() => onDisconnect(link)}>{tr('Disconnect')}</Button>
       </HStack>
     </VStack>
   )
 }
 
-function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled, onAddMedia, onShowSettings }: Props & { card: FlowRoutineCard }) {
+function RoutinePanel({ card, canvas, busy, offline, readOnly, onTest, onSetEnabled, onAddMedia, onShowSettings }: Props & { card: FlowRoutineCard }) {
   const tr = useTr()
   const { routine } = card
   const last = card.recentRuns[0]
@@ -191,15 +263,15 @@ function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled, onAdd
       <HStack gap={8}>
         <Text size="callout">{routine.enabled ? tr('Active') : tr('Paused')}</Text>
         <Spacer />
-        <Switch on={routine.enabled} disabled={busy || offline} label={routine.name} onChange={(on) => onSetEnabled(routine.id, on)} />
+        <Switch on={routine.enabled} disabled={busy || offline || readOnly} label={routine.name} onChange={(on) => onSetEnabled(routine.id, on)} />
       </HStack>
       {routine.nextRunAt ? <Text size="caption" tone="secondary">{tr('Next run')}: {new Date(routine.nextRunAt).toLocaleString()}</Text> : null}
       <Text size="caption" tone="secondary">{last ? `${tr('Last run')}: ${tr(runLabel(last))}` : tr('No runs yet')}</Text>
       {linked ? null : <Text size="caption" tone="secondary">{tr('Not connected')}</Text>}
       <Button disabled={busy || offline || !linked} onClick={() => onTest(routine.id)}>{tr('Test the flow')}</Button>
       <HStack gap={8}>
-        <Button kind="secondary" disabled={busy || offline} onClick={() => onAddMedia(routine.id, 'image')}>{tr('Add a picture step')}</Button>
-        <Button kind="secondary" disabled={busy || offline} onClick={() => onAddMedia(routine.id, 'video')}>{tr('Add a clip step')}</Button>
+        <Button kind="secondary" disabled={busy || offline || readOnly} onClick={() => onAddMedia(routine.id, 'image')}>{tr('Add a picture step')}</Button>
+        <Button kind="secondary" disabled={busy || offline || readOnly} onClick={() => onAddMedia(routine.id, 'video')}>{tr('Add a clip step')}</Button>
       </HStack>
       <Steps canvas={canvas} card={card} onShowSettings={onShowSettings} />
       <History card={card} />
@@ -257,7 +329,7 @@ function History({ card }: { card: FlowRoutineCard }) {
   )
 }
 
-function BotPanel({ botId, bot, canvas, busy, offline, targets, onConnectFrom, onRemoveNode }: Props & { botId: string; bot?: Bot }) {
+function BotPanel({ botId, bot, canvas, busy, offline, readOnly, targets, onConnectFrom, onRemoveNode }: Props & { botId: string; bot?: Bot }) {
   const tr = useTr()
   const step = latestStep(canvas, botId)
   const options = targets(botId)
@@ -279,7 +351,7 @@ function BotPanel({ botId, bot, canvas, busy, offline, targets, onConnectFrom, o
       >
         <Text>{options.length === 0 ? tr('No step to hand on to') : tr('Hand its reply on to…')}</Text>
       </DropdownMenu>
-      {removable ? <Button kind="secondary" disabled={busy || offline} onClick={() => onRemoveNode(botKey(botId))}>{tr('Remove from the canvas')}</Button> : null}
+      {removable ? <Button kind="secondary" disabled={busy || offline || readOnly} onClick={() => onRemoveNode(botKey(botId))}>{tr('Remove from the canvas')}</Button> : null}
       {step ? <StepResult key={step.id} step={step} /> : null}
       {step?.error ? <Text size="caption" tone="danger" lines={4}>{step.error}</Text> : null}
     </VStack>
@@ -291,10 +363,11 @@ function BotPanel({ botId, bot, canvas, busy, offline, targets, onConnectFrom, o
  * model offers, plus what it may hand the file on to (host/src/media).
  * Ported from OpenBot 0.70.0 `WorkflowImageNode.tsx`'s inspector.
  */
-function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSaveMedia, onRemoveMedia, onDuplicateMedia }: Props & { media: FlowMedia }) {
+function MediaPanel({ media, canvas, busy, offline, readOnly, fieldsFor, problemsFor, answerFor, checkFor, onSaveAnswer, onSaveCheck, targets, onConnectFrom, onSaveMedia, onRemoveMedia, onDuplicateMedia }: Props & { media: FlowMedia }) {
   const tr = useTr()
   const store = useStore()
   const nodeKey = mediaKey(media.id)
+  const locked = busy || offline || readOnly
   const card = canvas.routines.find((c) => c.routine.id === media.routineId)
   const owner = card?.routine.botId ?? canvas.botId
   const step = card ? stepOf(card, nodeKey) : null
@@ -348,14 +421,22 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
         <Text size="caption" tone="secondary">{tr(statusLabel(step?.status ?? null))}</Text>
       </HStack>
       <Text size="caption" tone="secondary">{tr('The step makes a {kind} from this description; whatever the step before hands on is added to it.').replace('{kind}', tr(media.kind === 'video' ? 'clip' : 'picture'))}</Text>
-      <textarea
-        className="routine-input flow-instruction"
-        aria-label={tr('What to make')}
-        placeholder={tr('Describe the {kind} to make').replace('{kind}', tr(media.kind === 'video' ? 'clip' : 'picture'))}
+      <FieldTextArea
         value={draft.prompt}
-        maxLength={8000}
-        disabled={offline}
-        onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
+        onChange={(prompt) => setDraft({ ...draft, prompt })}
+        fields={fieldsFor(nodeKey)}
+        problems={problemsFor(nodeKey)}
+        disabled={locked}
+        label="What to make"
+        placeholder={tr('Describe the {kind} to make').replace('{kind}', tr(media.kind === 'video' ? 'clip' : 'picture'))}
+      />
+      <StepFieldsToolbar
+        nodeKey={nodeKey}
+        disabled={locked}
+        answerFor={answerFor}
+        checkFor={checkFor}
+        onSaveAnswer={onSaveAnswer}
+        onSaveCheck={onSaveCheck}
       />
       <VStack gap={4}>
         <Text size="caption" tone="secondary">{tr('Model')}</Text>
@@ -410,7 +491,7 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
                     step={1}
                     value={Math.min(lengthMax, Math.max(lengthMin, draft.duration))}
                     aria-label={tr('Custom length')}
-                    disabled={offline}
+                    disabled={locked}
                     onChange={(event) => setDraft({ ...draft, duration: Number(event.target.value) })}
                   />
                   <Text size="caption" tone="secondary">{draft.duration}s</Text>
@@ -441,10 +522,10 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
         </VStack>
       ) : null}
       <HStack gap={8}>
-        <Button disabled={busy || offline || !changed} onClick={() => onSaveMedia(media, draft)}>{tr('Save')}</Button>
+        <Button disabled={locked || !changed} onClick={() => onSaveMedia(media, draft)}>{tr('Save')}</Button>
         <Spacer />
-        <Button kind="secondary" disabled={busy || offline} onClick={() => onDuplicateMedia(media)}>{tr('Duplicate')}</Button>
-        <Button kind="secondary" disabled={busy || offline} onClick={() => onRemoveMedia(media)}>{tr('Remove the step')}</Button>
+        <Button kind="secondary" disabled={locked} onClick={() => onDuplicateMedia(media)}>{tr('Duplicate')}</Button>
+        <Button kind="secondary" disabled={locked} onClick={() => onRemoveMedia(media)}>{tr('Remove the step')}</Button>
       </HStack>
       <DropdownMenu
         title={tr('Hand its file on to…')}

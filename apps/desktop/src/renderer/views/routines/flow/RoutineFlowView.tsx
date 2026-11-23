@@ -9,13 +9,15 @@ import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
 import { prefs, usePref } from '../../../lib/prefs'
 import {
-  NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasRunning, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle,
-  stepNameOf, tidyLayout, type FlowCanvas, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard,
-  type FlowStep, type WorkflowFolderAction,
+  NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasRunning, connectProblem, fieldsForStep, isFlowPaused,
+  isFlowReadOnly, layoutNodes, mediaEnd, mediaKey, mediaTitle, problemsForStep, specKeyOf, specText, stepNameOf,
+  tidyLayout, unknownSettings, workflowFileBytes,
+  type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard,
+  type FlowStep, type SettingProblem, type WorkflowFolderAction,
 } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
-import { RoutineFlowStore } from '../../../store/routine-flow-store'
+import { RoutineFlowStore, type WorkflowImportBody, type WorkflowImportInfo } from '../../../store/routine-flow-store'
 import { AllWorkflowsMenu } from './AllWorkflowsMenu'
 import { FlowCanvasView, type FlowSelection } from './FlowCanvas'
 import {
@@ -29,6 +31,7 @@ import { FlowInspector, type FlowTarget, type MediaSettings } from './FlowInspec
 import { FlowEmptyState } from './FlowEmptyState'
 import { FlowList } from './FlowList'
 import { FlowTabStrip } from './FlowTabStrip'
+import { WorkflowImportDialog } from './WorkflowImportDialog'
 import { clipped, hasMore, leftmostNode, settingsOf, type FlowStepSettings } from './flow-settings'
 import { RoutineEditorView } from '../RoutineEditorView'
 import './routine-flow.css'
@@ -149,6 +152,10 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [groupName, setGroupName] = useState('')
   /** The drawing a tidy replaced, so Undo can put the steps back. */
   const [tidyUndo, setTidyUndo] = useState<{ positions: FlowPosition[]; groups: FlowGroup[] } | null>(null)
+  /** A file being imported: its bytes and the names to map before the host makes the paused copy. */
+  const [importDraft, setImportDraft] = useState<{ info: WorkflowImportInfo; content: string; suggestedName?: string } | null>(null)
+  /** Steps that hold a secret, which the host refuses to export until they are changed. */
+  const [exportBlocked, setExportBlocked] = useState<string[] | null>(null)
   const offline = store.isOffline
   const rev = store.flowRev(activeId)
 
@@ -196,6 +203,9 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const currentWorkflowId = workflows.find((workflow) => workflow.botId === activeId)?.id
     ?? canvas?.routines.find((card) => card.routine.botId === activeId)?.routine.id
     ?? canvas?.routines[0]?.routine.id ?? null
+  /** Pause skips triggers; a manual run still works. A newer setting makes the whole workflow read-only. */
+  const paused = canvas ? isFlowPaused(canvas, currentWorkflowId ?? '') : false
+  const readOnly = isFlowReadOnly(canvas)
   const nameOfWorkflow = (id: string) => bots.get(id)?.name?.trim() || tr('Untitled workflow')
   const isRunning = (id: string) => {
     const status = bots.get(id)?.status
@@ -229,6 +239,92 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }
   }
   const applyFolderAction = (action: WorkflowFolderAction) => { void flow.folderAction(action) }
+
+  // --- Step fields, imported/exported workflows and pause ---------------------------------------
+
+  const fieldsFor = (nodeKey: string): FlowField[] => canvas ? fieldsForStep(canvas, nodeKey) : []
+  const problemsFor = (nodeKey: string) => canvas ? problemsForStep(canvas, nodeKey) : {}
+  const answerFor = (nodeKey: string) => {
+    const spec = canvas?.answerSpecs?.[specKeyOf(nodeKey)]
+    return specText(typeof spec === 'object' ? spec : undefined, 'answer') || (typeof spec === 'string' ? spec : '')
+  }
+  const checkFor = (nodeKey: string) => {
+    const spec = canvas?.answerSpecs?.[specKeyOf(nodeKey)]
+    return specText(typeof spec === 'object' ? spec : undefined, 'check') || (canvas?.checkSpecs?.[nodeKey] ?? '')
+  }
+  const saveAnswer = (nodeKey: string, answer: string) => {
+    if (!canvas || readOnly || !currentWorkflowId) return
+    void flow.setAnswers(currentWorkflowId, nodeKey, answer, checkFor(nodeKey))
+  }
+  const saveCheck = (nodeKey: string, check: string) => {
+    if (!canvas || readOnly || !currentWorkflowId) return
+    void flow.setAnswers(currentWorkflowId, nodeKey, answerFor(nodeKey), check)
+  }
+
+  /** Refuses a save the host would reject and tells the person which values it does know. */
+  const refuseSetting = (problems: SettingProblem[]): boolean => {
+    if (problems.length === 0) return false
+    const first = problems[0]
+    setNote(first.newer
+      ? tr('This step uses a setting from a newer version of Codync. The workflow is read-only.')
+      : tr('Unknown setting {name}. Use {values}.').replace('{name}', first.name).replace('{values}', first.values.join(', ')))
+    return true
+  }
+
+  const workflowName = currentWorkflowId
+    ? workflows.find((workflow) => workflow.id === currentWorkflowId)?.name ?? tr('Untitled workflow')
+    : tr('Untitled workflow')
+  const exportWorkflow = async () => {
+    if (!currentWorkflowId || offline) return
+    setNote(null)
+    const file = await flow.exportFlow(currentWorkflowId)
+    if (!file) return
+    if ('secrets' in file) {
+      setExportBlocked(file.secrets)
+      return
+    }
+    // The file keeps steps, notes and files; secrets never leave the computer.
+    const url = URL.createObjectURL(new Blob([workflowFileBytes(file.content)], { type: 'application/json' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = file.name.endsWith('.workflow') ? file.name : `${file.name || workflowName}.openbot-workflow`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+  const inspectFile = async (content: string, suggestedName?: string) => {
+    setNote(null)
+    const info = await flow.inspectImport(content)
+    if (info) setImportDraft({ info, content, suggestedName })
+  }
+  const duplicateWorkflow = async () => {
+    if (!currentWorkflowId || offline) return
+    const file = await flow.exportFlow(currentWorkflowId)
+    if (!file) return
+    if ('secrets' in file) {
+      setExportBlocked(file.secrets)
+      return
+    }
+    // Importing with the same agent/channel names makes the paused copy the host returns.
+    await inspectFile(file.content, tr('{name} copy').replace('{name}', workflowName))
+  }
+  const pickImportFile = async () => {
+    if (offline) return
+    try {
+      const picked = await window.codync.app.pickFiles()
+      const first = picked[0]
+      if (first) await inspectFile(new TextDecoder().decode(first.data))
+    } catch {
+      setNote(tr('Could not read that workflow file.'))
+    }
+  }
+  const commitImport = async (body: WorkflowImportBody) => {
+    const ok = await flow.importFlow(body)
+    setImportDraft(null)
+    if (ok) {
+      setNote(null)
+      void flow.loadFolders()
+    }
+  }
 
   const connectable = (c: FlowCanvas, from: string, to: string) =>
     c.routines.filter((r) => connectProblem(c, r.routine.id, from, to) === null)
@@ -291,6 +387,11 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
         onNew={() => setCreating(true)}
         onRename={(workflow) => setRenameDraft({ id: workflow.botId, name: nameOfWorkflow(workflow.botId) })}
         onFolderAction={applyFolderAction}
+        paused={paused}
+        onPause={() => { if (currentWorkflowId) { setNote(null); void flow.setPaused(currentWorkflowId, !paused) } }}
+        onDuplicate={() => void duplicateWorkflow()}
+        onExport={() => void exportWorkflow()}
+        onImport={() => void pickImportFile()}
       />
       <FlowTabStrip
         tabs={openTabs}
@@ -333,8 +434,10 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     const spot = freeSpot(canvas)
     void flow.place(bot.id, spot.x, spot.y)
   }
-  const saveLink = (link: FlowLink, text: string, model: string | null, modelOptions: Record<string, string>) =>
+  const saveLink = (link: FlowLink, text: string, model: string | null, modelOptions: Record<string, string>) => {
+    if (refuseSetting(unknownSettings('bot', modelOptions, canvas.nodeRegistry))) return
     void flow.updateLink(link.id, text, model, modelOptions)
+  }
   const disconnect = async (link: FlowLink) => {
     setSelection(null)
     await flow.disconnect(link.id)
@@ -344,7 +447,11 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     const media = await flow.addMedia(routineId, kind)
     if (media) setSelection({ kind: 'node', key: mediaKey(media.id) })
   }
-  const saveMedia = (media: FlowMedia, settings: MediaSettings) => void flow.updateMedia(media.id, settings)
+  const saveMedia = (media: FlowMedia, settings: MediaSettings) => {
+    const kind = media.kind === 'video' ? 'video' : 'image'
+    if (refuseSetting(unknownSettings(kind, settings as unknown as Record<string, unknown>, canvas.nodeRegistry))) return
+    void flow.updateMedia(media.id, settings)
+  }
   const removeMedia = async (media: FlowMedia) => {
     setSelection(null)
     await flow.removeMedia(media.id)
@@ -641,6 +748,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
         {model.busy || model.loading ? <Spinner /> : null}
       </HStack>
       {offline ? <Text size="caption" tone="attention">{tr('Offline: the flow is read-only until the computer is reachable.')}</Text> : null}
+      {readOnly ? <Text size="caption" tone="attention">{tr('This workflow uses a setting from a newer version of Codync. Update Codync to change it; a manual run still works.')}</Text> : null}
       {model.error ? <Text size="caption" tone="danger">{model.error}</Text> : null}
       {note ? <Text size="caption" tone="danger">{note}</Text> : null}
       {mergeNote ? <Text size="caption" tone="attention" className="flow-merge-note">{tr('Someone else edited this flow; their changes were merged in.')}</Text> : null}
@@ -652,7 +760,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 canvas={canvas}
                 bots={bots}
                 selection={selection}
-                disabled={offline || model.busy}
+                disabled={offline || readOnly || model.busy}
                 onSelect={setSelection}
                 onMove={(key, x, y) => void flow.move(key, x, y)}
                 onMoveGroup={(id, x, y) => void moveGroup(id, x, y)}
@@ -685,6 +793,19 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                   <FlowEmptyState note={note} disabled={offline} onNew={() => setCreating(true)} />
                 </div>
               ) : null}
+              {paused ? (
+                <div className="flow-paused-badge">
+                  <Text weight="semibold">{tr('Paused')}</Text>
+                  <Button
+                    kind="secondary"
+                    disabled={offline}
+                    onClick={() => { if (currentWorkflowId) void flow.setPaused(currentWorkflowId, false) }}
+                  >
+                    {tr('Resume')}
+                  </Button>
+                </div>
+              ) : null}
+              {readOnly ? <div className="flow-readonly-badge"><Text size="caption" tone="attention">{tr('Read-only')}</Text></div> : null}
             </div>
           ) : (
             <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} query={query} note={note} disabled={offline} onNew={() => setCreating(true)} />
@@ -696,6 +817,13 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
           selection={selection}
           busy={model.busy}
           offline={offline}
+          readOnly={readOnly}
+          fieldsFor={fieldsFor}
+          problemsFor={problemsFor}
+          answerFor={answerFor}
+          checkFor={checkFor}
+          onSaveAnswer={saveAnswer}
+          onSaveCheck={saveCheck}
           targets={targets}
           onSaveInstruction={saveLink}
           onDisconnect={(link) => void disconnect(link)}
@@ -844,6 +972,25 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
               </Button>
             </HStack>
           </VStack>
+        ) : null}
+      </Sheet>
+      <Dialog
+        open={exportBlocked !== null}
+        title={tr('Remove the secrets before you export.')}
+        message={tr('Found in: {fields}').replace('{fields}', (exportBlocked ?? []).join(', '))}
+        actions={[]}
+        onClose={() => setExportBlocked(null)}
+      />
+      <Sheet open={importDraft !== null} onClose={() => setImportDraft(null)} width={560} height={620}>
+        {importDraft ? (
+          <WorkflowImportDialog
+            info={importDraft.info}
+            content={importDraft.content}
+            suggestedName={importDraft.suggestedName}
+            candidates={[...bots.values()].map((bot) => ({ id: bot.id, name: bot.name }))}
+            onClose={() => setImportDraft(null)}
+            onImport={(body) => void commitImport(body)}
+          />
         ) : null}
       </Sheet>
     </VStack>

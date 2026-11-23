@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  NODE_WIDTH, botKey, canvasCenter, canvasRunning, connectProblem, depths, edgePath, fitView, flowEdges, flowRows, folderOf,
-  layoutNodes, mediaKey, mediaTitle, nodeAt, portCarry, routineKey, stepNameOf, stepProgress, tidyLayout, workflowsInFolder, zoomAt,
-  type FlowCanvas, type FlowLink, type FlowMedia, type FlowNode, type FlowStep, type WorkflowFoldersSnapshot,
+  NODE_WIDTH, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
+  fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, insertFieldToken, isFlowPaused, isFlowReadOnly,
+  problemsForStep,
+  isNewerSetting, layoutNodes, matchingFields, mediaKey, mediaTitle, nodeAt, parseAnswerSpec, parseWorkflowFile, portCarry,
+  routineKey, specKeyOf, specText, stepNameOf, stepProgress, tidyLayout, unknownSettings, workflowFileBytes,
+  workflowsInFolder, zoomAt,
+  type FieldMatch, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowNode, type FlowNodeRegistry,
+  type FlowStep, type WorkflowFoldersSnapshot,
 } from './routine-flow.ts'
 import {
   closeOtherWorkflows, closeWorkflow, closeWorkflowsRight, moveWorkflow, nextActiveTab, openWorkflow,
@@ -260,4 +265,142 @@ test('a dragged tab takes the target\'s place in the strip', () => {
   assert.deepEqual(moveWorkflow(['a', 'b', 'c'], 'b', 'a'), ['b', 'a', 'c'])
   assert.deepEqual(moveWorkflow(['a', 'b'], 'a', 'a'), ['a', 'b'])
   assert.deepEqual(moveWorkflow(['a', 'b'], 'a', 'missing'), ['a', 'b'])
+})
+
+// MARK: typed step fields
+
+const field = (name: string, step = '', type: FlowField['type'] = 'text', values: string[] = []): FlowField =>
+  ({ name, step, type, values, icon: step ? 'bell' : 'clock' })
+
+test('chips are only whole {{names}} and the raw text survives a round trip', () => {
+  const text = 'Use {{count}} then {{priority}}; keep {{bad name}} and {{open'
+  assert.deepEqual(fieldTokens(text).map((token) => token.kind === 'field' ? token.name : token.text),
+    ['Use ', 'count', ' then ', 'priority', '; keep {{', 'bad name}} and {{open'])
+  assert.equal(fieldTokens(text).map((token) => token.kind === 'field' ? token.raw : token.text).join(''), text)
+  assert.deepEqual(fieldTokens('plain text'), [{ kind: 'text', text: 'plain text' }])
+  assert.deepEqual(fieldTokens(''), [])
+})
+
+test('Backspace takes a whole chip only at its closing braces', () => {
+  const text = 'Sum {{count}} now'
+  assert.deepEqual(chipBefore(text, 13), { start: 4, end: 13, name: 'count' })
+  assert.equal(chipBefore(text, 12), null, 'inside the chip is an ordinary character')
+  assert.equal(chipBefore('{{bad name}}', 12), null)
+  assert.equal(chipBefore('no chip', 7), null)
+})
+
+test('{{ and a single { both complete to {{name}}, replacing the typed letters', () => {
+  assert.deepEqual(insertFieldToken('Sum {{cou', 9, 'count'), { text: 'Sum {{count}}', caret: 13 })
+  assert.deepEqual(insertFieldToken('Sum {', 5, 'count'), { text: 'Sum {{count}}', caret: 13 })
+  assert.deepEqual(insertFieldToken('Sum ', 4, 'count'), { text: 'Sum {{count}}', caret: 13 })
+  const after = insertFieldToken('Sum {{count}}', 13, 'later')
+  assert.equal(after.text, 'Sum {{count}}{{later}}')
+})
+
+test('a completion trigger ignores closed chips, JSON and braces stuck to a word', () => {
+  assert.deepEqual(fieldTrigger('{{pri', 5), { start: 0, query: 'pri', single: false })
+  assert.deepEqual(fieldTrigger('Say {', 5), { start: 4, query: '', single: true })
+  assert.equal(fieldTrigger('{{count}}', 9), null)
+  assert.equal(fieldTrigger('{"a": ', 6), null)
+  assert.equal(fieldTrigger('x{', 2), null)
+})
+
+test('field filtering puts prefix matches first and bolds the typed letters', () => {
+  const fields = [field('priority', 'LLM', 'choice', ['high', 'low']), field('note'), field('printer'), field('count')]
+  const matches: FieldMatch[] = matchingFields(fields, 'PRI')
+  assert.deepEqual(matches.map((m) => m.field.name), ['priority', 'printer'])
+  assert.deepEqual(matches[0].parts, [
+    { text: 'pri', match: true }, { text: 'ority', match: false },
+  ])
+  assert.deepEqual(matchingFields(fields, 'zzz'), [], 'the list shows "No matches"')
+  assert.deepEqual(matchingFields(fields, '').map((m) => m.field.name), ['priority', 'note', 'printer', 'count'])
+})
+
+test('a step offers the trigger\'s fields and earlier steps\' fields, nearest first', () => {
+  const c = canvas([link('a', 'b'), link('b', 'c')], {
+    triggerFields: [field('when')],
+    flowFields: { a: [field('count', 'A')], b: [field('count', 'B'), field('priority', 'B')], c: [field('later', 'C')] },
+  })
+  assert.deepEqual(fieldsForStep(c, botKey('b')).map((f) => f.name), ['when', 'count'])
+  assert.deepEqual(fieldsForStep(c, botKey('c')).map((f) => [f.name, f.step]), [['when', ''], ['count', 'B'], ['priority', 'B']])
+  assert.equal(fieldsForStep(c, 'not-a-step').length, 4, 'an unplaced step sees all fields')
+  assert.equal(isFlowPaused({ ...c, pausedRoutineIds: ['r'] }, 'r'), true)
+  assert.equal(isFlowPaused(c, 'r'), false)
+})
+
+test('answer rows keep the host\'s name: type text, with unshown lines kept apart', () => {
+  const parsed = parseAnswerSpec('count: int; priority: one of high, low; note?: text; free form')
+  assert.deepEqual(parsed.rows, [
+    { name: 'count', type: 'integer', values: [], optional: false },
+    { name: 'priority', type: 'choice', values: ['high', 'low'], optional: false },
+    { name: 'note', type: 'text', values: [], optional: true },
+  ])
+  assert.equal(parsed.unknown, 'free form')
+  assert.equal(formatAnswerSpec(parsed.rows), 'count: int\npriority: one of high, low\nnote?: text')
+  assert.deepEqual(parseAnswerSpec('priority: one of high').rows, [], 'a choice needs two values')
+})
+
+const registry: FlowNodeRegistry = {
+  bot: { effort: { values: ['low', 'medium', 'high'] }, filters: { values: ['a', 'b'], list: true }, task: {} },
+  image: { model: {}, prompt: {} },
+  video: { model: {}, prompt: {} },
+}
+
+test('value validation refuses an unknown value with the allowed ones', () => {
+  assert.deepEqual(unknownSettings('bot', { effort: 'extreme' }, registry),
+    [{ name: 'effort', values: ['low', 'medium', 'high'], newer: false }])
+  assert.deepEqual(unknownSettings('bot', { effort: 'high' }, registry), [])
+  assert.deepEqual(unknownSettings('bot', { filters: 'a, z' }, registry),
+    [{ name: 'filters', values: ['a', 'b'], newer: false }])
+  assert.deepEqual(unknownSettings('bot', { filters: ['a', 'b'] }, registry), [])
+  assert.deepEqual(unknownSettings('bot', { odd: 'x' }, registry), [{ name: 'odd', values: [], newer: true }])
+  assert.deepEqual(unknownSettings('bot', { effort: 'extreme' }, null), [], 'an older host has no registry')
+  assert.equal(isNewerSetting('bot', { odd: 'x' }, registry), true)
+  assert.equal(isNewerSetting('bot', { effort: 'extreme' }, registry), false)
+})
+
+test('a workflow with a newer setting is read-only, an unknown value is not', () => {
+  const c = canvas([])
+  assert.equal(isFlowReadOnly(c, registry), false)
+  const newer = canvas([], { links: [link('a', 'b', { modelOptions: { Odd: 'x' } })] })
+  assert.equal(isFlowReadOnly(newer, registry), true)
+  const refused = canvas([], { links: [link('a', 'b', { modelOptions: { effort: 'extreme' } })] })
+  assert.equal(isFlowReadOnly(refused, registry), false)
+  assert.equal(isFlowReadOnly({ ...c, readOnly: true }, registry), true)
+  assert.equal(isFlowReadOnly({ ...c, formatVersion: 2 }, null), true, 'a newer document is read-only without a registry')
+})
+
+test('host specs and step problems come in either shape', () => {
+  assert.equal(specKeyOf('bot:b'), 'b')
+  assert.equal(specKeyOf('media:m1'), 'media:m1')
+  assert.equal(specText({ answer: 'count: int', check: 'count > 2' }, 'answer'), 'count: int')
+  assert.equal(specText({ answer: 'count: int', check: 'count > 2' }, 'check'), 'count > 2')
+  assert.equal(specText('count: int', 'answer'), 'count: int')
+  assert.equal(specText(undefined, 'check'), '')
+  const c = canvas([], { answerProblems: [{ nodeKey: 'media:m1', text: 'Not every path gives count.' }] })
+  assert.equal(problemsForStep(c, 'media:m1')['*'], 'Not every path gives count.')
+  assert.deepEqual(problemsForStep(c, botKey('a')), {})
+})
+
+test('a pause stamped on the routine card shows on the canvas', () => {
+  const c = canvas([])
+  c.routines[0].paused = true
+  assert.equal(isFlowPaused(c, 'r'), true)
+})
+
+test('a portable workflow file gives its names in plain or base64 form', () => {
+  const file = {
+    formatVersion: 1,
+    workflow: { name: 'Digest', agents: ['Ada'], channels: ['#news'], steps: [] },
+    assets: { 'a.png': '...', 'b.png': '...' },
+  }
+  const json = JSON.stringify(file)
+  const base64 = Buffer.from(json, 'utf8').toString('base64')
+  for (const raw of [json, base64]) {
+    assert.deepEqual(parseWorkflowFile(raw), { name: 'Digest', agents: ['Ada'], channels: ['#news'], assets: 2 })
+  }
+  assert.equal(new TextDecoder().decode(workflowFileBytes(json)), json)
+  assert.equal(new TextDecoder().decode(workflowFileBytes(base64)), json)
+  assert.equal(parseWorkflowFile('not a file'), null)
+  assert.equal(parseWorkflowFile('{}'), null, 'a file without steps is not a workflow')
 })

@@ -1,7 +1,7 @@
 //! One bot's canvas as clients load it: its routines and those whose flow passes through it, the
 //! links, where the nodes sit and the bots placed before any link reaches them.
 
-use super::{folders, format, groups, output_template, pause};
+use super::{folders, format, groups, output_template, pause, trigger_fields};
 use crate::LockExt;
 use crate::hub::{Hub, flows::flow_event};
 use crate::routines::{Routine, Routines, Run, public};
@@ -45,6 +45,11 @@ impl Routines {
             "steps": steps,
             "stepSettings": step_settings,
             "output": output_template::load(store, &r.id),
+            // Fixed fields this routine's triggers give to later steps, for the client's `{{` picker.
+            "triggerFields": trigger_fields::fixed_field_names(&r.triggers)
+                .into_iter()
+                .map(|(name, ty)| json!({"name": name, "step": "", "icon": "bolt", "type": ty, "values": []}))
+                .collect::<Vec<_>>(),
         }))
     }
 

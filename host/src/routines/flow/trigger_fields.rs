@@ -48,6 +48,40 @@ fn is_schedule(triggers: &[Trigger]) -> bool {
         .any(|trigger| matches!(trigger, Trigger::Interval { .. } | Trigger::Once { .. } | Trigger::Cron { .. }))
 }
 
+/// The fields a trigger makes available to later steps, for the client's `{{` field picker. The
+/// names match `fixed_answers`: a schedule gives `weekday`/`local_date`, GitHub gives
+/// `title`/`author`/`labels`, and a chat mention gives `channel`/`text`/`author`. Each is a plain
+/// text field; the fixed values depend on the actual event and arrive at run time.
+pub fn fixed_field_names(triggers: &[Trigger]) -> Vec<(String, String)> {
+    let mut names: Vec<(String, String)> = Vec::new();
+    let mut push = |name: &str| {
+        if !names.iter().any(|(n, _)| n == name) {
+            names.push((name.to_owned(), "text".to_owned()));
+        }
+    };
+    for trigger in triggers {
+        match trigger {
+            Trigger::Once { .. } | Trigger::Interval { .. } => {
+                push("weekday");
+                push("local_date");
+            }
+            Trigger::Cron { .. } => {
+                push("weekday");
+                push("local_date");
+            }
+            Trigger::Webhook { .. } | Trigger::Event { .. } => {
+                push("title");
+                push("author");
+                push("labels");
+                push("text");
+                push("channel");
+            }
+            Trigger::Watch { .. } => {}
+        }
+    }
+    names
+}
+
 /// The fixed fields of `event` and `triggers`, keyed by field name. Only non-empty values are given:
 /// a step that uses `{{labels}}` without a GitHub trigger keeps its braces instead of sending an
 /// empty placeholder.
@@ -182,5 +216,26 @@ mod tests {
         merged_values(&mut values, &trigger);
         assert_eq!(values["author"], "bo");
         assert_eq!(values["weekday"], "Sunday");
+    }
+
+    #[test]
+    fn the_field_picker_lists_each_trigger_kind_once() {
+        let schedule = fixed_field_names(&[Trigger::Cron { expression: "* * * * *".into(), time_zone: "UTC".into() }]);
+        assert!(schedule.iter().any(|(name, _)| name == "weekday"));
+        assert!(schedule.iter().any(|(name, _)| name == "local_date"));
+        let github = fixed_field_names(&[Trigger::Event {
+            source: "github".into(),
+            event: "issues".into(),
+            filters: BTreeMap::new(),
+        }]);
+        for name in ["title", "author", "labels", "channel"] {
+            assert!(github.iter().any(|(n, _)| n == name), "{name} is offered");
+        }
+        let both = fixed_field_names(&[Trigger::Once { at: 0 }, Trigger::Webhook]);
+        assert_eq!(both.iter().filter(|(n, _)| n == "author").count(), 1, "no duplicates");
+        assert!(
+            fixed_field_names(&[Trigger::Watch { kind: super::super::watch::WatchKind::Files, every_minutes: 1 }])
+                .is_empty()
+        );
     }
 }

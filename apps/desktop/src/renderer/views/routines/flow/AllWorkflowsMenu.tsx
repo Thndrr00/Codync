@@ -24,17 +24,23 @@ interface WorkflowEntry {
   botId: string
 }
 
-export function AllWorkflowsMenu({ workflows, current, folders, loading, error, onOpen, onNew, onRename, onFolderAction }: {
+export function AllWorkflowsMenu({ workflows, current, folders, loading, error, paused, onOpen, onNew, onRename, onFolderAction, onPause, onDuplicate, onExport, onImport }: {
   workflows: readonly WorkflowEntry[]
   /** The routine id of the open canvas's workflow, which is what the host files in folders. */
   current: string
   folders: WorkflowFoldersSnapshot | null
   loading: boolean
   error: string | null
+  /** A paused workflow skips its triggers but can still be run by hand. */
+  paused: boolean
   onOpen: (workflow: WorkflowEntry) => void
   onNew: () => void
   onRename: (workflow: WorkflowEntry) => void
   onFolderAction: (action: WorkflowFolderAction) => void
+  onPause: () => void
+  onDuplicate: () => void
+  onExport: () => void
+  onImport: () => void
 }) {
   const tr = useTr()
   const button = useRef<HTMLButtonElement>(null)
@@ -114,6 +120,10 @@ export function AllWorkflowsMenu({ workflows, current, folders, loading, error, 
       { title: 'New folder', icon: 'folder', action: () => openNameDialog('create') },
       { title: 'Move workflow', icon: 'folder', disabled: !current, submenu: placeItems(current) },
       { title: 'Rename workflow', icon: 'pencil', action: () => { const entry = entryOf(current); if (entry) onRename(entry) } },
+      { title: paused ? 'Resume' : 'Pause', icon: paused ? 'play.circle' : 'clock', divider: true, disabled: !current, action: onPause },
+      { title: 'Duplicate', icon: 'doc.on.doc', disabled: !current, action: onDuplicate },
+      { title: 'Export', icon: 'doc.on.doc', disabled: !current, action: onExport },
+      { title: 'Import workflow', icon: 'doc.badge.plus', action: onImport },
     )
     return rows
   }

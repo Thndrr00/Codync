@@ -67,6 +67,8 @@ export interface FlowPosition {
 
 export interface FlowRoutineCard {
   routine: Routine
+  /** Whether this workflow skips its triggers; the host also stamps the canvas's paused ids. */
+  paused?: boolean
   /** Newest first. */
   recentRuns: RoutineRun[]
   upcomingRuns: number[]
@@ -83,7 +85,30 @@ export interface FlowCanvas {
   placedBotIds: string[]
   /** The picture and clip steps of these routines (host/src/store/flow_media.rs). */
   mediaNodes: FlowMedia[]
+  // Typed step fields and workflow actions (OpenBot nightly 0.70). All optional: an older host
+  // simply omits them, and the canvas keeps working without completions, pauses or a registry.
+  /** Fields the trigger gives; absent when the host doesn't know typed fields yet. */
+  triggerFields?: FlowField[]
+  /** Fields each step gives, by node key; the trigger's own key is ''. */
+  flowFields?: Record<string, FlowField[]>
+  /** Answer/check specs by host spec key; a newer host sends `{answer, check}` per key. */
+  answerSpecs?: Record<string, string | { answer?: string; check?: string }>
+  /** Check text by node key ('' = trigger). */
+  checkSpecs?: Record<string, string>
+  /** Problems by `${nodeKey}:${fieldName}`, or the host's list of `{nodeKey, text}`. */
+  answerProblems?: Record<string, string> | readonly { nodeKey: string; text: string }[]
+  /** Which setting values the host knows, by step kind then setting name. */
+  nodeRegistry?: FlowNodeRegistry | null
+  /** Routines whose workflow is paused: triggers are skipped, a manual run still works. */
+  pausedRoutineIds?: string[]
+  /** The host found a setting from a newer version: don't let this app save the workflow. */
+  readOnly?: boolean
+  /** The workflow document's format version; a newer one is read-only here. */
+  formatVersion?: number
 }
+
+/** The workflow format this client knows (host/src/routines/flow/format.rs). */
+export const FLOW_FORMAT_VERSION = 1
 
 /** One folder of the computer-wide "All workflows" tree (host `workflowFolders`). */
 export interface WorkflowFolder {
@@ -535,4 +560,380 @@ export function edgePath(from: FlowNode, to: FlowNode): string {
 /** The node whose card holds the canvas point, if any: where a dragged connection was dropped. */
 export function nodeAt(nodes: readonly FlowNode[], x: number, y: number): FlowNode | null {
   return nodes.find((n) => x >= n.x && x <= n.x + NODE_WIDTH && y >= n.y && y <= n.y + NODE_HEIGHT) ?? null
+}
+
+// MARK: typed step fields (OpenBot nightly workflow fields)
+
+export type FlowFieldType = 'text' | 'number' | 'integer' | 'yesNo' | 'list' | 'choice'
+
+/** One field an earlier step (or the trigger) gives, as the host sends it. */
+export interface FlowField {
+  name: string
+  /** The giving step's name; empty for the trigger. */
+  step: string
+  /** SF Symbol of the giving step, shown on the field list's one line. */
+  icon: string
+  type: FlowFieldType
+  /** Values of a "One of" field; empty for the other types. */
+  values: string[]
+}
+
+export type FieldToken = { kind: 'text'; text: string } | { kind: 'field'; name: string; raw: string }
+
+/** A bare field name, so a `{{...}}` in JSON or code is never mistaken for one. */
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/
+
+/**
+ * Splits a saved prompt into plain text and `{{name}}` fields. The raw braces stay in the pieces so
+ * a save is a lossless join; callers render a field as a chip. An unclosed or malformed pair is text.
+ */
+export function fieldTokens(text: string): FieldToken[] {
+  const tokens: FieldToken[] = []
+  let at = 0
+  while (at < text.length) {
+    const open = text.indexOf('{{', at)
+    if (open < 0) break
+    const close = text.indexOf('}}', open + 2)
+    if (close < 0) break
+    const name = text.slice(open + 2, close)
+    if (FIELD_NAME.test(name)) {
+      if (open > at) tokens.push({ kind: 'text', text: text.slice(at, open) })
+      tokens.push({ kind: 'field', name, raw: text.slice(open, close + 2) })
+      at = close + 2
+    } else {
+      // A brace pair that isn't a field: keep scanning after it for a real one.
+      tokens.push({ kind: 'text', text: text.slice(at, open + 2) })
+      at = open + 2
+    }
+  }
+  if (at < text.length) tokens.push({ kind: 'text', text: text.slice(at) })
+  return tokens
+}
+
+/** The whole chip right before `caret`, so Backspace can remove it in one go. */
+export function chipBefore(text: string, caret: number): { start: number; end: number; name: string } | null {
+  if (caret < 4 || text[caret - 1] !== '}' || text[caret - 2] !== '}') return null
+  const start = text.lastIndexOf('{{', caret - 2)
+  if (start < 0) return null
+  const name = text.slice(start + 2, caret - 2)
+  return FIELD_NAME.test(name) ? { start, end: caret, name } : null
+}
+
+/** An open completion at the caret: `{{que` or a single `{`. */
+export interface FieldTrigger {
+  /** Where the trigger starts, so the field token replaces all of the typed braces and letters. */
+  start: number
+  query: string
+  /** A single `{` (not `{{`) — Enter still means a new line until a letter or arrow is used. */
+  single: boolean
+}
+
+/** The completion trigger before the caret, or null in ordinary text (JSON, code, a closed chip). */
+export function fieldTrigger(text: string, caret: number): FieldTrigger | null {
+  const brace = text.lastIndexOf('{', caret - 1)
+  if (brace < 0) return null
+  const single = text[brace - 1] !== '{'
+  const start = single ? brace : brace - 1
+  if (start < 0) return null
+  // A single brace stuck to a word is part of that word, not a trigger.
+  if (single && brace > 0 && /[\p{L}\p{N}_]/u.test(text[brace - 1])) return null
+  const query = text.slice(start + (single ? 1 : 2), caret)
+  if (/[^\p{L}\p{N}_-]/u.test(query)) return null
+  return { start, query, single }
+}
+
+/** Replaces the typed trigger with `{{name}}` and puts the caret after it. Without a trigger, inserts at the caret. */
+export function insertFieldToken(text: string, caret: number, name: string): { text: string; caret: number } {
+  const trigger = fieldTrigger(text, caret)
+  const start = trigger?.start ?? caret
+  const token = `{{${name}}}`
+  const before = text.slice(0, start)
+  return { text: before + token + text.slice(caret), caret: before.length + token.length }
+}
+
+export interface TextFieldPart {
+  text: string
+  match: boolean
+}
+export interface FieldMatch {
+  field: FlowField
+  /** The name split around the typed letters, so the list can bold just those. */
+  parts: TextFieldPart[]
+}
+
+/** Fields whose name holds the typed text, name-prefix matches first, then host order. */
+export function matchingFields(fields: readonly FlowField[], query: string): FieldMatch[] {
+  const q = query.trim().toLocaleLowerCase()
+  if (!q) return fields.map((field) => ({ field, parts: [{ text: field.name, match: false }] }))
+  const matches: FieldMatch[] = []
+  for (const field of fields) {
+    const lower = field.name.toLocaleLowerCase()
+    const at = lower.indexOf(q)
+    if (at < 0) continue
+    const parts: TextFieldPart[] = []
+    if (at > 0) parts.push({ text: field.name.slice(0, at), match: false })
+    parts.push({ text: field.name.slice(at, at + q.length), match: true })
+    if (at + q.length < field.name.length) parts.push({ text: field.name.slice(at + q.length), match: false })
+    matches.push({ field, parts })
+  }
+  return matches.sort((a, b) =>
+    Number(b.field.name.toLocaleLowerCase().startsWith(q)) - Number(a.field.name.toLocaleLowerCase().startsWith(q)))
+}
+
+/** The fields a step can name: the trigger's, then every earlier step's; the nearest step wins on a repeated name. */
+export function fieldsForStep(canvas: FlowCanvas, nodeKey: string): FlowField[] {
+  const rows = flowRows(canvas)
+  const target = rows.findIndex((row) => (row.kind === 'media' ? mediaKey(row.nodeId) : botKey(row.nodeId)) === nodeKey)
+  const earlier = target < 0 ? rows : rows.slice(0, target)
+  const list = [...(canvas.triggerFields ?? [])]
+  for (const row of earlier) list.push(...(canvas.flowFields?.[row.nodeId] ?? []))
+  const seen = new Set<string>()
+  return list.reverse().filter((field) => {
+    if (seen.has(field.name)) return false
+    seen.add(field.name)
+    return true
+  }).reverse()
+}
+
+/** The answer or check text of a spec, whether the host sent a bare string or `{answer, check}`. */
+export function specText(spec: string | { answer?: string; check?: string } | undefined, part: 'answer' | 'check'): string {
+  if (!spec) return ''
+  return typeof spec === 'string' ? (part === 'answer' ? spec : '') : spec[part] ?? ''
+}
+
+/** Host spec keys drop the `bot:` prefix of a step's canvas key. */
+export function specKeyOf(nodeKey: string): string {
+  return nodeKey.startsWith('bot:') ? nodeKey.slice(4) : nodeKey
+}
+
+function problemEntries(canvas: FlowCanvas): [string, string][] {
+  const problems = canvas.answerProblems
+  if (!problems) return []
+  if (Array.isArray(problems)) return problems.map((problem) => [problem.nodeKey, problem.text])
+  return Object.entries(problems)
+}
+
+/** Every chip problem on a step, by field name (`*` = the whole step), for the chips of its prompt. */
+export function problemsForStep(canvas: FlowCanvas, nodeKey: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  const nodeProblem = problemEntries(canvas).find(([key]) => key === nodeKey)?.[1]
+  for (const [key, problem] of problemEntries(canvas)) {
+    if (!key.includes(':')) {
+      result[key] = problem
+    } else if (key.startsWith(`${nodeKey}:`)) {
+      result[key.slice(nodeKey.length + 1)] = problem
+    }
+  }
+  // The host's problem list names the step, not the field: every chip on it shows the warning.
+  if (nodeProblem) result['*'] = nodeProblem
+  return result
+}
+
+/** Whether a routine's workflow skips its triggers (a manual run is still allowed). */
+export function isFlowPaused(canvas: FlowCanvas, routineId: string): boolean {
+  return canvas.pausedRoutineIds?.includes(routineId)
+    ?? canvas.routines.find((card) => card.routine.id === routineId)?.paused
+    ?? false
+}
+
+/** The names in a portable workflow file, read before the person maps them to local agents. */
+export interface WorkflowFileInfo {
+  name: string
+  agents: string[]
+  channels: string[]
+  assets: number
+}
+
+/** The bytes to save: a plain JSON file is already text, an older host sends it base64-encoded. */
+export function workflowFileBytes(content: string): Uint8Array<ArrayBuffer> {
+  if (content.trimStart().startsWith('{')) return new TextEncoder().encode(content)
+  const binary = atob(content.trim())
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
+}
+
+/** Reads a workflow file's JSON (plain or base64); null when the bytes aren't a workflow. */
+export function parseWorkflowFile(raw: string): WorkflowFileInfo | null {
+  let text = raw.trim()
+  if (!text.startsWith('{')) {
+    try {
+      const binary = atob(text)
+      text = new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)))
+    } catch {
+      return null
+    }
+  }
+  let file: Record<string, unknown>
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (!parsed || typeof parsed !== 'object') return null
+    file = parsed as Record<string, unknown>
+  } catch {
+    return null
+  }
+  const workflow = (file.workflow ?? file) as Record<string, unknown>
+  if (!Array.isArray(workflow.steps)) return null
+  const names = (value: unknown) => Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string' && !!name) : []
+  const assets = file.assets
+  return {
+    name: typeof workflow.name === 'string' ? workflow.name : '',
+    agents: names(workflow.agents),
+    channels: names(workflow.channels),
+    assets: assets && typeof assets === 'object' ? Object.keys(assets).length : 0,
+  }
+}
+
+// MARK: answer fields ("name: type" lines)
+
+export type AnswerFieldType = FlowFieldType
+
+export interface AnswerFieldRow {
+  name: string
+  type: AnswerFieldType
+  values: string[]
+  optional: boolean
+}
+
+export interface ParsedAnswerSpec {
+  rows: AnswerFieldRow[]
+  /** Lines the rows cannot show; kept in the old text box so nothing is lost on a save. */
+  unknown: string
+}
+
+const ANSWER_TYPES: Record<string, AnswerFieldType> = {
+  text: 'text', string: 'text',
+  number: 'number', float: 'number',
+  int: 'integer', integer: 'integer',
+  'yes/no': 'yesNo', yesno: 'yesNo', boolean: 'yesNo',
+  list: 'list', array: 'list',
+  'one of': 'choice', choice: 'choice',
+}
+
+const ANSWER_TYPE_TEXT: Record<AnswerFieldType, string> = {
+  text: 'text', number: 'number', integer: 'int', yesNo: 'yes/no', list: 'list', choice: 'one of',
+}
+
+/** One `name: type` line per field, separated by newlines or semicolons, as the host saves it. */
+export function parseAnswerSpec(text: string): ParsedAnswerSpec {
+  const rows: AnswerFieldRow[] = []
+  const unknown: string[] = []
+  for (const line of text.split(/[\n;]/)) {
+    const raw = line.trim()
+    if (!raw) continue
+    const colon = raw.indexOf(':')
+    if (colon < 0) {
+      unknown.push(raw)
+      continue
+    }
+    let name = raw.slice(0, colon).trim()
+    const typeText = raw.slice(colon + 1).trim()
+    const optional = name.endsWith('?')
+    if (optional) name = name.slice(0, -1).trim()
+    if (!FIELD_NAME.test(name)) {
+      unknown.push(raw)
+      continue
+    }
+    const oneOf = /^one of\s+(.+)$/i.exec(typeText)
+    const type = ANSWER_TYPES[(oneOf ? 'one of' : typeText).toLocaleLowerCase()]
+    const values = oneOf ? oneOf[1].split(',').map((value) => value.trim()).filter(Boolean) : []
+    if (!type || (type === 'choice' && values.length < 2)) {
+      unknown.push(raw)
+      continue
+    }
+    rows.push({ name, type, values, optional })
+  }
+  return { rows, unknown: unknown.join('\n') }
+}
+
+/** Saved answer text in the host's `name: type` format; a choice keeps its values on the same line. */
+export function formatAnswerSpec(rows: readonly AnswerFieldRow[]): string {
+  return rows.map((row) => {
+    const type = row.type === 'choice' ? `${ANSWER_TYPE_TEXT.choice} ${row.values.join(', ')}` : ANSWER_TYPE_TEXT[row.type]
+    return `${row.name}${row.optional ? '?' : ''}: ${type}`
+  }).join('\n')
+}
+
+// MARK: node registry (values the host knows)
+
+export interface FlowSettingSpec {
+  /** The values this setting takes; absent means any value is fine. */
+  values?: string[]
+  /** The value is a list of those values (comma-separated or a JSON array). */
+  list?: boolean
+}
+
+/** Which setting values this host knows, by step kind then setting name. */
+export type FlowNodeRegistry = Record<string, Record<string, FlowSettingSpec>>
+
+export interface SettingProblem {
+  name: string
+  /** The allowed values, for a value the host doesn't know. Empty when the name itself is newer. */
+  values: string[]
+  /** The setting name is missing from this host's registry: it came from a newer version. */
+  newer: boolean
+}
+
+function settingList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String)
+  if (typeof value !== 'string') return []
+  const text = value.trim()
+  if (text.startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(text)
+      return Array.isArray(parsed) ? parsed.map(String) : []
+    } catch {
+      return []
+    }
+  }
+  return text.split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+/** Settings this host doesn't understand: a refused value (with the allowed ones), or a newer field. */
+export function unknownSettings(
+  kind: string,
+  settings: Record<string, unknown>,
+  registry: FlowNodeRegistry | null | undefined,
+): SettingProblem[] {
+  const spec = registry?.[kind] ?? registry?.['*']
+  if (!spec) return []
+  const problems: SettingProblem[] = []
+  for (const [name, value] of Object.entries(settings)) {
+    if (value === undefined || value === null || value === '') continue
+    const field = spec[name]
+    if (!field) {
+      problems.push({ name, values: [], newer: true })
+      continue
+    }
+    if (!field.values?.length) continue
+    const values = field.list ? settingList(value) : [String(value)]
+    if (values.some((item) => !field.values!.includes(item))) problems.push({ name, values: field.values, newer: false })
+  }
+  return problems
+}
+
+/** A step setting with a name this host has never seen means the workflow came from a newer version. */
+export function isNewerSetting(
+  kind: string,
+  settings: Record<string, unknown>,
+  registry: FlowNodeRegistry | null | undefined,
+): boolean {
+  return unknownSettings(kind, settings, registry).some((problem) => problem.newer)
+}
+
+/** A workflow with a setting from a newer version must stay read-only, or a save would change that step. */
+export function isFlowReadOnly(canvas: FlowCanvas | null, registry: FlowNodeRegistry | null | undefined = canvas?.nodeRegistry): boolean {
+  if (!canvas || canvas.readOnly) return !!canvas?.readOnly
+  if ((canvas.formatVersion ?? FLOW_FORMAT_VERSION) > FLOW_FORMAT_VERSION) return true
+  if (!registry) return false
+  for (const link of canvas.links) {
+    if (isNewerSetting('bot', link.modelOptions ?? {}, registry)) return true
+  }
+  for (const media of canvas.mediaNodes) {
+    const kind = media.kind === 'video' ? 'video' : 'image'
+    const settings: Record<string, unknown> = {
+      model: media.model, prompt: media.prompt, aspect: media.aspect, duration: media.duration,
+      resolution: media.resolution, transparent: media.transparent, voice: media.voice,
+    }
+    if (isNewerSetting(kind, settings, registry)) return true
+  }
+  return false
 }

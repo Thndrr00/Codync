@@ -3,10 +3,11 @@ import { onModel, type MediaAnswer, type MediaKind } from '@shared/media'
 import { Button, ChipChoice, DropdownMenu, IconButton, Switch } from '../../../components/Controls'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
-import { mediaKey, mediaOf, mediaTitle, type FlowMedia } from '../../../lib/routine-flow.ts'
+import { fieldsForStep, mediaKey, mediaOf, mediaTitle, problemsForStep, type FlowMedia } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
 import type { CanvasWithGroups } from './flow-groups'
+import { FieldTextArea } from './FieldTextArea'
 import type { FlowTarget, MediaSettings } from './FlowInspector'
 import { settingsOf } from './flow-settings'
 
@@ -80,14 +81,14 @@ export function MediaComposer({ media, canvas, busy, offline, targets, onSaveMed
         <Spacer />
         <IconButton title={tr('Close')} icon="xmark" onClick={onClose} />
       </HStack>
-      <textarea
-        className="routine-input flow-composer-prompt"
-        aria-label={tr('What to make')}
-        placeholder={tr('Describe the {kind} to make').replace('{kind}', tr(media.kind === 'video' ? 'clip' : 'picture'))}
+      <FieldTextArea
         value={draft.prompt}
-        maxLength={8000}
+        onChange={(prompt) => setDraft({ ...draft, prompt })}
+        fields={fieldsForStep(canvas, key)}
+        problems={problemsForStep(canvas, key)}
         disabled={offline}
-        onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
+        label="What to make"
+        placeholder={tr('Describe the {kind} to make').replace('{kind}', tr(media.kind === 'video' ? 'clip' : 'picture'))}
       />
       {pictures.length > 0 ? (
         <VStack gap={4}>
