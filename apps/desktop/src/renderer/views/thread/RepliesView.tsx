@@ -8,8 +8,9 @@ import { useStore } from '../../store/context'
 import { useTr } from '../../lib/use-language'
 import { UpdateNeededCard } from '../UpdateNeededCard'
 import { buildChat, rowIn, useArrivals } from './chat-items'
-import { BotMessageRow } from './BotConversation'
 import { ChatRow, TimeSeparator } from './ChatRows'
+import { RoutineNotice } from './RoutineNotice'
+import { SubagentCard } from './SubagentCard'
 import { ForwardSheet } from './ForwardSheet'
 import { WorkingIndicator } from './WorkingIndicator'
 import { workingSteps } from './trace-turns'
@@ -22,7 +23,16 @@ import { TraceView } from './TraceView'
  * (`OpenBot` Mobile's thread). A document's side conversation (`doc:<id>`) is one too, with its
  * document's title and no thread actions.
  */
-export function RepliesView({ botId, rootId, close, documentTitle }: { botId: string; rootId: string; close: () => void; documentTitle?: string }) {
+export function RepliesView({ botId, rootId, close, documentTitle, openRoutine, onOpenSubagent }: {
+  botId: string
+  rootId: string
+  close: () => void
+  documentTitle?: string
+  /** Shows a routine run's details where the host has an inspector; otherwise it is a plain marker. */
+  openRoutine?: (routineId: string) => void
+  /** Opens a subagent's work; without a peer sheet the card is informational. */
+  onOpenSubagent?: (peerId: string) => void
+}) {
   const store = useStore()
   const tr = useTr()
   const chat = store.bots.get(botId) ?? null
@@ -108,17 +118,20 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
             const line = unread > 0 && item.kind === 'entry' && seen++ === newLineAfter ? <UnreadLine key="new" /> : null
             if (item.kind === 'separator') return <TimeSeparator key={item.id} date={item.date} />
             if (item.kind === 'exchanges') {
-              // A bot-to-bot exchange reads as one block, like in the chat. The thread sheet has no
-              // peer chat to jump to, so the author chip stays informational here.
-              return <BotMessageRow key={item.id} exchanges={item.exchanges} open={() => {}} />
+              // The agent's subagents read as one status card, and each row opens that peer's work.
+              return <SubagentCard key={item.id} exchanges={item.exchanges} open={onOpenSubagent} />
             }
             return (
               <div key={item.id}>
                 {line}
                 <div className={arrivals.has(item.id) ? rowIn(item) : undefined}>
-                  <ChatRow entry={item.entry} groupStart={item.groupStart} chat={chat} openTrace={openTrace}
-                    onReply={store.mismatch ? undefined : setReplyEntry}
-                    onForward={store.mismatch ? undefined : setForwardEntry} />
+                  {item.kind === 'entry' && item.entry.kind === 'notice' && item.entry.data.routineId ? (
+                    <RoutineNotice entry={item.entry} open={openRoutine ? () => openRoutine(item.entry.data.routineId!) : undefined} />
+                  ) : (
+                    <ChatRow entry={item.entry} groupStart={item.groupStart} chat={chat} openTrace={openTrace}
+                      onReply={store.mismatch ? undefined : setReplyEntry}
+                      onForward={store.mismatch ? undefined : setForwardEntry} />
+                  )}
                 </div>
               </div>
             )

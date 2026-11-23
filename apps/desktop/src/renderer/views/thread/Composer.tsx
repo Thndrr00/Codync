@@ -169,6 +169,9 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
     field.current?.focus()
   }
   const commandMenu = useComposerMenu(draft, commands, run, returnRuns)
+  // The caret stays in the field while a picker is open, so the field carries the listbox
+  // relationship and the id of the highlighted row for screen readers (NVDA, #14099).
+  const activeMenu = commandMenu.shown.length ? commandMenu : mentionMenu.shown.length ? mentionMenu : null
 
   const append = (incoming: PickedFile[]) => {
     if (!canAttach) return
@@ -288,6 +291,11 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
                 spellCheck
                 aria-label={tr(reply ? 'Reply' : 'Message')}
                 aria-keyshortcuts="Enter Shift+Enter"
+                aria-autocomplete={activeMenu ? 'list' : undefined}
+                aria-haspopup={activeMenu ? 'listbox' : undefined}
+                aria-expanded={activeMenu ? true : undefined}
+                aria-controls={activeMenu?.listId}
+                aria-activedescendant={activeMenu ? activeMenu.optionId(activeMenu.index) : undefined}
                 onCompositionStart={() => { composing.current = true }}
                 onCompositionEnd={() => { composing.current = false }}
                 onChange={(e) => {

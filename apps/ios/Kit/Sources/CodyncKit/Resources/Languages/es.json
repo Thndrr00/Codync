@@ -2779,5 +2779,8 @@
   "Asked": "Preguntado",
   "Hide this list": "Ocultar esta lista",
   "Show older threads": "Mostrar hilos anteriores",
-  "Loading older threads…": "Cargando hilos anteriores…"
+  "Loading older threads…": "Cargando hilos anteriores…",
+  "Requests ended": "Peticiones terminadas",
+  "{done} replied · {failed} failed": "{done} respondieron · {failed} fallaron",
+  "Completed": "Completado"
 }

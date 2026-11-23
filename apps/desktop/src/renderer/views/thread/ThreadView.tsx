@@ -38,6 +38,7 @@ import { Composer } from './Composer'
 import { PresenceRow } from './PresenceRow'
 import { QueuedMessages } from './QueuedMessages'
 import { fill } from '../../lib/fill.ts'
+import { newFinalAnswerAtEnd, type AnswerRow } from '../../lib/chat-answer-placement.ts'
 import { outsideQueue } from './queued-messages'
 import { ChatSidePanel } from './ChatSidePanel'
 import { DetailsPanel, type DetailsTab } from './DetailsPanel'
@@ -425,7 +426,9 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         {forwardEntry ? <ForwardSheet entry={forwardEntry} close={() => setForwardEntry(null)} /> : null}
       </Sheet>
       <Sheet open={threadRoot !== null} onClose={() => setThreadRoot(null)} width={620} height={560}>
-        {threadRoot ? <RepliesView botId={botId} rootId={threadRoot} close={() => setThreadRoot(null)} /> : null}
+        {threadRoot ? <RepliesView botId={botId} rootId={threadRoot} close={() => setThreadRoot(null)}
+          openRoutine={(id) => { setThreadRoot(null); presentRoutine(id) }}
+          onOpenSubagent={(peer) => { setThreadRoot(null); setBotChat(peer) }} /> : null}
       </Sheet>
       <Sheet open={callLine !== null} onClose={() => setCallLine(null)} width={620} height={560}>
         {callLine ? <CallConversationView botId={botId} lineId={callLine} /> : null}
@@ -510,6 +513,8 @@ function ConnectionSubtitle() {
 
 /** The messages: every loaded message, brought to the newest as it changes while the reader is at the bottom. */
 const PAGE = 40
+/** Breathing room above a long new answer placed at the top of the view. */
+const ANSWER_START_GAP = 16
 
 const Transcript = memo(function Transcript({ botId, openTrace, onReply, openForward, openFile, openRoutine, openAgent, openBotChat, openApp, openArtifact, openCall, openThread, onBranch }: { botId: string; openTrace: () => void; onReply?: (e: Entry) => void; openForward?: (e: Entry) => void; openFile?: (e: Entry, file: SharedFile) => void; openRoutine: (id: string | null) => void; openAgent: (botId: string) => void; openBotChat: (peerId: string) => void; openApp?: (app: BotApp) => void; openArtifact: (artifactId: string) => void; openCall: (lineId: string) => void; openThread: (rootId: string) => void; onBranch?: (e: Entry) => void }) {
   const store = useStore()
@@ -539,6 +544,8 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openFor
   const scroller = useRef<HTMLDivElement>(null)
   const lastScrollTop = useRef(0)
   const keepPlace = useRef<number | null>(null)
+  const seenRows = useRef<string[] | null>(null)
+  const placedAnswer = useRef<string | null>(null)
   const last = items[items.length - 1]
   const jump = usePresence(!following && items.length > 0, 200)
   const arrivals = useArrivals([...items.map((i) => i.id), ...(live ? ['working'] : [])], following)
@@ -571,13 +578,38 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openFor
   }
 
   // Earlier messages going in above keep the reader's place; a follower stays at the bottom.
+  // A long final answer that arrives whole is the one exception: show its start instead (OpenBot
+  // nightly triage-12962), stop following and leave "Jump to latest" to take the reader to the end.
   useLayoutEffect(() => {
     const el = scroller.current
     if (!el) return
+    const before = seenRows.current
+    seenRows.current = items.map((i) => i.id)
     if (keepPlace.current !== null && !followingRef.current) {
       el.scrollTop = el.scrollHeight - keepPlace.current
       keepPlace.current = null
-    } else if (followingRef.current) toBottom()
+      return
+    }
+    if (!followingRef.current) return
+    toBottom()
+    const lastItem = items[items.length - 1]
+    if (!lastItem || lastItem.kind !== 'entry') return
+    const rows: AnswerRow[] = items.map((i) => ({
+      id: i.id,
+      kind: i.kind,
+      author: i.kind === 'entry' ? i.entry.kind : '',
+      final: i.kind === 'entry' && i.entry.data.final === true,
+    }))
+    const answer = newFinalAnswerAtEnd(before, rows)
+    if (!answer || placedAnswer.current === answer) return
+    const row = el.querySelector<HTMLElement>(`[data-chat-message-id="${CSS.escape(answer)}"]`)
+    if (!row) return
+    const start = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - ANSWER_START_GAP
+    // Only a reply taller than the view has a start above the bottom-most scroll position.
+    if (start <= 0 || start >= el.scrollHeight - el.clientHeight) return
+    placedAnswer.current = answer
+    setFollowing(false)
+    el.scrollTop = start
   })
 
   // A message the user sends brings the chat back to the newest.
@@ -623,7 +655,7 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openFor
           ) : null}
           {items.length === 0 && bot ? <div className="transcript-intro">{isGroup(bot) ? <GroupIntroCard group={bot} /> : <IntroCard bot={bot} />}</div> : null}
           {items.map((item) => (
-            <div key={item.id} className={arrivals.has(item.id) ? rowIn(item) : undefined}>
+            <div key={item.id} data-chat-message-id={item.id} className={arrivals.has(item.id) ? rowIn(item) : undefined}>
               <Row item={item} chat={bot} openTrace={openTrace} onReply={onReply} openForward={openForward} openFile={openFile} openRoutine={openRoutine} openAgent={openAgent} openBotChat={openBotChat} openApp={openApp} openArtifact={openArtifact} openCall={openCall} openThread={openThread} onBranch={onBranch} />
               {item.id === kofiAt ? <KofiInviteCard /> : null}
             </div>

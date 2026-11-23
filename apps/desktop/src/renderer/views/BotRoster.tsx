@@ -21,6 +21,7 @@ import { AppFloorCard, UpdateNeededCard } from './UpdateNeededCard'
 import { RosterControls, RosterPreview } from './RosterControls'
 import { RosterSection } from './RosterSection'
 import { RepliesView } from './thread/RepliesView'
+import { BotConversationView } from './thread/BotConversation'
 import { registerBackHandler } from './chat-navigation'
 import { RosterThreads } from './RosterThreads'
 import { RosterStops } from '../store/roster-query'
@@ -68,6 +69,8 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
   // One expanded row at a time; threads stay folded with their row and with its computer section.
   const [expandedThreads, setExpandedThreads] = useState<string | null>(null)
   const [threadOpen, setThreadOpen] = useState<{ botId: string; store: BotStore; threadId: string } | null>(null)
+  // The subagent a thread's status card opened: its work gets the same conversation sheet.
+  const [subagentChat, setSubagentChat] = useState<{ botId: string; store: BotStore; peerId: string } | null>(null)
   useEffect(() => registerBackHandler(() => {
     if (!threadOpen) return false
     setThreadOpen(null)
@@ -356,7 +359,13 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
       {/* The same thread view the chat's Threads tab uses, over the now-selected bot's chat. */}
       {threadOpen ? <StoreContext.Provider value={threadOpen.store}>
         <Sheet open onClose={() => setThreadOpen(null)} width={620} height={560}>
-          <RepliesView botId={threadOpen.botId} rootId={threadOpen.threadId} close={() => setThreadOpen(null)} />
+          <RepliesView botId={threadOpen.botId} rootId={threadOpen.threadId} close={() => setThreadOpen(null)}
+            onOpenSubagent={(peerId) => { setThreadOpen(null); setSubagentChat({ botId: threadOpen.botId, store: threadOpen.store, peerId }) }} />
+        </Sheet>
+      </StoreContext.Provider> : null}
+      {subagentChat ? <StoreContext.Provider value={subagentChat.store}>
+        <Sheet open onClose={() => setSubagentChat(null)} width={620} height={560}>
+          <BotConversationView botId={subagentChat.botId} peerId={subagentChat.peerId} />
         </Sheet>
       </StoreContext.Provider> : null}
     </>

@@ -191,7 +191,9 @@ function registerIPC(tray: Tray) {
   ipcMain.on('host:install', () => void host.install())
   ipcMain.on('host:restart', () => host.restart())
   ipcMain.on('app:openExternal', (_e, url: string) => {
-    if (/^(https?|mailto|x-apple\.systempreferences):/.test(url)) void shell.openExternal(url)
+    // A local file link from a chat opens in its default app; a remote file host is not allowed.
+    const localFile = /^file:\/\/(?:\/|[A-Za-z]:[\\/])/.test(url)
+    if (/^(https?|mailto|x-apple\.systempreferences):/.test(url) || localFile) void shell.openExternal(url)
   })
   ipcMain.on('app:openSettings', (_e, url: string) => {
     if (url.startsWith('x-apple.systempreferences:')) void shell.openExternal(url)

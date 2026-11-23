@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { Bot } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { Icon } from '../../components/Icon'
@@ -12,6 +12,9 @@ interface ComposerMenuState<T> {
   index: number
   hover: (index: number) => void
   pick: (item: T) => void
+  /** Stable ids so the textarea can point at the list and its highlighted row (NVDA, #14099). */
+  listId: string
+  optionId: (index: number) => string
 }
 
 /**
@@ -21,6 +24,7 @@ interface ComposerMenuState<T> {
  * every key but Escape edits the draft and Return sends.
  */
 export function useComposerMenu<T>(draft: string, items: T[], pick: (item: T) => void, returnPicks: (item: T, draft: string) => boolean = () => true) {
+  const listId = `composer-picker-${useId().replaceAll(':', '')}`
   const [highlight, setHighlight] = useState({ draft: '', index: 0 })
   const [dismissed, setDismissed] = useState<string | null>(null)
   if (dismissed !== null && dismissed !== draft) setDismissed(null)
@@ -44,7 +48,15 @@ export function useComposerMenu<T>(draft: string, items: T[], pick: (item: T) =>
     return true
   }
 
-  return { shown, index, hover: (i: number) => setHighlight({ draft, index: i }), pick, onKey }
+  return {
+    shown,
+    index,
+    hover: (i: number) => setHighlight({ draft, index: i }),
+    pick,
+    onKey,
+    listId,
+    optionId: (i: number) => `${listId}-${i}`,
+  }
 }
 
 /** A list over the transcript, above the box: each row's icon, name and what it is. */
@@ -64,14 +76,19 @@ function ComposerMenu<T>({ menu, label, row }: {
     void rows.current[menu.index]?.scrollIntoView({ block: 'nearest' })
   }, [menu.index, list])
   if (!mounted) return null
+  // The caret stays in the textarea, so a screen reader needs both the listbox relationship and a
+  // spoken line for the row the arrow keys land on (NVDA announces neither from a visual highlight).
+  const active = open ? row(list[menu.index]!) : null
+  const announcement = open && active ? [label, active.title, active.detail].filter(Boolean).join('. ') : ''
   return (
     <div className={`composer-menu ${shown ? 'shown' : ''}`} inert={!open}>
-      <div className="menu-panel" role="listbox" aria-label={label}>
+      <div className="menu-panel" id={menu.listId} role="listbox" aria-label={label}>
         {list.map((item, i) => {
           const { key, icon, title, detail, warning } = row(item)
           return (
             <button
               key={key}
+              id={menu.optionId(i)}
               ref={(el) => { rows.current[i] = el }}
               role="option"
               aria-selected={i === menu.index}
@@ -89,6 +106,7 @@ function ComposerMenu<T>({ menu, label, row }: {
           )
         })}
       </div>
+      <div className="composer-menu-live" aria-live="polite" aria-atomic="true">{announcement}</div>
     </div>
   )
 }

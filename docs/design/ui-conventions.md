@@ -129,6 +129,8 @@ A visible conversation registers its own read scope while its scene is active. N
 
 The iPhone conversation navigation title includes a compact second line with the connection label and the current connection route icon: cloud for Cloudflare, Wi-Fi for direct Wi-Fi/Tailscale. It follows the live route, not the preferred route setting; offline and reconnecting states replace the route icon. VoiceOver also reads the connection description.
 
+On the desktop, a full path in a reply's code span (including `.docx`, `.pages` and `.rtf`) opens as a file link, and `[label](<path with spaces>)` keeps a spaced path clickable. A long final answer that arrives whole is shown from its start, with **Jump to latest** still going to the end; when every teammate asked has ended and one failed, the card says **Requests ended** with replied/failed counts and keeps failed rows. A thread shows routine runs as short markers and its agent's subagents as one status card whose rows open their work; the composer's `@`/`/` picker is a labelled listbox with `aria-activedescendant` and a live row announcement. These are desktop renderings of OpenBot nightly's triage-12380, 12962, 13388, 13473, 13639 and 14099.
+
 
 ## Native client parity
 

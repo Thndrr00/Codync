@@ -7,28 +7,44 @@ import { Text } from '../../components/Text'
 import { highlightSpans } from './code-highlight.ts'
 import { looksLikeDiff, parseDiff, type DiffRow } from './diff-rows.ts'
 import { withChatLinkSource } from './link-source.ts'
+import { chatFileHref, chatFileLink, linkTarget } from '../../lib/chat-file-link.ts'
 import './markdown.css'
 
 // The Mac's Markdown for messages: the blocks from `markdown-blocks.ts`, with inline styling like
 // `AttributedString(markdown:)`.
 
+/**
+ * A local file link in a reply: the same underlined chat link a web URL uses. A full path in a code
+ * span (including .docx / .pages / .rtf) opens as a file, while commands stay plain code (OpenBot
+ * nightly triage-12380).
+ */
+function localFileLink(path: string, label: string, key: string): ReactNode {
+  const href = chatFileHref(path)
+  return (
+    <a key={key} href={href} title={path} className="md-link" onClick={(e) => { e.preventDefault(); window.codync.app.openExternal(href) }}>
+      {label}
+    </a>
+  )
+}
+
 /** Inline Markdown: `code` (tinted), **bold**, *italic*, ~~strike~~, [links](url). */
 export function inline(text: string, key = 'i'): ReactNode[] {
   const out: ReactNode[] = []
-  // Code spans first: nothing inside them is styled.
+  // Code spans first: nothing inside them is styled, except a full path to a file.
   text.split(/(`[^`\n]+`)/).forEach((part, i) => {
     if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
-      out.push(
-        <code key={`${key}${i}`} className="md-code-span">
-          {part.slice(1, -1)}
-        </code>,
-      )
+      const code = part.slice(1, -1)
+      const file = chatFileLink(code)
+      out.push(file
+        ? localFileLink(file.path, code, `${key}${i}`)
+        : <code key={`${key}${i}`} className="md-code-span">{code}</code>)
     } else if (part) out.push(...emphasis(part, `${key}${i}-`))
   })
   return out
 }
 
-const pattern = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|\*([^*\n]+)\*|(?<![\w])_([^_\n]+)_(?![\w])/
+// A link target inside `<…>` may hold spaces; CommonMark ends a bare target at the first space.
+const pattern = /\[([^\]]+)\]\((?:<[^>]*>|[^)\s]+)\)|\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|\*([^*\n]+)\*|(?<![\w])_([^_\n]+)_(?![\w])/
 function emphasis(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = []
   let rest = text
@@ -42,9 +58,11 @@ function emphasis(text: string, key: string): ReactNode[] {
     if (m.index > 0) out.push(rest.slice(0, m.index))
     const k = `${key}${n++}`
     if (m[1] !== undefined) {
-      const url = m[2]!
+      const written = linkTarget(m[2]!)
+      const file = chatFileLink(written)
+      const href = file ? file.href : withChatLinkSource(written)
       out.push(
-        <a key={k} href={url} title={url} className="md-link" onClick={(e) => { e.preventDefault(); window.codync.app.openExternal(withChatLinkSource(url)) }}>
+        <a key={k} href={href} title={written} className="md-link" onClick={(e) => { e.preventDefault(); window.codync.app.openExternal(href) }}>
           {emphasis(m[1], `${k}-`)}
         </a>,
       )

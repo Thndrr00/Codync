@@ -1,0 +1,17 @@
+/* A thread's subagent statuses: one compact card, one row per teammate the agent asked. */
+.subagent-card {
+  max-width: 520px;
+  margin: 0 auto 8px;
+}
+.subagent-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 0;
+  text-align: left;
+}
+.subagent-row.static {
+  cursor: default;
+}

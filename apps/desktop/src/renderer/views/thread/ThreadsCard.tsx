@@ -9,6 +9,7 @@ import { useTr } from '../../lib/use-language'
 import { registerBackHandler } from '../chat-navigation'
 import type { BotStore } from '../../store/bot-store'
 import { relativeTime } from './chat-items'
+import { BotConversationView } from './BotConversation'
 import { RepliesView } from './RepliesView'
 
 type Section = 'open' | 'archived'
@@ -29,6 +30,8 @@ export function ThreadsCard({ bot, store }: { bot: Bot; store: BotStore }) {
   const archived = section === 'archived'
   const threads = (archived ? store.archivedThreads : store.threads).get(bot.id) ?? []
   const [open, setOpen] = useState<string | null>(null)
+  // A subagent row in a thread opens that peer's work in the same conversation sheet as the chat.
+  const [subagent, setSubagent] = useState<string | null>(null)
   useEffect(() => registerBackHandler(() => {
     if (!open) return false
     setOpen(null)
@@ -110,7 +113,11 @@ export function ThreadsCard({ bot, store }: { bot: Bot; store: BotStore }) {
         }]}
         onClose={() => setDeleting(null)} />
       <Sheet open={open !== null} onClose={() => setOpen(null)} width={620} height={560}>
-        {open ? <RepliesView botId={bot.id} rootId={open} close={() => setOpen(null)} /> : null}
+        {open ? <RepliesView botId={bot.id} rootId={open} close={() => setOpen(null)}
+          onOpenSubagent={(peerId) => { setOpen(null); setSubagent(peerId) }} /> : null}
+      </Sheet>
+      <Sheet open={subagent !== null} onClose={() => setSubagent(null)} width={620} height={560}>
+        {subagent ? <BotConversationView botId={bot.id} peerId={subagent} /> : null}
       </Sheet>
     </div>
   )

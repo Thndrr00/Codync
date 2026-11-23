@@ -7,20 +7,29 @@ import { useTr } from '../../lib/use-language'
 import { useStore } from '../../store/context'
 
 /**
- * A routine's line in the chat, which opens the routine. A failed run that still offers a retry can
- * be tried again or ended there; the messages stay.
+ * A routine's short marker in the chat (or a thread). Where the host can open the routine it is a
+ * button; in a thread sheet with no inspector beside it the same marker is plain text. A failed run
+ * that still offers a retry can be tried again or ended there; the messages stay.
  */
-export function RoutineNotice({ entry, open }: { entry: Entry; open: () => void }) {
+export function RoutineNotice({ entry, open }: { entry: Entry; open?: () => void }) {
   const tr = useTr()
   const store = useStore()
   const answering = store.answering.get(entry.id)
   const failed = entry.data.source === 'scheduled_task' && entry.data.style !== undefined
+  const label = tr(entry.data.text ?? 'Routine')
   return (
     <HStack gap={2} justify="center" align="center">
-      <button className="chat-routine-notice" onClick={open}>
-        <Icon name="clock.arrow.circlepath" size={10} />
-        {tr(entry.data.text ?? 'Routine')}
-      </button>
+      {open ? (
+        <button className="chat-routine-notice" onClick={open}>
+          <Icon name="clock.arrow.circlepath" size={10} />
+          {label}
+        </button>
+      ) : (
+        <span className="chat-routine-notice">
+          <Icon name="clock.arrow.circlepath" size={10} />
+          {label}
+        </span>
+      )}
       {entry.data.retry &&
         (answering ? (
           <Spinner size={10} />

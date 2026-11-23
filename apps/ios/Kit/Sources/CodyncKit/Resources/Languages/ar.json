@@ -745,5 +745,9 @@
   "Stopped": "Stopped",
   "Hide this list": "Hide this list",
   "Show older threads": "Show older threads",
-  "Loading older threads…": "Loading older threads…"
+  "Loading older threads…": "Loading older threads…",
+  "Requests ended": "Requests ended",
+  "{done} replied · {failed} failed": "{done} replied · {failed} failed",
+  "Completed": "Completed",
+  "Jump to latest": "Jump to latest"
 }
