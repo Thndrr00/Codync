@@ -66,7 +66,7 @@ private enum class AccessPhase { Renew, Asking, Code, Approved, Ended }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         ModalHeader("Access")
         Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            ComputerBadge(computer.device, 64.dp)
+            Symbol(if (computer.device == "linux") "computer.linux" else "laptopcomputer", size = 64.dp, tint = Palette.text)
             AnimatedContent(phase, transitionSpec = { fadeIn(Motion.fade()) togetherWith fadeOut(Motion.fade()) }, label = "Access") { shown ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     when (shown) {
@@ -77,7 +77,7 @@ private enum class AccessPhase { Renew, Asking, Code, Approved, Ended }
                                 style = Type.footnote, color = Palette.secondary, textAlign = TextAlign.Center)
                             SecondaryButton("Request new approval") { confirmRenewal = false; renewRequest = true; store.requestAccess(computer, renew = true) }
                         }
-                        AccessPhase.Approved -> IconLabel("${computer.name} approved this phone", "checkmark.circle.fill", Palette.added, style = Type.headline)
+                        AccessPhase.Approved -> row { Text("✓ ${computer.name} approved this phone", style = Type.headline, color = Palette.added) }
                         AccessPhase.Code -> {
                             val code = ticket?.code.orEmpty()
                             val spoken = "${tr("Code")} ${code.toList().joinToString(" ")}"
