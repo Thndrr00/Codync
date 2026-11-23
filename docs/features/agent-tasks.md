@@ -22,6 +22,14 @@ A task is **one bounded row plus existing transcript entries** — there is no s
 | `startedAt`, `closedAt` | milliseconds; `closedAt` is 0 while open |
 | `readRev` | the host's last-read mark over the task's entries |
 | `rev`, `updatedAt` | the global mutation rev and the page ordering key |
+| `parentChat`, `parentThread` | where this task's final answer is delivered; empty for a local task |
+| `run` | `idle`, `queued`, `running` or `stopped` in the parallel scheduler |
+| `routedSeq` | last task message already delivered to the parent chat |
+| `prompt` | the split's instruction, kept in the host and never serialized to clients |
+
+`run` is a scheduling mark, not a second lifecycle: a `closed` task is `idle`, an `archived` one is
+`stopped`, and a reopen never silently restarts work. Only an explicit follow-up can requeue a
+stopped task.
 
 Messages are ordinary `entries` in `Lane::in_thread(bot, root)`. That gives a task its own agent
 session, the transcript's rev/stamp, history search, file attachments and the existing thread paging
@@ -45,8 +53,11 @@ archive -> open            (an archived task must be reopened before it can be c
 ```
 
 A same-state call is harmless. Only an `open` task accepts a message; sending into a closed or
-archived one is refused. `taskStop` interrupts the bot's current turn but does not change the state;
-`taskClose` sets `closedAt`, and `taskReopen` clears it.
+archived one is refused. `taskStop` interrupts the bot's current turn and stamps `run: stopped` so
+the scheduler cannot pick it up again — the person is told in the task's own thread not to restart
+it, and the parent agent gets the same note as a teammate result. `taskClose` sets `closedAt` and
+pauses (`idle`); `taskClose` with `archived: true` stops it for good; `taskReopen` clears `closedAt`
+without starting it.
 
 ## Host API
 
@@ -68,14 +79,19 @@ archived one is refused. `taskStop` interrupts the bot's current turn but does n
 | `taskBranch` | `botId`, `taskId` (source), `name`, `before?` | `{ task, seeded }` |
 | `taskDeleteMessage` | `taskId`, `messageId` | `{ deleted }` |
 | `taskSend` | `botId`, `taskId`, `text`, `clientNonce?`, `replyToMessageId?` | `{ entry }` |
+| `taskSplit` | `botId`, `tasks: [{ name, text }]`, `parentChat?`, `parentThread?` | `{ tasks, scheduled, maxConcurrent }` |
+| `taskFollowUp` | `botId`, `taskId`, `text` | `{ task }` |
+| `taskCollectResults` | `botId` | the number of results routed |
+| `taskAwaitEvent` | `taskId`, `runId?` or `source?` + `event?`, `timeoutSeconds?` | `{ event?, status?, continuedInThread? }` or `{ cancelled }` / `{ timedOut }` |
 
 `limit` is clamped to 1–100 (default 50). `before` and `after` are entry `seq` cursors: `before`
 pages older, `after` pages newer, neither gives the newest page. `taskReadAround` centres on a
 message id. `taskBranch` copies the newest 50 user/final messages before `before` into a new task;
 the copy is a snapshot with a `branchedFrom` marker, not a live link.
 
-`taskStart`, `taskStop`, `taskSend`, `taskBranch`, `taskDeleteMessage` and `taskDelete` are local-only
-because they drive this computer's single agent or remove its transcript lines. Reads and metadata
+`taskStart`, `taskStop`, `taskSend`, `taskBranch`, `taskDeleteMessage`, `taskDelete`, `taskSplit`,
+`taskFollowUp`, `taskCollectResults` and `taskAwaitEvent` are local-only because they drive this
+computer's single agent or remove its transcript lines. Reads and metadata
 changes work for paired devices too. A `task` event on the existing event stream carries the new
 `rev` with every change, so clients refresh by `rev` and call `taskList` for metadata after a
 reconnect. Task messages are `entry` events like any other and are included in the normal catch-up.
@@ -91,5 +107,34 @@ No task name, text or message body is sent to analytics.
   send, as for every Codync bot; no second agent process or loop is started.
 - Message deletes go through `hub.delete_entry`, so clients receive the usual `entryDeleted`.
 
-Not in this pass: client screens and catalog keys, a dedicated `task` type in the SSE catch-up
-(metadata is refreshed with `taskList`), per-task queue reorder, and per-task analytics events.
+## Parallel split, results and side-thread waits
+
+`taskSplit` validates the whole list before writing anything, creates the tasks, and admits at most
+**four** of them at a time (`MAX_CONCURRENT` in `chat::tasks::parallel`). Each admitted task's prompt
+is posted through `post_in_lane` into that task's thread, so the bot's one actor and queue run it in
+its own session; there is no second agent loop. The rest stay `queued` and are admitted as slots free.
+A claim is atomic, so a task cannot be posted twice. A post failure puts the slot back in the queue
+and surfaces the error to the caller. The cap bounds how many tasks may be admitted at once; the
+existing actor still decides when each admitted turn actually runs, so a provider that can only do
+one turn at a time simply sees them in queue order rather than starting an unbounded pile.
+
+When a task's turn finishes, `taskCollectResults` (also called by `taskList`) picks the newest final
+agent message after `routedSeq` and posts one teammate-style result into the parent chat — or into
+`parentThread` when the work was split from a side thread. The prompt is framed as a result, not a
+user instruction, so the parent combines answers. Drafts, tool lines and already-routed messages are
+ignored; the cursor advances only after a successful route. A stop routes a note instead of a stale
+answer, and writes the "do not restart" instruction into the task's own thread.
+
+`taskAwaitEvent` lets a side thread wait for a routine run or script event in the event stream the
+host already keeps (`routines.runs_for`). It checks for a stop on every tick, has a 10-minute cap
+and a 500 ms poll, and wakes the wait's own thread with a "continue the request" prompt when a
+matching run reaches a terminal state. A stop wins over an event at the same instant; expiry and
+cancellation return a result instead of an error.
+
+The desktop Tasks surface (`views/tasks`) lists status, opens a task's messages and sends
+follow-up, stop, archive and reopen. It is reachable from an agent's context menu, beside the
+existing Tasks sheet for approvals and routine runs.
+
+Not in this pass: catalog keys, a dedicated `task` type in the SSE catch-up (metadata is refreshed
+with `taskList`), per-task queue reorder and per-task analytics events. No method described here
+sends task text to analytics.

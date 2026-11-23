@@ -53,6 +53,51 @@ impl TaskState {
     }
 }
 
+/// Where a task sits in the bounded parallel scheduler. `stopped` is deliberate: a task stopped
+/// from its tab is never picked up again without an explicit follow-up. `idle` is paused (closed),
+/// `queued` waits for a free slot, `running` holds one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TaskRun {
+    #[default]
+    Idle,
+    Queued,
+    Running,
+    Stopped,
+}
+
+impl TaskRun {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Queued => "queued",
+            Self::Running => "running",
+            Self::Stopped => "stopped",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "idle" => Ok(Self::Idle),
+            "queued" => Ok(Self::Queued),
+            "running" => Ok(Self::Running),
+            "stopped" => Ok(Self::Stopped),
+            other => bail!("unknown task run state `{other}`"),
+        }
+    }
+}
+
+/// Pure: a lifecycle change decides the run state too. Closing pauses (idle), archiving is a stop
+/// that cannot be resumed by the scheduler, and reopening never silently restarts work.
+pub fn run_after_state(state: TaskState, current: TaskRun) -> TaskRun {
+    match state {
+        TaskState::Archived => TaskRun::Stopped,
+        TaskState::Closed => TaskRun::Idle,
+        TaskState::Open if current == TaskRun::Stopped => TaskRun::Stopped,
+        TaskState::Open => current,
+    }
+}
+
 /// A task as a client shows it: no messages, only its marks and its unread count.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +119,21 @@ pub struct TaskInfo {
     pub rev: i64,
     #[serde(default)]
     pub updated_at: i64,
+    /// Chat whose turn owns this task's result. Empty when nothing is routed back.
+    #[serde(default)]
+    pub parent_chat: String,
+    /// Side thread of that chat the result goes to; empty for the chat itself.
+    #[serde(default)]
+    pub parent_thread: String,
+    #[serde(default)]
+    pub run: TaskRun,
+    /// Last task message already routed to the parent chat.
+    #[serde(default)]
+    pub routed_seq: i64,
+    /// Prompt posted when the scheduler gives this task a slot. Stays in the host: clients only
+    /// need the task's marks and status, and analytics never sees its text.
+    #[serde(default, skip_serializing)]
+    pub prompt: String,
 }
 
 /// Trims and bounds a task name. Both create and rename go through this.
@@ -123,14 +183,36 @@ pub(super) fn ready(c: &Connection) -> Result<()> {
     let _ = c.execute("ALTER TABLE tasks ADD COLUMN rev INTEGER NOT NULL DEFAULT 0", []);
     let _ = c.execute("ALTER TABLE tasks ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0", []);
     let _ = c.execute("ALTER TABLE tasks ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0", []);
+    let _ = c.execute("ALTER TABLE tasks ADD COLUMN parent_chat TEXT NOT NULL DEFAULT ''", []);
+    let _ = c.execute("ALTER TABLE tasks ADD COLUMN parent_thread TEXT NOT NULL DEFAULT ''", []);
+    let _ = c.execute("ALTER TABLE tasks ADD COLUMN run TEXT NOT NULL DEFAULT 'idle'", []);
+    let _ = c.execute("ALTER TABLE tasks ADD COLUMN routed_seq INTEGER NOT NULL DEFAULT 0", []);
+    let _ = c.execute("ALTER TABLE tasks ADD COLUMN prompt TEXT NOT NULL DEFAULT ''", []);
     c.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_bot ON tasks(bot_id, state, updated_at);")?;
+    c.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_run ON tasks(bot_id, run, updated_at);")?;
     Ok(())
 }
 
-type TaskRow = (String, String, String, String, String, i64, i64, i64, i64, i64);
+type TaskRow = (String, String, String, String, String, i64, i64, i64, i64, i64, String, String, String, i64, String);
 
 fn row(r: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
-    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?))
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+        r.get(6)?,
+        r.get(7)?,
+        r.get(8)?,
+        r.get(9)?,
+        r.get(10)?,
+        r.get(11)?,
+        r.get(12)?,
+        r.get(13)?,
+        r.get(14)?,
+    ))
 }
 
 /// Unread agent finals (and pending cards) after the task's own mark. Uses the same
@@ -162,10 +244,15 @@ fn info(c: &Connection, row: TaskRow) -> Result<TaskInfo> {
         unread,
         rev: row.8,
         updated_at: row.9,
+        parent_chat: row.10,
+        parent_thread: row.11,
+        run: TaskRun::parse(&row.12)?,
+        routed_seq: row.13,
+        prompt: row.14,
     })
 }
 
-const TASK_COLS: &str = "id, bot_id, name, state, root, started_at, closed_at, read_rev, rev, updated_at";
+const TASK_COLS: &str = "id, bot_id, name, state, root, started_at, closed_at, read_rev, rev, updated_at, parent_chat, parent_thread, run, routed_seq, prompt";
 
 fn by_id(c: &Connection, id: &str) -> Result<Option<TaskInfo>> {
     let found = c.query_row(&format!("SELECT {TASK_COLS} FROM tasks WHERE id = ?1"), [id], row).optional()?;
@@ -248,15 +335,120 @@ impl Store {
             .query_row("SELECT started_at FROM tasks WHERE id = ?1", [id], |r| r.get(0))
             .optional()?
             .context("unknown task")?;
+        let run: String = c
+            .query_row("SELECT run FROM tasks WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?
+            .context("unknown task")?;
+        let run = TaskRun::parse(&run)?;
         let rev = next_rev(&c)?;
         let now = now_ms();
         let started_at = if start && started == 0 { now } else { started };
         let closed_at = if matches!(state, TaskState::Closed | TaskState::Archived) { now } else { 0 };
+        let run = run_after_state(state, run);
         c.execute(
-            "UPDATE tasks SET state = ?2, started_at = ?3, closed_at = ?4, rev = ?5, updated_at = ?5 WHERE id = ?1",
-            params![id, state.as_str(), started_at, closed_at, rev],
+            "UPDATE tasks SET state = ?2, started_at = ?3, closed_at = ?4, rev = ?5, updated_at = ?5, run = ?6 WHERE id = ?1",
+            params![id, state.as_str(), started_at, closed_at, rev, run.as_str()],
         )?;
         by_id(&c, id)?.context("unknown task")
+    }
+
+    /// Queues one task for the bounded scheduler, remembering where its result goes and the prompt
+    /// to post when a slot frees. Queuing is the only way an agent asks for work to run.
+    pub fn task_queue(
+        &self,
+        id: &str,
+        parent_chat: Option<&str>,
+        parent_thread: Option<&str>,
+        prompt: &str,
+    ) -> Result<TaskInfo> {
+        let c = self.db.locked();
+        ready(&c)?;
+        let rev = next_rev(&c)?;
+        ensure!(
+            c.execute(
+                "UPDATE tasks SET state = 'open', run = 'queued', parent_chat = ?2, parent_thread = ?3,
+                   prompt = ?4, closed_at = 0, rev = ?5, updated_at = ?5 WHERE id = ?1",
+                params![id, parent_chat.unwrap_or(""), parent_thread.unwrap_or(""), prompt, rev]
+            ) > 0,
+            "unknown task"
+        );
+        by_id(&c, id)?.context("unknown task")
+    }
+
+    /// Sets the run state without touching the lifecycle. `stop_bot` changes the runtime, not this
+    /// row; the stop-not-schedule decision does need the durable mark.
+    pub fn task_set_run(&self, id: &str, run: TaskRun) -> Result<TaskInfo> {
+        let c = self.db.locked();
+        ready(&c)?;
+        let rev = next_rev(&c)?;
+        ensure!(
+            c.execute(
+                "UPDATE tasks SET run = ?2, rev = ?3, updated_at = ?3 WHERE id = ?1",
+                params![id, run.as_str(), rev]
+            ) > 0,
+            "unknown task"
+        );
+        by_id(&c, id)?.context("unknown task")
+    }
+
+    /// Atomically takes one free slot: only a task still queued can start. Two scheduler calls can
+    /// therefore never post the same task's prompt twice.
+    pub fn task_claim(&self, id: &str) -> Result<bool> {
+        let c = self.db.locked();
+        ready(&c)?;
+        let rev = next_rev(&c)?;
+        Ok(c.execute(
+            "UPDATE tasks SET run = 'running', rev = ?2, updated_at = ?2 WHERE id = ?1 AND run = 'queued' AND state = 'open'",
+            params![id, rev],
+        ) > 0)
+    }
+
+    /// Moves the result cursor forward. A route that fails leaves it where it was, so the final is
+    /// retried on the next collection instead of being lost.
+    pub fn task_mark_routed(&self, id: &str, seq: i64) -> Result<TaskInfo> {
+        let c = self.db.locked();
+        ready(&c)?;
+        let rev = next_rev(&c)?;
+        ensure!(
+            c.execute(
+                "UPDATE tasks SET routed_seq = ?2, rev = ?3, updated_at = ?3 WHERE id = ?1",
+                params![id, seq, rev]
+            ) > 0,
+            "unknown task"
+        );
+        by_id(&c, id)?.context("unknown task")
+    }
+
+    /// Tasks waiting for a slot, oldest request first.
+    pub fn task_queued_for(&self, bot_id: &str) -> Result<Vec<TaskInfo>> {
+        let c = self.db.locked();
+        ready(&c)?;
+        let mut st = c.prepare(&format!(
+            "SELECT {TASK_COLS} FROM tasks WHERE bot_id = ?1 AND run = 'queued' AND state = 'open'
+              ORDER BY updated_at ASC, id ASC"
+        ))?;
+        let rows = st.query_map([bot_id], row)?.collect::<rusqlite::Result<Vec<_>>>()?;
+        rows.into_iter().map(|r| info(&c, r)).collect()
+    }
+
+    /// How many slots this bot's tasks hold right now.
+    pub fn task_running_count(&self, bot_id: &str) -> Result<usize> {
+        let c = self.db.locked();
+        ready(&c)?;
+        Ok(c.query_row("SELECT COUNT(*) FROM tasks WHERE bot_id = ?1 AND run = 'running'", [bot_id], |r| {
+            r.get::<_, i64>(0)
+        })? as usize)
+    }
+
+    /// Tasks whose final answer must be delivered to a parent chat.
+    pub fn task_with_parent(&self) -> Result<Vec<TaskInfo>> {
+        let c = self.db.locked();
+        ready(&c)?;
+        let mut st = c.prepare(&format!(
+            "SELECT {TASK_COLS} FROM tasks WHERE parent_chat != '' ORDER BY updated_at ASC, id ASC"
+        ))?;
+        let rows = st.query_map([], row)?.collect::<rusqlite::Result<Vec<_>>>()?;
+        rows.into_iter().map(|r| info(&c, r)).collect()
     }
 
     pub fn task_rename(&self, id: &str, name: &str) -> Result<TaskInfo> {
@@ -440,6 +632,54 @@ mod tests {
         }
         assert!(s.task_insert("b", "one too many", "task:extra").is_err());
         assert!(s.task_insert("other", "fine", "task:other").is_ok());
+    }
+
+    #[test]
+    fn a_lifecycle_change_never_restarts_a_stopped_task_and_archiving_stops_it() {
+        assert_eq!(run_after_state(TaskState::Open, TaskRun::Stopped), TaskRun::Stopped);
+        assert_eq!(run_after_state(TaskState::Open, TaskRun::Queued), TaskRun::Queued);
+        assert_eq!(run_after_state(TaskState::Closed, TaskRun::Running), TaskRun::Idle);
+        assert_eq!(run_after_state(TaskState::Archived, TaskRun::Running), TaskRun::Stopped);
+        assert_eq!(TaskRun::parse("queued").unwrap(), TaskRun::Queued);
+        assert_eq!(TaskRun::parse("stopped").unwrap(), TaskRun::Stopped);
+        assert!(TaskRun::parse("running-fast").is_err());
+    }
+
+    #[test]
+    fn queueing_claims_and_stopping_keep_the_scheduler_bounded() {
+        let s = temp_store();
+        let task = s.task_insert("b", "Review", "task:r1").unwrap();
+        assert_eq!(s.task_running_count("b").unwrap(), 0);
+        let queued = s.task_queue(&task.id, Some("b"), Some("thread:1"), "check the build").unwrap();
+        assert_eq!(queued.run, TaskRun::Queued);
+        assert_eq!(queued.parent_chat, "b");
+        assert_eq!(queued.parent_thread, "thread:1");
+        assert_eq!(queued.prompt, "check the build");
+        assert_eq!(s.task_queued_for("b").unwrap().len(), 1);
+        assert!(s.task_claim(&task.id).unwrap());
+        assert!(!s.task_claim(&task.id).unwrap(), "a claim is one-shot");
+        assert_eq!(s.task_running_count("b").unwrap(), 1);
+        assert!(s.task_queued_for("b").unwrap().is_empty());
+        s.task_set_run(&task.id, TaskRun::Stopped).unwrap();
+        assert_eq!(s.task_running_count("b").unwrap(), 0);
+        assert_eq!(s.task(&task.id).unwrap().unwrap().run, TaskRun::Stopped);
+        assert!(s.task_claim(&task.id).is_err(), "a stopped task can only be requeued explicitly");
+        s.task_queue(&task.id, Some("b"), None, "go again").unwrap();
+        assert_eq!(s.task_queued_for("b").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn only_tasks_with_a_parent_are_collected_and_the_cursor_is_durable() {
+        let s = temp_store();
+        let routed = s.task_insert("b", "Routed", "task:r1").unwrap();
+        let local = s.task_insert("b", "Local", "task:r2").unwrap();
+        s.task_queue(&routed.id, Some("b"), None, "one").unwrap();
+        s.task_queue(&local.id, None, None, "two").unwrap();
+        assert_eq!(s.task_with_parent().unwrap().len(), 1);
+        assert_eq!(s.task_with_parent().unwrap()[0].id, routed.id);
+        let marked = s.task_mark_routed(&routed.id, 42).unwrap();
+        assert_eq!(marked.routed_seq, 42);
+        assert_eq!(s.task(&routed.id).unwrap().unwrap().routed_seq, 42);
     }
 
     #[test]

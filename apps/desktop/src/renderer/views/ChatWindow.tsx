@@ -33,6 +33,7 @@ import { NewBotView, NewGroupView } from './bots/NewBotView'
 import { ImportBotsSheet } from './bots/ImportBotsView'
 import { BotEditorView } from './bots/BotEditorView'
 import { BotTasksSheet } from './bots/BotTasksSheet'
+import { AgentTasksSheet } from './tasks/AgentTasksSheet'
 import { BotFilesSheet } from './bots/BotFilesSheet'
 import { MarketplaceView } from './marketplace/MarketplaceView'
 import { SignInCodeDialog } from './marketplace/ConnectorSheets'
@@ -68,6 +69,7 @@ import { useTr } from '../lib/use-language'
 import type { ExtensionSection } from './marketplace/market-models'
 import { useTool } from '../lib/use-tool'
 import { registerBackHandler, useBackGesture, useChatNavigation } from './chat-navigation'
+import { shortcutForEvent } from '../components/keyboard-shortcuts'
 
 
 /** Native desktop chat: roster on the left, the conversation on the right (Grok Bot's desktop layout). */
@@ -244,60 +246,11 @@ function ChatSplitView() {
   const [sidebarWidth, setSidebarWidth] = usePref(prefs.sidebarWidth)
   const [hidden, setHidden] = usePref(prefs.hiddenComputers)
   const [startupAnimation] = usePref(prefs.startupAnimation)
+  const [bindings] = usePref(prefs.keyboardBindings)
   const [searching, setSearching] = useState(false)
   const [palette, setPalette] = useState(false)
   const [cheatsheet, setCheatsheet] = useState(false)
   const [statusBot, setStatusBot] = useState<BotTarget | null>(null)
-  // The window-wide shortcuts: the palette and `?` sheet, plus the shell actions below. None of
-  // them fires from a text field, where the same keys belong to typing (and to IME composition).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.isComposing) return
-      const target = e.target
-      const typing = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-      const mod = e.metaKey || e.ctrlKey
-      const key = e.key.toLowerCase()
-      if (mod && key === 'k') {
-        if (typing) return // never steal ⌘K from a text field
-        e.preventDefault()
-        setPalette(true)
-      } else if (typing) {
-        return // every shortcut below belongs to the window, not the field being typed in
-      } else if (!mod && (e.key === '?' || (e.key === '/' && e.shiftKey))) {
-        e.preventDefault()
-        setCheatsheet(true)
-      } else if (mod && !e.shiftKey && key === 'b') {
-        e.preventDefault()
-        prefs.sidebarCompact.set(!prefs.sidebarCompact.get())
-      } else if (mod && !e.shiftKey && key === ',') {
-        e.preventDefault()
-        setSettings('general')
-      } else if (mod && e.shiftKey && key === 'f') {
-        e.preventDefault()
-        setSearching(true)
-      } else if (mod && e.shiftKey && key === 'm') {
-        e.preventDefault()
-        const selected = app.selection
-        if (!selected) return
-        const store = app.store(selected.computerId)
-        const bot = store?.bots.get(selected.botId)
-        if (store && bot) store.setMuted(bot, bot.notify !== false)
-      } else if (mod && key === 'j') {
-        e.preventDefault()
-        // The unread bots in roster order, skipping computers hidden by the filter.
-        const shown = new Set(computerSelection(app.computers.map((c) => c.id), prefs.hiddenComputers.get()).shown)
-        const unread = app.roster.filter((item) => shown.has(item.ref.computerId) && item.bot.unread > 0)
-        if (!unread.length) return
-        const current = app.selection
-        const at = current ? unread.findIndex((item) => sameRef(item.ref, current)) : -1
-        const step = e.shiftKey ? -1 : 1
-        const next = unread[at < 0 ? (step > 0 ? 0 : unread.length - 1) : (at + step + unread.length) % unread.length]!
-        app.select(next.ref)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [app])
   const [creating, setCreating] = useState<CreateTarget | null>(null)
   const [importing, setImporting] = useState(false)
   const [newMenu, setNewMenu] = useState(false)
@@ -309,6 +262,7 @@ function ChatSplitView() {
   const [editing, setEditing] = useState<EditTarget | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<BotTarget | null>(null)
   const [tasksBot, setTasksBot] = useState<BotTarget | null>(null)
+  const [agentTasksBot, setAgentTasksBot] = useState<BotTarget | null>(null)
   const [filesBot, setFilesBot] = useState<BotTarget | null>(null)
   const [onboarding, setOnboarding] = useState(() => localStorage.getItem('codync.onboarding') !== 'done')
   const [marketplace, setMarketplace] = useState<string | null>(null)
@@ -348,6 +302,64 @@ function ChatSplitView() {
     const target = [selectedStore, app.local].find((s) => s && onlineStores.includes(s)) ?? onlineStores[0]
     if (target) setCreating({ kind, computerId: target.computer.id })
   }
+  // The window-wide shortcuts, all matched against the binding map Settings › Keyboard saves on
+  // this device. None fires from a text field, where the same keys belong to typing and IME.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing) return
+      const target = e.target
+      const typing = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      // `?` keeps opening the cheatsheet even after ⌘/ is rebound.
+      const legacy = !typing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === '?' || (e.key === '/' && e.shiftKey))
+      const id = shortcutForEvent(e, bindings, typing) ?? (legacy ? 'keyboardShortcuts' : undefined)
+      if (!id) return
+      e.preventDefault()
+      switch (id) {
+        case 'commandPalette':
+          setPalette(true)
+          return
+        case 'keyboardShortcuts':
+          setCheatsheet(true)
+          return
+        case 'toggleSidebar':
+          prefs.sidebarCompact.set(!prefs.sidebarCompact.get())
+          return
+        case 'openSettings':
+          setSettings('general')
+          return
+        case 'findInChat':
+        case 'openRosterSearch':
+          setSearching(true)
+          return
+        case 'addAgent':
+          create('bot')
+          return
+        case 'muteSelected': {
+          const selected = app.selection
+          if (!selected) return
+          const store = app.store(selected.computerId)
+          const bot = store?.bots.get(selected.botId)
+          if (store && bot) store.setMuted(bot, bot.notify !== false)
+          return
+        }
+        case 'unreadPrevious':
+        case 'unreadNext': {
+          // The unread bots in roster order, skipping computers hidden by the filter.
+          const shown = new Set(computerSelection(app.computers.map((c) => c.id), prefs.hiddenComputers.get()).shown)
+          const unread = app.roster.filter((item) => shown.has(item.ref.computerId) && item.bot.unread > 0)
+          if (!unread.length) return
+          const current = app.selection
+          const at = current ? unread.findIndex((item) => sameRef(item.ref, current)) : -1
+          const step = id === 'unreadPrevious' ? -1 : 1
+          const next = unread[at < 0 ? (step > 0 ? 0 : unread.length - 1) : (at + step + unread.length) % unread.length]!
+          app.select(next.ref)
+          return
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [app, bindings, create])
   const computerChoice = creating && onlineStores.length > 1
     ? { options: onlineStores.map((s) => ({ id: s.computer.id, label: s.hostName })), selection: creating.computerId, onChange: (computerId: string) => setCreating({ ...creating, computerId }) }
     : null
@@ -439,6 +451,7 @@ function ChatSplitView() {
     { title: bot.pinned ? 'Unpin' : 'Pin', icon: 'pin', action: () => store.setPinned(bot, !bot.pinned) },
     ...moveToSectionItems(bot, store, setNaming),
     { title: 'Tasks', icon: 'checklist', action: () => setTasksBot({ bot, store }) },
+    { title: 'Agent tasks…', icon: 'square.stack.3d.up', action: () => setAgentTasksBot({ bot, store }) },
     { title: 'Files', icon: 'folder', action: () => setFilesBot({ bot, store }) },
     ...(bot.kind === 'group' ? [] : [{ title: 'Duplicate', icon: 'square.on.square', action: () => void store.duplicateBot(bot) }]),
     { title: 'Mark as Read', icon: 'bell.badge', action: () => store.markAllRead(bot.id) },
@@ -497,7 +510,7 @@ function ChatSplitView() {
       run: () => app.select(item.ref),
     })),
     ...(onlineStores.length ? [
-      { id: 'new-bot', title: 'New bot', group: 'Actions', icon: 'plus', run: () => create('bot') },
+      { id: 'new-bot', title: 'New bot', group: 'Actions', icon: 'plus', shortcutId: 'addAgent', run: () => create('bot') },
       { id: 'new-group', title: 'New group', group: 'Actions', icon: 'person.2', run: () => create('group') },
     ] : []),
     { id: 'search', title: 'Search bots and history', group: 'Actions', icon: 'magnifyingglass', shortcutId: 'commandPalette', run: () => setSearching(true) },
@@ -514,6 +527,7 @@ function ChatSplitView() {
     { id: 'settings-voice', title: 'Settings: Voice chat', group: 'Settings', icon: 'waveform', run: () => setSettings('voice') },
     { id: 'settings-usage', title: 'Settings: Usage', group: 'Settings', icon: 'gauge.with.dots.needle.33percent', run: () => setSettings('usage') },
     { id: 'settings-updates', title: 'Settings: Updates', group: 'Settings', icon: 'arrow.down.circle', run: () => setSettings('updates') },
+    { id: 'settings-keyboard', title: 'Settings: Keyboard', group: 'Settings', icon: 'keyboard.chevron.compact.down', run: () => setSettings('keyboard') },
   ]
 
   let detail: ReactNode
@@ -718,6 +732,9 @@ function ChatSplitView() {
       </Sheet>
       <Sheet open={tasksBot !== null} onClose={() => setTasksBot(null)} width={Math.min(620, windowSize.width - 80)} height={Math.min(680, sheetHeight)}>
         {tasksBot ? <BotTasksSheet bot={tasksBot.bot} store={tasksBot.store} onClose={() => setTasksBot(null)} /> : null}
+      </Sheet>
+      <Sheet open={agentTasksBot !== null} onClose={() => setAgentTasksBot(null)} width={Math.min(620, windowSize.width - 80)} height={Math.min(680, sheetHeight)}>
+        {agentTasksBot ? <AgentTasksSheet bot={agentTasksBot.bot} store={agentTasksBot.store} onClose={() => setAgentTasksBot(null)} /> : null}
       </Sheet>
       <Sheet open={creating !== null} onClose={() => setCreating(null)} maxHeight={sheetHeight}>
         {creating && createStore ? (

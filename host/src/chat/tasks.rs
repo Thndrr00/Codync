@@ -5,12 +5,18 @@
 //! No second agent loop or message store is started here.
 //! Origin: OpenBot nightly's `agent-tasks` subsystem, adapted to Codync's one-agent bot queue.
 
+mod await_event;
+mod parallel;
+
 use crate::hub::Hub;
-use crate::store::tasks::{MAX_PER_BOT, clamp_limit, validate_name};
+use crate::store::tasks::{MAX_PAGE, MAX_PER_BOT, TaskRun, clamp_limit, validate_name};
 use crate::store::{Entry, EntryKind, Lane, TaskInfo, TaskState};
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+pub use await_event::{EventWait, clamp_wait, parse_wait};
 
 /// How many messages a branch copies from its source. The seed is a snapshot, not a live link.
 const MAX_SEED: usize = 50;
@@ -80,7 +86,7 @@ fn emit_deleted(hub: &Hub, id: &str, rev: i64) -> Result<Value> {
     Ok(json!({"deleted": true, "rev": rev}))
 }
 
-/// An event without a store write, for a stop: the runtime changed, the row did not.
+/// A lifecycle-free event, after the runtime (and any scheduling mark) has already been saved.
 fn emit_notice(hub: &Hub, event: Value) -> Result<()> {
     hub.emit_change(|| Ok(event))
 }
@@ -103,8 +109,207 @@ pub(crate) fn task_create(hub: &Arc<Hub>, bot: &str, name: &str) -> Result<Value
     emit(hub, || hub.store.task_insert(bot, &name, &root))
 }
 
-pub(crate) fn task_list(hub: &Hub, bot: &str, status: Option<TaskState>) -> Result<Value> {
+/// Posts one admitted task's prompt into its own lane, so the bot's existing actor and queue run
+/// it in the task's session. No second agent loop is started here.
+fn schedule(hub: &Arc<Hub>, bot: &str) -> Result<usize> {
+    let waiting = hub.store.task_queued_for(bot)?;
+    let running = hub.store.task_running_count(bot)?;
+    let cfg = hub.store.bot(bot)?.filter(|r| !r.deleted).context("unknown bot")?.config;
+    let admitted: Vec<TaskInfo> = parallel::admit(&waiting, running).into_iter().cloned().collect();
+    let mut started = 0;
+    let mut failure = None;
+    for task in admitted {
+        if !hub.store.task_claim(&task.id)? {
+            continue;
+        }
+        let mut data = json!({"text": task.prompt.clone(), "taskId": task.id, "source": "task"});
+        if let Some((chat, thread)) = parallel::result_parent(&task) {
+            data["parent"] = json!({"chat": chat, "thread": thread});
+        }
+        match crate::chat::messages::post_in_lane(hub, &cfg, Lane::in_thread(bot, &task.root), data) {
+            Ok(_) => started += 1,
+            Err(error) => {
+                // A claim that could not be handed to the actor goes back to the queue instead of
+                // becoming a task that looks done but never ran.
+                hub.store.task_set_run(&task.id, TaskRun::Queued)?;
+                tracing::warn!(task = %task.id, error = format!("{error:#}"), "could not start task");
+                failure.get_or_insert(error);
+            }
+        }
+    }
+    if let Some(error) = failure {
+        return Err(error);
+    }
+    Ok(started)
+}
+
+/// An agent splitting unrelated work: create all tasks first, then fill at most `MAX_CONCURRENT`
+/// slots. The rest keep waiting in the same actor and start as earlier tasks finish.
+pub(crate) fn task_split(
+    hub: &Arc<Hub>,
+    bot: &str,
+    values: &[Value],
+    parent_chat: Option<&str>,
+    parent_thread: Option<&str>,
+) -> Result<Value> {
+    let row = hub.store.bot(bot)?.filter(|r| !r.deleted).context("unknown bot")?;
+    ensure!(!row.config.is_group(), "tasks belong to an agent bot");
+    let specs = parallel::validate_split(values)?;
+    ensure!(
+        hub.store.task_count(bot)? + specs.len() <= MAX_PER_BOT,
+        "this bot already has {MAX_PER_BOT} tasks; delete one first"
+    );
+    let parent = parent_chat.unwrap_or(bot);
+    // A thread only belongs to this bot; never route a result into another agent's side thread.
+    let thread = parent_thread.filter(|_| parent == bot);
+    ensure!(hub.store.bot(parent)?.filter(|r| !r.deleted).is_some(), "unknown parent chat");
+    let mut ids = Vec::new();
+    for spec in specs {
+        let created = task_create(hub, bot, &spec.name)?;
+        let id = created["task"]["id"].as_str().context("task was not created")?.to_owned();
+        hub.store.task_queue(&id, Some(parent), thread, &spec.text)?;
+        ids.push(id);
+    }
+    let scheduled = schedule(hub, bot)?;
+    Ok(json!({"tasks": ids, "scheduled": scheduled, "maxConcurrent": parallel::MAX_CONCURRENT}))
+}
+
+/// A follow-up is the deliberate way to run a task again, including one stopped from its tab.
+pub(crate) fn task_follow_up(hub: &Arc<Hub>, bot: &str, id: &str, text: &str) -> Result<Value> {
+    let task = require(hub, id)?;
+    ensure!(task.bot_id == bot, "the task belongs to another bot");
+    ensure!(parallel::follow_up_allowed(&task), "reopen the task before sending to it");
+    let text = text.trim();
+    ensure!(!text.is_empty(), "a follow-up can't be empty");
+    let (chat, thread) = parallel::result_parent(&task).unwrap_or((bot, None));
+    let task = emit(hub, || hub.store.task_queue(id, Some(chat), thread, text))?;
+    schedule(hub, bot)?;
+    Ok(task)
+}
+
+/// Delivers the task's teammate-style result into the parent chat (or its side thread).
+fn route(hub: &Arc<Hub>, chat: &str, thread: Option<&str>, task: &TaskInfo, text: &str) -> Result<()> {
+    let cfg = hub.store.bot(chat)?.filter(|r| !r.deleted).context("unknown parent chat")?.config;
+    let lane = match thread {
+        Some(root) => Lane::in_thread(chat, root),
+        None => Lane::main(chat),
+    };
+    let data = json!({
+        "text": text,
+        "source": "task",
+        "teamReply": true,
+        "taskId": task.id,
+        "taskName": task.name,
+        "fromBotId": task.bot_id,
+        "delegationId": task.id,
+    });
+    crate::chat::messages::post_in_lane(hub, &cfg, lane, data)?;
+    Ok(())
+}
+
+/// Routes newly finished task turns back to their parents, once each. Called by `taskList` and by
+/// the explicit `taskCollectResults` method.
+pub(crate) fn task_collect_results(hub: &Arc<Hub>, bot: &str) -> Result<usize> {
+    let mut routed = 0;
+    let mut freed: Vec<String> = Vec::new();
+    for task in hub.store.task_with_parent()? {
+        if task.bot_id != bot {
+            continue;
+        }
+        let Some((chat, thread)) = parallel::result_parent(&task) else { continue };
+        let messages = hub.store.task_messages(&task.root, MAX_PAGE, None, None)?;
+        let Some(final_entry) = parallel::final_after(&messages, task.routed_seq) else { continue };
+        let text = parallel::result_text(&task.name, final_entry.data["text"].as_str(), "");
+        route(hub, chat, thread, &task, &text)?;
+        let seq = final_entry.seq;
+        let free = parallel::run_after_result(&task);
+        emit(hub, || {
+            hub.store.task_mark_routed(&task.id, seq)?;
+            hub.store.task_set_run(&task.id, free)
+        })?;
+        freed.push(task.bot_id);
+        routed += 1;
+    }
+    // A returned result is what frees a slot; fill it in the same pass instead of waiting for the
+    // next tab refresh, so a split of ten tasks keeps four running until the queue drains.
+    freed.sort();
+    freed.dedup();
+    for id in freed {
+        schedule(hub, &id)?;
+    }
+    Ok(routed)
+}
+
+/// Waits in the task's own side thread for a routine run or a script event from the stream the host
+/// already keeps. The run that wakes the wait continues the request in that same thread.
+pub(crate) async fn task_await_event(hub: &Arc<Hub>, id: &str, wait: EventWait, timeout: Duration) -> Result<Value> {
+    let task = require(hub, id)?;
+    ensure!(task.state == TaskState::Open, "reopen the task before waiting in it");
+    let deadline = Instant::now() + timeout;
+    loop {
+        let task = require(hub, id)?;
+        let runs = hub.routines.runs_for(&task.bot_id);
+        let probes: Vec<await_event::EventProbe<'_>> = runs
+            .iter()
+            .map(|run| await_event::EventProbe {
+                run_id: &run.id,
+                status: status_str(run.status),
+                source: await_event::field(&run.event, "source"),
+                name: {
+                    let name = await_event::field(&run.event, "event");
+                    if name.is_empty() { await_event::field(&run.event, "name") } else { name }
+                },
+            })
+            .collect();
+        let found = probes.iter().find(|probe| await_event::matches(&wait, *probe)).copied();
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let expired = remaining.is_zero();
+        match await_event::outcome(&wait, found.as_ref(), &task, expired) {
+            await_event::WaitOutcome::Waiting => {
+                tokio::time::sleep(await_event::POLL.min(remaining)).await;
+            }
+            await_event::WaitOutcome::Cancelled => return Ok(json!({"cancelled": true})),
+            await_event::WaitOutcome::TimedOut => return Ok(json!({"timedOut": true})),
+            await_event::WaitOutcome::Arrived => {
+                let probe = found.context("a matching event was found")?;
+                let cfg = hub.store.bot(&task.bot_id)?.filter(|r| !r.deleted).context("unknown bot")?.config;
+                let text = await_event::wake_text(&probe);
+                crate::chat::messages::post_in_lane(
+                    hub,
+                    &cfg,
+                    Lane::in_thread(&task.bot_id, &task.root),
+                    json!({"text": text, "taskId": task.id, "source": "task-event"}),
+                )?;
+                return Ok(json!({
+                    "event": {"runId": probe.run_id, "source": probe.source, "name": probe.name},
+                    "status": probe.status,
+                    "continuedInThread": true,
+                }));
+            }
+        }
+    }
+}
+
+/// The wire form of a run status, without serializing a whole run for one string.
+fn status_str(status: crate::routines::Status) -> &'static str {
+    use crate::routines::Status;
+    match status {
+        Status::Pending => "pending",
+        Status::Starting => "starting",
+        Status::Running => "running",
+        Status::Recovering => "recovering",
+        Status::Succeeded => "succeeded",
+        Status::Failed => "failed",
+        Status::Interrupted => "interrupted",
+        Status::Cancelled => "cancelled",
+    }
+}
+
+pub(crate) fn task_list(hub: &Arc<Hub>, bot: &str, status: Option<TaskState>) -> Result<Value> {
     hub.store.bot(bot)?.filter(|r| !r.deleted).context("unknown bot")?;
+    // A tab that lists tasks is the natural place to deliver results that finished while it was
+    // closed; the explicit `taskCollectResults` method does the same for other clients.
+    task_collect_results(hub, bot)?;
     Ok(json!({"tasks": hub.store.tasks(bot, status)?}))
 }
 
@@ -120,11 +325,40 @@ pub(crate) fn task_start(hub: &Hub, id: &str) -> Result<Value> {
 
 pub(crate) fn task_stop(hub: &Arc<Hub>, id: &str) -> Result<Value> {
     let task = require(hub, id)?;
+    // A stop from the tab is final for this scheduling attempt: stamp it before touching the
+    // runtime, so nothing (a later split, a result, a retry) queues the task again on its own.
+    let stopped = emit(hub, || hub.store.task_set_run(id, TaskRun::Stopped))?;
     // One actor serves the bot's chat and all of its tasks. Stopping the task interrupts its
     // current turn there; it does not spawn or kill a separate agent.
     hub.stop_bot(&task.bot_id)?;
-    emit_notice(hub, json!({"type": "task", "rev": task.rev, "taskId": task.id, "stopped": true}))?;
-    Ok(json!({"stopped": true, "rev": task.rev}))
+    // Telling the agent is a turn in the task's own lane, not just a card: the same actor that was
+    // stopped reads it next, so the task is not quietly started again.
+    let cfg = hub.store.bot(&task.bot_id)?.filter(|r| !r.deleted).context("unknown bot")?.config;
+    crate::chat::messages::post_in_lane(
+        hub,
+        &cfg,
+        Lane::in_thread(&task.bot_id, &task.root),
+        json!({
+            "text": parallel::stop_notice(&task.name),
+            "taskId": task.id,
+            "source": "task",
+            "system": true,
+        }),
+    )?;
+    // The parent agent is told through the same teammate-style path as a result, so it combines a
+    // stop with the other outcomes instead of waiting for a task that will not restart.
+    if let Some((chat, thread)) = parallel::result_parent(&task) {
+        let messages = hub.store.task_messages(&task.root, MAX_PAGE, None, None)?;
+        let cursor = messages.last().map_or(task.routed_seq, |entry| entry.seq);
+        let text = parallel::result_text(&task.name, None, "stopped from its tab");
+        route(hub, chat, thread, &task, &text)?;
+        emit(hub, || hub.store.task_mark_routed(id, cursor))?;
+    }
+    emit_notice(
+        hub,
+        json!({"type": "task", "rev": stopped["rev"], "taskId": task.id, "stopped": true, "agentTold": true}),
+    )?;
+    Ok(json!({"stopped": true, "agentTold": true, "rev": stopped["rev"]}))
 }
 
 pub(crate) fn task_close(hub: &Hub, id: &str, archived: bool) -> Result<Value> {

@@ -1,0 +1,46 @@
+.agent-tasks-sheet .agent-task-row {
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--group);
+}
+
+.agent-tasks-sheet .agent-task-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-tasks-sheet .agent-task-detail {
+  padding: 10px;
+  border-radius: var(--radius-s);
+  background: var(--group);
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity var(--morph), transform var(--morph);
+}
+
+.agent-tasks-sheet .agent-task-detail.shown {
+  opacity: 1;
+  transform: none;
+}
+
+.agent-tasks-sheet .agent-task-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
