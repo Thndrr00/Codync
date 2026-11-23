@@ -1,4 +1,3 @@
-# CI refresh
 name: codync-host
 
 on:
