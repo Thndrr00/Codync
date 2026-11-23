@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { onModel, type MediaAnswer, type MediaKind, type MediaModel } from '@shared/media'
+import { onModel, type MediaKind, type MediaModel } from '@shared/media'
 import type { Bot } from '@shared/models'
-import { Button, ChipChoice, DropdownMenu, Switch } from '../../../components/Controls'
+import { Button, ChoicePicker, ChipChoice, DropdownMenu, Switch } from '../../../components/Controls'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
 import {
-  botKey, latestStep, mediaKey, mediaTitle, statusLabel, stepNameOf, stepOf,
-  type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
+  MEDIA_BATCH_SIZES, botKey, latestStep, mediaBatch, mediaKey, mediaStepsFor, mediaTitle, mediaUnitPrice, statusLabel,
+  stepNameOf, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
 } from '../../../lib/routine-flow.ts'
-import { useStore } from '../../../store/context'
 import { useAgentModels } from '../../bots/agent-models'
 import { AgentModelPicker } from '../../bots/AgentModelPicker'
 import { runLabel } from '../routine'
@@ -19,7 +18,10 @@ import { FieldTextArea } from './FieldTextArea'
 import { FlowPopover } from './FlowPopover'
 import { groupsOf, type FlowGroup } from './flow-groups'
 import { StatusChip } from './FlowNodeCard'
+import { MediaModelButton } from './MediaModelButton'
+import { MediaResults } from './MediaResults'
 import { StepResult } from './StepResult'
+import { useFlowMediaCatalog } from './use-media-catalog'
 
 /** A step, bot or media node the selected step may hand work to. */
 export interface FlowTarget {
@@ -36,6 +38,8 @@ export interface MediaSettings {
   resolution: string
   transparent: boolean
   voice: string | null
+  /** How many results one run makes, 1–4; saved on the media node. */
+  batch: number
 }
 
 /** The settings a media step is edited with, plus the kind its model makes. */
@@ -50,6 +54,7 @@ const mediaDraft = (media: FlowMedia): MediaDraft => ({
   resolution: media.resolution,
   transparent: media.transparent,
   voice: media.voice,
+  batch: mediaBatch(media.batch),
 })
 
 interface Props {
@@ -72,6 +77,8 @@ interface Props {
   onSaveInstruction: (link: FlowLink, instruction: string, model: string | null, modelOptions: Record<string, string>) => void
   onDisconnect: (link: FlowLink) => void
   onTest: (routineId: string) => void
+  /** Starts a new run at this node, also used by a failed media result's Retry. */
+  onRunFromStep: (nodeKey: string) => void
   onSetEnabled: (routineId: string, enabled: boolean) => void
   onConnectFrom: (fromBotId: string, toBotId: string) => void
   onRemoveNode: (nodeKey: string) => void
@@ -363,35 +370,24 @@ function BotPanel({ botId, bot, canvas, busy, offline, readOnly, targets, onConn
  * model offers, plus what it may hand the file on to (host/src/media).
  * Ported from OpenBot 0.70.0 `WorkflowImageNode.tsx`'s inspector.
  */
-function MediaPanel({ media, canvas, busy, offline, readOnly, fieldsFor, problemsFor, answerFor, checkFor, onSaveAnswer, onSaveCheck, targets, onConnectFrom, onSaveMedia, onRemoveMedia, onDuplicateMedia }: Props & { media: FlowMedia }) {
+function MediaPanel({ media, canvas, busy, offline, readOnly, fieldsFor, problemsFor, answerFor, checkFor, onSaveAnswer, onSaveCheck, targets, onConnectFrom, onSaveMedia, onRemoveMedia, onDuplicateMedia, onRunFromStep }: Props & { media: FlowMedia }) {
   const tr = useTr()
-  const store = useStore()
   const nodeKey = mediaKey(media.id)
   const locked = busy || offline || readOnly
   const card = canvas.routines.find((c) => c.routine.id === media.routineId)
   const owner = card?.routine.botId ?? canvas.botId
-  const step = card ? stepOf(card, nodeKey) : null
-  const [answer, setAnswer] = useState<MediaAnswer | null>(null)
-  const [failed, setFailed] = useState(false)
+  const steps = mediaStepsFor(canvas, nodeKey)
+  const step = steps[steps.length - 1] ?? null
+  const { answer, failed } = useFlowMediaCatalog(owner)
   const [draft, setDraft] = useState<MediaDraft>(() => mediaDraft(media))
   /** A length outside the model's short list opens the Custom slider (OpenBot 0.74.0). */
   const [customLength, setCustomLength] = useState(false)
-  const kept = `${media.model}|${media.prompt}|${media.aspect}|${media.duration}|${media.resolution}|${media.transparent}|${media.voice}`
+  const kept = `${media.model}|${media.prompt}|${media.aspect}|${media.duration}|${media.resolution}|${media.transparent}|${media.voice}|${media.batch}`
   // The host's copy changed (a save, another device): show it; an edit in the box is kept otherwise.
   useEffect(() => setDraft(mediaDraft(media)), [media.id, kept])
-  useEffect(() => {
-    let alive = true
-    setAnswer(null)
-    setFailed(false)
-    void store.mediaModels(owner)
-      .then((a) => alive && setAnswer(a))
-      .catch(() => alive && setFailed(true))
-    return () => {
-      alive = false
-    }
-  }, [owner, store])
   const models = answer?.models.filter((model) => model.kinds.includes(media.kind)) ?? []
   const model = models.find((m) => m.id === draft.model) ?? null
+  const price = mediaUnitPrice(answer, draft.model)
   const current = mediaDraft(media)
   const changed = (Object.keys(draft) as (keyof MediaDraft)[]).some((key) => draft[key] !== current[key])
   const options = targets(nodeKey)
@@ -412,7 +408,7 @@ function MediaPanel({ media, canvas, busy, offline, readOnly, fieldsFor, problem
       setDraft({ ...draft, duration: value })
     }
   }
-  const pick = (chosen: MediaModel) => setDraft({ ...onModel(draft, chosen), prompt: draft.prompt })
+  const pick = (chosen: MediaModel) => setDraft({ ...onModel(draft, chosen), prompt: draft.prompt, batch: draft.batch })
   return (
     <VStack gap={10} className="flow-inspector">
       <Text weight="semibold">{media.name?.trim() || tr(media.kind === 'video' ? 'Clip step' : 'Picture step')}</Text>
@@ -446,23 +442,22 @@ function MediaPanel({ media, canvas, busy, offline, readOnly, fieldsFor, problem
           <Text size="caption" tone="secondary">{tr('Checking what this bot can make…')}</Text>
         ) : !answer.agent ? (
           <Text size="caption" tone="secondary">{tr('This bot’s agent has no image tool. Pick one that does, or use ComfyUI.')}</Text>
-        ) : models.length === 0 ? (
+        ) : models.length === 0 && !answer.unavailableModels?.length ? (
           <Text size="caption" tone="attention">{tr('This bot’s agent makes no {kind}.').replace('{kind}', tr(media.kind === 'video' ? 'clip' : 'picture'))}</Text>
         ) : (
           <>
             {!answer.installed ? <Text size="caption" tone="attention">{tr('This bot’s agent is not installed on this computer yet.')}</Text> : null}
-            {models.length > 1 ? (
-              <DropdownMenu
-                className="flow-menu-button"
-                items={() => models.map((m) => ({ title: m.name, action: () => pick(m) }))}
-              >
-                <Text>{model?.name ?? tr('Pick a model')}</Text>
-              </DropdownMenu>
-            ) : (
-              <Text size="callout" tone="secondary">{model?.name ?? draft.model}</Text>
-            )}
+            <MediaModelButton answer={answer} kind={media.kind} modelId={draft.model} onPick={pick} />
           </>
         )}
+      </VStack>
+      <VStack gap={4}>
+        <Text size="caption" tone="secondary">{tr('Batch')}</Text>
+        <ChoicePicker<number>
+          selection={mediaBatch(draft.batch)}
+          options={MEDIA_BATCH_SIZES.map((count) => ({ id: count, label: String(count) }))}
+          onChange={(next) => setDraft({ ...draft, batch: mediaBatch(next) })}
+        />
       </VStack>
       {model && caps ? (
         <VStack gap={8}>
@@ -534,8 +529,12 @@ function MediaPanel({ media, canvas, busy, offline, readOnly, fieldsFor, problem
       >
         <Text>{options.length === 0 ? tr('No step to hand on to') : tr('Hand its file on to…')}</Text>
       </DropdownMenu>
-      {step ? <StepResult key={step.id} step={step} /> : null}
-      {step?.error ? <Text size="caption" tone="danger" lines={4}>{step.error}</Text> : null}
+      <MediaResults
+        steps={steps}
+        price={price}
+        busy={locked}
+        onRetry={() => onRunFromStep(nodeKey)}
+      />
     </VStack>
   )
 }

@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react'
-import { onModel, type MediaAnswer, type MediaKind } from '@shared/media'
-import { Button, ChipChoice, DropdownMenu, IconButton, Switch } from '../../../components/Controls'
+import { onModel, type MediaKind, type MediaModel } from '@shared/media'
+import { Button, ChoicePicker, ChipChoice, IconButton, Switch } from '../../../components/Controls'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
-import { fieldsForStep, mediaKey, mediaOf, mediaTitle, problemsForStep, type FlowMedia } from '../../../lib/routine-flow.ts'
+import {
+  MEDIA_BATCH_SIZES, fieldsForStep, mediaBatch, mediaKey, mediaOf, mediaRunLabel, mediaStepsFor, mediaTitle,
+  mediaUnitPrice, missingMediaModel, problemsForStep, type FlowMedia,
+} from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
-import { useStore } from '../../../store/context'
 import type { CanvasWithGroups } from './flow-groups'
 import { FieldTextArea } from './FieldTextArea'
 import type { FlowTarget, MediaSettings } from './FlowInspector'
 import { settingsOf } from './flow-settings'
+import { MediaModelButton } from './MediaModelButton'
+import { MediaResults } from './MediaResults'
+import { useFlowMediaCatalog } from './use-media-catalog'
 
 /** The composer shown under a selected picture or clip card: description, pictures, model and Run
  *  together (OpenBot 0.75.0). It reuses the inspector's shared controls and the saved step snapshot;
@@ -37,36 +42,31 @@ const draftOf = (media: FlowMedia): MediaDraft => ({
   resolution: media.resolution,
   transparent: media.transparent,
   voice: media.voice,
+  batch: mediaBatch(media.batch),
 })
 
 export function MediaComposer({ media, canvas, busy, offline, targets, onSaveMedia, onRunFromStep, onClose }: Props) {
   const tr = useTr()
-  const store = useStore()
-  const [answer, setAnswer] = useState<MediaAnswer | null>(null)
-  const [failed, setFailed] = useState(false)
   const [draft, setDraft] = useState<MediaDraft>(() => draftOf(media))
-  useEffect(() => setDraft(draftOf(media)), [media.id, media.model, media.prompt, media.aspect, media.duration, media.resolution, media.transparent, media.voice])
+  useEffect(() => setDraft(draftOf(media)), [media.id, media.model, media.prompt, media.aspect, media.duration, media.resolution, media.transparent, media.voice, media.batch])
   const card = canvas.routines.find((routine) => routine.routine.id === media.routineId)
   const owner = card?.routine.botId ?? canvas.botId
-  useEffect(() => {
-    let alive = true
-    setAnswer(null)
-    setFailed(false)
-    void store.mediaModels(owner)
-      .then((models) => alive && setAnswer(models))
-      .catch(() => alive && setFailed(true))
-    return () => { alive = false }
-  }, [owner, store])
+  const { answer, failed } = useFlowMediaCatalog(owner)
 
   const key = mediaKey(media.id)
   const models = answer?.models.filter((model) => model.kinds.includes(media.kind)) ?? []
   const model = models.find((choice) => choice.id === draft.model) ?? null
   const caps = model?.capabilities
+  const batch = mediaBatch(draft.batch)
+  const price = mediaUnitPrice(answer, draft.model)
+  const missing = missingMediaModel(answer, draft.model, media.kind)
+  const pick = (choice: MediaModel) => setDraft({ ...onModel(draft, choice), prompt: draft.prompt, batch: draft.batch })
   const original = draftOf(media)
   const changed = (Object.keys(draft) as (keyof MediaSettings)[]).some((name) => draft[name] !== original[name])
-  // The newest result's saved settings, reused from the previous pass; an older run has none.
-  const step = canvas.routines.flatMap((routine) => routine.steps).find((candidate) => candidate.botId === key)
-  const saved = step ? settingsOf(canvas.stepSettings, step.id) : null
+  // The newest steps of this node make the result area; an older run has no saved settings.
+  const steps = mediaStepsFor(canvas, key)
+  const newest = steps[steps.length - 1]
+  const saved = newest ? settingsOf(canvas.stepSettings, newest.id) : null
   // Pictures whose file is handed to this step by an incoming media link.
   const pictures = canvas.links
     .filter((link) => link.toBotId === key && link.fromBotId.startsWith('media:'))
@@ -108,16 +108,19 @@ export function MediaComposer({ media, canvas, busy, offline, targets, onSaveMed
           <Text size="caption" tone="attention">{tr("This computer's host is not answering.")}</Text>
         ) : !answer ? (
           <Text size="caption" tone="secondary">{tr('Checking what this bot can make…')}</Text>
-        ) : models.length === 0 ? (
+        ) : models.length === 0 && !answer.unavailableModels?.length ? (
           <Text size="caption" tone="attention">{tr('This bot’s agent makes no {kind}.').replace('{kind}', tr(media.kind === 'video' ? 'clip' : 'picture'))}</Text>
         ) : (
-          <DropdownMenu
-            className="flow-menu-button"
-            items={() => models.map((choice) => ({ title: choice.name, action: () => setDraft({ ...onModel(draft, choice), prompt: draft.prompt }) }))}
-          >
-            <Text>{model?.name ?? tr('Pick a model')}</Text>
-          </DropdownMenu>
+          <MediaModelButton answer={answer} kind={media.kind} modelId={draft.model} onPick={pick} />
         )}
+      </VStack>
+      <VStack gap={4}>
+        <Text size="caption" tone="secondary">{tr('Batch')}</Text>
+        <ChoicePicker<number>
+          selection={batch}
+          options={MEDIA_BATCH_SIZES.map((count) => ({ id: count, label: String(count) }))}
+          onChange={(next) => setDraft({ ...draft, batch: mediaBatch(next) })}
+        />
       </VStack>
       {model && caps ? (
         <VStack gap={6}>
@@ -158,10 +161,13 @@ export function MediaComposer({ media, canvas, busy, offline, targets, onSaveMed
           {tr('Hands its file on to {count} step(s)').replace('{count}', String(connected.length))}
         </Text>
       ) : null}
+      <MediaResults steps={steps} price={price} busy={busy} onRetry={() => onRunFromStep(key)} />
       <HStack gap={8}>
         <Button disabled={busy || offline || !changed} onClick={() => onSaveMedia(media, draft)}>{tr('Save')}</Button>
         <Spacer />
-        <Button kind="secondary" disabled={busy || offline} onClick={() => onRunFromStep(key)}>{tr('Run')}</Button>
+        <Button kind="secondary" disabled={busy || offline || missing} onClick={() => onRunFromStep(key)}>
+          {mediaRunLabel(price, batch, missing, tr)}
+        </Button>
       </HStack>
     </VStack>
   )

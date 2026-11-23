@@ -804,5 +804,10 @@
   "Press a key as well as the modifier, not the modifier on its own.": "Press a key as well as the modifier, not the modifier on its own.",
   "That key is reserved for the app.": "That key is reserved for the app.",
   "That shortcut is already used by another row.": "That shortcut is already used by another row.",
-  "Press a key combination.": "Press a key combination."
+  "Press a key combination.": "Press a key combination.",
+  "Batch": "Batch",
+  "Model not available": "Model not available",
+  "Run · {credits} credits": "Run · {credits} credits",
+  "{count} results": "{count} results",
+  "Retry · {credits} credits": "Retry · {credits} credits"
 }

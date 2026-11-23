@@ -2833,5 +2833,10 @@
   "Press a key as well as the modifier, not the modifier on its own.": "Pulsa una tecla además del modificador, no solo el modificador.",
   "That key is reserved for the app.": "Esa tecla está reservada para la app.",
   "That shortcut is already used by another row.": "Ese atajo ya lo usa otra fila.",
-  "Press a key combination.": "Pulsa una combinación de teclas."
+  "Press a key combination.": "Pulsa una combinación de teclas.",
+  "Batch": "Lote",
+  "Model not available": "Modelo no disponible",
+  "Run · {credits} credits": "Ejecutar · {credits} créditos",
+  "{count} results": "{count} resultados",
+  "Retry · {credits} credits": "Reintentar · {credits} créditos"
 }

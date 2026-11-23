@@ -2,13 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   NODE_WIDTH, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
-  fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, insertFieldToken, isFlowPaused, isFlowReadOnly,
+  fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, groupMediaResults, insertFieldToken, isFlowPaused, isFlowReadOnly,
   problemsForStep,
-  isNewerSetting, layoutNodes, matchingFields, mediaKey, mediaTitle, nodeAt, parseAnswerSpec, parseWorkflowFile, portCarry,
-  routineKey, specKeyOf, specText, stepNameOf, stepProgress, tidyLayout, unknownSettings, workflowFileBytes,
-  workflowsInFolder, zoomAt,
-  type FieldMatch, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowNode, type FlowNodeRegistry,
-  type FlowStep, type WorkflowFoldersSnapshot,
+  isNewerSetting, layoutNodes, matchingFields, mediaBatch, mediaKey, mediaRetryLabel, mediaRunLabel, mediaStepsFor,
+  mediaTitle, mediaTotalCredits, mediaUnitPrice, missingMediaModel, nodeAt, parseAnswerSpec, parseWorkflowFile, portCarry,
+  routineKey, specKeyOf, specText, stepNameOf, stepProgress, tidyLayout, unknownSettings, unavailableMediaModel,
+  availableMediaModels, workflowFileBytes, workflowsInFolder, zoomAt,
+  type FieldMatch, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowMediaCatalog, type FlowNode,
+  type FlowNodeRegistry, type FlowStep, type WorkflowFoldersSnapshot,
 } from './routine-flow.ts'
 import {
   closeOtherWorkflows, closeWorkflow, closeWorkflowsRight, moveWorkflow, nextActiveTab, openWorkflow,
@@ -386,6 +387,115 @@ test('a pause stamped on the routine card shows on the canvas', () => {
   const c = canvas([])
   c.routines[0].paused = true
   assert.equal(isFlowPaused(c, 'r'), true)
+})
+
+test('only batches of one to four count; anything else makes one result', () => {
+  for (const size of [1, 2, 3, 4]) assert.equal(mediaBatch(size), size)
+  for (const bad of [0, 5, -1, 1.5, '2', null, undefined, Number.NaN]) assert.equal(mediaBatch(bad), 1)
+})
+
+test('the Run button shows one price times the batch and the number of results', () => {
+  const tr = (text: string) => text
+  assert.equal(mediaTotalCredits(12, 4), 48)
+  assert.equal(mediaTotalCredits(12, 9), 12, 'an invalid batch costs one result')
+  assert.equal(mediaTotalCredits(null, 4), null, 'no price means no price is shown')
+  assert.equal(mediaRunLabel(12, 3, false, tr), 'Run · 36 credits · 3 results')
+  assert.equal(mediaRunLabel(12, 1, false, tr), 'Run · 12 credits')
+  assert.equal(mediaRunLabel(null, 4, false, tr), 'Run · 4 results')
+  assert.equal(mediaRunLabel(12, 4, true, tr), 'Model not available')
+  assert.equal(mediaRetryLabel(12, tr), 'Retry · 12 credits')
+  assert.equal(mediaRetryLabel(null, tr), 'Retry')
+})
+
+test('the model picker follows the host availability flag but keeps a saved model', () => {
+  const base = {
+    id: 'gpt-image', name: 'GPT Image', maker: 'OpenAI', subscription: 'ChatGPT', kinds: ['image' as const],
+    aspects: ['1:1'], transparent: true, voices: false,
+    capabilities: { aspects: ['1:1'], durations: [], resolutions: [], transparent: true, voices: null },
+  }
+  const answer: FlowMediaCatalog = {
+    agent: 'codex', installed: true,
+    models: [
+      { ...base, available: true, batchCredits: { credits: 7 } },
+      { ...base, id: 'gone', name: 'Old Model', available: false, batchCredits: { credits: null } },
+    ],
+    modelsReady: true,
+    unavailableModels: [{ id: 'gone', name: 'Old Model', kinds: ['image'] }],
+  }
+  assert.deepEqual(availableMediaModels(answer, 'image').map((model) => model.id), ['gpt-image'])
+  assert.equal(unavailableMediaModel(answer, 'gone', 'image')?.name, 'Old Model')
+  assert.equal(missingMediaModel(answer, 'gone', 'image'), true)
+  assert.equal(missingMediaModel(answer, 'gpt-image', 'image'), false)
+  assert.equal(mediaUnitPrice(answer, 'gpt-image'), 7)
+  assert.equal(mediaUnitPrice(answer, 'gone'), null, 'a subscription has no credit price')
+  assert.equal(mediaUnitPrice({ ...answer, price: 9 }, 'gpt-image'), 9)
+  assert.equal(mediaUnitPrice(null, 'gpt-image'), null)
+  // An older answer has no flags or prices: every model stays listed and none is marked missing.
+  const older: FlowMediaCatalog = {
+    agent: 'codex', installed: true,
+    models: [base, { ...base, id: 'legacy', name: 'Legacy' }],
+  }
+  assert.deepEqual(availableMediaModels(older, 'image').map((model) => model.id), ['gpt-image', 'legacy'])
+  assert.equal(missingMediaModel(older, 'legacy', 'image'), false)
+  assert.equal(unavailableMediaModel(older, 'legacy', 'image'), null)
+  assert.equal(unavailableMediaModel(older, 'removed', 'image')?.name, 'removed', 'a model gone from a loaded list is marked')
+  // A model flagged unavailable is marked even before a "list loaded" flag exists.
+  assert.equal(missingMediaModel({ ...older, models: [{ ...base, available: false }] }, 'gpt-image', 'image'), true)
+})
+
+test('a batch groups into pending, failed and succeeded results with one file walk', () => {
+  const file = (id: string) => ({ id, name: `${id}.png`, size: 1, sha256: '' })
+  const batched: FlowStep = {
+    ...step('media:run1', 'running'),
+    files: [file('c1'), file('d1')],
+    results: [
+      { index: 0, status: 'succeeded' },
+      { index: 1, status: 'failed', error: 'The model of this step is not available' },
+      { index: 2, status: 'succeeded' },
+      { index: 3, status: 'pending' },
+    ],
+  }
+  const grouped = groupMediaResults([batched], 5)
+  assert.deepEqual(grouped.pending.map((item) => [item.id, item.status]), [['s-media:run1:3', 'pending']])
+  assert.deepEqual(grouped.failed.map((item) => [item.error, item.credits]), [
+    ['The model of this step is not available', 5],
+  ])
+  assert.deepEqual(grouped.succeeded.map((item) => item.id), ['s-media:run1:0', 's-media:run1:2'])
+  assert.deepEqual(grouped.files.map((item) => item.id), ['c1', 'd1'], 'a failure does not shift the files')
+  assert.deepEqual(groupMediaResults([step('media:a', 'running')], 5).pending.map((t) => t.status), ['pending'])
+  const blocked = {
+    ...step('media:run2', 'failed'), error: 'The model of this step is not available',
+    results: [{ index: 0, status: 'pending' as const }, { index: 1, status: 'pending' as const }],
+  }
+  const stopped = groupMediaResults([blocked], 5)
+  assert.equal(stopped.failed.length, 1, 'a run that stops before making anything shows one failure')
+  assert.equal(stopped.failed[0].error, 'The model of this step is not available')
+  assert.equal(stopped.pending.length, 0)
+  const big = { ...batched, results: Array.from({ length: 6 }, (_, i) => ({ index: i, status: 'succeeded' as const })) }
+  assert.ok(groupMediaResults([big], 5).files.length <= 4, 'only the newest batch is shown')
+})
+
+test('an older host with one step per result still groups by the step state', () => {
+  const file = { id: 'f1', name: 'f1.png', size: 1, sha256: '' }
+  const grouped = groupMediaResults([step('media:m1', 'succeeded', 1)].map((s) => ({ ...s, files: [file] })), null)
+  assert.equal(grouped.succeeded.length, 1)
+  assert.deepEqual(grouped.files, [file])
+  assert.deepEqual(groupMediaResults([step('media:m1', 'running')], null).pending.map((t) => t.status), ['pending'])
+  assert.equal(groupMediaResults([step('media:m1', 'skipped')], null).succeeded.length, 0, 'a skipped step has no result')
+  const c = canvas([], {}, [
+    { ...step('media:old', 'succeeded', 1), updatedAt: 1 },
+    { ...step('media:m1', 'running', 2), updatedAt: 2 },
+  ])
+  assert.deepEqual(mediaStepsFor(c, 'media:m1').map((s) => s.updatedAt), [2])
+  const live = canvas([], { stepSettings: {
+    's-media:m1': {
+      kind: 'image', inputs: [],
+      results: [{ index: 0, status: 'pending' }, { index: 1, status: 'failed', error: 'no file' }],
+    },
+  } }, [step('media:m1', 'running', 2)])
+  const merged = groupMediaResults(mediaStepsFor(live, 'media:m1'), null)
+  assert.deepEqual(merged.pending.map((take) => take.index), [0], 'batch progress comes from step settings')
+  assert.equal(merged.failed[0].error, 'no file')
 })
 
 test('a portable workflow file gives its names in plain or base64 form', () => {

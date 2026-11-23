@@ -1,31 +1,11 @@
 // What a routine-flow step actually ran with, sent beside the steps on the canvas. A run saved
 // before steps kept settings has no entry: the canvas shows the result and no settings, not an error.
-// The shape mirrors `engine::StepSettings` in host/src/routines/flow/engine.rs.
+// The shape mirrors `engine::StepSettings` in host/src/routines/flow/engine.rs and lives in
+// lib/routine-flow.ts, so the canvas can read a batch's progress beside its steps.
 
-import type { FlowNode } from '../../../lib/routine-flow.ts'
+import type { FlowNode, FlowStepInput, FlowStepSettings } from '../../../lib/routine-flow.ts'
 
-export interface FlowStepInput {
-    from: string
-    text: string
-    instruction: string
-    /** A picture handed on by a media step, rather than a bot's text reply. */
-    picture: boolean
-}
-
-export interface FlowStepSettings {
-    /** `bot` or a media kind (`image`/`video`). */
-    kind: string
-    model?: string | null
-    modelOptions?: Record<string, string>
-    instruction?: string
-    prompt?: string
-    aspect?: string
-    duration?: number | null
-    resolution?: string
-    transparent?: boolean | null
-    voice?: string | null
-    inputs: FlowStepInput[]
-}
+export type { FlowStepInput, FlowStepSettings }
 
 export type StepSettingsMap = Record<string, FlowStepSettings>
 

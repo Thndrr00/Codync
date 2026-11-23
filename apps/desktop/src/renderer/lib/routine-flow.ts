@@ -5,7 +5,7 @@
 // Media nodes follow OpenBot 0.70.0 `packages/ui/src/features/workflows/WorkflowImageNode.tsx`
 // (a step that makes a file is a node like any other, linked to the steps around it).
 
-import type { MediaKind } from '@shared/media'
+import type { MediaKind, MediaModel } from '@shared/media'
 import type { SharedFile } from '@shared/models'
 import { isActiveRun, type Routine, type RoutineRun } from '../views/routines/routine.ts'
 
@@ -36,8 +36,58 @@ export interface FlowStep {
   error: string | null
   /** The pictures or clips a media step made, as shared files of the routine's bot. */
   files?: SharedFile[]
+  /**
+   * One entry per result of a batched media step (the host's `BatchResult`: index, status, error).
+   * Older hosts send none, so the step itself is then the one result. A batch can mix pending,
+   * failed and finished results; the files stay on the step, in result order.
+   */
+  results?: FlowMediaResult[]
   createdAt: number
   updatedAt: number
+}
+
+/** One result's state on a step, as the host records it while a batch runs. */
+export interface FlowMediaResult {
+  index: number
+  status: 'pending' | 'succeeded' | 'failed'
+  error?: string | null
+}
+
+/** One input a step read, as saved on the host with the settings of its run. */
+export interface FlowStepInput {
+  from: string
+  text: string
+  instruction: string
+  /** A picture handed on by a media step, rather than a bot's text reply. */
+  picture: boolean
+}
+
+/** What a step actually ran with; the same shape as `engine::StepSettings` on the host. */
+export interface FlowStepSettings {
+  /** `bot` or a media kind (`image`/`video`). */
+  kind: string
+  model?: string | null
+  modelOptions?: Record<string, string>
+  instruction?: string
+  prompt?: string
+  aspect?: string
+  duration?: number | null
+  resolution?: string
+  transparent?: boolean | null
+  voice?: string | null
+  /** How many results a media run was asked for; older runs have none. */
+  batch?: number | null
+  /** One status per result, updated while a batch runs. */
+  results?: FlowMediaResult[]
+  inputs: FlowStepInput[]
+}
+
+/** A result with the files and price the result area needs. */
+export interface FlowMediaTake extends FlowMediaResult {
+  id: string
+  files: SharedFile[]
+  /** Credits for a Retry of this one result; null when the host sends no price. */
+  credits: number | null
 }
 
 export interface FlowMedia {
@@ -54,6 +104,8 @@ export interface FlowMedia {
   resolution: string
   transparent: boolean
   voice: string | null
+  /** How many files one run makes, 1–4; an older host omits it and makes one. */
+  batch?: number
   createdAt: number
   /** The routine the step belongs to. */
   routineId: string
@@ -85,6 +137,8 @@ export interface FlowCanvas {
   placedBotIds: string[]
   /** The picture and clip steps of these routines (host/src/store/flow_media.rs). */
   mediaNodes: FlowMedia[]
+  /** Settings each step ran with, by step id; a running batch updates its per-result states here. */
+  stepSettings?: Record<string, FlowStepSettings>
   // Typed step fields and workflow actions (OpenBot nightly 0.70). All optional: an older host
   // simply omits them, and the canvas keeps working without completions, pauses or a registry.
   /** Fields the trigger gives; absent when the host doesn't know typed fields yet. */
@@ -169,6 +223,167 @@ export function mediaTitle(media: FlowMedia | null): string {
   const prompt = media?.prompt.trim()
   if (prompt) return prompt
   return media?.kind === 'video' ? 'Video' : 'Picture'
+}
+
+// MARK: media step batch, price, availability and results (OpenBot 0.70+)
+
+/** The batch sizes an image or clip step can make at once (OpenBot's `MEDIA_BATCH_SIZES`). */
+export const MEDIA_BATCH_SIZES = [1, 2, 3, 4] as const
+export type MediaBatch = (typeof MEDIA_BATCH_SIZES)[number]
+export const MAX_MEDIA_TAKES = 4
+
+/** A batch value from the host or the editor: only 1–4 count, anything else is one result. */
+export function mediaBatch(value: unknown): MediaBatch {
+  return MEDIA_BATCH_SIZES.find((size) => size === value) ?? 1
+}
+
+/** What the flow reads of the host's `mediaModels` answer. The new fields are optional on the wire. */
+export interface FlowMediaCatalog {
+  agent: string | null
+  installed: boolean
+  models: FlowMediaModel[]
+  /** True once the host loaded its live list: only then is an unknown model "unavailable". */
+  modelsReady?: boolean
+  /** Names of models the service can't make now, for a saved step that still names one. */
+  unavailableModels?: { id: string; name: string; kinds: string[] }[]
+  /** One result's price with the chosen settings, when the host prices the answer itself. */
+  price?: number | null
+}
+
+/** A catalog model: `available` is the host's live flag, `batchCredits` its priced batch. */
+export type FlowMediaModel = MediaModel & {
+  available?: boolean
+  credits?: number | null
+  batchCredits?: { credits?: number | null }
+}
+
+/** A saved model the service can't make now, so its name stays on the button. */
+export function unavailableMediaModel(
+  answer: FlowMediaCatalog | null,
+  modelId: string,
+  kind: MediaKind,
+): { id: string; name: string } | null {
+  if (!modelId) return null
+  const listed = answer?.models.find((model) => model.id === modelId && model.kinds.includes(kind))
+  const named = answer?.unavailableModels?.find((model) => model.id === modelId && model.kinds.includes(kind))
+  if (listed) {
+    return listed.available === false || named ? (named ?? listed) : null
+  }
+  // A model missing from a loaded list is unavailable too; only an empty older answer says nothing.
+  if (named || answer?.modelsReady || (answer?.models.length ?? 0) > 0) {
+    return named ?? { id: modelId, name: modelId }
+  }
+  return null
+}
+
+/** The saved model is unavailable: a run reaching this step stops with the host's error. */
+export function missingMediaModel(answer: FlowMediaCatalog | null, modelId: string, kind: MediaKind): boolean {
+  return unavailableMediaModel(answer, modelId, kind) !== null
+}
+
+/**
+ * Models offered in the picker: the host's available ones only, so a saved unavailable model drops
+ * out of the list while its button keeps its name and marker. The media switch-all change needs no
+ * UI beyond this flag — switching to another available model uses the same picker.
+ */
+export function availableMediaModels(answer: FlowMediaCatalog | null, kind: MediaKind): MediaModel[] {
+  return answer?.models.filter((model) => model.kinds.includes(kind) && model.available !== false) ?? []
+}
+
+/** Credits for one result, from the host's `batchCredits.credits` (or an older answer), when priced. */
+export function mediaUnitPrice(answer: FlowMediaCatalog | null, modelId: string): number | null {
+  if (typeof answer?.price === 'number' && Number.isFinite(answer.price)) return answer.price
+  const model = answer?.models.find((choice) => choice.id === modelId)
+  const credits = model?.batchCredits?.credits ?? model?.credits
+  return typeof credits === 'number' && Number.isFinite(credits) ? credits : null
+}
+
+/** The price the Run button shows: one result's price times the batch, or null for no price. */
+export function mediaTotalCredits(price: number | null, batch: number): number | null {
+  return price !== null && Number.isFinite(price) ? price * mediaBatch(batch) : null
+}
+
+type Tr = (text: string) => string
+
+/** The Run button's words: priced when the host sends a price, and the host's marker when it cannot make the model. */
+export function mediaRunLabel(price: number | null, batch: number, missing: boolean, tr: Tr): string {
+  if (missing) return tr('Model not available')
+  const credits = mediaTotalCredits(price, batch)
+  const base = credits === null ? tr('Run') : tr('Run · {credits} credits').replace('{credits}', String(credits))
+  const takes = mediaBatch(batch)
+  return takes > 1 ? `${base} · ${tr('{count} results').replace('{count}', String(takes))}` : base
+}
+
+/** A failed take's Retry button, priced for one result rather than the whole batch. */
+export function mediaRetryLabel(price: number | null, tr: Tr): string {
+  return price === null ? tr('Retry') : tr('Retry · {credits} credits').replace('{credits}', String(price))
+}
+
+/** The newest steps a node left, oldest first and at most one batch; older hosts have just one. */
+export function mediaStepsFor(canvas: FlowCanvas, nodeKey: string): FlowStep[] {
+  return canvas.routines
+    .flatMap((card) => card.steps)
+    .filter((step) => step.botId === nodeKey)
+    .map((step) => {
+      // The host keeps a batch's progress on the step's saved settings, not on the step row.
+      const results = canvas.stepSettings?.[step.id]?.results ?? step.results
+      return results?.length ? { ...step, results } : step
+    })
+    .sort((a, b) => a.updatedAt - b.updatedAt)
+    .slice(-MAX_MEDIA_TAKES)
+}
+
+/**
+ * The results of a batch by state, plus one file list for the shared prev/next thumbnails. A
+ * finished result owns the next file in step order, so a failed result in between does not shift
+ * which file belongs to which success. An older step without per-result states is one result.
+ */
+export function groupMediaResults(steps: readonly FlowStep[], price: number | null): {
+  pending: FlowMediaTake[]
+  failed: FlowMediaTake[]
+  succeeded: FlowMediaTake[]
+  files: SharedFile[]
+} {
+  const takes: FlowMediaTake[] = []
+  for (const step of steps) {
+    const files = step.files ?? []
+    const single = !step.results?.length
+    // A model-unavailable run fails before any take starts: the host's step error is the result.
+    const stopped = !single && step.status === 'failed' && !!step.error
+      && !step.results!.some((result) => result.status === 'failed')
+    const listed: { index: number; status: FlowMediaResult['status'] | null; error?: string | null }[] = single || stopped
+      ? [{
+        index: 0,
+        status: step.status === 'running' ? 'pending'
+          : step.status === 'failed' || step.status === 'succeeded' ? step.status : null,
+        error: step.error,
+      }]
+      : step.results ?? []
+    let fileAt = 0
+    for (const result of listed) {
+      const status = result.status
+      if (status !== 'pending' && status !== 'failed' && status !== 'succeeded') continue
+      const made = status === 'succeeded'
+        ? (single ? files : (files[fileAt] ? [files[fileAt]] : []))
+        : []
+      if (made.length > 0 && !single) fileAt += 1
+      takes.push({ index: result.index, status, error: result.error, id: `${step.id}:${result.index}`, files: made, credits: price })
+    }
+  }
+  const recent = takes.slice(-MAX_MEDIA_TAKES)
+  const pending = recent.filter((take) => take.status === 'pending')
+  const failed = recent.filter((take) => take.status === 'failed')
+  const succeeded = recent.filter((take) => take.status === 'succeeded')
+  const seen = new Set<string>()
+  const files: SharedFile[] = []
+  for (const take of succeeded) {
+    for (const file of take.files) {
+      if (seen.has(file.id)) continue
+      seen.add(file.id)
+      files.push(file)
+    }
+  }
+  return { pending, failed, succeeded, files }
 }
 
 export interface FlowNode {

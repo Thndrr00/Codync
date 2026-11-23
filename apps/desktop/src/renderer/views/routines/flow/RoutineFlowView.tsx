@@ -10,7 +10,7 @@ import { useModel } from '../../../lib/observable'
 import { prefs, usePref } from '../../../lib/prefs'
 import {
   NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasRunning, connectProblem, fieldsForStep, isFlowPaused,
-  isFlowReadOnly, layoutNodes, mediaEnd, mediaKey, mediaTitle, problemsForStep, specKeyOf, specText, stepNameOf,
+  isFlowReadOnly, layoutNodes, mediaBatch, mediaEnd, mediaKey, mediaTitle, problemsForStep, specKeyOf, specText, stepNameOf,
   tidyLayout, unknownSettings, workflowFileBytes,
   type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard,
   type FlowStep, type SettingProblem, type WorkflowFolderAction,
@@ -102,6 +102,7 @@ function SavedSettings({ settings }: { settings: FlowStepSettings | null }) {
             <SettingsText label="Transparent background" value={settings.transparent ? 'Yes' : 'No'} />
           ) : null}
           {settings.voice ? <SettingsText label="Voice" value={settings.voice} /> : null}
+          {settings.batch ? <SettingsText label="Batch" value={String(mediaBatch(settings.batch))} /> : null}
         </>
       )}
       <Text size="caption" tone="secondary" weight="semibold">{tr('Inputs read')}</Text>
@@ -662,6 +663,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
         resolution: settings.resolution ?? '480p',
         transparent: settings.transparent ?? false,
         voice: settings.voice ?? null,
+        batch: mediaBatch(settings.batch ?? media.batch),
       })
     } else {
       const link = canvas.links.find((item) => item.routineId === card.routine.id && item.toBotId === step.botId)
@@ -688,6 +690,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       resolution: media.resolution,
       transparent: media.transparent,
       voice: media.voice,
+      batch: mediaBatch(media.batch),
     })
     for (const link of canvas.links.filter((item) => item.routineId === media.routineId && item.toBotId === mediaKey(media.id))) {
       await flow.connect(link.routineId, link.fromBotId, mediaKey(copy.id), link.instruction)
@@ -828,6 +831,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
           onSaveInstruction={saveLink}
           onDisconnect={(link) => void disconnect(link)}
           onTest={(id) => void flow.test(id)}
+          onRunFromStep={(nodeKey) => void runFromStep(nodeKey)}
           onSetEnabled={(id, on) => void flow.setEnabled(id, on)}
           // No pointer position here: a routine choice, if needed, opens in the middle of the window.
           onConnectFrom={(from, to) => dropped(from, to, { x: window.innerWidth / 2, y: window.innerHeight / 2 })}

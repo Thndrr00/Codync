@@ -15,11 +15,16 @@ pub fn models(hub: &Hub, body: &Value) -> Result<Value> {
         .filter(|row| !row.deleted && !row.config.is_group())
         .ok_or_else(|| anyhow!("unknown bot"))?;
     let backend = row.config.backend.as_str();
+    let listed = crate::media::catalog::models(backend, None).collect::<Vec<_>>();
     Ok(json!({
         // Null when the bot has no agent that makes media at all.
-        "agent": crate::media::catalog::models(backend, None).next().is_some().then_some(backend),
+        "agent": listed.first().map(|_| backend),
         "installed": crate::agent::backends::installed(backend),
-        "models": crate::media::catalog::models(backend, None).map(crate::media::catalog::json).collect::<Vec<_>>(),
+        // Live Sunra models are fetched separately; until that call answers, the picker shows the
+        // fixed catalog and does not mark a saved live model as missing (OpenBot nightly).
+        "modelsReady": true,
+        "unavailableModels": [],
+        "models": listed.iter().map(|model| crate::media::catalog::json(model)).collect::<Vec<_>>(),
     }))
 }
 
@@ -69,6 +74,8 @@ mod tests {
         assert_eq!(answer["agent"], "codex");
         assert_eq!(answer["models"].as_array().unwrap().len(), 1);
         assert_eq!(answer["models"][0]["id"], "gpt-image");
+        assert_eq!(answer["modelsReady"], true);
+        assert!(answer["unavailableModels"].as_array().unwrap().is_empty());
     }
 
     #[test]

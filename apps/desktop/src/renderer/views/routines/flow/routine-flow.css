@@ -971,6 +971,14 @@
   background: rgba(var(--text-rgb), 0.05);
 }
 
+/* A batch's pending progress and priced retries sit above one walk over the finished files. */
+.flow-media-results {
+  width: 100%;
+}
+.flow-media-results .flow-step-result {
+  width: 100%;
+}
+
 /* The title bar: the All workflows menu, the tab strip, and New workflow. */
 .flow-title-bar {
   min-width: 0;
