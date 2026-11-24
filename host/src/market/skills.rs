@@ -15,8 +15,16 @@ const MAX_FILE: usize = 1_000_000;
 /// `Skill::source` of a skill written in Codync rather than downloaded.
 const CUSTOM: &str = "custom";
 
+/// `SKILL.md` saved as "UTF-8 with BOM" by some Windows editors starts with U+FEFF before the `---`.
+/// Strip it once so the front matter is read instead of silently dropping the skill (OpenBot unreleased
+/// fragment triage-15499). Pure and shared by every place that reads a skill's markdown.
+fn without_bom(md: &str) -> &str {
+    md.strip_prefix('\u{feff}').unwrap_or(md)
+}
+
 /// `name` and `description` from a SKILL.md front matter.
 pub(crate) fn front_matter(md: &str) -> (Option<String>, Option<String>) {
+    let md = without_bom(md);
     let mut name = None;
     let mut description = None;
     let mut lines = md.lines();
@@ -75,6 +83,7 @@ pub fn record_bundled(store: &crate::store::Store, id: &str, name: &str, descrip
 
 /// `SKILL.md` without its front matter: what a skill tells the agent to do.
 pub(crate) fn body(md: &str) -> &str {
+    let md = without_bom(md);
     let mut lines = md.split_inclusive('\n');
     if lines.next().map(str::trim) != Some("---") {
         return md.trim();
@@ -587,6 +596,10 @@ mod tests {
         let md = "---\nname: pdf\ndescription: \"Work with PDFs\"\n---\n# PDF";
         assert_eq!(front_matter(md), (Some("pdf".into()), Some("Work with PDFs".into())));
         assert_eq!(front_matter("# no front matter"), (None, None));
+        // triage-15499: a BOM from a Windows editor must not hide the front matter or the body.
+        let bom = format!("\u{feff}{md}");
+        assert_eq!(front_matter(&bom), (Some("pdf".into()), Some("Work with PDFs".into())));
+        assert_eq!(body(&bom), "# PDF");
         let folded = "---\nname: guide\ndescription: >\n  Walks you\n  through it.\nlicense: MIT\n---\n";
         assert_eq!(front_matter(folded), (Some("guide".into()), Some("Walks you through it.".into())));
     }
