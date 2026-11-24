@@ -4,7 +4,7 @@ use super::event::Event;
 use super::session::{bot_for, turn_of};
 use super::{DECISION_WAIT, Decision, External, reply, tool};
 use crate::LockExt;
-use crate::hub::{BotStatus, Hub};
+use crate::hub::Hub;
 use crate::remote::push::{self, AlertKind};
 use crate::store::{BotConfig, EntryKind, Lane};
 use serde_json::{Value, json};
@@ -55,10 +55,9 @@ impl Drop for Waiting {
             entry.data["status"] = "expired".into();
             self.hub.set_entry(&entry.id, &entry.data);
         }
-        self.hub.set_runtime(&self.bot, |r| {
-            r.status = BotStatus::Working;
-            r.activity = "Asking in the terminal…".into();
-        });
+        // Another question in this chat may still be open: it keeps the bot in NeedsInput instead
+        // of this hook going away burying it (OpenBot nightly triage-15338).
+        super::question::after_card(&self.hub, &self.bot, &self.entry, "Asking in the terminal…");
     }
 }
 
@@ -98,10 +97,9 @@ pub(super) async fn wait_card(
 
     let (tx, rx) = oneshot::channel();
     hub.external.state.locked().waiting.insert(entry.id.clone(), tx);
-    let waiting = Waiting { hub: hub.clone(), entry: entry.id, bot: bot.to_owned() };
+    let waiting = Waiting { hub: hub.clone(), entry: entry.id.clone(), bot: bot.to_owned() };
+    super::question::on_post(hub, &entry, title);
     hub.set_runtime(bot, |r| {
-        r.status = BotStatus::NeedsInput;
-        r.activity = format!("Needs approval: {title}");
         r.lane = Some(Lane::main(bot));
     });
     push::notify(hub, config, Some(bot), &format!("{} needs you", config.name), title, AlertKind::NeedsInput);
@@ -136,10 +134,9 @@ pub(super) fn answer(external: &External, hub: &Hub, entry_id: &str, option_id: 
     entry.data["selected"] = option_id.into();
     hub.set_entry(entry_id, &entry.data);
     let bot = entry.data["author"].as_str().unwrap_or(&entry.bot_id).to_owned();
-    hub.set_runtime(&bot, |r| {
-        r.status = BotStatus::Working;
-        r.activity = "Continuing…".into();
-    });
+    // Answering this card cannot close another question in the same chat; if one is still open it
+    // takes over NeedsInput (OpenBot nightly triage-15338).
+    super::question::after_card(hub, &bot, entry_id, "Continuing…");
     // The hook may already be gone (answered in the terminal): nobody is left to tell.
     let _ = waiting.send(decision);
     true
@@ -204,10 +201,7 @@ fn settle_multi(
     }
     hub.set_entry(entry_id, &entry.data);
     let bot = entry.data["author"].as_str().unwrap_or(&entry.bot_id).to_owned();
-    hub.set_runtime(&bot, |r| {
-        r.status = BotStatus::Working;
-        r.activity = "Continuing…".into();
-    });
+    super::question::after_card(hub, &bot, entry_id, "Continuing…");
     if let Some(waiting) = waiting {
         let _ = waiting.send(decision);
     }

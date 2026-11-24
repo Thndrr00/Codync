@@ -22,6 +22,7 @@ import { callLength, relativeTime } from './chat-items'
 import { MarkdownText } from './Markdown'
 import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
+import { openQuestionCards } from './question-cards'
 import { PagePreviewSheet } from './PagePreview'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { AgentSwitchNotice, HandoffNotice } from './HandoffNotice'
@@ -305,7 +306,11 @@ function ChiefIncidentNotice({ entry }: { entry: Entry }) {
 /** Follows the store: the card shows a spinner while its answer is on its way. */
 function LivePermission({ entry }: { entry: Entry }) {
   const store = useLiveStore()
-  return <PermissionCard entry={entry} hostName={store.hostName} answering={store.answering.get(entry.id) ?? null} respond={(o, rule) => store.respond(entry, o, rule)} propose={() => store.proposeRule(entry)} />
+  // The visible card list comes from the same pure overlap decision the host uses: a newer
+  // question never hides an earlier one, and both stay answerable in this chat.
+  const otherQuestions = openQuestionCards(store.chatEntries(entry.botId), entry.botId, entry.threadId ?? null)
+    .filter((card) => card.id !== entry.id && card.open).length
+  return <PermissionCard entry={entry} hostName={store.hostName} answering={store.answering.get(entry.id) ?? null} respond={(o, rule) => store.respond(entry, o, rule)} propose={() => store.proposeRule(entry)} otherQuestions={otherQuestions} />
 }
 
 /** A message's thread, under it: who replied, how many, and how recently (or how many are new). */

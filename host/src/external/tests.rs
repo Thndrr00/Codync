@@ -277,6 +277,44 @@ async fn questions_are_asked_one_card_at_a_time_and_answered_by_label() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+fn one_question(text: &str) -> Value {
+    json!({"questions": [{"question": text, "header": "Q", "multiSelect": false,
+        "options": [{"label": "First"}, {"label": "Second"}]}]})
+}
+
+#[tokio::test]
+async fn a_second_question_in_the_same_chat_leaves_the_first_one_answerable() {
+    let (hub, dir) = hub();
+    super::ingest(&hub, &prompt("plan")).await;
+    let agent_q = asking("AskUserQuestion", &one_question("Which database?"), true);
+    let mut routine_q = asking("AskUserQuestion", &one_question("Ship it?"), true);
+    routine_q["payload"]["tool_use_id"] = "q2".into();
+    let agent_task = tokio::spawn({
+        let hub = hub.clone();
+        async move { super::ingest(&hub, &agent_q).await }
+    });
+    let first = cards(&hub, 1).await.pop().expect("the agent's question");
+    let routine_task = tokio::spawn({
+        let hub = hub.clone();
+        async move { super::ingest(&hub, &routine_q).await }
+    });
+    let both = cards(&hub, 2).await;
+    let routine = both.iter().find(|e| e.data["title"] == "Ship it?").expect("the routine's question").clone();
+
+    // Answering the routine's card settles only that card: the agent's earlier one stays pending.
+    assert!(hub.external.answer(&hub, &routine.id, Some("0")));
+    assert_eq!(routine_task.await.unwrap()["preToolUse"]["permissionDecision"], "allow");
+    // A second tap on the settled routine card commits nothing and leaves the agent's card alone.
+    assert!(hub.external.answer(&hub, &routine.id, Some("1")));
+    assert_eq!(hub.store.entry(&routine.id).expect("the routine card").data["selected"], "0");
+    assert_eq!(hub.store.entry(&first.id).expect("the first card").data["status"], "pending");
+    let id = bot(&hub).unwrap();
+    assert_eq!(hub.runtime(&id).status, BotStatus::NeedsInput, "the earlier question still needs input");
+    assert!(hub.external.answer(&hub, &first.id, Some("1")));
+    assert_eq!(agent_task.await.unwrap()["preToolUse"]["permissionDecision"], "allow");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 fn multi_question() -> Value {
     json!({"questions": [{"question": "Which checks should run?", "header": "Checks", "multiSelect": true,
         "options": [{"label": "Typecheck"}, {"label": "Tests"}, {"label": "Lint"}, {"label": "Audit"}]}]})

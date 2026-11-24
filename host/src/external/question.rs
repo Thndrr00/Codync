@@ -13,7 +13,8 @@
 use super::event::Event;
 use super::permission::{target, wait_card};
 use super::{Decision, tool};
-use crate::hub::Hub;
+use crate::hub::{BotStatus, Hub};
+use crate::store::{Entry, EntryKind};
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
 
@@ -38,6 +39,86 @@ pub(super) fn multi_answer_allowed(provider: &str, card: &Value) -> bool {
         && card["options"]
             .as_array()
             .is_some_and(|options| options.iter().filter(|o| o["optionId"].as_str() != Some(DONE)).count() >= 2)
+}
+
+/// The parts of a question card the overlap decision needs: its own id, the chat it sits in and
+/// whether it is still open. A routine run's question and the agent's earlier question are two
+/// cards — even when a person sees them in the same chat (OpenBot nightly triage-15338).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct CardRef<'a> {
+    pub id: &'a str,
+    pub chat: &'a str,
+    pub open: bool,
+}
+
+/// Whether the posting or answer of `incoming` may close `existing`. Each card owns its lifecycle:
+/// only the card the event names may close, so a routine question never expires the agent's earlier
+/// one in the same chat, and answering either leaves the other waiting. A card in another chat is a
+/// different card even if an id happens to match. A repeat answer replaces the named card with the
+/// same closed status — the host's `waiting` sender is taken once, so it commits nothing twice. Pure.
+pub(super) fn question_can_close(existing: CardRef<'_>, incoming: CardRef<'_>) -> bool {
+    existing.id == incoming.id && existing.chat == incoming.chat
+}
+
+fn card_ref(entry: &Entry) -> CardRef<'_> {
+    CardRef {
+        id: &entry.id,
+        chat: &entry.bot_id,
+        open: matches!(entry.data["status"].as_str(), Some("pending" | "expired")),
+    }
+}
+
+/// The still-open question cards in the same main chat, oldest first. Routine questions reach the
+/// same card path as an agent's own, so a card here may have been posted by either.
+fn open_questions(hub: &Hub, bot: &str) -> Vec<Entry> {
+    hub.store
+        .entries_since(0, 500)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| {
+            e.bot_id == bot
+                && e.thread_id.is_none()
+                && e.kind == EntryKind::Permission.as_str()
+                && e.data["question"] == true
+                && card_ref(e).open
+        })
+        .collect()
+}
+
+/// Called when a card is posted. An earlier question in the chat is not closed by this one: it
+/// stays in the card list and the bot still needs input, with a hint that another card waits.
+pub(super) fn on_post(hub: &Hub, entry: &Entry, title: &str) {
+    let incoming = card_ref(entry);
+    // Only this card may be taken out of the open set; a routine question in the same chat stays.
+    let earlier: Vec<Entry> =
+        open_questions(hub, &entry.bot_id).into_iter().filter(|e| !question_can_close(card_ref(e), incoming)).collect();
+    hub.set_runtime(&entry.bot_id, |r| {
+        r.status = BotStatus::NeedsInput;
+        r.activity = if earlier.is_empty() {
+            format!("Needs approval: {title}")
+        } else {
+            format!("Needs approval: {title} (+{} earlier)", earlier.len())
+        };
+    });
+}
+
+/// Called when a card settles or its hook goes away. If another question is still open in the chat
+/// it takes over the "needs input" state, so the earlier card reappears as answerable; the `fallback`
+/// is the activity to show when this was the last card.
+pub(super) fn after_card(hub: &Hub, bot: &str, closed: &str, fallback: &str) {
+    let incoming = CardRef { id: closed, chat: bot, open: true };
+    // Only the settled card may leave the open set; its siblings in the chat stay answerable.
+    let remaining: Vec<Entry> =
+        open_questions(hub, bot).into_iter().filter(|e| !question_can_close(card_ref(e), incoming)).collect();
+    hub.set_runtime(bot, |r| {
+        if let Some(next) = remaining.first() {
+            r.status = BotStatus::NeedsInput;
+            r.activity = format!("Needs approval: {}", next.data["title"].as_str().unwrap_or("a question"));
+        } else {
+            r.status = BotStatus::Working;
+            r.activity = fallback.to_owned();
+        }
+    });
 }
 
 /// The verdict to print for the hook, or `None` when nobody answered and the terminal should ask.
@@ -275,5 +356,70 @@ mod tests {
     fn up_to_four_questions_are_asked() {
         let four: Vec<Value> = (0..4).map(|_| pick()).collect();
         assert_eq!(questions(&json!({"questions": four})).map(|q| q.len()), Some(4));
+    }
+
+    fn card(id: &str, chat: &str, open: bool) -> CardRef<'_> {
+        CardRef { id, chat, open }
+    }
+
+    #[test]
+    fn two_overlapping_questions_in_one_chat_each_keep_their_own_lifecycle() {
+        let agent = card("agent-q", "bot", true);
+        let routine = card("routine-q", "bot", true);
+        assert!(!question_can_close(agent, routine), "a routine question cannot close the agent's");
+        assert!(!question_can_close(routine, agent), "nor the other way round");
+        assert!(question_can_close(agent, agent), "a card may still close itself");
+        assert!(question_can_close(routine, routine));
+    }
+
+    #[test]
+    fn answering_either_card_first_leaves_the_other_waiting() {
+        let agent = card("agent-q", "bot", true);
+        let routine = card("routine-q", "bot", true);
+        // The routine is answered first: the agent's earlier question is untouched and answerable.
+        assert!(question_can_close(routine, routine));
+        assert!(!question_can_close(agent, card("routine-q", "bot", false)));
+        // The agent answers first: the routine question is untouched instead.
+        assert!(question_can_close(agent, agent));
+        assert!(!question_can_close(routine, card("agent-q", "bot", false)));
+        // A second answer names the same card again, but its status is already closed.
+        assert!(question_can_close(card("routine-q", "bot", false), card("routine-q", "bot", false)));
+        assert!(!card_ref(&entry("routine-q", "bot", "answered")).open);
+    }
+
+    #[test]
+    fn a_card_in_another_chat_is_never_closed_by_a_post_or_an_answer() {
+        let here = card("q", "bot-a", true);
+        let there = card("q", "bot-b", true);
+        assert!(!question_can_close(here, there));
+        assert!(!question_can_close(there, here));
+        assert!(question_can_close(here, here));
+    }
+
+    fn entry(id: &str, bot: &str, status: &str) -> Entry {
+        Entry {
+            id: id.into(),
+            seq: 1,
+            bot_id: bot.into(),
+            rev: 1,
+            kind: EntryKind::Permission.as_str().into(),
+            turn: 1,
+            data: json!({"status": status, "question": true, "title": "Which database?"}),
+            created_at: 1,
+            updated_at: 1,
+            thread_id: None,
+        }
+    }
+
+    #[test]
+    fn an_expired_routine_question_still_cannot_close_the_agent_question() {
+        let agent = card("agent-q", "bot", true);
+        let expired = card_ref(&entry("routine-q", "bot", "expired"));
+        assert!(expired.open, "expired is still an open, answerable card");
+        assert!(!question_can_close(agent, expired));
+        assert!(question_can_close(expired, expired));
+        let answered = card_ref(&entry("routine-q", "bot", "answered"));
+        assert!(!answered.open, "an answered card cannot be closed twice");
+        assert!(!question_can_close(agent, answered));
     }
 }

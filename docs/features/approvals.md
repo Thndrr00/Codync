@@ -137,6 +137,28 @@ Cancelling before *Done* sends no decision and leaves the terminal to ask as usu
 the commit are tested in `host/src/external/question.rs` and `host/src/external/tests.rs`; no question
 text is logged as analytics.
 
+## Overlapping questions
+
+A routine run's question no longer closes a question the agent asked earlier in the same chat
+(OpenBot nightly `triage-15338`): after the routine's card is answered, the earlier one is still
+there and still answerable. Each card's lifecycle is its own. The pure `question_can_close` in
+`host/src/external/question.rs` is the rule: a card may only be closed by its own post or answer
+(same id and chat), never by a different card in the same chat and never by a card in another chat.
+It is wired into the real paths: `wait_card` calls `on_post` when a card appears, and
+`answer`, the multi-answer settle and the expired-hook guard call `after_card` — an earlier open
+question then takes over the bot's NeedsInput state, so the desktop and the island keep showing it
+instead of burying it under "Continuing…". A second answer to an already closed card still commits
+nothing.
+
+The desktop card list follows the same rule. `questionCardsAfter` and `questionCanClose` in
+`apps/desktop/src/renderer/lib/question-overlap.ts` fold a posted or answered card into the visible
+list without dropping any other card; `views/thread/question-cards.ts` applies them to a chat's
+entry list, and the question card shows *Another question is still open* (or *{n} other questions
+are still open*) while a sibling waits. The host's `state.locked().waiting` senders are keyed by
+card id, so answering one card cannot take another's waiter. The decisions and both paths are
+tested in `host/src/external/question.rs`, `host/src/external/tests.rs`, the lib test and the
+thread-view test.
+
 ## Location cards
 
 A voice call's `request_location` tool (OpenBot nightly v0.77.0, "an agent can now ask for your location")

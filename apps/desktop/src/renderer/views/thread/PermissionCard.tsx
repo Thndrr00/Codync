@@ -98,13 +98,15 @@ export function optionLabel(o: PermissionOption) {
 }
 
 /** Approval card in Grok Bot's choice-card style: what the agent wants, where it runs, the answers. */
-export function PermissionCard({ entry, hostName, answering, respond, propose }: {
+export function PermissionCard({ entry, hostName, answering, respond, propose, otherQuestions = 0 }: {
   entry: Entry
   hostName: string
   answering: string | null
   respond: (option: string | null, rule?: ApprovalRule) => void
   /** Asks the host which rule "always allow" would keep; without it the answer goes straight to the agent. */
   propose?: () => Promise<RuleProposal | null>
+  /** Other question cards still open in this chat; one question answering never closes another. */
+  otherQuestions?: number
 }) {
   const tr = useTr()
   const [expanded, setExpanded] = useState(false)
@@ -156,6 +158,11 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
             <Icon name="info.circle" size={10} color="var(--secondary)" />
             <Text size="caption" tone="secondary" title={tr(guidance)}>{tr(guidance)}</Text>
           </HStack>
+        ) : null}
+        {d.toolKind === 'question' && answerable && otherQuestions > 0 ? (
+          <Text size="caption" tone="secondary">
+            {otherQuestions === 1 ? tr('Another question is still open') : fill(tr('{n} other questions are still open'), { n: String(otherQuestions) })}
+          </Text>
         ) : null}
         {brief ? (
           <VStack gap={6} className="permission-brief">
