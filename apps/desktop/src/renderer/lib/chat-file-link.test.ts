@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chatFileHref, chatFileLink, fileReferenceName, isAbsoluteDocumentPath, isKnownFileReference, linkTarget } from './chat-file-link.ts'
+import { chatFileHref, chatFileLink, fileReferenceName, isAbsoluteDocumentPath, isKnownFileReference, linkTarget, previewKind } from './chat-file-link.ts'
 
 test('a full path to any document opens as a file link, including docx, pages and rtf', () => {
   for (const path of ['/Users/e/Documents/Informe.docx', 'C:\\Users\\e\\Notes.pages', '/home/e/notes.rtf', '/Users/e/report.pdf']) {
@@ -44,4 +44,13 @@ test('a file URL escapes spaces and Windows separators', () => {
 test('the file name decodes percent escapes and keeps the last component', () => {
   assert.equal(fileReferenceName('C:\\a\\b\\My%20Report.pdf'), 'My Report.pdf')
   assert.equal(fileReferenceName('/a/b/'), '')
+})
+
+test('only local HTML and PDF get an in-app preview, with a safe fallback for the rest', () => {
+  assert.equal(previewKind('/Users/e/report.PDF'), 'pdf')
+  assert.equal(previewKind('C:\\Docs\\page.htm'), 'html')
+  assert.equal(previewKind('//server/share/My%20Doc.html'), 'html')
+  for (const path of ['/Users/e/notes.txt', '/Users/e/picture.png', 'https://example.com/page.html', '/a/b/\nfile.pdf', '']) {
+    assert.equal(previewKind(path), null, path)
+  }
 })

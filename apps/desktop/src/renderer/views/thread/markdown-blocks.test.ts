@@ -19,3 +19,13 @@ test('blocks: headings, nested lists, rules, tables and code', () => {
 test('a pipe line without its rule stays text', () => {
   assert.deepEqual(parseMarkdown('| not a table'), [{ kind: 'paragraph', text: '| not a table' }])
 })
+
+test('task-list items become checkboxes, with their depth and checked state', () => {
+  assert.deepEqual(parseMarkdown('- [x] shipped\n- [ ] next\n  - [X] nested\n- [ ]'), [
+    { kind: 'task', text: 'shipped', checked: true, depth: 0 },
+    { kind: 'task', text: 'next', checked: false, depth: 0 },
+    { kind: 'task', text: 'nested', checked: true, depth: 1 },
+    { kind: 'bullet', text: '[ ]', marker: '•', depth: 0 },
+  ])
+  assert.deepEqual(parseMarkdown('[x] not a list item'), [{ kind: 'paragraph', text: '[x] not a list item' }])
+})

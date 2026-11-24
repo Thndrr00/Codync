@@ -5,6 +5,7 @@ export type Block =
   | { kind: 'paragraph'; text: string }
   | { kind: 'heading'; text: string; level: number }
   | { kind: 'bullet'; text: string; marker: string; depth: number }
+  | { kind: 'task'; text: string; checked: boolean; depth: number }
   | { kind: 'quote'; text: string }
   | { kind: 'code'; text: string; language: string }
   | { kind: 'table'; header: string[]; rows: string[][] }
@@ -71,7 +72,11 @@ export function parseMarkdown(source: string): Block[] {
       blocks.push({ kind: 'heading', text: heading[2]!.trim(), level: heading[1]!.length })
     } else if (/^[-*+•] /.test(line)) {
       flush()
-      blocks.push({ kind: 'bullet', text: line.slice(2), marker: depth > 0 ? '◦' : '•', depth })
+      const content = line.slice(2)
+      // A checkbox is a task even when the task tools wrote it as plain Markdown (OpenBot 0.74.0).
+      const task = /^\[([ xX])\]\s+(.*)$/.exec(content)
+      if (task) blocks.push({ kind: 'task', text: task[2]!.trim(), checked: task[1]!.toLowerCase() === 'x', depth })
+      else blocks.push({ kind: 'bullet', text: content, marker: depth > 0 ? '◦' : '•', depth })
     } else if (ordered) {
       flush()
       blocks.push({ kind: 'bullet', text: ordered[2]!, marker: ordered[1]!, depth })

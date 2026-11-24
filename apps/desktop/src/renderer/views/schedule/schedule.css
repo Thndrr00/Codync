@@ -143,6 +143,15 @@
   opacity: 0.85;
 }
 
+/* A paused routine sits once a day with a text mark, not a row per tick (OpenBot 0.77.0). */
+.schedule-chip.paused {
+  box-shadow: inset 2px 0 0 var(--tertiary);
+  opacity: 0.9;
+}
+.schedule-chip.paused .schedule-chip-time {
+  font-weight: 600;
+}
+
 .schedule-more {
   align-self: flex-start;
   margin-top: auto;

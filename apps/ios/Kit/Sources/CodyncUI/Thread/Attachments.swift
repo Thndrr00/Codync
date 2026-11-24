@@ -1,3 +1,4 @@
+import AVFoundation
 import CodyncKit
 import ImageIO
 import SwiftUI
@@ -83,9 +84,16 @@ enum AttachmentIcon {
         case "pdf": "doc.richtext"
         case "zip", "gz", "tar", "7z": "doc.zipper"
         case "mov", "mp4", "m4v": "film"
-        case "mp3", "m4a", "wav", "aac": "waveform"
+        case "mp3", "m4a", "wav", "aac", "ogg", "oga", "opus", "flac": "waveform"
         default: "doc"
         }
+    }
+}
+
+extension Attachment {
+    /// Sounds play in the chat instead of sitting in a card (OpenBot 0.70.0/0.72.0).
+    var isAudio: Bool {
+        ["mp3", "m4a", "wav", "aac", "ogg", "oga", "opus", "flac"].contains((name as NSString).pathExtension.lowercased())
     }
 }
 
@@ -112,6 +120,8 @@ struct AttachmentList: View {
                         .onTapGesture { viewing = file }
                         .accessibilityLabel(file.name)
                         .accessibilityAddTraits(.isButton)
+                } else if file.isAudio {
+                    AttachmentAudio(file: file, botId: botId)
                 } else {
                     card(file)
                 }
@@ -234,5 +244,100 @@ struct AttachmentImage: View {
             let size = maxPixels
             image = await Task.detached { ImageData.thumbnail(data, maxPixels: size) }.value
         }
+    }
+}
+
+/// One sound in a message: a play/pause control on the same store bytes a picture uses. Ported
+/// from OpenBot 0.70.0/0.72.0, with the temporary-file pattern of `AttachmentVideo`.
+struct AttachmentAudio: View {
+    let name: String
+    private let id: String
+    private let load: @MainActor (BotStore) async -> Data?
+    @Environment(BotStore.self) private var model
+    @State private var url: URL?
+    @StateObject private var playback = AudioPlayback()
+
+    init(file: Attachment, botId: String) {
+        name = file.name
+        id = file.id
+        load = { await $0.attachmentData(file, bot: botId) }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                Motion.animate {
+                    guard let url else { return }
+                    playback.toggle(url: url)
+                }
+            } label: {
+                Image(systemName: playback.playing ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(Palette.accent)
+            }
+            .buttonStyle(PressScale())
+            .accessibilityLabel(playback.playing ? L10n.tr("Pause") : L10n.tr("Play"))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.subheadline)
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .task(id: [id, model.connection == .online ? "online" : "waiting"]) {
+            guard url == nil, let data = await load(model) else { return }
+            let named = name
+            url = await Task.detached { Self.written(data, named: named) }.value
+        }
+        .onDisappear {
+            playback.stop()
+            guard let url else { return }
+            try? FileManager.default.removeItem(at: url)
+            self.url = nil
+        }
+    }
+
+    /// The sound's bytes in a temporary file the player can open, or nil when they can't be written.
+    private static func written(_ data: Data, named name: String) -> URL? {
+        let ext = (name as NSString).pathExtension
+        let folder = URL.temporaryDirectory.appending(path: "codync-audio")
+        let target = folder.appending(path: UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)"))
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try data.write(to: target)
+            return target
+        } catch {
+            return nil
+        }
+    }
+}
+
+/// The player is kept out of SwiftUI's value tree: AVPlayer is a reference type on the main actor.
+@MainActor
+final class AudioPlayback: ObservableObject {
+    @Published private(set) var playing = false
+    private var player: AVPlayer?
+
+    func toggle(url: URL) {
+        if playing {
+            stop()
+            return
+        }
+        let next = AVPlayer(url: url)
+        next.play()
+        player = next
+        playing = true
+    }
+
+    func stop() {
+        player?.pause()
+        player = nil
+        playing = false
     }
 }

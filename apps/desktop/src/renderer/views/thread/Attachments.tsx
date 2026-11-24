@@ -10,6 +10,8 @@ import { copyPicture } from '../../lib/copy-image'
 import { useTr } from '../../lib/use-language'
 import { useStoreRef } from '../../store/context'
 import type { BotStore } from '../../store/bot-store'
+import { AudioCard } from './AudioCard'
+import { isAudioName } from './audio'
 import './attachments.css'
 
 /** The symbol for a file by its extension. */
@@ -44,13 +46,17 @@ export function AttachmentList({ attachments, botId }: { attachments: Attachment
         isImageName(file.name) ? (
           <ImageChip key={file.id} file={file} botId={botId} open={() => setViewing(file)} />
         ) : (
-          <HStack key={file.id} gap={8} className="attachment-file">
-            <Icon name={attachmentSymbol(file.name)} size={16} color="var(--secondary)" />
-            <VStack gap={1} shrink>
-              <Text size="subheadline" tone="text" truncate className="attachment-file-name">{file.name}</Text>
-              <Text size="caption2" tone="tertiary">{byteCount(file.size)}</Text>
-            </VStack>
-          </HStack>
+          <VStack key={file.id} gap={4} align="flex-end">
+            {/* A sound plays in place; the card below still names it and gives its size (OpenBot 0.70.0). */}
+            {isAudioName(file.name) ? <AudioCard source={{ file, botId }} /> : null}
+            <HStack gap={8} className="attachment-file">
+              <Icon name={attachmentSymbol(file.name)} size={16} color="var(--secondary)" />
+              <VStack gap={1} shrink>
+                <Text size="subheadline" tone="text" truncate className="attachment-file-name">{file.name}</Text>
+                <Text size="caption2" tone="tertiary">{byteCount(file.size)}</Text>
+              </VStack>
+            </HStack>
+          </VStack>
         ),
       )}
       <AttachmentViewer source={viewing && { file: viewing, botId }} close={() => setViewing(null)} />
@@ -140,8 +146,11 @@ export function AttachmentViewer({ source, close }: { source: ImageSource | null
 /** A picture from the computer, fetched once and then read from the cache. */
 export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'icon' | 'thumbnail' | 'full' }) {
   const store = useStoreRef()
+  const tr = useTr()
   const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
   useEffect(() => {
+    setFailed(false)
     let revoked = false
     let made: string | null = null
     const read = () => {
@@ -167,6 +176,16 @@ export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'ic
     }
     // A file's id names its bytes for good; `source` is a new object every render.
   }, [store, source.file.id])
+  if (failed) {
+    // An unreadable format (or a file that is not really a picture) names the file so it can be found.
+    return (
+      <VStack gap={2} align="center" className={`attachment-image-missing ${fit}`}>
+        <Icon name="photo" size={13} color="var(--tertiary)" />
+        <Text size="caption2" tone="secondary">{tr('Image unavailable')}</Text>
+        <Text size="caption2" tone="tertiary" truncate className="attachment-image-missing-name">{source.file.name}</Text>
+      </VStack>
+    )
+  }
   if (!url) {
     return (
       <div className={`attachment-placeholder ${fit}`}>
@@ -174,7 +193,7 @@ export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'ic
       </div>
     )
   }
-  return <img src={url} alt="" className={`attachment-image ${fit}`} />
+  return <img src={url} alt="" className={`attachment-image ${fit}`} onError={() => setFailed(true)} />
 }
 
 /** What a clip's bytes are, by its extension, so the browser can play them. */

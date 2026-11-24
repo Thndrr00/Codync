@@ -42,6 +42,21 @@
 .attachment-file-name {
   max-width: 200px;
 }
+/* A picture that cannot be decoded still names the file (OpenBot 0.74.0). */
+.attachment-image-missing {
+  max-width: 220px;
+  min-width: 120px;
+  padding: 8px;
+  border-radius: var(--radius-l);
+  background: var(--bubble-user);
+}
+.attachment-image-missing.full {
+  max-width: 100%;
+  min-width: 0;
+}
+.attachment-image-missing-name {
+  max-width: 200px;
+}
 .attachment-viewer {
   flex: 1;
   min-height: 0;
@@ -93,6 +108,24 @@
   border-radius: var(--radius-xs);
 }
 
+/* Sounds use the browser's native controls; Download sits beside them for a shared file. */
+.audio-player {
+  width: min(320px, 100%);
+  min-width: 0;
+}
+.audio-player audio {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+}
+.audio-loading {
+  padding: 8px 12px;
+  border-radius: var(--radius-l);
+  background: var(--bubble-user);
+}
+
 .file-card {
   padding: 14px;
   background: var(--bubble-agent);
@@ -101,7 +134,8 @@
 }
 /* A clip in the chat fills the chat's width instead of collapsing into a small square,
    so the browser's full control bar stays visible (OpenBot 0.70.0, #11094/#12616). */
-.file-card:has(.video-player) {
+.file-card:has(.video-player),
+.file-card:has(.audio-player) {
   max-width: min(100%, 640px);
 }
 .file-card-image {

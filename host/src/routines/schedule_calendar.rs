@@ -100,7 +100,11 @@ impl Routines {
         }
         let state = self.state.locked();
         let mut items: Vec<Value> = Vec::new();
-        for routine in state.routines.iter().filter(|r| !r.deleted && r.enabled) {
+        // OpenBot 0.77.0: a paused routine still shows once on each day it would have run, with a
+        // `paused` mark, so it doesn't vanish from Schedule. The client folds the moments into one
+        // row per day; enabled routines keep the plain wire shape older clients expect.
+        for routine in state.routines.iter().filter(|r| !r.deleted) {
+            let paused = !routine.enabled;
             for trigger in &routine.triggers {
                 let (kind, zone) = match trigger {
                     Trigger::Cron { time_zone, .. } => ("cron", time_zone.to_string()),
@@ -109,7 +113,7 @@ impl Routines {
                     Trigger::Webhook | Trigger::Event { .. } | Trigger::Watch { .. } => continue,
                 };
                 for at in occurrences_in_range(trigger, from, to, &zone) {
-                    items.push(json!({
+                    let mut item = json!({
                         "id": routine.id,
                         "name": routine.name,
                         "at": at,
@@ -119,7 +123,11 @@ impl Routines {
                         "kind": "routine",
                         "description": trigger.description(),
                         "instruction": routine.instruction,
-                    }));
+                    });
+                    if paused {
+                        item["paused"] = Value::Bool(true);
+                    }
+                    items.push(item);
                 }
             }
         }

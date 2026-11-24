@@ -1,30 +1,39 @@
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useContext, useState, type MouseEvent, type ReactNode } from 'react'
 import { parseMarkdown, type Block } from './markdown-blocks.ts'
 import { Hairline } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { highlightSpans } from './code-highlight.ts'
+import { HScroll } from './HScroll.tsx'
 import { looksLikeDiff, parseDiff, type DiffRow } from './diff-rows.ts'
 import { withChatLinkSource } from './link-source.ts'
-import { chatFileHref, chatFileLink, linkTarget } from '../../lib/chat-file-link.ts'
+import { chatFileHref, chatFileLink, linkTarget, previewKind } from '../../lib/chat-file-link.ts'
+import { LocalFilePreviewSheet, LocalPreviewContext, type LocalPreview } from './PagePreview.tsx'
 import './markdown.css'
 
 // The Mac's Markdown for messages: the blocks from `markdown-blocks.ts`, with inline styling like
 // `AttributedString(markdown:)`.
 
 /**
- * A local file link in a reply: the same underlined chat link a web URL uses. A full path in a code
- * span (including .docx / .pages / .rtf) opens as a file, while commands stay plain code (OpenBot
- * nightly triage-12380).
+ * A link in a reply: PDF and HTML paths open in the chat's inert preview, other file types and web
+ * URLs keep opening in the computer's own app. A full path in a code span (including .docx /
+ * .pages / .rtf) is a file, while commands stay plain code (OpenBot nightly triage-12380).
  */
+function FileAnchor({ path, href, label }: { path: string; href: string; label: ReactNode }) {
+  const preview = useContext(LocalPreviewContext)
+  const open = (e: MouseEvent) => {
+    e.preventDefault()
+    // A bare name has no workspace to resolve against here, so only a written path can preview.
+    const kind = chatFileLink(path) ? previewKind(path) : null
+    if (kind) preview({ path, href, kind })
+    else window.codync.app.openExternal(href)
+  }
+  return <a href={href} title={path} className="md-link" onClick={open}>{label}</a>
+}
+
 function localFileLink(path: string, label: string, key: string): ReactNode {
-  const href = chatFileHref(path)
-  return (
-    <a key={key} href={href} title={path} className="md-link" onClick={(e) => { e.preventDefault(); window.codync.app.openExternal(href) }}>
-      {label}
-    </a>
-  )
+  return <FileAnchor key={key} path={path} href={chatFileHref(path)} label={label} />
 }
 
 /** Inline Markdown: `code` (tinted), **bold**, *italic*, ~~strike~~, [links](url). */
@@ -61,11 +70,7 @@ function emphasis(text: string, key: string): ReactNode[] {
       const written = linkTarget(m[2]!)
       const file = chatFileLink(written)
       const href = file ? file.href : withChatLinkSource(written)
-      out.push(
-        <a key={k} href={href} title={written} className="md-link" onClick={(e) => { e.preventDefault(); window.codync.app.openExternal(href) }}>
-          {emphasis(m[1], `${k}-`)}
-        </a>,
-      )
+      out.push(<FileAnchor key={k} path={written} href={href} label={emphasis(m[1], `${k}-`)} />)
     } else if (m[3] !== undefined || m[4] !== undefined) out.push(<strong key={k} className="md-strong">{emphasis(m[3] ?? m[4]!, `${k}-`)}</strong>)
     else if (m[5] !== undefined) out.push(<s key={k}>{emphasis(m[5], `${k}-`)}</s>)
     else out.push(<em key={k}>{emphasis(m[6] ?? m[7]!, `${k}-`)}</em>)
@@ -91,13 +96,24 @@ const MarkdownBlock = memo(function MarkdownBlock({ block }: { block: Block }) {
           <span className="md-text md-bullet-text" dir="auto">{inline(block.text)}</span>
         </HStack>
       )
+    case 'task':
+      // A read-only marker: a reply's checklist is what the agent wrote, not a setting to change.
+      return (
+        <HStack align="baseline" gap={6} className="md-spaced md-body md-task" style={{ paddingLeft: block.depth * 16 }}>
+          <span className={`md-task-box${block.checked ? ' checked' : ''}`} role="checkbox" aria-checked={block.checked}
+            aria-readonly aria-label={block.checked ? 'Checked' : 'Unchecked'}>
+            {block.checked ? <Icon name="checkmark" size={10} weight="bold" /> : null}
+          </span>
+          <span className={`md-text md-bullet-text${block.checked ? ' done' : ''}`} dir="auto">{inline(block.text)}</span>
+        </HStack>
+      )
     case 'rule':
       return <Hairline className="md-rule" />
     case 'table': {
       const columns = Math.max(block.header.length, ...block.rows.map((r) => r.length))
       const cols = Array.from({ length: columns }, (_, i) => i)
       return (
-        <div className="md-table-scroll">
+        <HScroll>
           <div className="md-table md-body" style={{ gridTemplateColumns: `repeat(${columns}, max-content)` }}>
             {cols.map((i) => (
               <Text key={`h${i}`} weight="semibold" dir="auto">{inline(block.header[i] ?? '', `h${i}`)}</Text>
@@ -107,7 +123,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ block }: { block: Block }) {
               ...cols.map((i) => <span key={`${r}-${i}`} dir="auto">{inline(row[i] ?? '', `${r}-${i}`)}</span>),
             ])}
           </div>
-        </div>
+        </HScroll>
       )
     }
     case 'quote':
@@ -148,7 +164,7 @@ function CodeFrame({ label, copyText }: { label: string; copyText: string }) {
           <Icon name={copied ? 'checkmark' : 'doc.on.doc'} size={12} weight="medium" />
         </button>
       </div>
-      <pre className={wrap ? 'md-code-text wrap' : 'md-code-text'}>{highlighted(copyText, label)}</pre>
+      <HScroll><pre className={wrap ? 'md-code-text wrap' : 'md-code-text'}>{highlighted(copyText, label)}</pre></HScroll>
     </div>
   )
 }
@@ -169,9 +185,11 @@ function DiffBlock({ rows, original, language }: { rows: DiffRow[]; original: st
           <Icon name={copied ? 'checkmark' : 'doc.on.doc'} size={12} weight="medium" />
         </button>
       </div>
-      <div className="md-code-text md-diff">
-        {rows.map((row, i) => <DiffLine key={i} row={row} />)}
-      </div>
+      <HScroll>
+        <div className="md-code-text md-diff">
+          {rows.map((row, i) => <DiffLine key={i} row={row} />)}
+        </div>
+      </HScroll>
     </div>
   )
 }
@@ -211,11 +229,15 @@ function highlighted(text: string, language: string): ReactNode {
 /** The desktop's Markdown for messages; a block that didn't change keeps its rendering. */
 export const MarkdownText = memo(function MarkdownText({ text }: { text: string }) {
   const blocks = parseMarkdown(text)
+  const [local, setLocal] = useState<LocalPreview | null>(null)
   return (
-    <VStack gap={10} shrink className="markdown selectable">
-      {blocks.map((b, i) => (
-        <MarkdownBlock key={i} block={b} />
-      ))}
-    </VStack>
+    <LocalPreviewContext.Provider value={setLocal}>
+      <VStack gap={10} shrink className="markdown selectable">
+        {blocks.map((b, i) => (
+          <MarkdownBlock key={i} block={b} />
+        ))}
+      </VStack>
+      <LocalFilePreviewSheet preview={local} close={() => setLocal(null)} />
+    </LocalPreviewContext.Provider>
   )
 })

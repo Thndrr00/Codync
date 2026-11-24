@@ -11,10 +11,40 @@ export interface ScheduleItem {
   kind: string
   description?: string | null
   instruction?: string | null
+  /** A disabled routine, shown once a day with a paused mark instead of at every trigger (OpenBot 0.77.0). */
+  paused?: boolean
 }
 
 export interface ScheduleListing {
   items: ScheduleItem[]
+}
+
+/** One calendar chip, with the paused flag resolved for the zone the view draws. */
+export interface ScheduleRow {
+  key: string
+  item: ScheduleItem
+  paused: boolean
+}
+
+/**
+ * Turns the host's moments into rows: enabled routines keep every occurrence, while a paused one
+ * contributes a single row on each day it would have run. Pure, so the rule is tested on its own.
+ */
+export function scheduleRows(items: ScheduleItem[], zone: string): ScheduleRow[] {
+  const pausedDays = new Set<string>()
+  const rows: ScheduleRow[] = []
+  for (const item of items) {
+    const paused = item.paused === true
+    const day = dayOf(item.at, zone)
+    if (paused) {
+      const key = `${item.id}:${day}`
+      if (pausedDays.has(key)) continue
+      pausedDays.add(key)
+    }
+    rows.push({ key: paused ? `paused:${item.id}:${day}` : `${item.id}:${item.at}`, item, paused })
+  }
+  rows.sort((a, b) => a.item.at - b.item.at || a.key.localeCompare(b.key))
+  return rows
 }
 
 export type ScheduleMode = 'month' | 'week' | 'day'

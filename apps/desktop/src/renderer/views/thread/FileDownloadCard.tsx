@@ -8,6 +8,8 @@ import { IconButtonBase } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { AttachmentImage, AttachmentViewer, attachmentSymbol, byteCount, SharedVideo, type ImageSource } from './Attachments'
+import { AudioCard } from './AudioCard'
+import { isAudioName } from './audio'
 import { trNow } from '../../lib/l10n.ts'
 import './attachments.css'
 
@@ -46,7 +48,7 @@ export function FileDownloadCard({ entry, file, onOpen }: { entry: Entry; file: 
         <AttachmentImage source={image} fit="thumbnail" />
       </button>
       <AttachmentViewer source={viewing ? image : null} close={() => setViewing(false)} />
-    </> : null}
+    </> : isAudioName(file.name) ? <AudioCard source={image} /> : null}
     <HStack gap={12}>
       <Icon name={attachmentSymbol(file.name)} size={24} color="var(--secondary)" />
       <VStack grow>

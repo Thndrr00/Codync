@@ -10,6 +10,24 @@ destination URL; clicking opens it in the default browser. iPhone links keep the
 system link interaction. The terminal already underlines Markdown link labels;
 it has no pointer tooltip or link-opening action.
 
+## Sound, links and Markdown in a reply
+
+- An M4A, WAV, AAC, OGG, Opus, FLAC or MP3 attachment plays in the chat with the platform's own
+  controls, on desktop and iPhone (OpenBot 0.70.0/0.72.0). The bytes come from the same store path
+  as a picture; a sound a bot shared also downloads from the player. Android keeps these as file
+  cards for now: it has no media3/ExoPlayer dependency, and its only `MediaPlayer` use is the
+  voice-call port, not a reusable Compose player surface.
+- A PDF or HTML file link in a reply opens in the chat's inert side preview instead of the system
+  app (OpenBot 0.77.0/0.74.0): a sandboxed frame with no scripts or outside content, plus an **Open
+  in system app** button. A local path of any other type, and a web link, still opens in its own app.
+  On a Markdown surface outside a chat there is no preview to show, so the link keeps that fallback.
+- A checklist written as `- [x] …` renders as a checked box and dimmed item text rather than a
+  literal `[x]` (OpenBot 0.74.0). It is read-only: the box shows what the agent wrote and does not
+  change the task. A picture that cannot be decoded shows **Image unavailable** and its file name.
+- Wide tables, long code lines and diffs scroll sideways with an arrow and a fade on the side that
+  still has content (OpenBot 0.72.0). The arrows follow the scroll position; narrow blocks show
+  neither. Wrapped code stays wrapped and needs no arrow.
+
 ## Messages are sent, not streamed
 
 - Every bot gets the built-in `chat` MCP server (`codync-host mcp chat`,

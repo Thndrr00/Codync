@@ -59,6 +59,22 @@ export function linkTarget(raw: string): string {
   return target.split(/\s/u)[0] ?? target
 }
 
+export type PreviewKind = 'html' | 'pdf'
+
+/**
+ * Whether a written file path can be shown in the chat's sandboxed preview. HTML and PDF have an
+ * in-app surface; every other type falls back to the computer's own app (OpenBot 0.77.0/0.74.0).
+ */
+export function previewKind(path: string): PreviewKind | null {
+  if (CONTROL.test(path)) return null
+  // A web URL is not a local document; a Windows drive letter is.
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(path) && !/^[A-Za-z]:[/\\]/u.test(path)) return null
+  const extension = fileReferenceName(path).split('.').at(-1)?.toLowerCase() ?? ''
+  if (extension === 'pdf') return 'pdf'
+  if (extension === 'html' || extension === 'htm') return 'html'
+  return null
+}
+
 /** A local path as a file URL: Windows separators become slashes and reserved URL chars are escaped. */
 export function chatFileHref(path: string): string {
   const normalized = path.replaceAll('\\', '/')

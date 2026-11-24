@@ -37,14 +37,71 @@
 .md-bullet-text {
   min-width: 0;
 }
+/* A reply's checklist is read-only: the box is a marker, never a control that changes the task. */
+.md-task-box {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--tertiary);
+  border-radius: 3px;
+  color: var(--on-accent, var(--background));
+}
+.md-task-box.checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.md-bullet-text.done {
+  color: var(--secondary);
+  text-decoration: line-through;
+}
 .md-quote {
   color: var(--secondary);
   padding-left: 10px;
   box-shadow: inset 3px 0 0 var(--border);
 }
-.md-table-scroll {
-  overflow-x: auto;
+/* Wide tables and unwrapped code scroll inside one element, with a fade and an arrow at the edge
+   that still has content (OpenBot 0.72.0). The arrows appear only when `HScroll` measures overflow. */
+.md-scroll-wrap {
+  position: relative;
+  min-width: 0;
 }
+.md-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.md-scroll-wrap[data-left='true']::before,
+.md-scroll-wrap[data-right='true']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 26px;
+  z-index: 1;
+  pointer-events: none;
+}
+.md-scroll-wrap[data-left='true']::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bubble-agent), transparent);
+}
+.md-scroll-wrap[data-right='true']::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bubble-agent), transparent);
+}
+.md-scroll-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  color: var(--secondary);
+  background: var(--field);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+}
+.md-scroll-arrow.left { left: 1px; }
+.md-scroll-arrow.right { right: 1px; }
+
 .md-table {
   display: grid;
   column-gap: 16px;
@@ -105,7 +162,7 @@
   font-family: var(--mono);
   font-size: calc(10px * var(--md-scale));
   color: var(--text);
-  overflow-x: auto;
+  /* Its HScroll parent owns horizontal scrolling and the edge arrows. */
   white-space: pre;
 }
 .md-code-text.wrap {

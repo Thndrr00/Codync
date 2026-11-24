@@ -8,8 +8,8 @@ import { errorText } from '../routines/routine'
 import { currentZone } from '../routines/time-zones'
 import { ScheduleCreateDialog, type ScheduleBot, type ScheduleSlot } from './ScheduleCreateDialog'
 import {
-  dayOf, dayLabel, hourOf, rangeFor, rangeLabel, shiftAnchor, timeOf, today,
-  type ScheduleItem, type ScheduleListing, type ScheduleMode,
+  dayOf, dayLabel, hourOf, rangeFor, rangeLabel, scheduleRows, shiftAnchor, timeOf, today,
+  type ScheduleListing, type ScheduleMode, type ScheduleRow,
 } from './schedule'
 import './schedule.css'
 
@@ -55,12 +55,11 @@ export function ScheduleView({ botId, bots }: { botId: string; bots: ScheduleBot
   }, [range.from, range.to, store])
 
   const byDay = useMemo(() => {
-    const map = new Map<string, ScheduleItem[]>()
-    for (const item of listing?.items ?? []) {
-      const key = dayOf(item.at, zone)
+    const map = new Map<string, ScheduleRow[]>()
+    for (const row of scheduleRows(listing?.items ?? [], zone)) {
+      const key = dayOf(row.item.at, zone)
       const list = map.get(key) ?? []
-      list.push(item)
-      list.sort((a, b) => a.at - b.at)
+      list.push(row)
       map.set(key, list)
     }
     return map
@@ -75,12 +74,15 @@ export function ScheduleView({ botId, bots }: { botId: string; bots: ScheduleBot
   const open = (day: string, hour: number | null) => {
     if (canCreate(day, hour)) setSlot({ day, hour })
   }
-  const chip = (item: ScheduleItem) => (
-    <span key={`${item.id}-${item.at}`} className={`schedule-chip ${item.trigger}`} title={`${item.name} · ${item.description ?? ''}`}>
-      <span className="schedule-chip-time">{timeOf(item.at, zone)}</span>
-      <span className="schedule-chip-name">{item.name}</span>
-    </span>
-  )
+  const chip = (row: ScheduleRow) => {
+    const { item } = row
+    return (
+      <span key={row.key} className={`schedule-chip ${item.trigger}${row.paused ? ' paused' : ''}`} title={`${item.name} · ${item.description ?? ''}`}>
+        <span className="schedule-chip-time">{row.paused ? tr('Paused') : timeOf(item.at, zone)}</span>
+        <span className="schedule-chip-name">{item.name}</span>
+      </span>
+    )
+  }
   const chips = (day: string) => (byDay.get(day) ?? []).slice(0, CHIP_LIMIT[mode]).map(chip)
   const more = (day: string) => Math.max(0, (byDay.get(day)?.length ?? 0) - CHIP_LIMIT[mode])
 
@@ -122,7 +124,7 @@ export function ScheduleView({ botId, bots }: { botId: string; bots: ScheduleBot
                 }}
               >
                 <Text size="caption" tone="tertiary" className="schedule-hour-label">{String(hour).padStart(2, '0')}:00</Text>
-                <div className="schedule-hour-items">{(byDay.get(anchor) ?? []).filter((item) => hourOf(item.at, zone) === hour).map(chip)}</div>
+                <div className="schedule-hour-items">{(byDay.get(anchor) ?? []).filter((row) => hourOf(row.item.at, zone) === hour).map(chip)}</div>
               </div>
             ))}
           </div>

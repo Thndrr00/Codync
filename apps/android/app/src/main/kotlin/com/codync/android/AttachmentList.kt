@@ -116,6 +116,12 @@ import kotlinx.coroutines.launch
     }
 }
 
+/**
+ * Sound attachments stay cards on Android for now: the app has no media3/ExoPlayer dependency and
+ * the only `MediaPlayer` use here is the voice-call port (`VoiceAudioPorts.kt`), not a reusable
+ * Compose player surface. Desktop and iPhone play M4A/WAV/AAC/OGG/Opus/FLAC in the chat
+ * (OpenBot 0.70.0/0.72.0); adding the same here needs that player dependency first.
+ */
 @Composable private fun AttachmentCard(file: Attachment) {
     Row(Modifier.clip(RoundedRectangle(16.dp)).background(Palette.bubbleUser).semantics(mergeDescendants = true) { }
         .padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
