@@ -34,12 +34,32 @@ pub(super) fn oldest_queued(hub: &Hub) -> Result<Option<(String, u64)>> {
     Ok(read(hub)?.into_iter().min_by_key(|p| p.at).map(|p| (p.id, p.at)))
 }
 
-/// A queued message that is dropped before `on_message` writes its history row still owns the file
-/// `save_media` wrote; without a row, nothing else would delete it.
+/// A queued message that is dropped before `on_message` writes its history row still owns the files
+/// `save_media` wrote; without a row, nothing else would delete them.
 fn remove_pending_media(event: &Value) {
-    if let Some(path) = event["media"]["_codyncPath"].as_str() {
-        super::history::remove_queued_file(path);
+    for key in ["media", "quotedMedia"] {
+        if let Some(path) = event[key]["_codyncPath"].as_str() {
+            super::history::remove_queued_file(path);
+        }
     }
+}
+
+/// Keeps only metadata in SQLite, with the saved path the live path reopens. The bytes stay out of
+/// the queue row, including for the file of a quoted message (OpenBot 0.72.0).
+async fn media_metadata(media: &Map<String, Value>) -> Value {
+    let mut metadata: Map<String, Value> = media
+        .iter()
+        .filter(|(key, _)| key.as_str() != "data")
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    match super::save_media(media).await {
+        Ok(Some(path)) => {
+            metadata.insert("_codyncPath".into(), path.into());
+        }
+        Ok(None) => {}
+        Err(error) => tracing::warn!(%error, "WhatsApp attachment could not be saved"),
+    }
+    Value::Object(metadata)
 }
 
 pub(super) fn invalidate_link(hub: &Hub) -> Result<()> {
@@ -202,20 +222,10 @@ pub(super) async fn receive(app: &WhatsApp, hub: &Arc<Hub>, event: &Value) -> Re
     small.insert("_codyncMe".into(), me.into());
     let Some(generation) = snapshot(hub, &Value::Object(small.clone()), me)? else { return Ok(()) };
     if let Some(media) = event["media"].as_object() {
-        // Keep only metadata in SQLite; the existing attachment store owns the bytes.
-        let mut metadata: Map<String, Value> = media
-            .iter()
-            .filter(|(key, _)| key.as_str() != "data")
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect();
-        match super::save_media(media).await {
-            Ok(Some(path)) => {
-                metadata.insert("_codyncPath".into(), path.into());
-            }
-            Ok(None) => {}
-            Err(error) => tracing::warn!(%error, "WhatsApp attachment could not be saved"),
-        }
-        small.insert("media".into(), Value::Object(metadata));
+        small.insert("media".into(), media_metadata(media).await);
+    }
+    if let Some(quoted) = event["quotedMedia"].as_object() {
+        small.insert("quotedMedia".into(), media_metadata(quoted).await);
     }
     let event = Value::Object(small);
     ensure!(serde_json::to_vec(&event)?.len() <= 256 * 1024, "WhatsApp message metadata exceeds 256 KiB");

@@ -75,6 +75,25 @@ function mediaOf(message) {
     }
 }
 
+/** Reads one attachment's bytes, leaving its metadata alone when it is too big or unreadable. */
+async function withBytes(message, media) {
+    const limit = 32 * 1024 * 1024
+    if (!media || media.size > limit) return media
+    try {
+        const stream = await downloadMediaMessage(message, 'stream', {})
+        const chunks = []
+        let size = 0
+        for await (const chunk of stream) {
+            size += chunk.length
+            if (size > limit) throw new Error('attachment exceeds 32 MiB')
+            chunks.push(chunk)
+        }
+        return { ...media, data: Buffer.concat(chunks, size).toString('base64') }
+    } catch {
+        return media
+    }
+}
+
 async function start() {
     if (starting || socket) return out({ type: 'state', state: socket ? 'connected' : 'starting' })
     starting = true
@@ -125,21 +144,13 @@ async function start() {
                 const quoted = context?.participant ? jidNormalizedUser(context.participant) === me : false
                 if (group && !mentioned && !quoted && !self) continue
                 const sender = message.key.participant ? jidNormalizedUser(message.key.participant) : (chat ? jidNormalizedUser(chat) : '')
-                let media = mediaOf(message)
-                try {
-                    const limit = 32 * 1024 * 1024
-                    if (media && media.size <= limit) {
-                        const stream = await downloadMediaMessage(message, 'stream', {})
-                        const chunks = []
-                        let size = 0
-                        for await (const chunk of stream) {
-                            size += chunk.length
-                            if (size > limit) throw new Error('attachment exceeds 32 MiB')
-                            chunks.push(chunk)
-                        }
-                        media = { ...media, data: Buffer.concat(chunks, size).toString('base64') }
-                    }
-                } catch {}
+                const media = await withBytes(message, mediaOf(message))
+                // OpenBot 0.72.0: a reply carries the quoted message's text and file to the agent too.
+                // The quoted payload has no key of its own, so it borrows this message's key to download.
+                const quotedMessage = context?.quotedMessage ?? null
+                const quotedMedia = quotedMessage
+                    ? await withBytes({ key: message.key, message: quotedMessage }, mediaOf({ message: quotedMessage }))
+                    : null
                 out({
                     type: 'message',
                     id: message.key.id,
@@ -149,6 +160,8 @@ async function start() {
                     group,
                     mentioned,
                     quoted,
+                    quotedText: quotedMessage ? textOf({ message: quotedMessage }) : '',
+                    quotedMedia,
                     name: message.pushName ?? null,
                     text: textOf(message),
                     contact: contactOf(message),

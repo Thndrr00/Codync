@@ -79,7 +79,14 @@ impl Actor {
     pub(super) fn begin_media(&mut self, kind: Kind, output: Output, prompt: Option<String>) {
         // A finished one is dropped; the rest keep their send from reading as cancelled.
         self.files.quiet.retain_mut(|done| matches!(done.try_recv(), Err(oneshot::error::TryRecvError::Empty)));
-        let name = crate::media::display_name(kind, output.path.as_deref(), 0);
+        // A chat media tool names its file from the first words of the prompt (OpenBot v0.72.0);
+        // the public adapter is shared with the routine flow path and falls back to the generic name.
+        let name = crate::media::display_name_from_prompt(
+            kind,
+            output.path.as_deref(),
+            0,
+            prompt.as_deref().unwrap_or_default(),
+        );
         let source = if let Some(path) = output.path {
             path
         } else {

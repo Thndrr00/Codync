@@ -28,7 +28,7 @@ pub use batch::{
     REFERENCE_RETENTION, REFERENCE_RETENTION_DAYS, batch_credits, batch_credits_view, batch_results, default_batch,
     kept_files, media_batch, model_available, reference_expired,
 };
-pub use output::{Output, decode_base64, display_name, kind, output};
+pub use output::{Output, decode_base64, display_name, display_name_from_prompt, kind, output};
 
 use anyhow::{Result, bail, ensure};
 use command::{Frames, Request};
@@ -86,9 +86,40 @@ pub fn nearest(choices: &[u32], asked: u32) -> u32 {
         .unwrap_or(asked)
 }
 
+/// The first words of a prompt as a safe, short file-name stem. Pure: only letters and digits
+/// (of any script), `-` and `_` survive, so a path, quote or control character never reaches a name.
+fn prompt_stem(prompt: &str) -> Option<String> {
+    const WORDS: usize = 5;
+    const CHARS: usize = 40;
+    let stem: String = prompt
+        .split_whitespace()
+        .filter_map(|word| {
+            let clean: String = word.chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_').collect();
+            (!clean.is_empty()).then_some(clean)
+        })
+        .take(WORDS)
+        .collect::<Vec<_>>()
+        .join("-");
+    let stem: String = stem.chars().take(CHARS).collect::<String>().to_lowercase();
+    let stem = stem.trim_matches(['-', '_']);
+    (!stem.is_empty()).then(|| stem.to_owned())
+}
+
+/// OpenBot 0.72.0: a made file is named from the first words of its prompt, so the chat shows what
+/// was asked for instead of `generated-video.mp4`. Pure; an empty or punctuation-only prompt falls
+/// back to the generic name.
+pub fn name_from_prompt(prompt: &str, ext: &str) -> String {
+    format!("{}.{ext}", prompt_stem(prompt).unwrap_or_else(|| "generated".to_owned()))
+}
+
 /// The safe display name of a made file: `generated-image.png`, or `generated-video.mp4`. The
 /// extension comes from what the tool wrote, and is one the clients can play or show.
 pub fn name(kind: Kind, path: &str, index: usize) -> String {
+    name_with_prompt(kind, path, index, None)
+}
+
+/// As [`name`], but named after the first words of the prompt when it says something.
+pub fn name_with_prompt(kind: Kind, path: &str, index: usize, prompt: Option<&str>) -> String {
     let extension = path.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
     let allowed: &[&str] = match kind {
         Kind::Image => &["png", "jpg", "jpeg", "webp", "gif", "avif"],
@@ -102,8 +133,9 @@ pub fn name(kind: Kind, path: &str, index: usize) -> String {
             Kind::Video => "mp4".to_owned(),
         }
     };
+    let stem = prompt.and_then(prompt_stem).unwrap_or_else(|| format!("generated-{}", kind.as_str()));
     let suffix = if index == 0 { String::new() } else { format!("-{}", index + 1) };
-    format!("generated-{}{suffix}.{extension}", kind.as_str())
+    format!("{stem}{suffix}.{extension}")
 }
 
 /// A setting of a request that the model does not make, named for the person who asked.
@@ -177,6 +209,36 @@ mod tests {
         assert_eq!(name(Kind::Image, "/tmp/a.bmp", 0), "generated-image.png");
         assert_eq!(name(Kind::Video, "/tmp/a.mov", 1), "generated-video-2.mov");
         assert_eq!(name(Kind::Video, "/tmp/a.m4v", 0), "generated-video.mp4");
+    }
+
+    #[test]
+    fn a_prompt_names_a_file_with_its_first_safe_words() {
+        assert_eq!(name_from_prompt("A red fox in the snow, cinematic lighting", "mp4"), "a-red-fox-in-the.mp4");
+        assert_eq!(name_from_prompt("  multiple   spaces\n and dashes  ", "png"), "multiple-spaces-and-dashes.png");
+        assert_eq!(name_from_prompt("../etc/passwd \\ dangerous: name", "mp4"), "etcpasswd-dangerous-name.mp4");
+        // Punctuation-only, empty and whitespace prompts keep the generic name.
+        for prompt in ["", "   ", "!!! ???", "— —"] {
+            assert_eq!(name_from_prompt(prompt, "mp4"), "generated.mp4", "{prompt}");
+        }
+        // Unicode letters survive, but a name is capped by characters, never cut mid-codepoint.
+        let long = "狐狸 在 雪地 上 奔跑 ".repeat(20);
+        let named = name_from_prompt(&long, "png");
+        assert!(named.starts_with("狐狸-在-雪地-上-奔跑.png"), "{named}");
+        assert!(named.chars().count() <= 40 + 4, "{named}");
+        let capped = name_from_prompt(&"a".repeat(200), "mp4");
+        assert_eq!(capped.chars().count(), 40 + 4, "five long words still cap at 40 characters");
+        assert!(!capped.contains("--"), "the cap cannot leave a dangling separator");
+    }
+
+    #[test]
+    fn a_named_file_keeps_its_extension_and_batch_suffix() {
+        assert_eq!(
+            name_with_prompt(Kind::Video, "/tmp/a.mov", 2, Some("a paper boat in a gutter")),
+            "a-paper-boat-in-a-3.mov"
+        );
+        assert_eq!(name_with_prompt(Kind::Video, "/tmp/a.m4v", 0, None), "generated-video.mp4");
+        assert_eq!(name_with_prompt(Kind::Image, "/tmp/a.bmp", 0, Some("   ")), "generated-image.png");
+        assert_eq!(name(Kind::Image, "/tmp/a.webp", 0), "generated-image.webp", "the old path is unchanged");
     }
 
     #[test]

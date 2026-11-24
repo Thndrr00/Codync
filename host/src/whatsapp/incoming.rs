@@ -28,6 +28,22 @@ fn prompt(place: &str, note: &str) -> String {
     format!("WhatsApp message from {place}:\n\n{note}")
 }
 
+/// OpenBot 0.72.0: the message you reply to brings its text and file into the agent's prompt. Pure
+/// and deliberately brief: the path is already saved by the media store, and no sender id is logged.
+fn quoted_context(text: &str, file: Option<&str>, name: Option<&str>) -> Option<String> {
+    let text = text.trim();
+    let mut lines = Vec::new();
+    if !text.is_empty() {
+        lines.push(format!("Replying to: {text}"));
+    } else if let Some(name) = name.filter(|name| !name.is_empty()) {
+        lines.push(format!("Replying to a file: {name}"));
+    }
+    if let Some(file) = file {
+        lines.push(format!("[Attached: {file}]"));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n\n"))
+}
+
 /// Unescapes the printable parts of a vCard value. Folded continuation lines are handled by the
 /// caller, and a literal newline becomes a space so the text stays one line in a prompt.
 fn unescape_vcard(value: &str) -> String {
@@ -116,7 +132,7 @@ impl WhatsApp {
         });
         let text = card.unwrap_or_else(|| event["text"].as_str().unwrap_or_default().trim().to_owned());
         let Some(chat) = event["chat"].as_str().filter(|c| !c.is_empty()) else { return };
-        if text.is_empty() && event["media"].is_null() {
+        if text.is_empty() && event["media"].is_null() && event["quotedMedia"].is_null() {
             // OpenBot 0.70.0: a newly linked number may first get a group message it can't decrypt.
             // WhatsApp sends it again once it can; remember this empty first copy so the readable
             // copy reaches the group history and the orchestrator instead of being dropped.
@@ -131,6 +147,11 @@ impl WhatsApp {
         // The file is saved as the message arrives, before the mention and allow checks, because the
         // number keeps its files along with its text (OpenBot 0.72.0).
         let saved = match media {
+            Some(media) => save_media(media).await.ok().flatten(),
+            None => None,
+        };
+        let quoted_media = event["quotedMedia"].as_object();
+        let quoted_saved = match quoted_media {
             Some(media) => save_media(media).await.ok().flatten(),
             None => None,
         };
@@ -213,6 +234,17 @@ impl WhatsApp {
             text.clone()
         };
         let note = if let Some(media) = media { voice_notes::append(&hub.store, media, note).await } else { note };
+        let quoted_name = quoted_media.and_then(|media| media.get("name")).and_then(Value::as_str);
+        let note = if let Some(context) =
+            quoted_context(event["quotedText"].as_str().unwrap_or_default(), quoted_saved.as_deref(), quoted_name)
+        {
+            if let Some(path) = &quoted_saved {
+                attached.push(path.clone());
+            }
+            format!("{note}\n\n{context}")
+        } else {
+            note
+        };
         // Audio work can outlive a configuration edit or unlink. Do not hand the old message
         // to a bot after its connection, allowlist, or default binding has been revoked.
         let current_allowed = settings::read_allowed(&hub.store).unwrap_or_default();
@@ -376,6 +408,31 @@ mod tests {
         assert!(!working_line_allowed(true, false), "a teammate's result is internal");
         assert!(working_line_allowed(true, true), "the owner still gets one");
         assert!(working_line_allowed(false, true));
+    }
+
+    #[test]
+    fn a_reply_shows_the_quoted_text_and_its_file_to_the_agent() {
+        let file = "/data/codync/whatsapp-media/123-quoted.pdf";
+        assert_eq!(
+            quoted_context("  see the attached plan  ", Some(file), Some("plan.pdf")),
+            Some(format!("Replying to: see the attached plan\n\n[Attached: {file}]"))
+        );
+        assert_eq!(
+            quoted_context("looks good", None, None),
+            Some("Replying to: looks good".to_owned()),
+            "a fileless quote still reaches the agent"
+        );
+        assert_eq!(
+            quoted_context("", Some(file), Some("plan.pdf")),
+            Some(format!("Replying to a file: plan.pdf\n\n[Attached: {file}]"))
+        );
+        assert_eq!(
+            quoted_context("   ", Some(file), None),
+            Some(format!("[Attached: {file}]")),
+            "a captionless quoted file is still named"
+        );
+        assert_eq!(quoted_context("", None, None), None, "an empty quote adds nothing");
+        assert_eq!(quoted_context("  ", None, Some("")), None, "blank names are not shown");
     }
 
     #[test]

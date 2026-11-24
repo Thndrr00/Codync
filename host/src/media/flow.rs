@@ -188,7 +188,7 @@ async fn keep(owner: &BotConfig, request: &Request, found: Vec<String>) -> Resul
     let cwd = PathBuf::from(&owner.cwd);
     let mut kept = Vec::new();
     for (index, path) in found.iter().enumerate() {
-        let display = super::name(request.kind, path, index);
+        let display = super::display_name_from_prompt(request.kind, Some(path), index, &request.prompt);
         let source = path.clone();
         let (root, cwd) = (root.clone(), cwd.clone());
         let snapshot = tokio::task::spawn_blocking(move || {

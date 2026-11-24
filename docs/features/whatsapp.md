@@ -59,6 +59,17 @@ bot (the orchestrator) even without a mention (OpenBot 0.77.0). The reply names 
 so the orchestrator sees which agent wrote it and routes it. The bot is the one already chosen for
 the number; no second bot is created.
 
+## A reply brings the quoted message with it
+
+When you reply to a message, the agent gets the text of the message you answered and any file it
+carried (OpenBot 0.72.0). The bridge forwards the quoted message's text and media metadata from
+WhatsApp's `contextInfo.quotedMessage` and downloads the quoted file through the same path as an
+ordinary attachment. The host saves that file beside the current one, adds it to the prompt as
+`Replying to: …` with `[Attached: …]`, and lists it with the message's files. A quoted captionless
+file is named by its file name; an empty quote adds nothing. The quoted bytes never go into SQLite
+— only their metadata and saved path do — and a message dropped before it reaches history deletes
+both saved files.
+
 ## The busy note
 
 The "too many requests" note stays out of another person's chat or a group on a personal number and

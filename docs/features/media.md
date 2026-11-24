@@ -56,7 +56,12 @@ media is offered to a bot only. The usual `control` scope applies.
 
 The file the tool left is published like a bot's own `send_file`: a snapshot under
 `~/.codync/bots/<bot>/files/<fileId>`, a final entry with `files: [{id, name, size, sha256}]` and
-`data.media = {kind}`. The prompt is kept as the entry's text. `host/src/agent/bot/updates.rs`
+`data.media = {kind}`. The prompt is kept as the entry's text. OpenBot 0.72.0: a routine flow media
+step names its file from the first five safe words of that prompt (`a-paper-boat-in-a.mov`), capped
+at 40 characters and falling back to `generated-video.mp4` / `generated-image.png` when the prompt
+is empty or only punctuation; the extension still comes from what the tool wrote and the batch
+suffix is kept. The pure decision is `media::name_from_prompt` / `media::display_name_from_prompt`.
+`host/src/agent/bot/updates.rs`
 dedupes a share whose file the tool already published (`mediaShared`), so the picture appears once.
 A share happens quietly: a failure posts a `Notice` instead of breaking the turn, and
 `media_failed` records why. Each made file also counts as `media_made` (`kind`, `agent`), never the

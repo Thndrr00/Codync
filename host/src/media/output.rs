@@ -79,7 +79,12 @@ pub fn output(update: &Value) -> Option<Output> {
 
 /// The display name of a made file (see `super::name`).
 pub fn display_name(kind: Kind, path: Option<&str>, index: usize) -> String {
-    super::name(kind, path.unwrap_or_default(), index)
+    display_name_from_prompt(kind, path, index, "")
+}
+
+/// OpenBot 0.72.0: the first words of the prompt name the file when the prompt says something.
+pub fn display_name_from_prompt(kind: Kind, path: Option<&str>, index: usize, prompt: &str) -> String {
+    super::name_with_prompt(kind, path.unwrap_or_default(), index, Some(prompt))
 }
 
 /// The bytes of a base64 picture or data URL. The most a file may be is `limit`.
@@ -147,5 +152,14 @@ mod tests {
     fn a_display_name_uses_what_the_tool_wrote() {
         assert_eq!(display_name(Kind::Image, Some("/tmp/x.webp"), 0), "generated-image.webp");
         assert_eq!(display_name(Kind::Video, None, 2), "generated-video-3.mp4");
+        assert_eq!(
+            display_name_from_prompt(Kind::Video, Some("/tmp/x.mov"), 0, "a paper boat in a gutter"),
+            "a-paper-boat-in-a.mov"
+        );
+        assert_eq!(
+            display_name_from_prompt(Kind::Image, None, 1, "   "),
+            "generated-image-2.png",
+            "an empty prompt keeps the generic name"
+        );
     }
 }
