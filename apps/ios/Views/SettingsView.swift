@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var app
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showAgentesChat = false
     @State private var notificationsAllowed: Bool?
     @AppStorage(Analytics.enabledKey) private var analyticsEnabled = true
     @State private var confirmStartOver = false
@@ -26,6 +27,12 @@ struct SettingsView: View {
             LanguageSettings()
 
             ThinkingDetailsSettings()
+
+            CardSection("Agentes.chat", footer: "Setup, presence, stretch and approval cards, and the local vault for this bot.") {
+                Button("Open Agentes.chat") { showAgentesChat = true }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(app.currentStore?.client == nil || app.currentStore?.bots.isEmpty != false)
+            }
 
             ShortcutLeadSettings()
 
@@ -91,6 +98,11 @@ struct SettingsView: View {
             if phase == .active { Task { notificationsAllowed = await PushRegistrar.shared.isAllowed() } }
         }
         .codyncSheet(isPresented: $aboutAnalytics) { AnalyticsSheet() }
+        .codyncSheet(isPresented: $showAgentesChat) {
+            if let store = app.currentStore, let client = store.client, let botId = store.bots.keys.sorted().first {
+                AgentesChatView(host: client, botId: botId)
+            }
+        }
     }
 
     private var notificationsRow: some View {

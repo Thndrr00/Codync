@@ -1,0 +1,5 @@
+.agentes-chat-panel { padding: var(--space-lg, 16px); max-width: 420px; }
+.agentes-chat-header { justify-content: space-between; }
+.agentes-chat-close { background: none; border: none; cursor: pointer; font-size: 1.2rem; }
+.agentes-chat-section { padding: var(--space-md, 12px) 0; border-bottom: 1px solid var(--line, rgba(127,127,127,.2)); }
+.agentes-chat-section input { flex: 1; min-width: 0; }

@@ -33,6 +33,7 @@ import { AnalyticsSheet } from './AnalyticsSheet'
 import { N8nSettings } from './N8nSettings'
 import { DiagnosticsView } from './DiagnosticsView'
 import { AgentImportSection } from './AgentImportSection'
+import { AgentesChatPanel } from '../agentes-chat/AgentesChatPanel'
 import { ChannelsSection } from './ChannelsSection'
 import { GitHubSection } from './GitHubSection'
 import { GitHubAppSection } from './GitHubAppSection'
@@ -41,7 +42,7 @@ import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
-export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
+export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n' | 'agentes-chat'
 
 const thisComputer = isMac ? 'This Mac' : 'This computer'
 const pages: { id: SettingsPage; title: string; label?: string; group: string; icon: string }[] = [
@@ -54,10 +55,11 @@ const pages: { id: SettingsPage; title: string; label?: string; group: string; i
   { id: 'updates', title: 'Updates', group: thisComputer, icon: 'arrow.down.circle' },
   { id: 'diagnostics', title: 'System diagnostics', label: 'Diagnostics', group: thisComputer, icon: 'stethoscope' },
   { id: 'n8n', title: 'n8n', group: thisComputer, icon: 'point.3.connected.trianglepath.dotted' },
+  { id: 'agentes-chat', title: 'Agentes.chat', group: 'Personal', icon: 'sparkles' },
 ]
 
 /** Each page as `screen_viewed` names it; Computer access and Voice chat report themselves. */
-const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null }
+const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null, 'agentes-chat': 'settings' }
 
 /** `page` is the window's: a command (the menu bar's network rows) can turn the open sheet to another page. */
 export function SettingsView({ page, setPage, onExtensions }: { page: SettingsPage; setPage: (page: SettingsPage) => void; onExtensions?: () => void }) {
@@ -137,6 +139,16 @@ function PageContent({ page, onExtensions, onPage }: { page: SettingsPage; onExt
       return <UpdateSettings />
     case 'n8n':
       return <N8nSettings />
+    case 'agentes-chat':
+      return app.local && app.selection ? (
+        <StoreContext.Provider value={app.local}>
+          <AgentesChatPanel botId={app.selection.botId} onClose={() => onPage('general')} />
+        </StoreContext.Provider>
+      ) : (
+        <CardForm>
+          <Text tone="secondary">{tr("Open a bot's chat to see its agentes.chat features.")}</Text>
+        </CardForm>
+      )
   }
 }
 

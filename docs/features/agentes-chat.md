@@ -66,6 +66,12 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | Agents start UI actions (ADR 0129) | An app action is also a host tool, named as a host call, through `uiAction` | `chat/ui_action.rs`, `api/bots.rs` |
 | Personal mode (ADR 0159) | One member hides team surfaces without adding a team model, through `personalMode` | `chat/personal_mode.rs`, `api/bots.rs` |
 
+## In B and C, fully brought in
+
+- **ADR 0089 (stretches)** is wired into `routines::runner::begin`: a routine's chain of unattended runs stops at the caps (10 unattended / 50 interactive) and the run is cancelled, so the agent never runs forever on its own.
+- **ADR 0047 (quiet handoff)** is available through `routineHandoff`: a routine's final text is stored as a summary and a conversation run takes it once and says it in the agent's voice.
+- **B's other behaviors** (choice cards, live blocks, presence, setup, stretches, approvals, vault) now have real views in all four clients: `AgentesChatPanel.tsx`, `AgentesChatView.swift`, `AgentesChatSheet.kt` and `tui/sheets/agentes_chat_view.rs`, each rendering only host answers.
+
 The clients reach all of these through typed bridges that only call the host and decode its answer:
 `apps/desktop/src/renderer/client/agentes-chat.ts`, `CodyncKit/Client/HostClient+AgentesChat.swift`,
 `core/.../AgentesChat.kt` and `host/src/tui/net/agentes_chat.rs`. The host still owns the logic.

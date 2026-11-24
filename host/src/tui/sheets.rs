@@ -10,6 +10,7 @@ use ratatui::style::{Modifier, Style};
 use crate::tui::l10n::tr;
 use serde_json::Value;
 
+pub mod agentes_chat_view;
 mod computer;
 mod documents;
 pub use computer::draw as computer;

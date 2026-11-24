@@ -56,6 +56,7 @@ import com.codync.android.design.*
     var confirmStartOver by remember { mutableStateOf(false) }
     var aboutAnalytics by remember { mutableStateOf(false) }
     var channels by remember { mutableStateOf(false) }
+    var agentesChat by remember { mutableStateOf(false) }
     LaunchedEffect(reselectToken) { if (reselectToken > 0) scroll.animateScrollTo(0) }
     LaunchedEffect(active) { if (active) store.refreshCloud() }
     CardForm(Modifier.background(Palette.background).statusBarsPadding(), PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = bottomInset), scroll) {
@@ -63,6 +64,7 @@ import com.codync.android.design.*
         if (computers != null) CardSection {
             row { RowLabel("Computer management", "desktopcomputer", chevron = true, modifier = Modifier.plainButton(action = computers)) }
             row { RowLabel("Channels", "paperplane", chevron = true, modifier = Modifier.plainButton { channels = true }) }
+            row { RowLabel("Agentes.chat", "sparkles", chevron = true, modifier = Modifier.plainButton { agentesChat = true }) }
         }
         AppearanceSection()
         val appLanguage = LocalAppLanguage.current
@@ -134,6 +136,13 @@ import com.codync.android.design.*
     }
     CodyncSheet(aboutAnalytics, { aboutAnalytics = false }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded)) { AnalyticsSheet() }
     CodyncSheet(channels, { channels = false }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded)) { ChannelsSheet(state, store) }
+    if (agentesChat) {
+        val channel = store.channel
+        val botId = state.selectedBot ?: state.bots.firstOrNull()?.id
+        if (channel != null && botId != null) {
+            AgentesChatSheet(channel, botId, isPresented = agentesChat, onDismiss = { agentesChat = false })
+        }
+    }
     CodyncDialog("Start over?", confirmStartOver, { confirmStartOver = false },
         "Signs out of every account and forgets every computer on this phone, then shows the welcome again. Your computers keep their bots and chats; pair again to use them.") {
         listOf(DialogAction("Start over", destructive = true, action = store::startOver))

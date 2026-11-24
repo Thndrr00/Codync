@@ -66,6 +66,8 @@ pub enum Reply {
     BrainExported(String),
     /// A bot's missions and the changes to them.
     Missions(MissionReply),
+    /// A bot's setup checklist for the agentes.chat sheet.
+    AgentesSetup(String),
     /// The modules on this computer, after installing, approving, turning one on or off, or removing it.
     Modules,
     /// One module's screen, as rows the sheet draws.

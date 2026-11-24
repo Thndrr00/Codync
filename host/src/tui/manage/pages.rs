@@ -5,6 +5,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::super::app::App;
+use super::Reply;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {
@@ -13,10 +14,13 @@ pub enum Page {
     Missions,
     Memory,
     Settings,
+    /// The agentes.chat behaviors (setup, presence, cards, vault) for this bot.
+    Agentes,
 }
 
 impl Page {
-    pub const ALL: [Self; 5] = [Self::Details, Self::Library, Self::Missions, Self::Memory, Self::Settings];
+    pub const ALL: [Self; 6] =
+        [Self::Details, Self::Library, Self::Missions, Self::Memory, Self::Settings, Self::Agentes];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -25,6 +29,7 @@ impl Page {
             Self::Missions => "Missions",
             Self::Memory => "Memory",
             Self::Settings => "Settings",
+            Self::Agentes => "Agentes.chat",
         }
     }
 
@@ -52,7 +57,25 @@ impl App {
             Page::Missions => self.open_missions(),
             Page::Memory => self.open_memory(),
             Page::Settings => self.edit_bot(),
+            Page::Agentes => self.open_agentes_chat(),
         }
+    }
+
+    /// Opens the agentes.chat sheet for the bot in view: setup, presence and the card preview.
+    pub(in crate::tui) fn open_agentes_chat(&mut self) {
+        let Some(b) = self.bot().filter(|b| !b.group) else {
+            self.flash("Agentes.chat belongs to a bot, not a group");
+            return;
+        };
+        let bot = b.id.clone();
+        self.call(
+            "botSetup",
+            serde_json::json!({"botId": bot}),
+            super::super::app::After::Sheet(Reply::AgentesSetup(bot.clone())),
+        );
+        self.overlays.push(super::super::app::Overlay::Agentes(Box::new(
+            super::super::sheets::agentes_chat_view::AgentesChatSheet { bot, ..Default::default() },
+        )));
     }
 }
 

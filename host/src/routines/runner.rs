@@ -65,6 +65,11 @@ impl Routines {
             return Ok(None);
         }
         let prepared = self.change(&hub.store, |s| {
+            // The stretch cap is read before the mutable borrow of the run below (ADR 0089).
+            let routine_id = s.runs.iter().find(|r| r.id == id).map(|r| r.routine_id.clone());
+            let started_in_stretch = routine_id
+                .as_deref()
+                .map_or(0, |rid| s.runs.iter().filter(|r| r.routine_id == rid && r.started_at.is_some()).count());
             let Some(run) = s.runs.iter_mut().find(|r| {
                 r.id == id && r.bot_id == bot && matches!(r.status, Status::Pending | Status::Recovering)
             }) else {
@@ -82,6 +87,14 @@ impl Routines {
                 return Ok(None);
             }
             if !resuming {
+                // A stretch bounds the runs an agent starts on its own since a person last acted
+                // (agentes.chat ADR 0089). A routine's chain of self-started runs stops at the cap and
+                // asks the person with a card; it never runs forever on its own.
+                let unattended = run.event["source"] != "user";
+                if crate::chat::stretch::may_continue(started_in_stretch, unattended, 0).is_err() {
+                    cancel_run(run);
+                    return Ok(None);
+                }
                 run.status = Status::Starting;
             }
             // A routine that asks for a thread gets one per routine, kept across runs.

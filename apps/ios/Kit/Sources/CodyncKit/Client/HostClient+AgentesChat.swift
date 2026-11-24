@@ -7,7 +7,7 @@ public struct PresenceStatus: Decodable, Sendable {
     public let until: Int64?
 }
 
-public struct SetupStep: Decodable, Sendable {
+public struct SetupStep: Decodable, Sendable, Identifiable {
     public let id: String
     public let done: Bool
     public let label: String
@@ -38,7 +38,7 @@ public struct ApprovalRequest: Codable, Sendable {
     public let selected: String?
 }
 
-public struct ApprovalOption: Codable, Sendable {
+public struct ApprovalOption: Codable, Sendable, Identifiable {
     public let id: String
     public let label: String
     public let kind: String

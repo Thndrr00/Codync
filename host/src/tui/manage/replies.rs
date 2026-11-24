@@ -142,6 +142,14 @@ impl App {
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
             Reply::Missions(MissionReply::List(bot, finished)) => self.missions_loaded(&bot, finished, &v),
             Reply::Missions(MissionReply::Changed(bot)) => self.mission_changed(&bot),
+            Reply::AgentesSetup(bot) => {
+                if let Some(Overlay::Agentes(sheet)) =
+                    self.overlays.iter_mut().rev().find(|o| matches!(o, Overlay::Agentes(_)))
+                {
+                    sheet.setup = Some(v.clone());
+                    let _ = &bot;
+                }
+            }
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
                     self.overlays.truncate(i);

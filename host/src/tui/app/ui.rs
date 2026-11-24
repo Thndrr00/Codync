@@ -415,6 +415,8 @@ pub enum Overlay {
     Routine(Box<RoutineForm>),
     Library(Library),
     Missions(Box<super::super::manage::MissionSheet>),
+    /// The agentes.chat behaviors for a bot.
+    Agentes(Box<super::super::sheets::agentes_chat_view::AgentesChatSheet>),
     Market(Box<Market>),
     Agent(AgentSetup),
     Fields(Box<Fields>),
