@@ -30,6 +30,18 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let profile = insights.profile
+                    Text(profile.bar).font(.footnote).foregroundStyle(Palette.accent)
+                    Text(profile.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    if !profile.nextUp.isEmpty {
+                        Text("\(L10n.tr("Next up")): \(profile.nextUp.map(\.title).joined(separator: " · "))")
+                            .font(.footnote).foregroundStyle(Palette.secondary)
+                    }
+                    ForEach(profile.caps) { cap in
+                        Text("\(cap.enabled ? "●" : "○") \(cap.title): \(cap.detail)")
+                            .font(.footnote)
+                            .foregroundStyle(cap.enabled ? Palette.text : Palette.secondary)
+                    }
                     let health = insights.health
                     Text(health.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(health.headline).font(.footnote).foregroundStyle(Palette.secondary)

@@ -42,6 +42,19 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val profile = insights.profile
+            CardSection("Capabilities") {
+                row { Text(profile.bar, style = Type.caption, color = Palette.accent) }
+                row { Text(profile.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                if (profile.nextUp.isNotEmpty()) row {
+                    Text("Next up: ${profile.nextUp.joinToString(" · ") { it.title }}",
+                        style = Type.caption, color = Palette.secondary)
+                }
+                for (cap in profile.caps) row {
+                    Text("${if (cap.enabled) "●" else "○"} ${cap.title}: ${cap.detail}",
+                        style = Type.caption, color = if (cap.enabled) Palette.text else Palette.secondary)
+                }
+            }
             val health = insights.health
             CardSection("Health") {
                 row { Text(health.label, style = Type.subheadline.semibold, color = Palette.text) }

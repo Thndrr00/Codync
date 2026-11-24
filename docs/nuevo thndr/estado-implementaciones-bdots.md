@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Perfil de capacidades (23 helpers + UI en 4 clientes)
+
+`bdots_profile.rs` añade 23 helpers puros que resumen qué puede hacer un bot (computadora,
+conectores, skills, rutinas, delegación, web, correo, memoria, agente, modelo, fallbacks,
+verificación, modelo de fondo, perfil de navegador y reglas de aprobación). Reutiliza los
+validadores de los módulos anteriores en vez de duplicarlos. El endpoint `botInsights` añade el
+campo `profile` y la sección «Capabilities» se muestra en el Insights existente de los cuatro
+clientes.
+
 ## Salud de configuración (23 helpers + UI en 4 clientes)
 
 `bdots_health.rs` aporta 23 helpers puros que validan la configuración de un bot (nombre,

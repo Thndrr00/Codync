@@ -66,6 +66,34 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let profile = &data["profile"];
+    if profile.is_object() {
+        line(buf, &mut y, tr("Capabilities").into_owned(), t.bold.patch(t.panel));
+        let headline = profile["headline"].as_str().unwrap_or("");
+        let bar = profile["bar"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{bar} {headline}"), t.accent.patch(t.panel));
+        let caps: Vec<String> = profile["caps"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(15)
+                    .map(|c| {
+                        format!(
+                            "  {} {}: {}",
+                            if c["enabled"] == true { "●" } else { "○" },
+                            c["title"].as_str().unwrap_or(""),
+                            c["detail"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for cap in caps {
+            line(buf, &mut y, cap, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let health = &data["health"];
     if health.is_object() {
         line(buf, &mut y, tr("Health").into_owned(), t.bold.patch(t.panel));

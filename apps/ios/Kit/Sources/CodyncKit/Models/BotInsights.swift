@@ -9,9 +9,38 @@ public struct BotInsights: Decodable, Sendable {
     public let recentWork: [String]
     public let activity: InsightActivity
     public let health: InsightHealth
+    public let profile: InsightProfile
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed capability profile for one bot.
+public struct InsightProfile: Decodable, Sendable {
+    public let headline: String
+    public let enabled: Int
+    public let total: Int
+    public let missing: Int
+    public let coverage: Int
+    public let bar: String
+    public let nextUp: [InsightNextUp]
+    public let caps: [InsightCapability]
+}
+
+public struct InsightNextUp: Decodable, Sendable {
+    public let title: String
+    public let icon: String
+}
+
+public struct InsightCapability: Decodable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let detail: String
+    public let icon: String
+    public let tone: String
+    public let enabled: Bool
+    public let stateIcon: String
+    public let stateTone: String
 }
 
 /// A host-computed configuration health report for one bot.

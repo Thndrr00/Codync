@@ -12,9 +12,30 @@ data class BotInsights(
     val recentWork: List<String> = emptyList(),
     val activity: InsightActivity = InsightActivity(),
     val health: InsightHealth = InsightHealth(),
+    val profile: InsightProfile = InsightProfile(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed capability profile for one bot. */
+@Serializable
+data class InsightProfile(
+    val headline: String = "",
+    val enabled: Int = 0,
+    val total: Int = 0,
+    val missing: Int = 0,
+    val coverage: Int = 0,
+    val bar: String = "",
+    val nextUp: List<InsightNextUp> = emptyList(),
+    val caps: List<InsightCapability> = emptyList(),
+)
+
+@Serializable data class InsightNextUp(val title: String = "", val icon: String = "")
+@Serializable data class InsightCapability(
+    val id: String = "", val title: String = "", val detail: String = "",
+    val icon: String = "", val tone: String = "", val enabled: Boolean = false,
+    val stateIcon: String = "", val stateTone: String = "",
 )
 
 /** A host-computed configuration health report for one bot. */

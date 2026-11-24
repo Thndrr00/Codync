@@ -17,6 +17,7 @@ mod bdots_extra;
 mod bdots_health;
 mod bdots_links;
 mod bdots_more;
+mod bdots_profile;
 mod bdots_pure;
 mod bdots_spend;
 mod bdots_text;

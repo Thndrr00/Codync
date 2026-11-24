@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health } = insights
+  const { usage, skills, activity, health, profile } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,22 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Capabilities')}>
+        <Text size="footnote" tone="accent">{profile.bar}</Text>
+        <Text size="subheadline" weight="semibold">{profile.headline}</Text>
+        {profile.nextUp.length ? (
+          <Text size="footnote" tone="secondary">
+            {tr('Next up')}: {profile.nextUp.map((c) => c.title).join(' · ')}
+          </Text>
+        ) : null}
+        {profile.caps.map((cap) => (
+          <HStack key={cap.id} gap={6}>
+            <Text size="footnote" tone={toneOf(cap.stateTone)}>{cap.enabled ? '●' : '○'}</Text>
+            <Text size="footnote" tone={toneOf(cap.stateTone)}>{`${cap.title}: ${cap.detail}`}</Text>
+          </HStack>
+        ))}
       </CardSection>
 
       <CardSection title={tr('Health')}>

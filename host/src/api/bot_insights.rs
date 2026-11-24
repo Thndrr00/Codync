@@ -157,6 +157,48 @@ fn health_view(row: &crate::store::BotRow, used: u64, limit: Option<u64>, routin
     })
 }
 
+/// Capability profile: what this bot can do with the configuration and tools it has.
+fn profile_view(row: &crate::store::BotRow, routines: usize) -> Value {
+    use crate::bdots_profile as p;
+
+    let config = &row.config;
+    let caps = p::build_caps(
+        config.computer,
+        &config.connectors,
+        &config.skills,
+        routines,
+        &config.backend,
+        config.model.as_deref(),
+        config.fallbacks.len(),
+        config.self_fallbacks,
+        config.verify_command.as_deref(),
+        config.background_model.as_deref(),
+        config.saver,
+        config.browser_profile.as_deref(),
+        config.approval_rules.len(),
+    );
+    let coverage = p::coverage(&caps);
+    json!({
+        "headline": p::profile_headline(&caps),
+        "enabled": p::enabled_count(&caps),
+        "total": caps.len(),
+        "missing": p::missing_count(&caps),
+        "coverage": coverage,
+        "bar": p::coverage_bar(&caps, 12),
+        "nextUp": p::next_up(&p::sort_caps(&caps), 3).iter().map(|c| json!({"title": c.title, "icon": c.icon})).collect::<Vec<_>>(),
+        "caps": p::sort_caps(&caps).iter().map(|c| json!({
+            "id": c.id,
+            "title": c.title,
+            "detail": c.detail,
+            "icon": c.icon,
+            "tone": c.tone,
+            "enabled": c.enabled,
+            "stateIcon": p::state_icon(c.enabled),
+            "stateTone": p::state_tone(c.enabled),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -211,6 +253,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "recentWork": recent,
         "activity": activity_view(hub, bot, now),
         "health": health_view(&row, used, limit, routines.len()),
+        "profile": profile_view(&row, routines.len()),
         "routines": routines,
         "usage": {
             "used": used,
