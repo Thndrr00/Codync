@@ -36,6 +36,45 @@ pub(super) fn says_logged_in(_: bool, out: &str) -> bool {
     out.contains("logged in") && !out.contains("not logged in")
 }
 
+/// The sign-in page a CLI printed, when it is a plain https link on the provider's own domain.
+/// OpenBot nightly `triage-15344`: on a Mac Claude's CLI can fail to open its page and then
+/// only print the link, so the host opens it from the app, the way Codex's page is opened.
+/// A link carrying a code, token or secret is never opened: this is not an OAuth client.
+pub fn sign_in_page_available(backend: &str, output: &str) -> Option<String> {
+    let domains: &[&str] = match backend {
+        "claude" => &["claude.ai", "anthropic.com"],
+        "codex" => &["chatgpt.com", "openai.com"],
+        _ => return None,
+    };
+    output
+        .split_whitespace()
+        .filter_map(|word| {
+            reqwest::Url::parse(word.trim_end_matches(|c: char| matches!(c, '.' | ',' | ')' | ']'))).ok()
+        })
+        .find(|url| {
+            url.scheme() == "https"
+                && domains.iter().any(|domain| on_domain(url.host_str(), domain))
+                && !carries_secret(url)
+        })
+        .map(|url| url.into())
+}
+
+fn on_domain(host: Option<&str>, domain: &str) -> bool {
+    host.is_some_and(|host| {
+        host.eq_ignore_ascii_case(domain) || host.to_ascii_lowercase().ends_with(&format!(".{domain}"))
+    })
+}
+
+fn carries_secret(url: &reqwest::Url) -> bool {
+    url.query_pairs().any(|(name, _)| secret_name(&name)) || url.fragment().is_some_and(secret_name)
+}
+
+fn secret_name(name: &str) -> bool {
+    const SECRET: &[&str] = &["token", "code", "secret", "key", "sig", "signature", "password", "session"];
+    let name = name.to_ascii_lowercase().replace('_', "");
+    SECRET.iter().any(|word| name.contains(word))
+}
+
 /// Last sign-in check per harness id; missing = can't tell.
 static SIGNED_IN: Mutex<Vec<(String, bool)>> = Mutex::new(Vec::new());
 
@@ -155,6 +194,32 @@ mod tests {
         assert_eq!(apply_prompt_refusal(id, None), None);
         clear_prompt_refused(id);
         assert_eq!(apply_prompt_refusal(id, Some(true)), Some(true));
+    }
+
+    #[test]
+    fn only_a_plain_sign_in_page_from_the_provider_is_opened() {
+        let out = "Opening https://claude.ai/login?state=abc in your browser. Try https://evil.test/signin";
+        assert_eq!(sign_in_page_available("claude", out).as_deref(), Some("https://claude.ai/login?state=abc"));
+        assert_eq!(
+            sign_in_page_available("claude", "Open https://console.anthropic.com/oauth/authorize, then continue")
+                .as_deref(),
+            Some("https://console.anthropic.com/oauth/authorize")
+        );
+        assert_eq!(
+            sign_in_page_available("codex", "Visit https://chatgpt.com/codex/login").as_deref(),
+            Some("https://chatgpt.com/codex/login")
+        );
+        for refused in [
+            "Open http://claude.ai/login",
+            "Open https://claude.ai/login#token=one-time",
+            "Open https://claude.ai/login?access_token=secret",
+            "Open https://evil.test/login",
+            "Open file:///etc/passwd",
+            "nothing here",
+        ] {
+            assert_eq!(sign_in_page_available("claude", refused), None, "{refused}");
+        }
+        assert_eq!(sign_in_page_available("gemini", "Open https://claude.ai/login"), None);
     }
 
     #[test]

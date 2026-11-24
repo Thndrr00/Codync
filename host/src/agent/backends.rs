@@ -13,6 +13,7 @@ use crate::shell;
 use serde_json::{Value, json};
 use std::path::Path;
 
+mod capability;
 mod catalog;
 mod credentials;
 mod hermes;
@@ -20,13 +21,15 @@ pub(crate) mod openai_compatible;
 mod search_path;
 mod sign_in;
 mod workbuddy;
+pub use capability::UNSUPPORTED_CPU;
+pub(crate) use capability::{capability_failure, provider_capability, sse41, start_failure};
 pub use catalog::HARNESSES;
 pub(crate) use credentials::for_id as credential_state;
 pub(crate) use credentials::for_profile as profile_credential_state;
 pub use search_path::{hydrate_path, on_path, which};
 pub use sign_in::{
     SignInCheck, agent_checks_off, apply_prompt_refusal, clear_prompt_refused, cli_signed_in, from_files_first, merged,
-    note_prompt_refused, refresh_sign_in, set_signed_in, signed_in,
+    note_prompt_refused, refresh_sign_in, set_signed_in, sign_in_page_available, signed_in,
 };
 pub use workbuddy::{apply_process_env, move_saved_session_aside, session_proves_sign_in};
 
@@ -134,6 +137,8 @@ pub fn list() -> Vec<Value> {
                 "accounts": profile_home(h.id).is_some(),
                 "signOut": sign_out_available(h.id),
                 "updateAvailable": reg.is_some_and(registry::update_pending),
+                // A fixed note, not a download error: the CLI cannot run here at all.
+                "capability": provider_capability(h.id, sse41()).then_some(UNSUPPORTED_CPU),
             })
         })
         .collect();
@@ -160,6 +165,7 @@ pub fn list() -> Vec<Value> {
             "accounts": false,
             "signOut": false,
             "updateAvailable": registry::update_pending(a),
+            "capability": null,
         }));
     }
     out.sort_by_key(|v| (!v["installed"].as_bool().unwrap_or(false), !v["curated"].as_bool().unwrap_or(false)));

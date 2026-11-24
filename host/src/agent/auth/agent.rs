@@ -108,13 +108,24 @@ async fn start_candidates(
                 return Ok(Started { acp, inbox: rx, init, cmd });
             }
             Ok(Err(e)) => {
-                let why = std::iter::from_fn(|| rx.try_recv().ok()).find_map(|inc| match inc {
-                    Incoming::Closed { stderr_tail } => stderr_reason(&stderr_tail),
+                let tail = std::iter::from_fn(|| rx.try_recv().ok()).find_map(|inc| match inc {
+                    Incoming::Closed { stderr_tail } => Some(stderr_tail),
                     _ => None,
                 });
-                last = Some(match why {
-                    Some(why) => e.context(why),
-                    None => e,
+                // OpenBot nightly `triage-15358`: a SIGILL from a verified build means this
+                // processor cannot run the CLI. Keep the original failure in the log, and
+                // never turn a download or network error into this message.
+                let capability = tail.as_deref().and_then(|tail| {
+                    backends::capability_failure(backend, backends::sse41(), backends::start_failure(tail))
+                });
+                last = Some(if let Some(message) = capability {
+                    tracing::warn!(backend, error = format!("{e:#}"), "CLI cannot run on this processor");
+                    anyhow!("{message}")
+                } else {
+                    match tail.as_deref().and_then(stderr_reason) {
+                        Some(why) => e.context(why),
+                        None => e,
+                    }
                 });
             }
             Err(_) => last = Some(anyhow!("the agent didn't start within {}s", budget.as_secs())),

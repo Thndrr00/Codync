@@ -7,7 +7,11 @@ import { useModel } from '../../lib/observable'
 import { useApp } from '../../store/context'
 import type { Hello } from '../../../shared/models'
 
-type Provider = Hello['backends'][number] & { updateAvailable?: boolean }
+type Provider = Hello['backends'][number] & {
+  updateAvailable?: boolean
+  /** Fixed host text when this computer's processor cannot run the provider, never a download error. */
+  capability?: string | null
+}
 
 /**
  * Agent providers on this computer. An "Update available" mark comes from the host's registry
@@ -49,6 +53,7 @@ export function ProvidersSection() {
       ) : null}
       {providers.map((provider) => (
         <ValueRow key={provider.id} label={provider.name}>
+          {provider.capability ? <Text size="caption" tone="attention">{tr(provider.capability)}</Text> : null}
           {provider.updateAvailable ? <Text size="caption" tone="attention">{tr('Update available')}</Text> : null}
         </ValueRow>
       ))}

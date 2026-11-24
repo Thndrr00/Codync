@@ -101,3 +101,25 @@ sign-in, and the pool has another ready account, that account is passed over for
 rest scoped to it and the message is retried on the next ready account instead of failing
 on the same one each time. With a single account there is nowhere to retry, so the older
 provider-wide sign-out behaviour stands.
+
+## Provider probes, processor support and sign-in pages
+
+Three fixes from OpenBot nightly, all decided in the host so every client shows the same
+state:
+
+- **Grok model checks (`triage-15353`).** A Grok `session/new` is saved under
+  `~/.grok/sessions/<encoded cwd>` and has no `session/delete`. Model discovery uses a probe
+  folder (never a bot's chat session) and removes the probe's session file after the read,
+  so a repeated model check no longer fills the Grok session list. The host only removes a
+  file whose id and encoded cwd match the one it just opened.
+- **Unsupported processor (`triage-15358`).** Gemini and Antigravity CLI builds need SSE4.1;
+  a build without it dies with SIGILL before it can print its own explanation. The host
+  classifies that one signal as *"The processor of this computer cannot run this provider.
+  Use a different provider."*, shows it on the Providers row, and keeps the original error
+  in the log. A download, a network error or a crash while a bot runs is never shown as a
+  processor problem.
+- **Claude's sign-in page (`triage-15344`).** When a CLI's own opener fails it still prints
+  the page, so Add account now reads that link and opens it from the app on every OS, the
+  same page-open path ACP agents use when they post one. Only a plain https link on the
+  provider's own domain is opened; a link carrying a code or token is ignored. The desktop
+  "Sign in" (Connect) already opens links printed in its setup terminal the same way.

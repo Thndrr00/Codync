@@ -13,6 +13,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
 
 pub mod rotation;
@@ -427,7 +428,50 @@ async fn cli_login(backend: &str, env: &[(String, String)]) -> Result<()> {
         );
     }
     let command = backends::login_command(backend).await?;
-    run_login_command(&command, env, Duration::from_mins(10)).await
+    run_login_command_with_page(&command, env, backend, Duration::from_mins(10)).await
+}
+
+/// Runs a login command and opens the sign-in page it prints from the app, on every OS. This is
+/// the same page-open path an ACP agent uses when it posts a page (OpenBot nightly `triage-15344`):
+/// when a CLI's own opener fails, the printed link no longer leaves the sign-in stuck.
+async fn run_login_command_with_page(
+    command: &str,
+    env: &[(String, String)],
+    backend: &str,
+    timeout: Duration,
+) -> Result<()> {
+    let line = crate::shell::line(command);
+    let mut child = tokio::process::Command::new(line.program)
+        .args(&line.args)
+        .envs(line.env)
+        .envs(env.iter().map(|(key, value)| (key, value)))
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .spawn()?;
+    let backend = backend.to_owned();
+    let page = child.stdout.take().map(|out| {
+        tokio::spawn(async move {
+            let mut lines = tokio::io::BufReader::new(out).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if let Some(url) = backends::sign_in_page_available(&backend, &line) {
+                    if !crate::shell::open(std::ffi::OsStr::new(&url)) {
+                        tracing::warn!("couldn't open the sign-in page");
+                    }
+                    break;
+                }
+            }
+        })
+    });
+    let status = tokio::time::timeout(timeout, child.wait()).await.context("The command didn't finish in time")??;
+    if let Some(page) = page {
+        page.abort();
+    }
+    if !status.success() {
+        bail!("The sign-in command ended with {status}.");
+    }
+    Ok(())
 }
 
 async fn run_login_command(command: &str, env: &[(String, String)], timeout: Duration) -> Result<()> {

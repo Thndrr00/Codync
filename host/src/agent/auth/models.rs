@@ -8,6 +8,7 @@ use crate::store::Store;
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::OnceCell;
@@ -90,6 +91,38 @@ pub(crate) fn retry_slow_account(is_secondary: bool, timed_out: bool) -> bool {
     is_secondary && timed_out
 }
 
+/// Grok saves every `session/new` under its own home folder and has no `session/delete`
+/// (OpenBot nightly `triage-15353`). A model check's probe therefore has to remove the
+/// session it just created; a bot's own chat session is started elsewhere and is untouched.
+pub(crate) fn model_check_session(backend: &str) -> bool {
+    backend == "grok"
+}
+
+/// `encodeURIComponent`'s unreserved set, which is how Grok encodes a session's cwd.
+const GROK_PATH_ENCODE: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'!')
+    .remove(b'~')
+    .remove(b'*')
+    .remove(b'\'')
+    .remove(b'(')
+    .remove(b')');
+
+/// The one session file a Grok probe left, when `session_id` is one Grok uses. Nothing is
+/// removed for another id or an empty cwd: a wrong path must never be deleted.
+pub(crate) fn grok_probe_session_file(grok_home: &Path, cwd: &str, session_id: &str) -> Option<PathBuf> {
+    if cwd.is_empty()
+        || session_id.is_empty()
+        || !session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return None;
+    }
+    let encoded = percent_encoding::utf8_percent_encode(cwd, GROK_PATH_ENCODE).to_string();
+    Some(grok_home.join("sessions").join(encoded).join(session_id))
+}
+
 fn timed_out(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| cause.is::<tokio::time::error::Elapsed>())
 }
@@ -141,6 +174,19 @@ pub async fn models(store: &Store, backend: &str, account: Option<&str>) -> Resu
 async fn discover(store: &Store, backend: &str, account: Option<&str>, budget: Duration) -> Result<Value> {
     let extra_env = account.map(|id| crate::agent::account::env(id, backend)).transpose()?.unwrap_or_default();
     let Started { acp, mut inbox, .. } = start_with_env(store, backend, &extra_env).await?;
+    // Keep the exact folder the probe was started in and the home its environment names;
+    // cleanup then touches no file system path we did not just use (OpenBot nightly
+    // `triage-15353`, second pass).
+    let cleanup = if model_check_session(backend) {
+        extra_env
+            .iter()
+            .find(|(name, _)| name == "GROK_HOME")
+            .map(|(_, value)| PathBuf::from(value))
+            .or_else(|| dirs::home_dir().map(|home| home.join(".grok")))
+            .map(|home| (home, probe_dir().to_string_lossy().into_owned()))
+    } else {
+        None
+    };
     let result = tokio::time::timeout(budget, async {
         let request = acp.request("session/new", json!({"cwd": probe_dir(), "mcpServers": []}));
         tokio::pin!(request);
@@ -156,6 +202,7 @@ async fn discover(store: &Store, backend: &str, account: Option<&str>, budget: D
                 }
             }
         };
+        let session_id = session["sessionId"].as_str().map(str::to_owned);
         // Cursor lists each model's options (effort, fast…) only through its own method.
         let options = if backend == "cursor" {
             acp.request("cursor/list_available_models", json!({})).await.unwrap_or_default()
@@ -168,11 +215,19 @@ async fn discover(store: &Store, backend: &str, account: Option<&str>, budget: D
         if backend != "cursor" {
             discover_options(&acp, &session, &mut catalog).await?;
         }
-        Ok(catalog)
+        Ok((catalog, session_id))
     })
     .await;
     acp.kill().await;
-    result.context("the agent's model list timed out")?
+    let (catalog, session_id) = result.context("the agent's model list timed out")?;
+    if let (Some((home, cwd)), Some(session_id)) = (cleanup, session_id)
+        && let Some(file) = grok_probe_session_file(&home, &cwd, &session_id)
+        && let Err(error) = tokio::fs::remove_file(&file).await
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!(path = %file.display(), %error, "couldn't remove the Grok probe session");
+    }
+    Ok(catalog)
 }
 
 /// Probe model-dependent settings in the disposable discovery session, never in a bot's session.
@@ -565,6 +620,26 @@ mod tests {
         assert_eq!(lists.stale("antigravity"), Some(old));
         assert!(!has_models(&json!({"models": []})), "an empty re-read is quiet");
         assert!(has_models(&json!({"models": [{"id": "neon"}]})));
+    }
+
+    #[test]
+    fn a_grok_model_check_removes_only_its_own_probe_session() {
+        assert!(model_check_session("grok"));
+        assert!(!model_check_session("claude"), "a bot's chat session is not a model-check probe");
+        assert!(!model_check_session("gemini"));
+        let home = Path::new("/home/me/.grok");
+        assert_eq!(
+            grok_probe_session_file(home, "/Users/me/project", "abc_12-3").as_deref(),
+            Some(Path::new("/home/me/.grok/sessions/%2FUsers%2Fme%2Fproject/abc_12-3"))
+        );
+        assert_eq!(
+            grok_probe_session_file(home, "/a b!x", "s").as_deref(),
+            Some(Path::new("/home/me/.grok/sessions/%2Fa%20b!x/s")),
+            "encodeURIComponent keeps !"
+        );
+        for (cwd, id) in [("/p", ""), ("/p", "../bad"), ("/p", "a/b"), ("", "ok")] {
+            assert_eq!(grok_probe_session_file(home, cwd, id), None, "{cwd} / {id}");
+        }
     }
 
     #[test]
