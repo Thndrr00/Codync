@@ -30,6 +30,25 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let week = insights.week
+                    Text(week.verdict).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(week.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    HStack(spacing: 12) {
+                        Text("\(L10n.tr("Steps")): \(week.totalLabel)")
+                        Text("\(L10n.tr("Trend")): \(week.trend.label)")
+                    }
+                    .font(.footnote).foregroundStyle(Palette.secondary)
+                    if let peak = week.peak {
+                        Text("\(L10n.tr("Busiest")): \(peak.label) · \(peak.count)")
+                            .font(.footnote).foregroundStyle(Palette.secondary)
+                    }
+                    ForEach(week.top, id: \.label) { day in
+                        HStack(spacing: 6) {
+                            Text(day.label).font(.footnote).foregroundStyle(Palette.tertiary)
+                            Text(day.bar).font(.footnote).foregroundStyle(Palette.accent)
+                            Text("\(day.count)").font(.footnote).foregroundStyle(Palette.secondary)
+                        }
+                    }
                     let profile = insights.profile
                     Text(profile.bar).font(.footnote).foregroundStyle(Palette.accent)
                     Text(profile.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)

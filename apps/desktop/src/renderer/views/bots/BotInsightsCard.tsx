@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile } = insights
+  const { usage, skills, activity, health, profile, week } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,27 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('This week')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(week.tone)}>{week.verdict}</Text>
+        <Text size="footnote" tone="secondary">{week.headline}</Text>
+        <ValueRow label={tr('Steps')}>{week.totalLabel}</ValueRow>
+        <ValueRow label={tr('Trend')}>{week.trend.label}</ValueRow>
+        {week.peak ? (
+          <Text size="footnote" tone="secondary">{tr('Busiest')}: {week.peak.label} · {week.peak.count}</Text>
+        ) : null}
+        {week.top.length ? (
+          <VStack gap={2}>
+            {week.top.map((day) => (
+              <HStack key={day.label} gap={6}>
+                <Text size="footnote" tone="tertiary">{day.label}</Text>
+                <Text size="footnote" tone="accent">{day.bar}</Text>
+                <Text size="footnote" tone="secondary">{String(day.count)}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       <CardSection title={tr('Capabilities')}>

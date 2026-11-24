@@ -199,6 +199,58 @@ fn profile_view(row: &crate::store::BotRow, routines: usize) -> Value {
     })
 }
 
+/// Weekly summary: seven day-buckets plus trends, built from the same history as `activity`.
+fn week_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
+    use crate::bdots_week as w;
+
+    let entries = hub.store.history(bot, i64::MAX, 400).unwrap_or_default();
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for entry in entries {
+        if entry.kind != crate::store::EntryKind::Tool.as_str() {
+            continue;
+        }
+        if now - entry.created_at > 7 * 86_400_000 {
+            continue;
+        }
+        let key = crate::bdots_activity::bucket_day(entry.created_at);
+        if let Some(slot) = counts.iter_mut().find(|(k, _)| *k == key) {
+            slot.1 += 1;
+        } else {
+            counts.push((key, 1));
+        }
+    }
+    let refs: Vec<(&str, usize)> = counts.iter().map(|(k, n)| (k.as_str(), *n)).collect();
+    let today = crate::bdots_activity::bucket_day(now);
+    let days = w::build_days(&refs, &today, now);
+    let trend = w::trend(&days);
+    let verdict = w::week_verdict(&days);
+    json!({
+        "headline": w::week_headline(&days),
+        "tone": w::week_tone(&days),
+        "verdict": verdict,
+        "total": w::total(&days),
+        "totalLabel": w::total_label(&days),
+        "average": w::daily_average(&days),
+        "peak": w::peak_day(&days).map(|d| json!({"label": d.label, "count": d.count})).unwrap_or(Value::Null),
+        "quietDays": w::quiet_days(&days),
+        "activeStreak": w::active_streak(&days),
+        "quietStreak": w::quiet_streak(&days),
+        "aboveAverage": w::above_average_days(&days),
+        "change": w::change_percent(&days),
+        "perfectAttendance": w::perfect_attendance(&days),
+        "grew": w::grew(&days),
+        "trend": {
+            "kind": format!("{trend:?}").to_ascii_lowercase(),
+            "label": w::trend_label(trend),
+            "icon": w::trend_icon(trend),
+            "tone": w::trend_tone(trend),
+        },
+        "top": w::top_days(&days, 12).into_iter().map(|(label, count, bar)| json!({"label": label, "count": count, "bar": bar})).collect::<Vec<_>>(),
+        "quiet": w::bottom_days(&days, 12).into_iter().map(|(label, count, bar)| json!({"label": label, "count": count, "bar": bar})).collect::<Vec<_>>(),
+        "days": days.iter().map(|d| json!({"key": d.key, "label": d.label, "count": d.count})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -254,6 +306,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "activity": activity_view(hub, bot, now),
         "health": health_view(&row, used, limit, routines.len()),
         "profile": profile_view(&row, routines.len()),
+        "week": week_view(hub, bot, now),
         "routines": routines,
         "usage": {
             "used": used,

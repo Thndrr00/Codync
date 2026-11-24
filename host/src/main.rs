@@ -21,6 +21,7 @@ mod bdots_profile;
 mod bdots_pure;
 mod bdots_spend;
 mod bdots_text;
+mod bdots_week;
 mod browser;
 mod budget;
 mod bundle;

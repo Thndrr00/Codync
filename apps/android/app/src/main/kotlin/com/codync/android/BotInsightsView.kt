@@ -42,6 +42,17 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val week = insights.week
+            CardSection("This week") {
+                row { Text(week.verdict, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(week.headline, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Steps", week.totalLabel) }
+                row { ValueRow("Trend", week.trend.label) }
+                week.peak?.let { row { Text("Busiest: ${it.label} · ${it.count}", style = Type.caption, color = Palette.secondary) } }
+                for (day in week.top) row {
+                    Text("${day.label}  ${day.bar}  ${day.count}", style = Type.caption, color = Palette.tertiary)
+                }
+            }
             val profile = insights.profile
             CardSection("Capabilities") {
                 row { Text(profile.bar, style = Type.caption, color = Palette.accent) }

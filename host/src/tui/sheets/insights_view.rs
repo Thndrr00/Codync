@@ -66,6 +66,37 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let week = &data["week"];
+    if week.is_object() {
+        line(buf, &mut y, tr("This week").into_owned(), t.bold.patch(t.panel));
+        let verdict = week["verdict"].as_str().unwrap_or("");
+        let headline = week["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{verdict} · {headline}"), t.text.patch(t.panel));
+        let steps = week["totalLabel"].as_str().unwrap_or("0");
+        let trend = week["trend"]["label"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("  {}: {steps} · {}: {trend}", tr("Steps"), tr("Trend")), t.secondary.patch(t.panel));
+        let top: Vec<String> = week["top"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(5)
+                    .map(|d| {
+                        format!(
+                            "  {} {} {}",
+                            d["label"].as_str().unwrap_or(""),
+                            d["bar"].as_str().unwrap_or(""),
+                            d["count"].as_u64().unwrap_or(0)
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for day in top {
+            line(buf, &mut y, day, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let profile = &data["profile"];
     if profile.is_object() {
         line(buf, &mut y, tr("Capabilities").into_owned(), t.bold.patch(t.panel));

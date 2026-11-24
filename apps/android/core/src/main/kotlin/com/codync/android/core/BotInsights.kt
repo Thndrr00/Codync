@@ -13,10 +13,39 @@ data class BotInsights(
     val activity: InsightActivity = InsightActivity(),
     val health: InsightHealth = InsightHealth(),
     val profile: InsightProfile = InsightProfile(),
+    val week: InsightWeek = InsightWeek(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
 )
+
+/** A host-computed weekly summary for one bot. */
+@Serializable
+data class InsightWeek(
+    val headline: String = "",
+    val tone: String = "",
+    val verdict: String = "",
+    val total: Int = 0,
+    val totalLabel: String = "",
+    val average: Int = 0,
+    val peak: InsightPeak? = null,
+    val quietDays: Int = 0,
+    val activeStreak: Int = 0,
+    val quietStreak: Int = 0,
+    val aboveAverage: Int = 0,
+    val change: Int = 0,
+    val perfectAttendance: Boolean = false,
+    val grew: Boolean = false,
+    val trend: InsightTrend = InsightTrend(),
+    val top: List<InsightDayBar> = emptyList(),
+    val quiet: List<InsightDayBar> = emptyList(),
+    val days: List<InsightDayCount> = emptyList(),
+)
+
+@Serializable data class InsightPeak(val label: String = "", val count: Int = 0)
+@Serializable data class InsightTrend(val kind: String = "", val label: String = "", val icon: String = "", val tone: String = "")
+@Serializable data class InsightDayBar(val label: String = "", val count: Int = 0, val bar: String = "")
+@Serializable data class InsightDayCount(val key: String = "", val label: String = "", val count: Int = 0)
 
 /** A host-computed capability profile for one bot. */
 @Serializable

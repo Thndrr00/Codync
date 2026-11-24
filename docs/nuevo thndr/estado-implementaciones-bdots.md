@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Resumen semanal (21 helpers + UI en 4 clientes)
+
+`bdots_week.rs` añade 21 helpers puros que convierten la actividad diaria en tendencias,
+picos, rachas, promedios y un titular en lenguaje natural. Reutiliza `bdots_activity`,
+`bdots_text` y `bdots_profile`. El endpoint `botInsights` añade el campo `week` y la sección
+«This week» se muestra en el Insights existente de los cuatro clientes.
+
 ## Perfil de capacidades (23 helpers + UI en 4 clientes)
 
 `bdots_profile.rs` añade 23 helpers puros que resumen qué puede hacer un bot (computadora,
