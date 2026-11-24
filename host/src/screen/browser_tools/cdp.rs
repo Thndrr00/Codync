@@ -23,6 +23,7 @@ use super::{cut_at, folder_slug};
 use crate::LockExt as _;
 use crate::agent::process::Process;
 use crate::hub::{BotStatus, Hub};
+use crate::screen::browser_cards::SignInProgress;
 use crate::screen::protected_browser::{
     browser_executable,
     pipe::{self, Pipe, rpc},
@@ -591,10 +592,44 @@ async fn typed(
         None => "the focused control".to_owned(),
     };
     rpc(&mut session.pipe, "Input.insertText", json!({"text": text}), Some(tab)).await?;
+    let mut answer = json!({"typed": text.chars().count(), "into": into});
     if submit {
+        let before = page(session, tab, "probe", &json!({}))
+            .await
+            .ok()
+            .and_then(|probe| probe["url"].as_str().map(str::to_owned))
+            .unwrap_or_default();
         press_key(session, tab, &Key::enter()).await?;
+        // OpenBot nightly: a saved password's Enter can land on a slow page. Give it a bounded grace to
+        // move so the agent reads the signed-in page, instead of handing the browser to the user.
+        answer["signIn"] = json!(await_sign_in(session, tab, &before).await);
     }
-    Ok(json!({"typed": text.chars().count(), "into": into}))
+    Ok(answer)
+}
+
+/// After a submitting `type`, polls until the site moves off the login form or the grace ends. The
+/// answer carries only a fixed word; no address or page text is logged. This runs after the Enter
+/// press only, so a password or payment approval card is never skipped.
+async fn await_sign_in(session: &mut Session, tab: &str, url_before: &str) -> &'static str {
+    let started = Instant::now();
+    loop {
+        let probe = match page(session, tab, "probe", &json!({})).await {
+            Ok(probe) => probe,
+            Err(error) => {
+                // A page being replaced can refuse an evaluate. That is not a sign-in failure; the
+                // existing handoff path stays exactly as it was.
+                tracing::debug!(%error, "the sign-in page did not answer a probe");
+                return "handoff";
+            }
+        };
+        let url_after = probe["url"].as_str().unwrap_or_default();
+        let still_on_form = probe["hasPassword"] == true || crate::screen::browser_cards::is_sign_in_page(url_after);
+        match crate::screen::browser_cards::sign_in_complete(url_before, url_after, still_on_form, started.elapsed()) {
+            SignInProgress::Continue => return "complete",
+            SignInProgress::Handoff => return "handoff",
+            SignInProgress::Waiting => sleep(POLL).await,
+        }
+    }
 }
 
 async fn press(session: &mut Session, tab: &str, key: &Key, target: Option<Target>) -> Result<Value> {

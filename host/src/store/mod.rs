@@ -8,6 +8,7 @@
 mod analytics;
 pub mod apps;
 mod bots;
+pub(crate) use bots::workspace_copy;
 mod channel_activity;
 mod computer_activity;
 mod devices;

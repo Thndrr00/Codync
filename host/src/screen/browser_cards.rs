@@ -30,6 +30,9 @@ pub(crate) const SIGN_IN_FROM_DESKTOP: &str = "Sign in from the desktop app";
 pub(crate) const STALL_AFTER: Duration = Duration::from_secs(20);
 /// Upper bound for a pasted sign-in address, so a stray paste cannot grow a card or a query.
 pub(crate) const MAX_PASTED_URL: usize = 2048;
+/// OpenBot nightly: how long a saved-password submit waits for a slow site to reach the signed-in page. Well
+/// under a tool call's own deadline, and only a page that is still a login form waits at all.
+pub(crate) const SIGN_IN_GRACE: Duration = Duration::from_secs(3);
 
 /// The notice a returned sign-in page shows. A fixed label is returned so callers can count the
 /// outcome without carrying the address into analytics.
@@ -52,7 +55,7 @@ impl SignInNotice {
 
 /// Whether an address is a sign-in page or its return: only the scheme and path are read, never a
 /// token in the query or fragment.
-fn is_sign_in_page(url: &str) -> bool {
+pub(crate) fn is_sign_in_page(url: &str) -> bool {
     let url = url.trim();
     if url.is_empty() || url.len() > MAX_PASTED_URL {
         return false;
@@ -69,6 +72,37 @@ pub(crate) fn sign_in_notice(url: &str, active: bool) -> SignInNotice {
         return SignInNotice::None;
     }
     if active { SignInNotice::Waiting } else { SignInNotice::StartAgain }
+}
+
+/// What a saved-password submit does after the Enter press (OpenBot nightly: a slow site must not hand the
+/// browser to the user when the sign-in already finished).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SignInProgress {
+    /// The site moved on, or the form is gone: the agent reads the signed-in page and continues.
+    Continue,
+    /// Still the same login form, but the grace period has not run out: keep polling.
+    Waiting,
+    /// No navigation and still the login form after the bound: keep the existing handoff path.
+    Handoff,
+}
+
+/// `url_before` is the address at submit time, `url_after` the address now; `still_on_form` comes
+/// from the page (a visible password field) and the address. Addresses are only compared and
+/// classified here, never logged or sent anywhere. This never touches a password or payment
+/// approval card: those are a separate, explicit handoff.
+pub(crate) fn sign_in_complete(
+    url_before: &str,
+    url_after: &str,
+    still_on_form: bool,
+    waited: Duration,
+) -> SignInProgress {
+    if !still_on_form || url_after != url_before {
+        SignInProgress::Continue
+    } else if waited >= SIGN_IN_GRACE {
+        SignInProgress::Handoff
+    } else {
+        SignInProgress::Waiting
+    }
 }
 
 /// What a takeover or ask-help card does once the agent's wait has ended (0.77.0: "Keep a browser
@@ -164,6 +198,27 @@ mod tests {
             sign_in_notice(&format!("https://x.example/oauth/{}", "a".repeat(MAX_PASTED_URL)), false),
             SignInNotice::None
         );
+    }
+
+    #[test]
+    fn a_slow_sign_in_continues_once_the_site_moves() {
+        let login = "https://site.example/login";
+        let signed_in = "https://site.example/inbox";
+        assert_eq!(sign_in_complete(login, signed_in, true, Duration::ZERO), SignInProgress::Continue);
+        assert_eq!(sign_in_complete(login, signed_in, false, Duration::ZERO), SignInProgress::Continue);
+        assert_eq!(sign_in_complete(login, login, false, Duration::ZERO), SignInProgress::Continue, "in-page sign-in");
+    }
+
+    #[test]
+    fn a_stuck_sign_in_waits_only_for_the_bounded_grace() {
+        let login = "https://site.example/login";
+        assert_eq!(
+            sign_in_complete(login, login, true, SIGN_IN_GRACE - Duration::from_millis(1)),
+            SignInProgress::Waiting
+        );
+        assert_eq!(sign_in_complete(login, login, true, SIGN_IN_GRACE), SignInProgress::Handoff);
+        assert_eq!(sign_in_complete(login, login, true, SIGN_IN_GRACE * 2), SignInProgress::Handoff);
+        assert!(SIGN_IN_GRACE < Duration::from_secs(20), "the wait stays inside one browser tool call");
     }
 
     #[test]

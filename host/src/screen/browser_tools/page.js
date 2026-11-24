@@ -382,6 +382,14 @@
     return { ok: true, checked: el.checked === true, label: entry.label };
   }
 
+  function hasPasswordField() {
+    var fields = document.querySelectorAll ? document.querySelectorAll('input[type="password"]') : [];
+    for (var index = 0; index < fields.length; index += 1) {
+      if (shown(fields[index])) return true;
+    }
+    return false;
+  }
+
   function probe(request) {
     var now = Date.now();
     var watched = window.__codyncMutations || { at: now, count: 0 };
@@ -404,7 +412,8 @@
       title: document.title,
       quietMs: now - watched.at,
       mutations: watched.count,
-      hasText: hasText
+      hasText: hasText,
+      hasPassword: hasPasswordField()
     };
   }
 

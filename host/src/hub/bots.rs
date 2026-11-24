@@ -24,14 +24,36 @@ impl Hub {
         cfg.hidden = false;
         cfg.created_by = None;
         cfg.auto_name = false;
+        // A bot with its own workspace gets a copy of it, links kept as links. The new id is picked
+        // here so the copy is complete before the actor starts and the config points at that copy.
+        let source = std::path::PathBuf::from(&cfg.cwd);
+        if crate::agent::workspace::is_managed(&cfg) && source.is_dir() {
+            let new_id = uuid::Uuid::new_v4().to_string();
+            let target = crate::agent::workspace::path(&new_id);
+            if let Err(error) = crate::store::workspace_copy::copy_workspace(&source, &target) {
+                let _ = std::fs::remove_dir_all(&target);
+                return Err(error).context("copying the agent's workspace");
+            }
+            cfg.cwd = target.to_string_lossy().into_owned();
+            let made = self.create_bot_with_id(cfg, new_id.clone());
+            if made.is_err() {
+                let _ = std::fs::remove_dir_all(&target);
+            }
+            return made;
+        }
         self.create_bot(cfg)
     }
 
-    pub fn create_bot(self: &Arc<Self>, mut cfg: BotConfig) -> Result<Value> {
+    pub fn create_bot(self: &Arc<Self>, cfg: BotConfig) -> Result<Value> {
+        self.create_bot_with_id(cfg, uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Shared with duplication, which copies the workspace before the new id is persisted.
+    fn create_bot_with_id(self: &Arc<Self>, mut cfg: BotConfig, id: String) -> Result<Value> {
+        cfg.id = id;
         if crate::external::is_external(&cfg) {
             bail!("a terminal session is created by its terminal, not by an app");
         }
-        cfg.id = uuid::Uuid::new_v4().to_string();
         cfg.created_at = crate::store::now_ms();
         cfg.position = self.new_bot_position()?;
         // No name yet (Grok Bot's flow): it gets one after its first few conversations.

@@ -1,5 +1,7 @@
 //! The `bots` table: roster rows, sessions, read marks and unread counts.
 
+pub(crate) mod workspace_copy;
+
 use super::entries::NOT_REMOVED;
 use super::model::{BotConfig, BotRow, EntryKind, LastMessage, message_text};
 use super::visibility::PUBLIC;

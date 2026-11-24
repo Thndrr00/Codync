@@ -133,6 +133,15 @@ guidance that a secure fill would need, and a secret would go only to the page, 
 
 ## Sign-in and takeover cards (OpenBot 0.77.0)
 
+A saved password that lands on a slow page no longer hands the browser to the user (OpenBot nightly). After
+a `type` with `submit`, the host gives the site a three-second grace to leave the login form: the
+`sign_in_complete` decision in `host/src/screen/browser_cards.rs` checks the address before and
+after the Enter press and whether a visible password field is still there. A site that moves on —
+even slowly — gets a snapshot of the signed-in page and the agent continues; a site that never moves
+and stays on the form keeps the existing handoff path exactly as it was. Only a submitting `type`
+waits, and the wait stays inside one tool call's deadline. No password or payment approval card is
+skipped: those are explicit, separate handoffs that this path never touches.
+
 The browser view and the card code share pure decisions in `host/src/screen/browser_cards.rs`, with
 the client-side copy decisions in `apps/desktop/src/renderer/lib/browser-cards.ts`. Every message is
 a fixed label; an address is read only to classify a page and is never logged or sent to analytics.

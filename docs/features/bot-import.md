@@ -54,6 +54,18 @@ warning; the rest imports.
 A bot whose skills or files fail is deleted again with the skills and `imported/` files it got; the others
 carry on. Import counts as `bots_imported` in analytics (source and counts only).
 
+## Duplicating an agent
+
+**Duplicate** on a bot copies its setup into a new bot: same agent, skills and persona, but no chat,
+pinned place or owner. A bot with its own workspace also gets a copy of that folder before its actor
+starts, and its config points at the copy. The copy keeps linked folders (a Windows junction for
+installed packages, for example) as links instead of walking into them, so it cannot fail on a
+package cache. When Windows security or search briefly holds a newly created file, the copy waits a
+short, capped backoff and tries that one step again; any other error fails the duplicate, which
+leaves no half-made bot behind. Bots that point at a shared project folder keep that folder as
+before, and nothing is copied for them. The pure retry decision and its tests are in
+`host/src/store/bots/workspace_copy.rs`.
+
 ## Safety (`host/src/import/archive.rs`)
 
 Entries are listed before anything is read: at most 5,000 entries and 500 MB inflated. Paths that leave the
