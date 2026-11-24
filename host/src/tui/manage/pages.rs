@@ -89,7 +89,8 @@ mod tests {
         assert_eq!(Page::Details.step(key(KeyCode::Right)), Some(Page::Library));
         assert_eq!(Page::Memory.step(key(KeyCode::Left)), Some(Page::Missions));
         assert_eq!(Page::Library.step(key(KeyCode::Left)), Some(Page::Details));
-        assert_eq!(Page::Settings.step(key(KeyCode::Right)), None);
+        assert_eq!(Page::Agentes.step(key(KeyCode::Right)), None);
+        assert_eq!(Page::Settings.step(key(KeyCode::Right)), Some(Page::Agentes));
         assert_eq!(Page::Details.step(key(KeyCode::Left)), None);
         assert_eq!(
             Page::Memory.step(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
