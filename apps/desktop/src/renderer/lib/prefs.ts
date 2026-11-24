@@ -71,6 +71,23 @@ export function usePref<T>(p: Pref<T>): [T, (v: T) => void] {
   return [value, p.set]
 }
 
+/**
+ * A font preference stores one family name, never a CSS declaration: only letters, digits, spaces and
+ * a few typographic marks are kept, so a stored or pasted value cannot inject styles or URLs.
+ */
+const FONT_NAME = /^[\p{L}\p{N}][\p{L}\p{N} _+'.-]{0,79}$/u
+
+export function validFontFamily(value: unknown): value is string {
+  return typeof value === 'string' && FONT_NAME.test(value)
+}
+
+/** Quotes a family with spaces, then appends a trusted stack. `fallback` is always a constant, never user input. */
+export function font_stack(candidate: string | null, fallback: string): string {
+  if (!validFontFamily(candidate)) return fallback
+  const family = /\s/.test(candidate) ? `"${candidate}"` : candidate
+  return `${family}, ${fallback}`
+}
+
 export const TEXT_SIZES = [11, 12, 13, 14, 15, 16, 18]
 export const DEFAULT_TEXT_SIZE = 12
 
@@ -126,6 +143,10 @@ export const prefs = {
   whatsNewSeen: pref<string | null>('whatsNewSeen', null),
   /** A hand-picked accent for Settings › Appearance; `null` keeps the theme's own black/white accent. */
   accentColor: pref<string | null>('accentColor', null),
+  /** Settings › Appearance: an installed family for app chrome, or `null` for the theme's default stack. */
+  interfaceFont: pref<string | null>('interfaceFont', null, (value, fallback) => validFontFamily(value) ? value : fallback),
+  /** Settings › Appearance: an installed family for code, or `null` for the theme's default stack. */
+  codeFont: pref<string | null>('codeFont', null, (value, fallback) => validFontFamily(value) ? value : fallback),
   /** "Restore the last workspace on launch": brings back a chat's open file and artifact tabs. */
   restoreLastWorkspace: pref('restoreLastWorkspace', true),
   /** Open tabs of each chat, keyed by computer and bot; ids only, kept on this device. */
@@ -182,6 +203,24 @@ export function applyAccentColor(hex: string | null) {
 
 prefs.accentColor.subscribe(() => applyAccentColor(prefs.accentColor.get()))
 applyAccentColor(prefs.accentColor.get())
+
+/* The default stacks are the ones in styles/theme.css; keep both in step. A chosen family is prepended
+   to its stack as an inline root variable, so every view picks it up without its own font CSS. */
+const DEFAULT_INTERFACE_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif'
+const DEFAULT_CODE_STACK = 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, "DejaVu Sans Mono", monospace'
+
+export function applyFonts(interfaceFamily: string | null, codeFamily: string | null) {
+  if (typeof document === 'undefined') return
+  const style = document.documentElement.style
+  if (validFontFamily(interfaceFamily)) style.setProperty('--font', font_stack(interfaceFamily, DEFAULT_INTERFACE_STACK))
+  else style.removeProperty('--font')
+  if (validFontFamily(codeFamily)) style.setProperty('--mono', font_stack(codeFamily, DEFAULT_CODE_STACK))
+  else style.removeProperty('--mono')
+}
+
+prefs.interfaceFont.subscribe(() => applyFonts(prefs.interfaceFont.get(), prefs.codeFont.get()))
+prefs.codeFont.subscribe(() => applyFonts(prefs.interfaceFont.get(), prefs.codeFont.get()))
+applyFonts(prefs.interfaceFont.get(), prefs.codeFont.get())
 
 /** The window mirrors for Arabic; paragraphs still follow their own text. */
 export function applyDirection(language: AppLanguage) {

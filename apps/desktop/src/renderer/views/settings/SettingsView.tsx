@@ -15,6 +15,7 @@ import { DEFAULT_TEXT_SIZE, prefs, TEXT_SIZES, usePref } from '../../lib/prefs'
 import { YOUR_BUBBLE_STYLES } from '../../lib/theme'
 import { useAccount } from '../../store/account'
 import { analytics, useScreenViewed } from '../../store/analytics'
+import { useBackWithHistory } from '../chat-navigation'
 import { StoreContext, useApp } from '../../store/context'
 import { SwitchRow } from '../bots/parts'
 import { ComputerBadge } from '../ComputerBadge'
@@ -64,6 +65,11 @@ const pages: { id: SettingsPage; title: string; label?: string; group: string; i
   { id: 'n8n', title: 'n8n', group: thisComputer, icon: 'point.3.connected.trianglepath.dotted' },
 ]
 
+/** The chosen family stays in the menu even when this device no longer has it (a moved profile). */
+function fontOptions(installed: string[], chosen: string | null) {
+  return [{ id: '', label: 'Default' }, ...[...new Set([...installed, ...(chosen ? [chosen] : [])])].map((family) => ({ id: family, label: family }))]
+}
+
 /** Each page as `screen_viewed` names it; Computer access and Voice chat report themselves. */
 const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', keyboard: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null }
 
@@ -74,6 +80,8 @@ export function SettingsView({ page, setPage, onExtensions }: { page: SettingsPa
   const tr = useTr()
   const current = pages.find((p) => p.id === page)!
   useScreenViewed(pageScreens[page])
+  // Back walks the pages opened in this sheet, then closes Settings to the chat behind it.
+  useBackWithHistory(page, setPage, dismiss)
   return (
     <div className="settings">
       <nav className="settings-sidebar">
@@ -156,6 +164,15 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   const [appearance, setAppearance] = useState<Appearance>('system')
   useEffect(() => void window.codync.app.appearance().then(setAppearance), [])
   const [textSize, setTextSize] = usePref(prefs.textSize)
+  const [interfaceFont, setInterfaceFont] = usePref(prefs.interfaceFont)
+  const [codeFont, setCodeFont] = usePref(prefs.codeFont)
+  const [installedFonts, setInstalledFonts] = useState<string[]>([])
+  const [fontQuery, setFontQuery] = useState('')
+  const [codeFontQuery, setCodeFontQuery] = useState('')
+  useEffect(() => {
+    const installed = window.codync.app.installedFonts
+    if (installed) void installed().then(setInstalledFonts, () => setInstalledFonts([]))
+  }, [])
   const [language, setLanguage] = usePref(prefs.appLanguage)
   const systemLanguage = typeof navigator === 'undefined' ? 'en' : navigator.language
   const [usageIconStyle, setUsageIconStyle] = usePref(prefs.usageIconStyle)
@@ -217,6 +234,22 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
           <ChoicePicker selection={appearance} options={[...APPEARANCES]} onChange={(value) => void window.codync.app.setAppearance(value).then(setAppearance)} />
         </ValueRow>
         <AccentColorRow />
+        <ValueRow label="Interface font" detail="The type used across the app. Only changes this device.">
+          <ChoicePicker
+            selection={interfaceFont ?? ''}
+            options={fontOptions(installedFonts, interfaceFont)}
+            onChange={(family) => setInterfaceFont(family || null)}
+            search={{ value: fontQuery, onChange: setFontQuery, placeholder: tr('Search fonts') }}
+          />
+        </ValueRow>
+        <ValueRow label="Code font" detail="The type used for code blocks. Only changes this device.">
+          <ChoicePicker
+            selection={codeFont ?? ''}
+            options={fontOptions(installedFonts, codeFont)}
+            onChange={(family) => setCodeFont(family || null)}
+            search={{ value: codeFontQuery, onChange: setCodeFontQuery, placeholder: tr('Search fonts') }}
+          />
+        </ValueRow>
         <ValueRow label="Text size">
           <ChoicePicker
             selection={textSize}

@@ -23,6 +23,7 @@ mod island_queue;
 mod island_resources;
 mod island_runtime;
 mod island_workspace;
+mod library_batch;
 mod location;
 mod marketplace;
 mod media;
@@ -277,6 +278,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };
+    if matches!(method, "libraryBatchPlan" | "libraryBatchDelete") {
+        return library_batch::call(hub, method, &b).await;
+    }
     let b = match bots::call(hub, caller, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import type { Bot } from '@shared/models'
 import type { BotStore } from '../../store/bot-store'
 import { Button, IconButton } from '../../components/Controls'
+import { Icon } from '../../components/Icon'
 import { ModalHeader, SheetPage } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
+import { workspace_row } from '../../lib/workspace-row.ts'
 
 interface Row {
   name: string
@@ -39,10 +41,28 @@ export function BotFilesSheet({ bot, store, onClose }: { bot: Bot; store: BotSto
   const segments = path.split('/').filter(Boolean)
   const up = () => void load(segments.slice(0, -1).join('/'))
   const full = (name: string) => [bot.cwd.replace(/[\\/]+$/, ''), ...segments, name].filter(Boolean).join('/')
+  const workspace = workspace_row(bot.cwd)
+  const reveal = () => {
+    if (!workspace || !window.codync.app.revealBotWorkspace) return
+    void window.codync.app.revealBotWorkspace(workspace.path).then(
+      () => setError(null),
+      (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)),
+    )
+  }
   return (
     <SheetPage>
       <ModalHeader title={tr('Files')} subtitle={tr('Inside this bot’s folder')} onClose={onClose} closeTitle={tr('Close')} />
       <VStack gap={10} className="channel-sheet">
+        {/* The workspace itself, above the folders the bot keeps inside it. */}
+        {workspace ? (
+          <Button kind="secondary" onClick={reveal} title={tr('Reveal workspace folder')}>
+            <HStack gap={8} grow>
+              <Icon name="folder" size={14} />
+              <Text>{tr('Workspace folder')}</Text>
+              <Text size="caption" tone="secondary" truncate title={workspace.path}>{workspace.label}</Text>
+            </HStack>
+          </Button>
+        ) : null}
         <HStack gap={6} wrap>
           <Button kind="secondary" disabled={!segments.length} onClick={up}>{tr('Up')}</Button>
           <Text size="caption" tone="secondary">{`${bot.name}${segments.length ? `/${segments.join('/')}` : ''}`}</Text>

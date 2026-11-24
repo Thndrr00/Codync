@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { Artifact, LibraryItem } from '@shared/artifacts'
 import { isImageName, type Attachment, type SharedFile } from '@shared/models'
 import { DropdownMenu, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
+import { Dialog } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { inSection, libraryItemKey, readFavorites, toggleFavorite, visibleFolders, type LibraryFolder, type LibrarySection } from '../../lib/library-folders.ts'
 import { libraryGroups } from '../../lib/library-groups'
+import { marquee_after, selection_after, type LibrarySelection } from '../../lib/library-selection.ts'
 import { trNow } from '../../lib/l10n.ts'
 import { useTr } from '../../lib/use-language'
 import { useScreenViewed } from '../../store/analytics'
@@ -16,9 +18,11 @@ import { downloadAction, downloadDetail } from '../thread/FileDownloadCard'
 import { artifactShareItems, renameArtifact, TitleField } from './ArtifactParts'
 import { LibraryFolders } from './LibraryFolders'
 import { LibraryRail } from './LibraryRail'
+import { LibrarySelectionBar } from './LibrarySelectionBar'
 import { LibraryState } from './LibraryState'
 import { LibraryUndo } from './LibraryUndo'
 import { LibraryUsage } from './LibraryUsage'
+import { deleteLibraryItem, downloadLibraryItem } from './library-actions.ts'
 import './library.css'
 
 /**
@@ -40,8 +44,13 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewing, setViewing] = useState<Attachment | null>(null)
+  const [selection, setSelection] = useState<LibrarySelection>({ ids: [], anchor: null })
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [marquee, setMarquee] = useState<{ x: number; y: number; x2: number; y2: number; additive: boolean } | null>(null)
   const generation = useRef(0)
   const pendingKey = useRef('')
+  const list = useRef<HTMLDivElement>(null)
   useScreenViewed('library')
   // Read again when the chat gets an artifact card or a file.
   const shared = store.allEntries(botId).filter((e) => e.data.artifact || e.data.files?.length || e.data.attachments?.length).length
@@ -68,6 +77,7 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
   }, [refresh])
   useEffect(() => {
     setSection('all'); setNotice(null); setRenamingId(null); setFavorites(readFavorites(botId))
+    setSelection({ ids: [], anchor: null }); setConfirmDelete(false); setMarquee(null)
   }, [botId])
 
   const showError = (e: unknown) => setError(e instanceof Error ? e.message : String(e))
@@ -154,6 +164,76 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
   const star = (id: string) => setFavorites(toggleFavorite(botId, id))
   const shown = items.filter((item) => inSection(item, section, favorites, Date.now()))
   const tiles = visibleFolders(folders, section, favorites)
+  const visibleKeys = shown.map(libraryItemKey)
+  const selectedItems = items.filter((item) => selection.ids.includes(libraryItemKey(item)))
+
+  const select = (key: string, event: ReactMouseEvent) => {
+    const target = event.target as HTMLElement
+    if (target.closest('.library-row-menu') || (target.closest('button') && !target.closest('.library-row-open'))) return
+    setSelection((current) => selection_after(current.ids, key, current.anchor, {
+      meta: event.metaKey || event.ctrlKey,
+      shift: event.shiftKey,
+    }, visibleKeys))
+  }
+  const rowProps = (key: string) => ({
+    itemKey: key,
+    dragging: setDragging,
+    pending: pendingKey,
+    selected: selection.ids.includes(key),
+    onSelect: (event: ReactMouseEvent) => select(key, event),
+  })
+
+  // A marquee starts on empty space, not on a row (a row drag files it into a folder).
+  const marqueeDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button, input, [data-item-key]')) return
+    const box = event.currentTarget.getBoundingClientRect()
+    const at = { x: event.clientX - box.left, y: event.clientY - box.top }
+    setMarquee({ ...at, x2: at.x, y2: at.y, additive: event.metaKey || event.ctrlKey })
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+  const marqueeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!marquee) return
+    const box = event.currentTarget.getBoundingClientRect()
+    setMarquee({ ...marquee, x2: event.clientX - box.left, y2: event.clientY - box.top })
+  }
+  const marqueeUp = () => {
+    if (!marquee) return
+    const box = list.current?.getBoundingClientRect()
+    if (box) {
+      const left = box.left + Math.min(marquee.x, marquee.x2)
+      const right = box.left + Math.max(marquee.x, marquee.x2)
+      const top = box.top + Math.min(marquee.y, marquee.y2)
+      const bottom = box.top + Math.max(marquee.y, marquee.y2)
+      const hits = [...(list.current?.querySelectorAll<HTMLElement>('[data-item-key]') ?? [])]
+        .filter((row) => {
+          const r = row.getBoundingClientRect()
+          return r.right >= left && r.left <= right && r.bottom >= top && r.top <= bottom
+        })
+        .map((row) => row.dataset.itemKey ?? '')
+      setSelection((current) => ({ ids: marquee_after(current.ids, hits, marquee.additive), anchor: null }))
+    }
+    setMarquee(null)
+  }
+
+  const finish = (results: PromiseSettledResult<void>[], reload: boolean) => {
+    const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (failure) showError(failure.reason)
+    else setError(null)
+    setBusy(false)
+    if (reload) refresh()
+  }
+  const downloadSelected = () => {
+    setBusy(true)
+    void Promise.allSettled(selectedItems.map((item) => downloadLibraryItem(store, botId, item))).then((results) => finish(results, false))
+  }
+  const deleteSelected = () => {
+    setConfirmDelete(false)
+    setBusy(true)
+    void Promise.allSettled(selectedItems.map((item) => deleteLibraryItem(store, item))).then((results) => {
+      finish(results, true)
+      setSelection({ ids: [], anchor: null })
+    })
+  }
   return (
     <HStack gap={12} align="flex-start" className="library-view">
       <LibraryRail section={section} select={setSection} dragging={dragging} dropUnfiled={() => { if (pendingKey.current) fileItem(pendingKey.current, null) }} />
@@ -188,23 +268,57 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
             onAction={refresh}
           />
         ) : (
-          libraryGroups(shown).map(({ group, items }) => (
-            <section key={group} className="details-section">
-              <Text className="details-section-title">{tr(group)}</Text>
-              <VStack gap={6}>
-                {items.map((item) =>
-                  item.kind === 'artifact' ? (
-                    <ArtifactRow key={item.artifact.id} artifact={store.artifacts.byId.get(item.artifact.id) ?? item.artifact} open={() => openArtifact(item.artifact.id)} onError={setError} itemKey={libraryItemKey(item)} dragging={setDragging} pending={pendingKey} />
-                  ) : item.kind === 'file' ? (
-                    <FileRow key={item.file.id} entryId={item.entryId} file={item.file} itemKey={libraryItemKey(item)} dragging={setDragging} pending={pendingKey} />
-                  ) : (
-                    <AttachmentRow key={item.file.id} botId={botId} file={item.file} view={() => setViewing(item.file)} itemKey={libraryItemKey(item)} dragging={setDragging} pending={pendingKey} />
-                  ),
-                )}
-              </VStack>
-            </section>
-          ))
+          <div
+            ref={list}
+            className="library-select-area"
+            onPointerDown={marqueeDown}
+            onPointerMove={marqueeMove}
+            onPointerUp={marqueeUp}
+            onPointerCancel={() => setMarquee(null)}
+          >
+            {marquee ? (
+              <div
+                className="library-marquee"
+                style={{
+                  left: Math.min(marquee.x, marquee.x2),
+                  top: Math.min(marquee.y, marquee.y2),
+                  width: Math.abs(marquee.x2 - marquee.x),
+                  height: Math.abs(marquee.y2 - marquee.y),
+                }}
+              />
+            ) : null}
+            {libraryGroups(shown).map(({ group, items }) => (
+              <section key={group} className="details-section">
+                <Text className="details-section-title">{tr(group)}</Text>
+                <VStack gap={6}>
+                  {items.map((item) =>
+                    item.kind === 'artifact' ? (
+                      <ArtifactRow {...rowProps(libraryItemKey(item))} key={item.artifact.id} artifact={store.artifacts.byId.get(item.artifact.id) ?? item.artifact} open={() => openArtifact(item.artifact.id)} onError={setError} />
+                    ) : item.kind === 'file' ? (
+                      <FileRow {...rowProps(libraryItemKey(item))} key={item.file.id} entryId={item.entryId} file={item.file} />
+                    ) : (
+                      <AttachmentRow {...rowProps(libraryItemKey(item))} key={item.file.id} botId={botId} file={item.file} view={() => setViewing(item.file)} />
+                    ),
+                  )}
+                </VStack>
+              </section>
+            ))}
+          </div>
         )}
+        <LibrarySelectionBar
+          count={selection.ids.length}
+          busy={busy}
+          onDownload={downloadSelected}
+          onDelete={() => setConfirmDelete(true)}
+          onClear={() => setSelection({ ids: [], anchor: null })}
+        />
+        <Dialog
+          open={confirmDelete}
+          title={tr('Delete {count} selected items?').replace('{count}', String(selectedItems.length))}
+          message={tr('Shared files leave this chat. Deleting an artifact removes its card; its saved page stays in the Library.')}
+          actions={[{ title: 'Delete selected', destructive: true, action: deleteSelected }]}
+          onClose={() => setConfirmDelete(false)}
+        />
         <AttachmentViewer source={viewing && { file: viewing, botId }} close={() => setViewing(null)} />
       </VStack>
     </HStack>
@@ -212,14 +326,17 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
 }
 
 /** One line of the Library: what it is, its name, and what can be done with it. */
-function Row({ leading, children, trailing, itemKey, dragging, pending }: {
+function Row({ leading, children, trailing, itemKey, dragging, pending, selected, onSelect }: {
   leading: ReactNode; children: ReactNode; trailing?: ReactNode
   itemKey?: string; dragging?: (value: boolean) => void; pending?: { current: string }
+  selected?: boolean; onSelect?: (event: ReactMouseEvent) => void
 }) {
   return (
     <HStack
       gap={4}
-      className="outlined-card library-row"
+      className={`outlined-card library-row${selected ? ' selected' : ''}`}
+      data-item-key={itemKey}
+      onClick={itemKey ? onSelect : undefined}
       draggable={!!itemKey}
       onDragStart={itemKey ? (e) => {
         e.dataTransfer.setData('text/plain', itemKey)
@@ -238,9 +355,10 @@ function Row({ leading, children, trailing, itemKey, dragging, pending }: {
   )
 }
 
-function ArtifactRow({ artifact, open, onError, itemKey, dragging, pending }: {
+function ArtifactRow({ artifact, open, onError, itemKey, dragging, pending, selected, onSelect }: {
   artifact: Artifact; open: () => void; onError: (message: string | null) => void
   itemKey?: string; dragging?: (value: boolean) => void; pending?: { current: string }
+  selected?: boolean; onSelect?: (event: ReactMouseEvent) => void
 }) {
   const tr = useTr()
   const store = useStore()
@@ -274,7 +392,7 @@ function ArtifactRow({ artifact, open, onError, itemKey, dragging, pending }: {
     )
   }
   return (
-    <Row leading={icon} trailing={menu} itemKey={itemKey} dragging={dragging} pending={pending}>
+    <Row leading={icon} trailing={menu} itemKey={itemKey} dragging={dragging} pending={pending} selected={selected} onSelect={onSelect}>
       <button className="library-row-open" onClick={open}>
         <Name name={artifact.title} detail={tr('Artifact')} />
       </button>
@@ -283,9 +401,10 @@ function ArtifactRow({ artifact, open, onError, itemKey, dragging, pending }: {
 }
 
 /** A file the bot shared: saved like its card in the chat. */
-function FileRow({ entryId, file, itemKey, dragging, pending }: {
+function FileRow({ entryId, file, itemKey, dragging, pending, selected, onSelect }: {
   entryId: string; file: SharedFile
   itemKey?: string; dragging?: (value: boolean) => void; pending?: { current: string }
+  selected?: boolean; onSelect?: (event: ReactMouseEvent) => void
 }) {
   const store = useStore()
   const state = store.fileDownloads.states.get(file.id)
@@ -297,6 +416,8 @@ function FileRow({ entryId, file, itemKey, dragging, pending }: {
       itemKey={itemKey}
       dragging={dragging}
       pending={pending}
+      selected={selected}
+      onSelect={onSelect}
     >
       <Name name={file.name} detail={downloadDetail(state, file)} failed={state?.kind === 'failed'} />
     </Row>
@@ -304,19 +425,20 @@ function FileRow({ entryId, file, itemKey, dragging, pending }: {
 }
 
 /** A file the user sent: an image opens full size, like in the chat. */
-function AttachmentRow({ botId, file, view, itemKey, dragging, pending }: {
+function AttachmentRow({ botId, file, view, itemKey, dragging, pending, selected, onSelect }: {
   botId: string; file: Attachment; view: () => void
   itemKey?: string; dragging?: (value: boolean) => void; pending?: { current: string }
+  selected?: boolean; onSelect?: (event: ReactMouseEvent) => void
 }) {
   if (!isImageName(file.name)) {
     return (
-      <Row leading={<Icon name={attachmentSymbol(file.name)} size={16} color="var(--secondary)" />} itemKey={itemKey} dragging={dragging} pending={pending}>
+      <Row leading={<Icon name={attachmentSymbol(file.name)} size={16} color="var(--secondary)" />} itemKey={itemKey} dragging={dragging} pending={pending} selected={selected} onSelect={onSelect}>
         <Name name={file.name} detail={byteCount(file.size)} />
       </Row>
     )
   }
   return (
-    <Row leading={<AttachmentImage source={{ file, botId }} fit="icon" />} itemKey={itemKey} dragging={dragging} pending={pending}>
+    <Row leading={<AttachmentImage source={{ file, botId }} fit="icon" />} itemKey={itemKey} dragging={dragging} pending={pending} selected={selected} onSelect={onSelect}>
       <button className="library-row-open" onClick={view}>
         <Name name={file.name} detail={byteCount(file.size)} />
       </button>

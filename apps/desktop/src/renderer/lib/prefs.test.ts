@@ -11,6 +11,8 @@ test('A stored preference of another kind reads as the fallback', async () => {
     ['desktopSidebarWidth', '300'],
     ['computerAccessSetup', '"ready"'],
     ['accentColor', '"#1084FE"'],
+    ['interfaceFont', '"red; } body { color: blue"'],
+    ['codeFont', '123'],
     ['restoreLastWorkspace', '"yes"'],
     ['startupAnimation', '"yes"'],
     ['openTabsByChat', '[]'],
@@ -32,6 +34,8 @@ test('A stored preference of another kind reads as the fallback', async () => {
   assert.equal(prefs.sidebarWidth.get(), 300)
   assert.equal(prefs.computerAccessSetup.get(), 'ready')
   assert.equal(prefs.accentColor.get(), '#1084FE')
+  assert.equal(prefs.interfaceFont.get(), null, 'a font name with CSS syntax reads as the default')
+  assert.equal(prefs.codeFont.get(), null, 'a non-string font reads as the default')
   assert.equal(prefs.restoreLastWorkspace.get(), true, 'a non-boolean switch reads as its default')
   assert.equal(prefs.startupAnimation.get(), true, 'a non-boolean startup switch reads as its default')
   assert.deepEqual(prefs.openTabsByChat.get(), {}, 'an array is not a tab map')
@@ -63,4 +67,34 @@ test('a custom accent writes the accent variables and clearing it removes them',
   assert.equal(props.has('--accent'), false)
   assert.equal(props.has('--accent-fill'), false)
   assert.equal(props.has('--on-accent'), false)
+})
+
+test('a chosen font family prefixes the trusted stack and never injects CSS', async () => {
+  const { font_stack } = await import('./prefs.ts')
+  const fallback = 'system-ui, sans-serif'
+  assert.equal(font_stack('Inter', fallback), 'Inter, system-ui, sans-serif')
+  assert.equal(font_stack('SF Mono', fallback), '"SF Mono", system-ui, sans-serif')
+  assert.equal(font_stack('Noto Sans CJK TC', fallback), '"Noto Sans CJK TC", system-ui, sans-serif')
+  for (const bad of ['red;}body{color:blue', 'a, b', 'url(evil)', '"quoted"', 'a\\b', null]) {
+    assert.equal(font_stack(bad, fallback), fallback, `rejected: ${bad}`)
+  }
+})
+
+test('font choices write the two root variables and clearing them restores the theme', async () => {
+  const props = new Map<string, string>()
+  const style = {
+    setProperty: (name: string, value: string) => void props.set(name, value),
+    removeProperty: (name: string) => void props.delete(name),
+  }
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { documentElement: { style } },
+  })
+  const { applyFonts } = await import('./prefs.ts')
+  applyFonts('Inter', 'JetBrains Mono')
+  assert.match(props.get('--font') ?? '', /^Inter, /)
+  assert.match(props.get('--mono') ?? '', /^"JetBrains Mono", /)
+  applyFonts(null, null)
+  assert.equal(props.has('--font'), false)
+  assert.equal(props.has('--mono'), false)
 })

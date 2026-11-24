@@ -32,6 +32,7 @@ import { AgentsPanel, AppsPanel, MarketAgentsPanel, MarketPanel, SkillsPanel } f
 import { ExtensionTabs, FormSheet, ItemRow, MarketSection, ServiceLogo, SkillGlyph, SlideStack } from './pieces'
 import { usePlugins } from './plugins'
 import { useTr } from '../../lib/use-language'
+import { useBackWithHistory } from '../chat-navigation'
 
 /**
  * Extensions for the bots on one computer (the store in context): the ready-made Bots and Teams
@@ -88,6 +89,26 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
   const [catalogAdded, setCatalogAdded] = useState<string[]>([])
   const [appsAdded, setAppsAdded] = useState<string[]>([])
   const [agentsAdded, setAgentsAdded] = useState<string[]>([])
+
+  /** Back closes whatever is on top of the catalog, then walks its tabs, then leaves Marketplace. */
+  const closeTop = () => {
+    if (showCredentials) { setShowCredentials(false); return true }
+    if (showInstalled) { setShowInstalled(false); return true }
+    if (viewingChannel) { setViewingChannel(null); return true }
+    if (installing) { setInstalling(null); return true }
+    if (viewingConnector) { setViewingConnector(null); return true }
+    if (viewingApp) { setViewingApp(null); return true }
+    if (viewingAgent) { setViewingAgent(null); return true }
+    if (whatsapp) { setWhatsApp(false); return true }
+    if (comfy) { setComfy(false); return true }
+    if (addingConnector) { setAddingConnector(false); return true }
+    if (writingSkill) { setWritingSkill(false); return true }
+    if (viewingSkill) { setViewingSkill(null); return true }
+    if (addingNode) { setAddingNode(false); return true }
+    if (agent) { setAgent(null); return true }
+    return false
+  }
+  useBackWithHistory(section, setSection, dismiss, closeTop)
 
   const query = search.trim()
   const matches = (text: string | null | undefined) => (text ?? '').toLowerCase().includes(query.toLowerCase())

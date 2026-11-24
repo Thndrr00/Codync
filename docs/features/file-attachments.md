@@ -107,7 +107,12 @@ the side rail adds **Favorites**, **All files**, **Recent** (last 7 days) and **
 their newest items, and dragging an item onto a tile, onto **New folder** or onto **Not in a folder** files, creates
 or unfiles it with an **Undo** notice. Starred folders are kept in this browser only. A bot can organize its own chat's
 folders with the `library` chat tools (deleting a folder needs approval under Ask); libraries with no folders read as
-before.
+before. Click to pick one item, Command/Ctrl-click to toggle, Shift-click for a range, or drag on empty space for a
+marquee; the bar below the list **Downloads selected** or **Deletes selected**. Each download uses the item's own
+authenticated read (and one native Save dialog per file); delete removes the item's chat entry, which leaves an
+artifact's saved page in the Library until the host's unwired batch-delete call is dispatched. A bot's Files sheet
+also has a **Workspace folder** row at the top: it reveals `bot.cwd` in the system file manager through a dedicated
+main-process channel that accepts only an absolute directory. Paths from the file listing are never revealed.
 
 A connected Telegram or WhatsApp chat also keeps a copy of what it received on the computer for 90 days, including
 group lines that never reached the bot (OpenBot 0.72.0/0.75.0). A Telegram voice note that arrives is saved in the

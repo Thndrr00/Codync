@@ -86,6 +86,8 @@
   --spring: linear(0, 0.0712, 0.2244, 0.3992, 0.5638, 0.7018, 0.8077, 0.8834, 0.9342, 0.9663, 0.9853, 0.9958, 1.0009, 1.0028, 1.0029, 1);
   --layout: 0.3s var(--spring);
 
+  /* Defaults for Settings › Appearance's font pickers: lib/prefs.ts prepends a chosen family as an
+     inline root override and mirrors these two stacks, so keep them in step. */
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'DejaVu Sans Mono', monospace;
 }

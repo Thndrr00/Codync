@@ -122,9 +122,31 @@
 .library-skeleton-line.short {
   width: 84px;
 }
+.library-select-area {
+  position: relative;
+}
+.library-marquee {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: 1px solid var(--accent);
+  border-radius: var(--radius-s);
+}
+.library-selection-bar {
+  padding: 8px 10px;
+  background: var(--surface);
+  border-radius: var(--radius-s);
+  animation: fade-in var(--fade) both;
+}
 .library-row {
   min-height: 46px;
   padding: 4px 6px 4px 14px;
+}
+.library-row.selected {
+  background: var(--raised, var(--surface));
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 .library-row-main {
   min-width: 0;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { IslandAction } from '../../shared/island-activity.ts'
-import { navigateCommand } from '../views/chat-navigation.ts'
+import { back_target, navigateCommand } from '../views/chat-navigation.ts'
 
 function navigation() {
   const calls: unknown[] = []
@@ -34,6 +34,13 @@ test('host and voice mutations are not repeated by the window navigation router'
   navigateCommand({ kind: 'stopBot', ref: 'computer/bot' }, handlers)
   navigateCommand({ kind: 'sendMessage', ref: 'computer/bot', text: 'hello' }, handlers)
   assert.deepEqual(calls, [])
+})
+
+test('back returns to the view last left and stops at the start of a sheet history', () => {
+  assert.equal(back_target('keyboard', ['general', 'computers']), 'computers')
+  assert.equal(back_target('general', []), null)
+  assert.equal(back_target('general', ['general']), null, 'the view shown now is not its own predecessor')
+  assert.equal(back_target('apps', ['skills', 'apps']), 'skills')
 })
 
 test('legacy window commands keep their existing routes and voice keys dispatch once', () => {

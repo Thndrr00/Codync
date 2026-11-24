@@ -320,6 +320,10 @@ export interface CodyncBridge {
     setDraftsDirty(dirty: boolean): void
     appearance(): Promise<Appearance>
     setAppearance(value: Appearance): Promise<Appearance>
+    /** Installed family names for Settings › Appearance's font pickers; absent on an older preload. */
+    installedFonts?(): Promise<string[]>
+    /** Reveals a bot's own workspace folder in the system file manager; main validates the path. */
+    revealBotWorkspace?(cwd: string): Promise<void>
     showWindow(): void
     showInDock(): Promise<boolean>
     setShowInDock(on: boolean): Promise<boolean>

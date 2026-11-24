@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { WindowCommand } from '../../shared/ipc'
 import type { IslandAction } from '../../shared/island-activity'
 import type { VoiceKey } from '../../shared/voice-shortcut'
@@ -36,6 +36,17 @@ export function useChatNavigation(navigation: Navigation) {
   useEffect(() => window.codync.app.onCommand((command) => navigateCommand(command, navigation)))
 }
 
+/**
+ * The view Back returns to: the latest earlier view in a sheet's own history. `history` holds only
+ * views already left, so reaching its start means Back should leave the sheet entirely.
+ */
+export function back_target<T>(current: T, history: readonly T[]): T | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i] !== current) return history[i] ?? null
+  }
+  return null
+}
+
 /** A back handler returns true when it consumed the gesture: an open thread closes before the
  * selected chat changes. Handlers are tried newest first, so the topmost sheet goes back. */
 type BackHandler = { handler: () => boolean; priority: number }
@@ -53,6 +64,34 @@ export function goBack(): boolean {
     if (handler()) return true
   }
   return false
+}
+
+/**
+ * Back inside a sheet: an open subview (`first`) closes before the sheet's own page history, and leaving
+ * the first page closes the sheet. Higher than the chat's handler, so the sheet goes back before the chat.
+ */
+export function useBackWithHistory<T>(current: T, setCurrent: (value: T) => void, exit: () => void, first?: () => boolean, priority = 20) {
+  const history = useRef<T[]>([])
+  const last = useRef(current)
+  const before = useRef(first)
+  before.current = first
+  useEffect(() => {
+    if (last.current === current) return
+    history.current = [...history.current, last.current]
+    last.current = current
+  }, [current])
+  useEffect(() => registerBackHandler(() => {
+    if (before.current?.()) return true
+    const target = back_target(current, history.current)
+    if (target === null) {
+      exit()
+      return true
+    }
+    history.current = history.current.slice(0, -1)
+    last.current = target
+    setCurrent(target)
+    return true
+  }, priority), [current, setCurrent, exit, priority])
 }
 
 /** Back from a thread goes to the chat or thread it came from: mouse back, Alt+←, ⌘[, UI arrow. */

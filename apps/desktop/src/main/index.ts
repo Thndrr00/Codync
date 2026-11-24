@@ -1,5 +1,7 @@
 import { identity } from './environment'
 import { registerAppearance } from './appearance'
+import { registerFonts } from './fonts'
+import { registerWorkspaceReveal } from './workspace-reveal'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -296,6 +298,8 @@ if (yieldsToInstall()) {
   })
   void app.whenReady().then(() => {
     registerAppearance()
+    registerFonts()
+    registerWorkspaceReveal()
     // Packaged builds take the icon from the bundle (resources/AppIcon.icon); a development run
     // would otherwise show Electron's.
     if (isMac && !app.isPackaged) app.dock?.setIcon(join(__dirname, '../../resources/icon.png'))
