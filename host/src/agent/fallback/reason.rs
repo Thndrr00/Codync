@@ -154,6 +154,21 @@ pub fn continues_after_work(reason: Reason) -> bool {
     )
 }
 
+/// OpenBot 0.66.0: a backup that failed a short time ago is shown as "Not available now ·
+/// skipped" instead of a count-down. A plan limit, a sign-out and a missing model have their own
+/// explanations, so they keep the ordinary text. Pure, tested.
+pub fn skip_reason(reason: Reason) -> Option<&'static str> {
+    match reason {
+        Reason::RateLimited
+        | Reason::Overloaded
+        | Reason::Network
+        | Reason::Timeout
+        | Reason::RefusedKey
+        | Reason::NotStarting => Some("Not available now · skipped"),
+        Reason::UsageLimit | Reason::OutOfCredits | Reason::SignedOut | Reason::ModelMissing => None,
+    }
+}
+
 /// Why `error` moves the bot on, or `None` when it shouldn't (a stop, a refusal, a bug in the request).
 pub fn of(error: &anyhow::Error) -> Option<Reason> {
     for cause in error.chain() {
@@ -293,6 +308,24 @@ mod tests {
         assert_eq!(of(&rpc(AUTH_REQUIRED, "Authentication required", None)), Some(Reason::SignedOut));
         assert_eq!(of(&rpc(-32603, "Authentication failed", Some("oauth_org_not_allowed"))), Some(Reason::SignedOut));
         assert!(continues_after_work(Reason::RefusedKey));
+    }
+
+    #[test]
+    fn only_a_recent_failure_is_shown_as_skipped() {
+        // OpenBot 0.66.0: the label is about an error, not about a plan limit or a sign-out.
+        for reason in [
+            Reason::RateLimited,
+            Reason::Overloaded,
+            Reason::Network,
+            Reason::Timeout,
+            Reason::RefusedKey,
+            Reason::NotStarting,
+        ] {
+            assert_eq!(skip_reason(reason), Some("Not available now · skipped"), "{reason:?}");
+        }
+        for reason in [Reason::UsageLimit, Reason::OutOfCredits, Reason::SignedOut, Reason::ModelMissing] {
+            assert_eq!(skip_reason(reason), None, "{reason:?} has its own wording");
+        }
     }
 
     #[test]

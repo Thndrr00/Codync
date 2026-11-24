@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Entry, EntryData } from '../../../shared/models.ts'
-import { waitingReplyRows } from './waiting-replies.ts'
+import { supersededFailedAsks, waitingReplyRows } from './waiting-replies.ts'
 
 const asked = (id: string, status: string, extra: Partial<Entry> = {}): Entry => {
   const data: EntryData = {
@@ -34,6 +34,34 @@ test('a failed ask is cleared by the next message the person sends', () => {
   const nextMessage = { ...asked('next', 'queued'), kind: 'user', turn: 1, data: { text: 'Try again' } }
   const rows = waitingReplyRows([failed, nextMessage], 'egan', null, new Set(), (id) => id)
   assert.deepEqual(rows.map((row) => row.id), [])
+})
+
+test('re-asking the same teammate clears the older failed row without a new user message', () => {
+  const failed = asked('failed', 'failed', { seq: 1 })
+  const reAsk = asked('re-ask', 'queued', { seq: 2 })
+  const rows = waitingReplyRows([failed, reAsk], 'egan', null, new Set(), (id) => id)
+  assert.deepEqual(rows.map((row) => [row.id, row.state]), [['re-ask', 'asked']])
+  const raw = [failed, reAsk].map((entry, i) => ({ id: entry.id, name: 'owen', request: 'x', state: i ? 'asked' as const : 'failed' as const, entry }))
+  assert.deepEqual([...supersededFailedAsks(raw)], ['failed'], 'the newer ask retires the older failure')
+})
+
+test('an ask to someone else, or an older ask, does not clear a failed row', () => {
+  const failed = asked('failed', 'failed', { seq: 3 })
+  const other = asked('other', 'queued', {
+    seq: 4,
+    data: { ...asked('other', 'queued').data, botMessage: { sourceBotId: 'egan', targetBotId: 'maya', text: 'Inspect other' } },
+  })
+  const older = asked('older', 'queued', { seq: 2 })
+  assert.deepEqual(
+    waitingReplyRows([failed, other, older], 'egan', null, new Set(), (id) => id).map((row) => row.id),
+    ['failed', 'older', 'other'],
+  )
+})
+
+test('a second failure to the same teammate keeps only the newest failed row', () => {
+  const first = asked('first', 'failed', { seq: 1 })
+  const second = asked('second', 'failed', { seq: 2 })
+  assert.deepEqual(waitingReplyRows([first, second], 'egan', null, new Set(), (id) => id).map((row) => row.id), ['second'])
 })
 
 test('a message that was not an ask, and a row from another thread, are not asks', () => {

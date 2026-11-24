@@ -72,7 +72,9 @@ pub fn resting(store: &Store, cfg: &BotConfig, now: i64) -> Vec<Value> {
     (0..steps(cfg))
         .filter_map(|s| {
             let r = rest::get(store, &account(cfg, s), now)?;
-            Some(json!({"agent": backend(cfg, s), "until": r.until, "reason": r.reason}))
+            // OpenBot 0.66.0: the snapshot also says when a recent failure has this step skipped.
+            Some(json!({"agent": backend(cfg, s), "until": r.until, "reason": r.reason,
+                "skipReason": reason::skip_reason(r.reason)}))
         })
         .collect()
 }
@@ -182,6 +184,21 @@ mod tests {
         assert!(check(&bot(&[("codex", None), ("codex", Some("o3"))])).is_err());
         assert!(check(&bot(&[("no-such-agent", None)])).is_err());
         assert!(check(&bot(&[("codex", None), ("gemini", None), ("cursor", None), ("qwen", None)])).is_err());
+    }
+
+    #[test]
+    fn a_snapshotted_rest_names_the_recent_failure_as_skipped() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let cfg = bot(&[("codex", None)]);
+        rest::record(&store, &account(&cfg, 1), Reason::NotStarting, 1_000, None);
+        let rows = resting(&store, &cfg, 1_001);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["agent"], "codex");
+        assert_eq!(rows[0]["skipReason"], "Not available now · skipped");
+
+        let limited = bot(&[("gemini", None)]);
+        rest::record(&store, &account(&limited, 1), Reason::UsageLimit, 1_000, Some(9_000));
+        assert!(resting(&store, &limited, 1_001)[0]["skipReason"].is_null(), "a limit keeps its reset time");
     }
 
     #[test]

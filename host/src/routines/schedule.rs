@@ -17,6 +17,29 @@ pub fn local_zone() -> String {
     iana_time_zone::get_timezone().ok().filter(|z| valid(z)).unwrap_or_else(|| "UTC".into())
 }
 
+/// The line a run prompt gets about the wall clock where the routine lives. OpenBot 0.72.0:
+/// an autonomous run is told the local date, weekday and time, so "tomorrow" means something.
+/// Pure: a bad zone falls back to UTC, and a timestamp before the epoch reads as nothing.
+pub(super) fn run_context_line(now: i64, zone: &str) -> String {
+    let Some(at) = DateTime::<Utc>::from_timestamp_millis(now) else { return String::new() };
+    let tz = zone.parse::<Tz>().unwrap_or(Tz::UTC);
+    let local = at.with_timezone(&tz);
+    format!("Run's local time: {} ({zone})", local.format("%A, %Y-%m-%d %H:%M"))
+}
+
+/// The zone a routine's runs are described in: its calendar trigger when it has one, else this
+/// computer's (see [`local_zone`]). Pure over the saved triggers.
+pub(super) fn routine_zone(routine: &super::Routine) -> String {
+    routine
+        .triggers
+        .iter()
+        .find_map(|trigger| match trigger {
+            Trigger::Cron { time_zone, .. } => Some(time_zone.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(local_zone)
+}
+
 /// How long a run may be queued after its occurrence without counting as missed: one tick of slack.
 pub const GRACE_MS: i64 = 60_000;
 /// The largest count a missed-run record names exactly; a larger one means "more than this".
@@ -267,6 +290,43 @@ mod tests {
             let expected = DateTime::parse_from_rfc3339(expected).unwrap().timestamp_millis();
             assert_eq!(trigger.next(now).unwrap(), Some(expected), "{expression}");
         }
+    }
+
+    #[test]
+    fn a_run_names_its_local_date_weekday_and_time() {
+        // 23:30 in Taipei is still the same calendar day; half an hour later it is the next one.
+        let at = DateTime::parse_from_rfc3339("2026-11-24T15:30:00Z").unwrap().timestamp_millis();
+        assert_eq!(run_context_line(at, "Asia/Taipei"), "Run's local time: Tuesday, 2026-11-24 23:30 (Asia/Taipei)");
+        assert_eq!(
+            run_context_line(at + 3_600_000, "Asia/Taipei"),
+            "Run's local time: Wednesday, 2026-11-25 00:30 (Asia/Taipei)"
+        );
+        assert_eq!(run_context_line(0, "not-a-zone"), "Run's local time: Thursday, 1970-01-01 00:00 (not-a-zone)");
+        assert!(run_context_line(i64::MIN, "UTC").is_empty(), "an impossible timestamp has no local time");
+    }
+
+    #[test]
+    fn daylight_saving_changes_the_local_hour_not_the_run() {
+        let before = DateTime::parse_from_rfc3339("2026-03-08T06:30:00Z").unwrap().timestamp_millis();
+        let after = DateTime::parse_from_rfc3339("2026-03-08T07:30:00Z").unwrap().timestamp_millis();
+        assert_eq!(
+            run_context_line(before, "America/New_York"),
+            "Run's local time: Sunday, 2026-03-08 01:30 (America/New_York)"
+        );
+        assert_eq!(
+            run_context_line(after, "America/New_York"),
+            "Run's local time: Sunday, 2026-03-08 03:30 (America/New_York)",
+            "the spring-forward hour is skipped locally"
+        );
+    }
+
+    #[test]
+    fn a_calendar_routine_uses_its_own_zone() {
+        let mut routine = super::super::tests::routine();
+        assert!(routine.triggers.iter().all(|t| !matches!(t, Trigger::Cron { .. })));
+        assert_eq!(routine_zone(&routine), local_zone(), "without a calendar trigger the computer's zone applies");
+        routine.triggers.push(Trigger::Cron { expression: "0 9 * * *".into(), time_zone: "Asia/Taipei".into() });
+        assert_eq!(routine_zone(&routine), "Asia/Taipei");
     }
 
     #[test]

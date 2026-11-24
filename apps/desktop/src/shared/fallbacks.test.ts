@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clockTime, mixesAgents, moveFallback, restLine, restOf, runningAgent, stepBanner, withBackend } from './fallbacks.ts'
+import { SKIPPED_NOW, clockTime, mixesAgents, moveFallback, restCaption, restLine, restOf, runningAgent, stepBanner, withBackend } from './fallbacks.ts'
 import { draftOf, normalizeBot } from './models.ts'
 
 const now = new Date(2026, 9, 21, 10, 0).getTime()
@@ -18,6 +18,15 @@ test('a time today is just the time; another day names the weekday', () => {
 test('a usage limit says when it resets; other rests say until when', () => {
   assert.equal(restLine({ agent: 'claude', until: at3, reason: 'usageLimit' }, now), `Usage resets ${time(at3)}`)
   assert.equal(restLine({ agent: 'claude', until: at3, reason: 'rateLimited' }, now), `Resting until ${time(at3)}`)
+})
+
+test('a recently failed backup is skipped, not left on a count-down', () => {
+  const rest = { agent: 'codex', until: at3, reason: 'notStarting', skipReason: SKIPPED_NOW }
+  assert.equal(restCaption(rest, now), SKIPPED_NOW)
+  assert.equal(restCaption({ agent: 'codex', until: at3, reason: 'rateLimited' }, now), `Resting until ${time(at3)}`)
+  const step = { step: 1, agent: 'codex', model: null, since: now, reason: 'notStarting' }
+  const bot = normalizeBot({ id: 'b', backend: 'claude', agentStep: step, resting: [rest] })
+  assert.equal(stepBanner(bot, name, now), "Using Codex while Claude Code can't answer")
 })
 
 test('a rest that ended no longer counts', () => {

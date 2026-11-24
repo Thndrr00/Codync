@@ -231,12 +231,24 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"entries": hub.store.bot_conversation(str_arg(&b, "botId")?, str_arg(&b, "peerId")?, 200)?})
         }
         "createBot" => {
+            // OpenBot 0.66.0: a new agent opens by asking which of three first tasks to do. A
+            // caller may name its language; otherwise the computer's locale is the best hint, and
+            // an unknown one reads English. No client needs a change to get the card.
+            let lang = b["language"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| std::env::var("LANG").or_else(|_| std::env::var("LC_ALL")).unwrap_or_default());
             let mut b = b;
             // Only a bot's `create_bot` records who made one.
             b["createdBy"] = Value::Null;
             let cfg = crate::agent::new_bot::with_defaults(hub, b).await?;
             let hub = hub.clone();
-            json!({"bot": tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??})
+            let saved = tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??;
+            let id = saved["id"].as_str().context("the new bot has no id")?.to_owned();
+            if let Some(row) = hub.store.bot(&id)? {
+                crate::agent::new_bot::post_welcome(hub, &row.config, &lang)?;
+            }
+            json!({"bot": saved})
         }
         // Bots from another app's export file on this computer (`import`).
         "previewImport" => crate::import::preview(&b).await?,
@@ -749,6 +761,19 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 }
                 Some("answered") => bail!("This approval was already answered with another choice"),
                 _ => bail!("This approval is closed: its turn ended or was stopped"),
+            }
+            // A new agent's welcome card has no tool waiting: the picked first task becomes its
+            // first turn (OpenBot 0.66.0). Close the card before the turn starts so a retry can't
+            // ask the same question twice.
+            if let Some(task) = crate::agent::new_bot::welcome_task(&e.data, option_id.as_deref()) {
+                let mut answered = e.clone();
+                answered.data["status"] = "answered".into();
+                answered.data["selected"] = option_id.clone().into();
+                hub.set_entry(entry_id, &answered.data);
+                let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
+                let prompt = format!("[Your new agent's first task] {task}");
+                crate::api::apps_runtime::dispatch_bot_turn(hub, bot, &prompt, "welcome")?;
+                return Ok(ControlFlow::Break(json!({})));
             }
             // "Always allow" with a rule: check it, and keep it for the bot before the answer goes out.
             if let Some(rule) = b.get("rule").filter(|r| r.is_object()) {

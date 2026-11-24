@@ -14,6 +14,30 @@ export interface WaitingReply {
 }
 
 /**
+ * OpenBot 0.77: asking the same teammate again retires the older failed "Asked" row, even when the
+ * person sent no new message in between. Only a *newer* ask to that same peer clears it: a failure
+ * to someone else, or a re-ask that came first, leaves the row standing. Pure, tested.
+ */
+export function supersededFailedAsks(rows: WaitingReply[]): Set<string> {
+  const latest = new Map<string, number>()
+  for (const row of rows) {
+    const exchange = botExchange(row.entry)
+    if (!exchange) continue
+    const peer = peerOf(exchange)
+    latest.set(peer, Math.max(latest.get(peer) ?? Number.NEGATIVE_INFINITY, row.entry.seq))
+  }
+  const cleared = new Set<string>()
+  for (const row of rows) {
+    if (row.state !== 'failed') continue
+    const exchange = botExchange(row.entry)
+    if (!exchange) continue
+    const last = latest.get(peerOf(exchange))
+    if (last !== undefined && last > row.entry.seq) cleared.add(row.id)
+  }
+  return cleared
+}
+
+/**
  * The asks in this chat or thread, from the structured bot messages the host publishes. A stopped
  * row keeps its place, and a row that replied or failed stays long enough to count: the card hides
  * replied rows and keeps failed ones until it is closed (OpenBot nightly triage-13388). Pure, so
@@ -51,7 +75,8 @@ export function waitingReplyRows(
       entry,
     })
   }
+  const superseded = supersededFailedAsks(rows)
   return rows
-    .filter((row) => row.state !== 'failed' || row.entry.turn >= latestUserTurn)
+    .filter((row) => row.state !== 'failed' || (row.entry.turn >= latestUserTurn && !superseded.has(row.id)))
     .sort((a, b) => a.id.localeCompare(b.id))
 }

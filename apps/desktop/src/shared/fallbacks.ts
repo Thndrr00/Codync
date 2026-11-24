@@ -4,8 +4,11 @@ import { isGroup, type Bot, type BotDraft, type Fallback, type Resting } from '.
 /** The host refuses more. */
 export const MAX_FALLBACKS = 3
 
+/** An agent's rest with the host's additive note that a recent failure has it skipped. */
+export type FallbackRest = Resting & { skipReason?: string | null }
+
 /** `agent`'s rest, while it lasts. */
-export const restOf = (bot: Bot, agent: string, now: number): Resting | null =>
+export const restOf = (bot: Bot, agent: string, now: number): FallbackRest | null =>
   bot.resting.find((r) => r.agent === agent && r.until > now) ?? null
 
 /** The agent a bot runs on right now: its fallback's while it's on one. */
@@ -25,12 +28,21 @@ export function clockTime(ms: number, now: number): string {
 export const restLine = (rest: Resting, now: number) =>
   `${rest.reason === 'usageLimit' ? 'Usage resets' : 'Resting until'} ${clockTime(rest.until, now)}`
 
+/** OpenBot 0.66: a backup that failed recently says so instead of showing a count-down. */
+export const SKIPPED_NOW = 'Not available now · skipped'
+
+/** The caption under a resting agent: a recent failure is skipped, a usage limit still has a reset. */
+export const restCaption = (rest: FallbackRest, now: number): string =>
+  rest.skipReason ? SKIPPED_NOW : restLine(rest, now)
+
 /** The Agent card's first line while the bot runs on a fallback; null on its own agent. */
 export function stepBanner(bot: Bot, name: (agent: string) => string, now: number): string | null {
   if (!bot.agentStep) return null
   const [to, own] = [name(bot.agentStep.agent), name(bot.backend)]
   const rest = restOf(bot, bot.backend, now)
-  return rest ? `Using ${to} until ${own} resets at ${clockTime(rest.until, now)}` : `Using ${to} while ${own} can't answer`
+  return rest && !rest.skipReason
+    ? `Using ${to} until ${own} resets at ${clockTime(rest.until, now)}`
+    : `Using ${to} while ${own} can't answer`
 }
 
 /** The list with the fallback at `index` moved `by` places (clamped to the ends). */

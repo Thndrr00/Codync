@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MAX_FALLBACKS, moveFallback, restLine, restOf, runningAgent, stepBanner } from '@shared/fallbacks'
+import { MAX_FALLBACKS, moveFallback, restCaption, restOf, runningAgent, stepBanner, type FallbackRest } from '@shared/fallbacks'
 import type { Backend, Bot, BotDraft, Fallback } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { Button, CardForm, CardSection, DropdownMenu, IconButton } from '../../components/Controls'
@@ -21,13 +21,24 @@ const ABOUT =
 /** An agent as the Agent pickers list it: its logo, its sign-in, and "(not installed)" when it isn't. */
 export const agentChoice = (b: Backend) => ({ id: b.id, label: b.available ? b.name : `${b.name} (not installed)`, leading: <AgentIcon registry={b.registry ?? b.id} size={14} />, status: <AgentStatusBadge backend={b} /> })
 
+/** One resting agent's second line, shared by the fallback rows and the switch banner. */
+export function RestCaption({ rest, now }: { rest: FallbackRest; now: number }) {
+  const tr = useTr()
+  return <Text size="caption" tone="secondary">{tr(restCaption(rest, now))}</Text>
+}
+
 /** The Agent card's first row while the bot runs on a fallback, with the way back to its own agent. */
 export function AgentStepBanner({ bot }: { bot: Bot }) {
   const store = useStore()
+  const now = Date.now()
+  const ownRest = restOf(bot, bot.backend, now)
   return (
     <HStack gap={8} className="fade-in">
       <AgentIcon registry={store.agentRegistry(runningAgent(bot))} size={14} />
-      <Text tone="text" grow>{stepBanner(bot, (a) => store.backendName(a), Date.now())}</Text>
+      <VStack gap={2} grow>
+        <Text tone="text">{stepBanner(bot, (a) => store.backendName(a), now)}</Text>
+        {ownRest?.skipReason ? <RestCaption rest={ownRest} now={now} /> : null}
+      </VStack>
       <Button kind="secondary" className="fallback-switch-back" onClick={() => store.switchBack(bot.id)}>Switch back</Button>
     </HStack>
   )
@@ -110,7 +121,7 @@ function FallbackRow({ fallback, index, count, bot, now, move, remove }: {
       <AgentIcon registry={store.agentRegistry(fallback.backend)} size={14} />
       <VStack gap={2} grow>
         <Text tone="text" truncate>{`${name} · ${fallback.model || tr(`Default`)}`}</Text>
-        {rest ? <Text size="caption" tone="secondary">{restLine(rest, now)}</Text> : null}
+        {rest ? <RestCaption rest={rest} now={now} /> : null}
       </VStack>
       {bot.agentStep?.agent === fallback.backend ? <Text size="caption" weight="medium" tone="text" className="fallback-chip fade-in">{tr(`In use`)}</Text> : null}
       <DropdownMenu
