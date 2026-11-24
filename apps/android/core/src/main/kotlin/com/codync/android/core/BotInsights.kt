@@ -14,10 +14,40 @@ data class BotInsights(
     val health: InsightHealth = InsightHealth(),
     val profile: InsightProfile = InsightProfile(),
     val week: InsightWeek = InsightWeek(),
+    val routineSummary: InsightRoutineSummary = InsightRoutineSummary(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
 )
+
+/** A host-computed summary of one bot's routines. */
+@Serializable
+data class InsightRoutineSummary(
+    val count: String = "",
+    val active: Int = 0,
+    val paused: Int = 0,
+    val scheduled: Int = 0,
+    val activePercent: Int = 0,
+    val bar: String = "",
+    val next: String = "",
+    val mix: String = "",
+    val clock: Boolean = false,
+    val event: Boolean = false,
+    val allScheduled: Boolean = false,
+    val headline: String = "",
+    val tone: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val soonest: List<InsightSoonestRoutine> = emptyList(),
+    val pausedList: List<InsightPausedRoutine> = emptyList(),
+)
+
+@Serializable data class InsightSummaryRow(val key: String = "", val value: String = "")
+@Serializable data class InsightSoonestRoutine(
+    val id: String = "", val name: String = "", val enabled: Boolean = false,
+    val trigger: String = "", val triggerIcon: String = "", val nextIn: String = "",
+    val stateIcon: String = "", val stateTone: String = "",
+)
+@Serializable data class InsightPausedRoutine(val id: String = "", val name: String = "")
 
 /** A host-computed weekly summary for one bot. */
 @Serializable

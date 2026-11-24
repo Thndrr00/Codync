@@ -66,6 +66,47 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let schedule = &data["routineSummary"];
+    if schedule.is_object() {
+        line(buf, &mut y, tr("Schedule").into_owned(), t.bold.patch(t.panel));
+        let headline = schedule["headline"].as_str().unwrap_or("");
+        let bar = schedule["bar"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{bar} {headline}"), t.text.patch(t.panel));
+        let active = schedule["active"].as_u64().unwrap_or(0);
+        let paused = schedule["paused"].as_u64().unwrap_or(0);
+        let mix = schedule["mix"].as_str().unwrap_or("");
+        line(
+            buf,
+            &mut y,
+            format!("  {}: {active} · {}: {paused} · {mix}", tr("Active"), tr("Paused")),
+            t.secondary.patch(t.panel),
+        );
+        let soonest: Vec<String> = schedule["soonest"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(6)
+                    .map(|r| {
+                        format!(
+                            "  {} {} · {}{}",
+                            if r["enabled"] == true { "●" } else { "○" },
+                            r["name"].as_str().unwrap_or(""),
+                            r["trigger"].as_str().unwrap_or(""),
+                            {
+                                let n = r["nextIn"].as_str().unwrap_or("");
+                                if n.is_empty() { String::new() } else { format!(" · {n}") }
+                            }
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in soonest {
+            line(buf, &mut y, item, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let week = &data["week"];
     if week.is_object() {
         line(buf, &mut y, tr("This week").into_owned(), t.bold.patch(t.panel));

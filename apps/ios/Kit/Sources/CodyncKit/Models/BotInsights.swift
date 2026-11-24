@@ -11,9 +11,51 @@ public struct BotInsights: Decodable, Sendable {
     public let health: InsightHealth
     public let profile: InsightProfile
     public let week: InsightWeek
+    public let routineSummary: InsightRoutineSummary
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of one bot's routines.
+public struct InsightRoutineSummary: Decodable, Sendable {
+    public let count: String
+    public let active: Int
+    public let paused: Int
+    public let scheduled: Int
+    public let activePercent: Int
+    public let bar: String
+    public let next: String
+    public let mix: String
+    public let clock: Bool
+    public let event: Bool
+    public let allScheduled: Bool
+    public let headline: String
+    public let tone: String
+    public let summary: [InsightSummaryRow]
+    public let soonest: [InsightSoonestRoutine]
+    public let pausedList: [InsightPausedRoutine]
+}
+
+public struct InsightSummaryRow: Decodable, Sendable {
+    public let key: String
+    public let value: String
+}
+
+public struct InsightSoonestRoutine: Decodable, Sendable {
+    public let id: String
+    public let name: String
+    public let enabled: Bool
+    public let trigger: String
+    public let triggerIcon: String
+    public let nextIn: String
+    public let stateIcon: String
+    public let stateTone: String
+}
+
+public struct InsightPausedRoutine: Decodable, Sendable {
+    public let id: String
+    public let name: String
 }
 
 /// A host-computed weekly summary for one bot.

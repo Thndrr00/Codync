@@ -42,6 +42,17 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val schedule = insights.routineSummary
+            CardSection("Schedule") {
+                row { Text(schedule.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(schedule.bar, style = Type.caption, color = Palette.accent) }
+                row { Text("Active: ${schedule.active}   Paused: ${schedule.paused}   ${schedule.mix}",
+                    style = Type.caption, color = Palette.secondary) }
+                for (item in schedule.soonest) row {
+                    Text("${if (item.enabled) "●" else "○"} ${item.name} · ${item.trigger}${if (item.nextIn.isNotBlank()) " · ${item.nextIn}" else ""}",
+                        style = Type.caption, color = Palette.secondary)
+                }
+            }
             val week = insights.week
             CardSection("This week") {
                 row { Text(week.verdict, style = Type.subheadline.semibold, color = Palette.text) }

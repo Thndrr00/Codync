@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,25 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Schedule')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(routineSummary.tone)}>{routineSummary.headline}</Text>
+        <Text size="footnote" tone="accent">{routineSummary.bar}</Text>
+        <ValueRow label={tr('Active')}>{String(routineSummary.active)}</ValueRow>
+        <ValueRow label={tr('Paused')}>{String(routineSummary.paused)}</ValueRow>
+        <ValueRow label={tr('Triggers')}>{routineSummary.mix}</ValueRow>
+        {routineSummary.soonest.length ? (
+          <VStack gap={2}>
+            {routineSummary.soonest.map((item) => (
+              <HStack key={item.id} gap={6}>
+                <Text size="footnote" tone={toneOf(item.stateTone)}>{item.enabled ? '●' : '○'}</Text>
+                <Text size="footnote" tone={toneOf(item.stateTone)}>{`${item.name} · ${item.trigger}`}</Text>
+                {item.nextIn ? <Text size="footnote" tone="tertiary">{item.nextIn}</Text> : null}
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       <CardSection title={tr('This week')}>

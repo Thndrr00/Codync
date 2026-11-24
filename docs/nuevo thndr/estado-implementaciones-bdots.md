@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Resumen de rutinas (21 helpers + UI en 4 clientes)
+
+`bdots_routines.rs` añade 21 helpers puros que resumen las rutinas de un bot: activas/pausadas,
+programadas, próxima ejecución, porcentaje y barra de actividad, mezcla de disparadores (cron
+vs evento), ordenación por proximidad, titular y tono. Reutiliza `bdots_cron`, `bdots_text` y
+`bdots_activity`. El endpoint `botInsights` añade el campo `routineSummary`, construido desde el
+mismo array `routines` que ya calcula el host (sin recalcular), y la sección «Schedule» se muestra
+en los cuatro clientes.
+
 ## Resumen semanal (21 helpers + UI en 4 clientes)
 
 `bdots_week.rs` añade 21 helpers puros que convierten la actividad diaria en tendencias,

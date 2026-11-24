@@ -30,6 +30,24 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let schedule = insights.routineSummary
+                    Text(schedule.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(schedule.bar).font(.footnote).foregroundStyle(Palette.accent)
+                    HStack(spacing: 12) {
+                        Text("\(L10n.tr("Active")): \(schedule.active)")
+                        Text("\(L10n.tr("Paused")): \(schedule.paused)")
+                        Text(schedule.mix)
+                    }
+                    .font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(schedule.soonest, id: \.id) { item in
+                        HStack(spacing: 6) {
+                            Text(item.enabled ? "●" : "○").foregroundStyle(Palette.secondary)
+                            Text("\(item.name) · \(item.trigger)").font(.footnote).foregroundStyle(Palette.text)
+                            if !item.nextIn.isEmpty {
+                                Text(item.nextIn).font(.footnote).foregroundStyle(Palette.tertiary)
+                            }
+                        }
+                    }
                     let week = insights.week
                     Text(week.verdict).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(week.headline).font(.footnote).foregroundStyle(Palette.secondary)

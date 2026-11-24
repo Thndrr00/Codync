@@ -251,6 +251,65 @@ fn week_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
     })
 }
 
+/// Routine summary: reuse the already-computed `routines` array, no second calculation.
+fn routine_summary_view(routines: &[Value], now: i64) -> Value {
+    use crate::bdots_routines as r;
+
+    let lines: Vec<r::RoutineLine> = routines
+        .iter()
+        .map(|v| {
+            let schedules: Vec<String> = v["schedules"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+                .unwrap_or_default();
+            r::line(
+                v["id"].as_str().unwrap_or(""),
+                v["name"].as_str().unwrap_or(""),
+                v["enabled"] == true,
+                &schedules,
+                v["nextInMs"].as_i64(),
+                now,
+            )
+        })
+        .collect();
+
+    let soonest: Vec<Value> = r::soonest_first(&lines, 6)
+        .into_iter()
+        .map(|l| {
+            json!({
+                "id": l.id,
+                "name": l.name,
+                "enabled": l.enabled,
+                "trigger": l.trigger,
+                "triggerIcon": r::trigger_icon(&l.trigger),
+                "nextIn": l.next_in,
+                "stateIcon": r::state_icon(l.enabled),
+                "stateTone": r::state_tone(l.enabled),
+            })
+        })
+        .collect();
+    let paused: Vec<Value> = r::paused(&lines).iter().map(|l| json!({"id": l.id, "name": l.name})).collect();
+
+    json!({
+        "count": r::count_label(&lines),
+        "active": r::active_count(&lines),
+        "paused": r::paused_count(&lines),
+        "scheduled": r::scheduled_count(&lines),
+        "activePercent": r::active_percent(&lines),
+        "bar": r::active_bar(&lines, 12),
+        "next": r::next_label(&lines),
+        "mix": r::trigger_mix(&lines),
+        "clock": r::has_clock(&lines),
+        "event": r::has_event(&lines),
+        "allScheduled": r::all_scheduled(&lines),
+        "headline": r::schedule_headline(&lines),
+        "tone": r::schedule_tone(&lines),
+        "summary": r::summary(&lines).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "soonest": soonest,
+        "pausedList": paused,
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -307,6 +366,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "health": health_view(&row, used, limit, routines.len()),
         "profile": profile_view(&row, routines.len()),
         "week": week_view(hub, bot, now),
+        "routineSummary": routine_summary_view(&routines, now),
         "routines": routines,
         "usage": {
             "used": used,
