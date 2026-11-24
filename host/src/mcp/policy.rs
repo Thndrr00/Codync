@@ -29,6 +29,34 @@ struct Decision {
     approve: bool,
 }
 
+/// The chat's startup-failure latch for a connector's tools, after a Test connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ToolsAfterVerify {
+    /// A passing check cleared the latch: declare the tools again from the next message.
+    Restore,
+    /// The check failed: keep the latch, so the tools stay out of this chat.
+    KeepFailed { needs_sign_in: bool },
+    /// There was no latch and no new failure: nothing to refresh.
+    Unchanged,
+}
+
+/// Pure decision for a Test connection (OpenBot triage-15335). A passing check clears a stale
+/// startup-failure latch whether or not the server needs sign-in; a failed check keeps it. Only the
+/// latch is decided here — per-tool authorization (allow/ask/deny, including the deny blocklist)
+/// stays a later gate.
+pub(crate) fn tools_after_verify(previous_failure: bool, verify_ok: bool, requires_sign_in: bool) -> ToolsAfterVerify {
+    match (verify_ok, previous_failure) {
+        (true, true) => ToolsAfterVerify::Restore,
+        (true, false) => ToolsAfterVerify::Unchanged,
+        (false, _) => ToolsAfterVerify::KeepFailed { needs_sign_in: requires_sign_in },
+    }
+}
+
+/// The latch never widens authorization: a `deny` (blocklist) policy still refuses dispatch.
+pub(crate) fn policy_allows_dispatch(mode: Mode) -> bool {
+    mode != Mode::Deny
+}
+
 pub(super) fn field<'a>(body: &'a Value, name: &str) -> Result<&'a str> {
     body[name].as_str().with_context(|| format!("{name} is required"))
 }
@@ -78,7 +106,7 @@ pub fn respond(hub: &Hub, id: &str, option: Option<&str>) -> Result<bool> {
     };
     if approve {
         enabled(hub, &call.bot, &call.connector)?;
-        if hub.store.mcp_policy(&call.connector, &call.tool)? == Mode::Deny {
+        if !policy_allows_dispatch(hub.store.mcp_policy(&call.connector, &call.tool)?) {
             bail!("tool is disabled");
         }
     }
@@ -142,7 +170,8 @@ pub async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, body: Value) ->
             let _configuration = hub.store.connector_lock.locked();
             let request = hub.store.mcp_call(field(&body, "id")?)?.context("unknown tool request")?;
             enabled(hub, &request.bot, &request.connector)?;
-            if request.status != "dispatched" || hub.store.mcp_policy(&request.connector, &request.tool)? == Mode::Deny
+            if request.status != "dispatched"
+                || !policy_allows_dispatch(hub.store.mcp_policy(&request.connector, &request.tool)?)
             {
                 bail!("tool request is no longer authorized");
             }
@@ -306,5 +335,35 @@ mod tests {
             serde_json::from_value::<Decision>(json!({"id":"call","approve":true,"arguments":{"changed":true}}))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn a_failed_start_then_a_passing_verify_restores_the_tools() {
+        assert_eq!(tools_after_verify(true, true, true), ToolsAfterVerify::Restore);
+    }
+
+    #[test]
+    fn a_passing_verify_on_a_server_with_no_sign_in_restores_the_tools() {
+        assert_eq!(tools_after_verify(true, true, false), ToolsAfterVerify::Restore);
+    }
+
+    #[test]
+    fn a_still_failing_verify_keeps_the_latch() {
+        assert_eq!(tools_after_verify(true, false, false), ToolsAfterVerify::KeepFailed { needs_sign_in: false });
+        assert_eq!(tools_after_verify(false, false, true), ToolsAfterVerify::KeepFailed { needs_sign_in: true });
+    }
+
+    #[test]
+    fn a_denied_tool_stays_denied_even_after_the_latch_is_cleared() {
+        // The decision restores declarations only; authorization still runs its own gate.
+        assert_eq!(tools_after_verify(true, true, false), ToolsAfterVerify::Restore);
+        assert!(!policy_allows_dispatch(Mode::Deny));
+        assert!(policy_allows_dispatch(Mode::Allow));
+        assert!(policy_allows_dispatch(Mode::Ask));
+    }
+
+    #[test]
+    fn a_passing_verify_without_a_prior_failure_changes_nothing() {
+        assert_eq!(tools_after_verify(false, true, false), ToolsAfterVerify::Unchanged);
     }
 }

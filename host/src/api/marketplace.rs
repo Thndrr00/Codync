@@ -124,7 +124,30 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "connectorInfo" => market::connector_info(&hub.store, str_arg(&b, "registryName")?).await?,
         "connectorRequestFinish" => market::requests::finish(hub, &b).await?,
-        "connectorVerify" => market::verify::verify(&hub.store, str_arg(&b, "id")?, hub.port).await?,
+        "connectorVerify" => {
+            let id = str_arg(&b, "id")?;
+            // Read the latch before checking: a passing check clears it in the store (`verify`).
+            let previous_failure = market::verify::last_failure(&hub.store, id).is_some();
+            let requires_sign_in =
+                market::connectors(&hub.store)?.into_iter().find(|c| c.id == id).is_some_and(|c| c.oauth.is_some());
+            let verified = market::verify::verify(&hub.store, id, hub.port).await;
+            match crate::mcp::policy::tools_after_verify(previous_failure, verified.is_ok(), requires_sign_in) {
+                crate::mcp::policy::ToolsAfterVerify::Restore => {
+                    // OpenBot triage-15335: a passing check gives the chat the tools a failed start left out.
+                    // Bots rebuild their declarations on the next turn (or next new session).
+                    refresh_tools_for_bots_using(hub, id);
+                }
+                crate::mcp::policy::ToolsAfterVerify::KeepFailed { needs_sign_in } => {
+                    tracing::info!(
+                        connector = id,
+                        needs_sign_in,
+                        "connector tools stay out of the chat after a failed check"
+                    );
+                }
+                crate::mcp::policy::ToolsAfterVerify::Unchanged => {}
+            }
+            verified?
+        }
         "composioPrepareCall" | "composioDispatchCall" => {
             if !matches!(caller, Caller::Local) {
                 bail!("This method is restricted to the local MCP proxy.");

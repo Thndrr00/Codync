@@ -31,6 +31,20 @@ before calling the provider. Repeating the dispatch API cannot repeat execution.
 Missing/ambiguous success fields remain unknown outcomes. Credential/account
 replacement revokes inherited policy state.
 
+## Test connection and the chat's tool latch
+
+A server that failed to start in a chat had its tools left out of that chat's
+agent session until a new chat. A passing **Test connection** (`connectorVerify`)
+now clears that startup-failure latch: the host refreshes the tools of every bot
+using the connector, so the next message declares them again. This applies both
+to servers that need sign-in and to servers with no sign-in. A check that still
+fails keeps the latch and its recorded failure message.
+
+The latch only restores tool declarations. It never changes an `allow`, `ask` or
+`deny` policy: a tool denied by policy stays denied at authorization time. The
+client label for the success state is "Tools available from the next message"
+(English source).
+
 ## Management and read-only recovery
 
 The sheet contains overrides, an exact-argument request inbox, confirmed bulk
