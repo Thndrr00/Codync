@@ -224,7 +224,7 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   and behind a routine, a room or another bot's request it goes first in line. A group's message and channel work keep
   their own turn either way. *Remove* (`unqueue`) takes a queued one back:
   never goes out, its files are deleted and the chat hides it (`removed`).
-- Bot-to-bot requests and the replies to them occupy separate turns in the same queue (replies waiting together are one turn); user messages are only folded together up to the next request or reply. Neither feeds dreaming. See [bot collaboration](bot-collaboration.md).
+- Bot-to-bot requests and the replies to them occupy separate turns in the same queue (replies waiting together are one turn); user messages are only folded together up to the next request or reply. Neither feeds dreaming. A side question's bounded transcript comes from the lane the ask was made in: a thread question reads that thread, not the bot's main chat (OpenBot 0.76.0; pure `transcript_lane` in `chat/team/side_question.rs`). See [bot collaboration](bot-collaboration.md).
 - A request turn (the recipient's) doesn't set the restart marker: its pending notices become interrupted errors instead of automatically replaying work. A reply turn is the sender's own chat turn and sets it, so it resumes like a user turn.
 - Stop sends `session/cancel`; an agent still running 15 seconds later is stopped (it resumes its session on
   the next turn). `session/new`, `session/load`, `session/resume` and `session/fork` get three minutes before the agent is
@@ -250,7 +250,9 @@ part still missing; the chain is capped at three checks per request and stops at
 permission card or a Stop. The host also sends the activities "Thinking it through…" (until the first text or step),
 "Waiting for background work…" with a Claude agent's elapsed wait, and "Searching its past chats…" while the history
 tools run. A New chat opens an empty context window but keeps the chat in SQLite: `search_history` and `read_history`
-read those earlier messages on demand when asked, never in every turn.
+read those earlier messages on demand when asked, never in every turn. A broad `search_history` still caps each hit at
+1,500 characters, but an explicit `read_history` of a message or its bounded window of replies comes back in full, so
+re-reading an earlier answer gives the whole code or text (OpenBot 0.73.0; pure `history_text` in `chat/memory/tools.rs`).
 
 From OpenBot nightly: saved memories are presented as the user's **lasting preferences** (`agent/bot/memory_rules.rs`,
 added to the composed prompt). A note naming a site stays a hint; only the user's own request can save a memory, so

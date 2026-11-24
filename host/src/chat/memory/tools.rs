@@ -14,7 +14,12 @@ use std::sync::Arc;
 const SEARCH_DEFAULT: i64 = 10;
 const SEARCH_MAX: i64 = 30;
 const SEARCH_TERMS: usize = 8;
+/// Broad search over all of history: a tight per-message cap so one hit can't fill the context.
 const SEARCH_TEXT_CHARS: usize = 1_500;
+/// An explicit re-read of a specific message, or the bounded window of replies around it, comes
+/// back whole for ordinary messages. This generous per-message cap still bounds one pasted
+/// document; the window itself is bounded by `around` (OpenBot 0.73.0).
+const RE_READ_TEXT_CHARS: usize = 32 * 1024;
 
 pub const INSTRUCTIONS: &str = "Your memory holds what you know about the user, and every session opens with it. \
 It is Markdown files you keep yourself: MEMORY.md, one short fact about the user per line, in every session in \
@@ -56,7 +61,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "read_history",
-            "description": "Read the conversation window surrounding a specific message id (from search_history) in chronological order, including messages from before a New chat.",
+            "description": "Read the conversation window surrounding a specific message id (from search_history) in chronological order, including messages from before a New chat. Replies come back in full so you can re-read an earlier answer; the window is bounded (default 4 messages around, at most 15).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -215,7 +220,7 @@ async fn search_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result
                 "id": e.id,
                 "date": ymd(e.created_at),
                 "from": if e.kind == crate::store::EntryKind::User.as_str() { "user" } else { "you" },
-                "text": acp::truncate(e.data["text"].as_str().unwrap_or_default(), SEARCH_TEXT_CHARS),
+                "text": history_text(e.data["text"].as_str().unwrap_or_default(), SEARCH_TEXT_CHARS),
             })
         })
         .collect();
@@ -227,6 +232,13 @@ fn history_bound(args: &Value, key: &str, default: i64) -> Result<i64> {
         None | Some(Value::Null) => Ok(default),
         Some(value) => value.as_i64().ok_or_else(|| anyhow!("{key} must be Unix milliseconds")),
     }
+}
+
+/// The text of one history message within `limit` bytes: a short message is returned whole, a
+/// longer one is cut at a character boundary and marked, so Unicode is never split and even a
+/// re-read keeps a context budget (OpenBot 0.73.0). Pure, with no store or bot.
+fn history_text(message: &str, limit: usize) -> String {
+    acp::truncate(message, limit)
 }
 
 async fn read_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result<Value> {
@@ -250,7 +262,7 @@ async fn read_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result<V
                     "date": ymd(e.created_at),
                     "from": if e.kind == crate::store::EntryKind::User.as_str() { "user" } else { "you" },
                     "anchor": e.id == anchor.id,
-                    "text": acp::truncate(e.data["text"].as_str().unwrap_or_default(), SEARCH_TEXT_CHARS),
+                    "text": history_text(e.data["text"].as_str().unwrap_or_default(), RE_READ_TEXT_CHARS),
                 })
             })
             .collect())
@@ -318,5 +330,27 @@ mod tests {
             call(&f.hub, &f.id, "read_memory", &json!({"file": "bg_notes.md"})).await.is_err(),
             "the delete is already on disk"
         );
+    }
+
+    #[test]
+    fn a_re_read_keeps_long_code_and_unicode_while_a_broad_search_stays_capped() {
+        let code = "fn main() {\n    println!(\"hello\");\n}\n".repeat(200);
+        assert!(code.len() > SEARCH_TEXT_CHARS && code.len() < RE_READ_TEXT_CHARS);
+        assert_eq!(history_text(&code, RE_READ_TEXT_CHARS), code, "a specific reply is re-read whole");
+        let capped = history_text(&code, SEARCH_TEXT_CHARS);
+        assert!(capped.ends_with('…'), "a broad search marks what it cuts");
+        assert!(capped.len() <= SEARCH_TEXT_CHARS + 3, "the ellipsis is three bytes");
+
+        let unicode = "日本語テスト 🚀 ".repeat(500);
+        let cut = history_text(&unicode, SEARCH_TEXT_CHARS);
+        assert!(cut.len() <= SEARCH_TEXT_CHARS + 3);
+        assert!(std::str::from_utf8(cut.as_bytes()).is_ok(), "a multi-byte character is never split");
+
+        assert_eq!(history_text("", SEARCH_TEXT_CHARS), "", "an empty message stays empty");
+        let exact = "x".repeat(SEARCH_TEXT_CHARS);
+        assert_eq!(history_text(&exact, SEARCH_TEXT_CHARS), exact, "exactly the limit is whole");
+        assert_eq!(history_text(&format!("{exact}x"), SEARCH_TEXT_CHARS), format!("{exact}…"), "one byte over is cut");
+        let huge = "z".repeat(RE_READ_TEXT_CHARS + 1);
+        assert!(history_text(&huge, RE_READ_TEXT_CHARS).ends_with('…'), "a re-read still has a cap");
     }
 }

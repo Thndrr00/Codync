@@ -53,6 +53,15 @@ fn a_draft_is_read_from_the_models_reply_and_cut_to_the_limits() {
     assert_eq!(parse_draft(&long).expect("cut").0.chars().count(), MAX_NAME);
 }
 
+#[test]
+fn a_busy_agent_retries_without_changing_the_draft_or_the_skill() {
+    assert_eq!(approve_outcome(true, false), ApproveOutcome::Retry);
+    assert_eq!(approve_outcome(true, true), ApproveOutcome::Retry, "even a would-be save waits for a busy agent");
+    assert_eq!(approve_outcome(false, true), ApproveOutcome::Saved);
+    assert_eq!(approve_outcome(false, false), ApproveOutcome::Failed);
+    assert_eq!(AGENT_BUSY, "The agent is busy; try again when it finishes");
+}
+
 struct Fixture {
     hub: Arc<Hub>,
     bot: String,
@@ -156,6 +165,21 @@ async fn approving_saves_a_skill_of_the_bot_and_empties_the_proposal() {
         .filter_map(|e| e.data["text"].as_str().map(str::to_owned))
         .collect();
     assert!(notices.iter().any(|t| t.contains("Saved the skill")), "{notices:?}");
+}
+
+#[tokio::test]
+async fn approving_while_the_agent_works_is_a_retryable_error_and_changes_nothing() {
+    let f = fixture();
+    save_pending(&f.hub.store, &f.bot, &[proposal(&f, "p1", "aaaa")]).expect("saved");
+    f.hub.set_runtime(&f.bot, |r| r.status = crate::hub::BotStatus::Working);
+    let error = ask(&f, "approveSkillProposal", json!({"id": "p1"})).await.expect_err("busy agent");
+    assert_eq!(error.to_string(), AGENT_BUSY);
+    let after = ask(&f, "skillProposals", json!({})).await.expect("listed");
+    assert_eq!(after["proposals"].as_array().expect("list").len(), 1, "the draft stays for another try");
+    assert!(
+        !crate::market::list_skills(&f.hub.store).to_string().contains("Ship a release"),
+        "no skill was saved while the agent worked"
+    );
 }
 
 #[tokio::test]

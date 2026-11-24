@@ -25,6 +25,32 @@ const MAX_NAME: usize = 64;
 const MAX_DESCRIPTION: usize = 1024;
 const MAX_INSTRUCTIONS: usize = 16 * 1024;
 
+/// The one retryable answer a busy agent gets, so the Save/Update button doesn't spin on its queue.
+const AGENT_BUSY: &str = "The agent is busy; try again when it finishes";
+
+/// What approving a draft does, from whether its agent is busy and whether the save took. A busy
+/// agent leaves both the draft and the skill alone; the draft leaves the inbox only on a save that
+/// took (OpenBot 0.77.0). Pure so both inputs have a test.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ApproveOutcome {
+    /// The agent is working: show the fixed retryable message and change nothing.
+    Retry,
+    /// The skill was saved: take the draft out of the inbox.
+    Saved,
+    /// The save did not take: keep the draft for another try.
+    Failed,
+}
+
+fn approve_outcome(busy: bool, saved: bool) -> ApproveOutcome {
+    if busy {
+        ApproveOutcome::Retry
+    } else if saved {
+        ApproveOutcome::Saved
+    } else {
+        ApproveOutcome::Failed
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Proposal {
@@ -234,17 +260,43 @@ fn dismiss(store: &Store, bot: &str, id: &str) -> Result<()> {
     save_pending(store, bot, &list)
 }
 
-/// Saves the proposal as a skill of the bot (on for that bot only, with a notice in its chat) and takes it from the inbox.
+/// Saves the proposal as a skill of the bot (on for that bot only, with a notice in its chat) and
+/// takes it from the inbox only after that save succeeded. A busy agent gets a fixed retryable
+/// answer before the save queue is touched, so the button doesn't spin (OpenBot 0.77.0).
 async fn approve(hub: &Arc<Hub>, bot: &str, id: &str) -> Result<()> {
-    let mut list = pending(&hub.store, bot);
-    let proposal = take(&mut list, id)?;
-    super::skills::call(
-        hub,
-        bot,
-        &json!({"name": proposal.name, "description": proposal.description, "instructions": proposal.instructions}),
-    )
-    .await?;
-    save_pending(&hub.store, bot, &list)
+    let list = pending(&hub.store, bot);
+    let proposal = list.iter().find(|p| p.id == id).ok_or_else(|| anyhow!("That proposal is gone."))?;
+    let busy = matches!(hub.runtime(bot).status, crate::hub::BotStatus::Working | crate::hub::BotStatus::NeedsInput);
+    let saved = if busy {
+        false
+    } else {
+        match super::skills::call(
+            hub,
+            bot,
+            &json!({
+                "name": proposal.name,
+                "description": proposal.description,
+                "instructions": proposal.instructions,
+            }),
+        )
+        .await
+        {
+            Ok(_) => true,
+            Err(error) => {
+                tracing::warn!(error = format!("{error:#}"), bot, "a proposal could not be saved");
+                false
+            }
+        }
+    };
+    match approve_outcome(busy, saved) {
+        ApproveOutcome::Saved => {
+            let mut list = list;
+            take(&mut list, id)?;
+            save_pending(&hub.store, bot, &list)
+        }
+        ApproveOutcome::Retry => bail!("{AGENT_BUSY}"),
+        ApproveOutcome::Failed => bail!("The skill could not be saved; try again"),
+    }
 }
 
 #[cfg(test)]

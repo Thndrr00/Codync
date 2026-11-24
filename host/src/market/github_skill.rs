@@ -1,5 +1,6 @@
 //! A skill from a pasted public GitHub link: the folder that holds `SKILL.md`, its repository and branch.
-//! Ported from `OpenBot` 0.69.0, "Add skills from GitHub".
+//! Ported from `OpenBot` 0.69.0, "Add skills from GitHub". Scripts in the linked folder keep their
+//! executable bit on install and on revise (`skills::script_mode`, OpenBot 0.70.0).
 
 use anyhow::{Result, bail};
 

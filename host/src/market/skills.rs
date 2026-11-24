@@ -22,6 +22,37 @@ fn without_bom(md: &str) -> &str {
     md.strip_prefix('\u{feff}').unwrap_or(md)
 }
 
+/// Whether a skill file is a script that must keep its executable bit: a shebang on the first line
+/// or a `.sh` name, nothing else (OpenBot 0.70.0). Pure so the choice has a test without a download.
+pub(super) fn script_mode(path: &std::path::Path, content: &[u8]) -> bool {
+    let shell = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("sh"));
+    shell || content.starts_with(b"#!")
+}
+
+/// Adds the execute bits to a file the pure decision marked as a script, keeping the other bits.
+/// Off Unix there is no POSIX mode to set; the decision is still made at every write site.
+pub(super) fn mark_executable(path: &std::path::Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(path)?.permissions().mode();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode | 0o111))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// Writes a downloaded skill file, then restores the executable bit raw GitHub content doesn't
+/// carry. Scripts in an installed skill stay runnable (OpenBot 0.70.0).
+async fn write_download(path: &std::path::Path, content: &[u8]) -> Result<()> {
+    tokio::fs::write(path, content).await?;
+    if script_mode(path, content) {
+        mark_executable(path)?;
+    }
+    Ok(())
+}
+
 /// `name` and `description` from a SKILL.md front matter.
 pub(crate) fn front_matter(md: &str) -> (Option<String>, Option<String>) {
     let md = without_bom(md);
@@ -284,7 +315,7 @@ async fn download_dir_in(repo: &str, branch: &str, repo_path: &str, dest: &std::
         }
         let url = format!("https://raw.githubusercontent.com/{repo}/{branch}/{}", entry.path);
         if let Some(bytes) = skill_file(&url).await? {
-            tokio::fs::write(dest.join(entry.name), &bytes).await?;
+            write_download(&dest.join(entry.name), &bytes).await?;
         }
     }
     Ok(())
@@ -443,7 +474,12 @@ pub(super) fn one_line(text: &str) -> String {
 
 fn write_skill_md(s: &Skill, body: &str) -> Result<()> {
     std::fs::create_dir_all(s.dir())?;
-    std::fs::write(s.dir().join("SKILL.md"), markdown(s, body))?;
+    let path = s.dir().join("SKILL.md");
+    let content = markdown(s, body);
+    std::fs::write(&path, &content)?;
+    if script_mode(&path, content.as_bytes()) {
+        mark_executable(&path)?;
+    }
     Ok(())
 }
 
@@ -668,5 +704,18 @@ mod tests {
         store.save_bot(&cfg).expect("save bot");
         turn_on_installed_once(&store).expect("second run");
         assert!(skills_of(&store).is_empty(), "a skill turned off afterwards stays off");
+    }
+
+    #[test]
+    fn only_a_shebang_or_a_shell_name_makes_a_skill_file_executable() {
+        let path = |name: &str| std::path::Path::new(name);
+        assert!(script_mode(path("run.sh"), b""), "a .sh is a script even without a shebang");
+        assert!(script_mode(path("RUN.SH"), b"echo hi\n"));
+        assert!(script_mode(path("tool.py"), b"#!/usr/bin/env python3\nprint(1)\n"));
+        assert!(script_mode(path("tool"), b"#!/bin/sh\necho hi\n"), "a shebang needs no extension");
+        assert!(!script_mode(path("SKILL.md"), b"# A skill\n"), "instructions are never executable");
+        assert!(!script_mode(path("run.sh.txt"), b"echo hi\n"));
+        assert!(!script_mode(path("tool.py"), b"print(1)\n"), "plain code is not marked");
+        assert!(!script_mode(path("tool"), b"\n#!/bin/sh\n"), "the shebang must be on the first line");
     }
 }

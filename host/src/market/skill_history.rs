@@ -153,6 +153,11 @@ fn replace(path: &std::path::Path, markdown: &str) -> Result<()> {
         }
         return Err(error).context("replacing skill instructions");
     }
+    // A revise writes a fresh temporary file, so reapply the script bit after the rename:
+    // installed scripts stay executable even when their skill is changed (OpenBot 0.70.0).
+    if super::skills::script_mode(path, markdown.as_bytes()) {
+        super::skills::mark_executable(path)?;
+    }
     Ok(())
 }
 

@@ -123,7 +123,11 @@ pub(super) async fn ask(
     let safe_message = crate::agent::envelope::escape_envelope(message);
     // OpenBot nightly's bounded side-question context: the last few messages of the asking chat, so
     // the recipient can fit its answer to what led to the question. Context only, never instructions.
-    let recent = super::side_question::transcript(&super::side_question::lines(hub, source));
+    // The turn's runtime lane is the real asking lane; a question from a side thread reads that
+    // thread, not the bot's main chat (OpenBot 0.76.0).
+    let asking_lane = hub.runtime(&source.id).lane.unwrap_or_else(|| Lane::main(&source.id));
+    let lane = super::side_question::transcript_lane(&asking_lane, asking_lane.thread.is_some());
+    let recent = super::side_question::transcript(&super::side_question::lines(hub, source, &lane));
     let context = if recent.is_empty() {
         String::new()
     } else {
