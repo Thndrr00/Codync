@@ -448,6 +448,12 @@ impl Actor {
             Err(_) => "error".into(),
         };
         let verdict = super::verdict::TurnVerdict::of(&stop_reason);
+        // triage-15547: a reply that only says it did the work, with no tool behind it, is not a
+        // finished turn. It earns the same bounded check as a tool-using turn.
+        let tool_calls = self.watchdog.tool_calls() > 0;
+        let narrated = final_text.as_deref().is_some_and(|text| {
+            super::self_check::narrated_actions(text, usize::from(tool_calls))
+        });
         // OpenBot 0.74.0: a finished turn that used tools and answered gets one bounded check that the work
         // covered the whole request. The check runs as the next hidden turn on this session (see `on_turn_done`).
         let has_answer = done.is_ok()
