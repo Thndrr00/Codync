@@ -184,6 +184,13 @@ impl Actor {
         self.first_prompt = None;
         self.stop_requested = false;
         self.cancel_deadline = None;
+        // Each user request gets one chance at a background-work recovery turn (triage-15555); the host's
+        // recovery turn itself must not reset that latch. A held steer belongs to the previous turn.
+        if self.source() == TurnSource::User {
+            self.recovery_announced = false;
+        }
+        self.deferred_steer = None;
+        self.background_children = false;
         let team_turn = if let Some(request) = &self.active_request {
             if request.expects_reply() {
                 crate::chat::team::Turn::SynchronousRequest(request.hops())
@@ -319,6 +326,9 @@ impl Actor {
         memory::turns::begin_turn(&self.cfg.id, &sid, self.hub.runtime(&self.cfg.id).message);
         // Written before this returns, so a Stop right after is sent after the prompt.
         let answer = acp.send("session/prompt", params).await?;
+        // A message held while this turn opened its session joins the live turn now, not after it ends
+        // (OpenBot v0.78.0). The session and prompt both exist, so `_session/steering` can join it.
+        self.session_opened();
         // triage-14330: the provider saw these entries; a restart that cuts this turn short may give
         // a teammate result again, and only then may its empty replay end quietly.
         super::results::note_provider_turn(&self.hub, &self.cfg.id, entry_ids);

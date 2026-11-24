@@ -196,8 +196,8 @@ impl Actor {
 
     /// After a Claude turn that left detached work running, the chat says why the agent stays and for how long,
     /// until the next turn replaces the line. Other backends, turns still running and agents that left nothing
-    /// running say nothing.
-    pub(super) async fn note_background_wait(&self, since: Option<i64>) {
+    /// running say nothing. The marker lets a later process exit start the recovery turn (triage-15555).
+    pub(super) async fn note_background_wait(&mut self, since: Option<i64>) {
         if self.cfg.backend != "claude" || self.turn.is_some() {
             return;
         }
@@ -205,6 +205,7 @@ impl Actor {
         if !background_work(&conn.acp).await {
             return;
         }
+        self.background_children = true;
         let waited = since.map_or(0, |at| now_ms() - at);
         let activity = background_activity(waited);
         self.hub.set_runtime(&self.cfg.id, |r| r.activity = activity);

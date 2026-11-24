@@ -12,14 +12,16 @@
 //! Ideas from rakazo's `tool-loop.ts` and `stuck-work.ts` (Apache-2.0); no code copied.
 
 use super::{
-    Actor,
+    Actor, Done, NoticeStyle,
     outcome::{Outcome, Trace},
+    turn_rules::HungOutcome,
 };
 use crate::store::EntryKind;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
 
 /// Identical calls in a row that stop the turn.
 const LOOP_LIMIT: u32 = 10;
@@ -52,6 +54,8 @@ pub(super) struct Watchdog {
     warned: bool,
     /// A hung tool call was already reported this turn.
     hung_warned: bool,
+    /// OpenBot v0.78.0: the first `session/update` of this turn arrived; Antigravity can take a steer after it.
+    saw_update: bool,
     /// What the turn's finished tool calls did (`outcome`).
     trace: Trace,
 }
@@ -66,6 +70,7 @@ impl Default for Watchdog {
             running: HashMap::new(),
             warned: false,
             hung_warned: false,
+            saw_update: false,
             trace: Trace::default(),
         }
     }
@@ -90,6 +95,7 @@ impl Watchdog {
     /// Notes one `session/update` of the turn.
     pub(super) fn seen(&mut self, update: &Value) {
         self.last_update = Instant::now();
+        self.saw_update = true;
         let kind = update["sessionUpdate"].as_str();
         if !matches!(kind, Some("tool_call" | "tool_call_update")) {
             return;
@@ -140,6 +146,21 @@ impl Watchdog {
         self.trace.calls()
     }
 
+    /// Whether a tool call is running now: the step a new message would interrupt (triage-15730).
+    pub(super) fn tool_running(&self) -> bool {
+        !self.running.is_empty()
+    }
+
+    /// Whether the first update of this turn arrived (OpenBot v0.78.0).
+    pub(super) fn saw_update(&self) -> bool {
+        self.saw_update
+    }
+
+    /// How long the oldest unfinished tool call has run, for the hung-tool bound (triage-15551).
+    pub(super) fn hung_for(&self, now: Instant) -> Option<Duration> {
+        self.running.values().map(|call| now.saturating_duration_since(call.started)).max()
+    }
+
     /// Why the turn must stop for a loop, once.
     pub(super) fn tripped(&mut self) -> Option<String> {
         self.tripped.take()
@@ -173,16 +194,30 @@ impl Watchdog {
 }
 
 impl Actor {
-    /// Tells the chat once when the running turn has gone silent (called on the flush tick).
-    pub(super) fn check_stall(&mut self) {
+    /// Tells the chat once when the running turn has gone silent, and ends a turn whose tool call ran past
+    /// its bound (called on the flush tick). OpenBot nightly triage-15551: the notice alone left the queue
+    /// blocked forever behind a hung tool.
+    pub(super) async fn check_stall(&mut self, done_tx: &mpsc::UnboundedSender<Done>) {
         let Some(turn) = self.turn else { return };
-        if let Some(note) = self.watchdog.stalled(Instant::now(), !self.perms.is_empty()) {
+        let now = Instant::now();
+        if let Some(note) = self.watchdog.stalled(now, !self.perms.is_empty()) {
             tracing::warn!(bot = %self.cfg.id, "a turn has gone silent");
             self.hub.add_entry(&self.lane, EntryKind::Notice, turn, &json!({"text": note, "style": "info"}));
         }
-        if let Some(note) = self.watchdog.hung(Instant::now()) {
+        if let Some(note) = self.watchdog.hung(now) {
             tracing::warn!(bot = %self.cfg.id, "a tool call may be hung");
             self.hub.add_entry(&self.lane, EntryKind::Notice, turn, &json!({"text": note, "style": "info"}));
+        }
+        if let Some(elapsed) = self.watchdog.hung_for(now)
+            && let HungOutcome::End { detach_cards } =
+                super::turn_rules::hung_outcome(elapsed, TOOL_HUNG_AFTER, !self.perms.is_empty())
+        {
+            tracing::warn!(bot = %self.cfg.id, "a tool call stayed hung past its bound; ending the turn");
+            self.notice(
+                "The tool call was still hung, so the turn was stopped. Your waiting messages can go now.",
+                NoticeStyle::Error,
+            );
+            self.end_hung_turn(done_tx, detach_cards).await;
         }
     }
 }
@@ -243,6 +278,25 @@ mod tests {
         let mut done = Watchdog::default();
         done.seen(&json!({"sessionUpdate":"tool_call","toolCallId":"t","title":"ls","status":"completed"}));
         assert!(done.hung(later).is_none(), "a finished call isn't hung");
+    }
+
+    #[test]
+    fn the_first_update_is_remembered_and_a_running_tool_has_an_elapsed_time() {
+        let mut dog = Watchdog::default();
+        assert!(!dog.saw_update(), "no update yet");
+        assert!(dog.hung_for(Instant::now()).is_none(), "no call is running");
+        assert!(!dog.tool_running());
+        dog.seen(&json!({"sessionUpdate":"agent_message_chunk","content":[{"type":"text","text":"hi"}]}));
+        assert!(dog.saw_update());
+        dog.seen(&json!({"sessionUpdate":"tool_call","toolCallId":"t","title":"npm install","status":"in_progress"}));
+        assert!(dog.tool_running());
+        assert!(dog.hung_for(Instant::now()).is_some_and(|at| at < Duration::from_secs(1)));
+        let later = dog.hung_for(Instant::now() + TOOL_HUNG_AFTER).expect("the call is still running");
+        assert!(later >= TOOL_HUNG_AFTER, "the bound was reached");
+        assert!(later < TOOL_HUNG_AFTER + Duration::from_secs(1));
+        dog.seen(&json!({"sessionUpdate":"tool_call_update","toolCallId":"t","status":"completed"}));
+        assert!(!dog.tool_running());
+        assert!(dog.hung_for(Instant::now()).is_none());
     }
 
     #[test]

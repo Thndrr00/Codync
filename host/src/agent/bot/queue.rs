@@ -1,6 +1,6 @@
 //! Commands from clients and the queue of turns waiting for the bot.
 
-use super::{Actor, CANCEL_GRACE, Cmd, Done, Queued, RESUME_PROMPT, RoutineCompletion};
+use super::{Actor, CANCEL_GRACE, Cmd, Done, EXIT_RECOVERY_PROMPT, Queued, RESUME_PROMPT, RoutineCompletion};
 use crate::agent::acp;
 use crate::chat::memory;
 use crate::hub::BotStatus;
@@ -171,6 +171,7 @@ impl Actor {
     }
 
     pub(super) async fn stop(&mut self) {
+        self.deferred_steer = None;
         self.stop_owner_after_turn = self.cfg.backend == "hermes";
         self.hub.team.end_turn(&self.cfg.id);
         if let Err(error) = self.hub.routines.cancel_queued(&self.hub.store, &self.cfg.id) {
@@ -222,6 +223,31 @@ impl Actor {
         if let (Some(c), Some(sid)) = (&self.conn, &self.turn_session) {
             let _ = c.acp.notify("session/cancel", json!({"sessionId": sid})).await;
         }
+    }
+
+    /// Ends a turn whose tool never finished (OpenBot nightly triage-15551). Its cards are detached first,
+    /// so the person can still answer them; the normal turn-end path then frees every waiting message.
+    pub(super) async fn end_hung_turn(&mut self, done_tx: &mpsc::UnboundedSender<Done>, detach_cards: bool) {
+        if detach_cards {
+            self.detach_open_cards();
+        }
+        // Ask the agent to wind the turn down, without closing the cards we just detached.
+        if let (Some(c), Some(sid)) = (&self.conn, &self.turn_session) {
+            let _ = c.acp.notify("session/cancel", json!({"sessionId": sid})).await;
+        }
+        // No answer to a steer can arrive from a hung tool: drop the holds so the queue frees now.
+        self.steers_in_flight.clear();
+        self.held_done = None;
+        self.deferred_steer = None;
+        self.stop_requested = true;
+        let done: Done = Ok(json!({"stopReason": "cancelled"}));
+        self.turn_ended(done, done_tx).await;
+    }
+
+    /// OpenBot nightly triage-15555: after a process exit with live work, the recovery turn goes before
+    /// anything else waiting in the queue.
+    pub(super) fn queue_recovery(&mut self) {
+        self.queue.push_front(Queued::Prompt { text: EXIT_RECOVERY_PROMPT.to_owned(), call: None });
     }
 
     /// A new agent, model, command, folder or memory: the agent starts again with a fresh context.
@@ -362,7 +388,9 @@ impl Actor {
             ended: self.held_done.is_some(),
             stopped: self.stop_requested,
             started_at: self.hub.runtime(&self.id()).started_at,
-            running_children: self.cancel_deadline.is_some(),
+            // triage-15555: children of a process that already exited cannot hold this turn; the recovery
+            // turn carries on their work instead of leaving the queue stuck behind a dead provider.
+            running_children: self.cancel_deadline.is_some() && self.conn.is_some(),
         };
         if !presence.stale() {
             return;
@@ -372,6 +400,7 @@ impl Actor {
         self.close_attempt(true);
         self.held_done = None;
         self.steers_in_flight.clear();
+        self.deferred_steer = None;
         if self.active_routine.is_some() {
             self.finish_routine(
                 crate::routines::Status::Interrupted,

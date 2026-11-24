@@ -4,7 +4,7 @@ use super::approval_age;
 use super::fast_mode::Listing;
 use super::stall::ToolOutcome;
 use super::tool_entry::{activity, mark_bookkeeping, merge_tool_content};
-use super::{Actor, Reacted, Seg, SegKind};
+use super::{Actor, EXIT_RECOVERY_NOTICE, NoticeStyle, Reacted, Seg, SegKind, turn_rules};
 use crate::agent::acp::{self, Incoming};
 use crate::hub::BotStatus;
 use crate::remote::push::{self, AlertKind};
@@ -49,6 +49,19 @@ impl Actor {
                     Some(Incoming::Closed { stderr_tail }) => stderr_tail,
                     _ => String::new(),
                 };
+                // OpenBot nightly triage-15555: a Claude process that dies with live background work must not
+                // leave the chat saying "waiting" forever. Announce once and put a short recovery turn first.
+                let children = self.task_started || self.background_children || self.cancel_deadline.is_some();
+                if self.turn.is_some()
+                    && !self.stop_requested
+                    && turn_rules::recovery_after_exit(children, self.cfg.backend == "claude", self.recovery_announced)
+                {
+                    self.recovery_announced = true;
+                    self.notice(EXIT_RECOVERY_NOTICE, NoticeStyle::Info);
+                    if self.active_routine.is_none() && self.active_group.is_none() && self.active_request.is_none() {
+                        self.queue_recovery();
+                    }
+                }
                 self.conn = None;
                 // The in-flight prompt request resolves with an error; finish_turn reports it with this output.
                 self.exit_tail = Some(tail);
@@ -407,6 +420,29 @@ impl Actor {
         }
         self.detached_questions.insert(entry_id.to_owned(), super::DetachedQuestion { question: question.to_owned() });
         tracing::info!(bot = %self.cfg.id, entry = entry_id, "detached an open question so a provider update can proceed");
+    }
+
+    /// Keeps every card of a turn that ends early answerable: the card stays in the chat and its answer arrives
+    /// as a new message, the same detachment an update restart uses (OpenBot nightly triage-15551).
+    pub(super) fn detach_open_cards(&mut self) {
+        let open: Vec<(String, String)> = self
+            .perms
+            .keys()
+            .map(|id| {
+                let title = self
+                    .hub
+                    .store
+                    .entry(id)
+                    .and_then(|e| e.data["title"].as_str().map(str::to_owned))
+                    .unwrap_or_else(|| "Approval".to_owned());
+                (id.clone(), title)
+            })
+            .collect();
+        for (id, title) in open {
+            if let Some(answer) = self.perms.remove(&id) {
+                self.detach_question(&id, answer, &title);
+            }
+        }
     }
 
     /// Answers permission request `rpc_id` with its first option of one of `kinds`, in that order

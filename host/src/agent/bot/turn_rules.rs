@@ -5,6 +5,7 @@
 //! (triage-12470, -12968, -12975, -13050, -13142); the code is Codync's.
 
 use super::Done;
+use std::time::Duration;
 
 /// A final answer ends the turn at once, even while a message steered into the turn is still waiting for the
 /// agent's steering answer. The late answer leaves the message queued for the next turn instead of keeping the
@@ -96,6 +97,79 @@ pub(super) fn no_answer_action(steps: u32, background: bool, has_backup: bool) -
     }
 }
 
+/// When a message the person asked to send now reaches the actor (OpenBot v0.78.0).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SteerStage {
+    /// No turn is running: the message waits for its own turn.
+    BetweenTurns,
+    /// The turn has started but its ACP session has not opened yet.
+    Starting,
+}
+
+/// Where that message goes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SteerTiming {
+    /// It stays in the queue for its own turn.
+    Wait,
+    /// Hold it for this turn: hand it to the agent as soon as the session opens (v0.78.0).
+    HoldForSession,
+    /// Hand it to the agent now.
+    Now,
+}
+
+/// A steer that arrives before its turn has a session must not wait for the *whole* turn: keep it for the
+/// session, then join that turn (OpenBot v0.78.0).
+pub(super) fn steer_during_start(stage: SteerStage, has_session: bool) -> SteerTiming {
+    match (stage, has_session) {
+        (SteerStage::BetweenTurns, _) => SteerTiming::Wait,
+        (SteerStage::Starting, false) => SteerTiming::HoldForSession,
+        (SteerStage::Starting, true) => SteerTiming::Now,
+    }
+}
+
+/// OpenBot v0.78.0: Antigravity (and Devin, which has no Codync backend) only take a steer after their first
+/// `session/update`; every other backend takes it at once. The caller retries briefly while it waits.
+pub(super) fn steer_ready(backend: &str, first_update_seen: bool) -> bool {
+    backend != "antigravity" || first_update_seen
+}
+
+/// A Stop the provider never carried out leaves `stop_requested` set. When the provider is still running, a
+/// later message may steer into it and the stale flag is reconciled instead of blocking it (v0.78.0).
+pub(super) fn steer_after_stop(stop_requested: bool, provider_still_running: bool) -> bool {
+    stop_requested && provider_still_running
+}
+
+/// What to do with a tool call that has run past its bound (OpenBot nightly triage-15551).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum HungOutcome {
+    /// Still inside the bound: the long tool may simply be doing its work.
+    KeepWaiting,
+    /// The bound passed: end the turn as stopped. Open cards are detached so the person can still answer them.
+    End { detach_cards: bool },
+}
+
+/// Never end a turn before the bound, even when a card is open; at the bound free the queue and keep cards
+/// answerable (triage-15551).
+pub(super) fn hung_outcome(elapsed: Duration, limit: Duration, cards_open: bool) -> HungOutcome {
+    if elapsed < limit { HungOutcome::KeepWaiting } else { HungOutcome::End { detach_cards: cards_open } }
+}
+
+/// OpenBot nightly triage-15555: a Claude process that dies while its subagents still run needs one recovery
+/// turn, not an endless "waiting for background work" line. `announced` keeps that to once per user request.
+pub(super) fn recovery_after_exit(children: bool, background: bool, announced: bool) -> bool {
+    children && background && !announced
+}
+
+/// Whether a new message may interrupt the step that is running now (OpenBot nightly triage-15730). A
+/// teammate's or a routine's message waits for the step to end; the person's own reaches a busy agent at once.
+pub(super) fn interrupt_allowed(message_source: &str, is_user: bool, step_running: bool) -> bool {
+    if !step_running {
+        return true;
+    }
+    let automated = matches!(message_source, "routine" | "scheduled_task" | "bot" | "host");
+    is_user && !automated
+}
+
 /// The notice for a turn that did steps and said nothing. The work stays in the chat and the turn is not run again.
 pub(super) const NO_ANSWER_AFTER_STEPS: &str =
     "The agent ended its turn without an answer. Check what it did before you send the same request again.";
@@ -150,5 +224,56 @@ mod tests {
         assert_eq!(no_answer_action(0, false, false), NoAnswer::EndedWithNoAnswer);
         assert_eq!(no_answer_action(3, true, false), NoAnswer::None, "background work waits for its own answer");
         assert_eq!(no_answer_action(0, true, true), NoAnswer::None);
+    }
+
+    #[test]
+    fn a_steer_that_arrives_before_the_session_waits_for_the_session_not_the_turn() {
+        assert_eq!(steer_during_start(SteerStage::BetweenTurns, false), SteerTiming::Wait);
+        assert_eq!(steer_during_start(SteerStage::BetweenTurns, true), SteerTiming::Wait);
+        assert_eq!(steer_during_start(SteerStage::Starting, false), SteerTiming::HoldForSession);
+        assert_eq!(steer_during_start(SteerStage::Starting, true), SteerTiming::Now);
+    }
+
+    #[test]
+    fn antigravity_needs_its_first_update_but_other_backends_do_not() {
+        assert!(!steer_ready("antigravity", false));
+        assert!(steer_ready("antigravity", true));
+        for backend in ["claude", "grok", "codex", "pi", "gemini"] {
+            assert!(steer_ready(backend, false), "{backend} takes a steer at once");
+        }
+    }
+
+    #[test]
+    fn only_a_still_running_provider_can_take_a_message_after_a_stop() {
+        assert!(steer_after_stop(true, true));
+        assert!(!steer_after_stop(true, false), "a provider that stopped cannot be steered");
+        assert!(!steer_after_stop(false, true), "no stop to reconcile");
+    }
+
+    #[test]
+    fn a_hung_tool_ends_the_turn_only_at_the_bound_and_keeps_cards_answerable() {
+        let limit = Duration::from_mins(30);
+        assert_eq!(hung_outcome(limit - Duration::from_millis(1), limit, true), HungOutcome::KeepWaiting);
+        assert_eq!(hung_outcome(Duration::ZERO, limit, false), HungOutcome::KeepWaiting);
+        assert_eq!(hung_outcome(limit, limit, false), HungOutcome::End { detach_cards: false });
+        assert_eq!(hung_outcome(limit * 2, limit, true), HungOutcome::End { detach_cards: true });
+    }
+
+    #[test]
+    fn a_dead_claude_with_live_children_gets_one_recovery_turn() {
+        assert!(recovery_after_exit(true, true, false));
+        assert!(!recovery_after_exit(false, true, false), "no live work to resume");
+        assert!(!recovery_after_exit(true, false, false), "no background work to recover");
+        assert!(!recovery_after_exit(true, true, true), "it is already announced");
+    }
+
+    #[test]
+    fn a_busy_step_admits_only_the_persons_own_message() {
+        assert!(interrupt_allowed("bot", false, false), "an idle step takes any message");
+        assert!(interrupt_allowed("", true, true), "the person reaches a busy agent at once");
+        assert!(interrupt_allowed("slack", true, true), "a person in a channel is still the person");
+        assert!(!interrupt_allowed("bot", false, true), "a teammate waits");
+        assert!(!interrupt_allowed("routine", false, true), "a routine waits");
+        assert!(!interrupt_allowed("scheduled_task", true, true), "a scheduled message is not the person");
     }
 }

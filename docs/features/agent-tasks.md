@@ -135,6 +135,26 @@ The desktop Tasks surface (`views/tasks`) lists status, opens a task's messages 
 follow-up, stop, archive and reopen. It is reachable from an agent's context menu, beside the
 existing Tasks sheet for approvals and routine runs.
 
+## Busy steps, steering and recovery
+
+The host's turn rules decide which messages may join a running turn, all in pure functions with unit
+tests (`host/src/agent/bot/turn_rules.rs`):
+
+- A message the person asked to send now while a turn is still opening its ACP session is held for that
+  session and steered in as soon as it opens, instead of waiting for the whole turn to end (OpenBot
+  0.78.0). Antigravity takes a steer only after its first update; the host waits briefly for it. Devin
+  has no Codync backend.
+- A Stop the provider ignored does not keep blocking a later message: while the provider still runs,
+  the stale stop flag is reconciled and the message can join it (0.78.0).
+- Only the person's own message may interrupt a running Claude tool step. Another agent's or a
+  routine's message stays queued until the step ends, and the team tool's answer says so
+  (OpenBot nightly triage-15730).
+- A tool call still running past 30 minutes ends its turn as stopped and frees the queue; open cards
+  are detached so the person can still answer them (triage-15551).
+- When a Claude process exits while its subagents or other background work still run, the host posts
+  one notice and schedules a short recovery turn that says what stopped and resumes the unfinished
+  work without repeating completed steps (triage-15555).
+
 Not in this pass: catalog keys, a dedicated `task` type in the SSE catch-up (metadata is refreshed
 with `taskList`), per-task queue reorder and per-task analytics events. No method described here
 sends task text to analytics.

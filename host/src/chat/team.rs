@@ -601,10 +601,19 @@ fn message_bot(hub: &Arc<Hub>, source: &BotConfig, to: &str, message: &str) -> R
     lifetime.entries.push(exchange.notice(hub, &source.id, &asked, false)?);
     lifetime.entries.push(exchange.notice(hub, &target.id, &from, true)?);
     let who = format!("Another Codync bot, {},", source.name);
+    // A bot request never steers into the recipient's running step (OpenBot nightly triage-15730). Say so in
+    // the tool's answer: only the person's own message reaches a busy agent at once.
+    let busy_step = target.backend == "claude" && hub.runtime(to).started_at.is_some();
+    let waiting = !crate::agent::bot::interrupt_allowed("bot", false, busy_step);
     lifetime.deliver(&target.id, hops, request_prompt(&who, &source.name, message))?;
+    let note = if waiting {
+        "Queued. The recipient is in the middle of a step; the reply comes back as a new turn when it finishes. Don't wait or poll for it."
+    } else {
+        "Queued. The reply comes back to you as a new turn in your chat: don't wait or poll for it."
+    };
     Ok(json!({
         "requestId": id, "botId": target.id, "name": target.name, "status": RequestStatus::Queued,
-        "note": "Queued. The reply comes back to you as a new turn in your chat: don't wait or poll for it.",
+        "note": note,
     }))
 }
 

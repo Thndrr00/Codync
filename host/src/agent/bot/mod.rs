@@ -71,6 +71,8 @@ pub use compaction::{
 pub(crate) use launch::{launch_commands, select_model, start_agent, start_first, system_prompt};
 pub(crate) use results::recover_results;
 pub(crate) use tool_entry::diff_summary;
+// Pure steering rule, shared with the team tools so a teammate's message cannot interrupt a busy step.
+pub(crate) use turn_rules::interrupt_allowed;
 
 use crate::agent::acp::{self, Acp, Incoming};
 use crate::agent::config::FastModeSupport;
@@ -161,6 +163,8 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         turn: None,
         queue: VecDeque::new(),
         steers_in_flight: HashMap::new(),
+        /// A steer held while this turn opened its session, going out as soon as the session exists (v0.78.0).
+        deferred_steer: None,
         held_done: None,
         active_request: None,
         turn_model: None,
@@ -200,6 +204,8 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         detached_questions: HashMap::new(),
         no_answer_empty: false,
         turn_replayed_result: false,
+        background_children: false,
+        recovery_announced: false,
     };
     let task = tokio::spawn(actor.run(rx, interrupted));
     BotHandle { tx, task }
@@ -371,6 +377,8 @@ struct Actor {
     queue: VecDeque<Queued>,
     /// Queued messages handed to the agent to join the running turn, by entry id, until it answers (`steer`).
     steers_in_flight: HashMap<String, steer::InFlight>,
+    /// A message held until the running turn's session opens, then handed to the agent (OpenBot v0.78.0).
+    deferred_steer: Option<String>,
     /// How the running turn ended, while the agent still owes an answer to a steer (`turn_ended`).
     held_done: Option<Done>,
     active_request: Option<crate::chat::team::BotRequest>,
@@ -448,6 +456,10 @@ struct Actor {
     /// The messages this turn answers include a teammate result that restart recovery gave again after its
     /// provider turn had started (OpenBot nightly triage-14330). An empty replay then ends quietly.
     turn_replayed_result: bool,
+    /// The turn left work running detached, so a process exit needs a recovery turn (triage-15555).
+    background_children: bool,
+    /// The recovery turn for this user request was already scheduled, so an exit cannot start another.
+    recovery_announced: bool,
 }
 
 struct DetachedQuestion {
@@ -560,7 +572,7 @@ impl Actor {
                         self.cancel_deadline = None;
                         if let Some(c) = self.conn.take() { c.acp.kill().await; }
                     }
-                    self.check_stall();
+                    self.check_stall(&done_tx).await;
                     self.settle_stale_turn(&done_tx).await;
                     self.release_idle().await;
                     // The idle check may have queued a compaction.
@@ -638,6 +650,13 @@ impl Actor {
 
 /// Told to a bot whose turn the previous host process cut off (Grok Bot's upgrade resume).
 const RESUME_PROMPT: &str = "[Codync restarted on this computer and interrupted you mid-task. You've been resumed with your full conversation intact. Continue exactly where you left off and finish what you were doing. If your previous step already completed an action, do NOT repeat it — just carry on from there.]";
+
+/// OpenBot nightly triage-15555: the process died while its subagents still ran, so one short turn says what
+/// stopped and carries the unfinished work on in the same session.
+const EXIT_RECOVERY_PROMPT: &str = "[Your previous process stopped while its background work was still running. In one short line, tell the user what stopped, then continue the unfinished work in this session. Do not repeat a step that already completed.]";
+/// The chat line posted before that recovery turn, so the user knows why the agent speaks again.
+const EXIT_RECOVERY_NOTICE: &str =
+    "The agent stopped while its background work was still running. Picking that work up now…";
 
 /// How long a cancelled turn may take to wind down before its agent process is stopped.
 const CANCEL_GRACE: Duration = Duration::from_secs(15);

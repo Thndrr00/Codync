@@ -1,5 +1,6 @@
 //! The user's queued messages before their turn comes: handled now (`steer`) or taken back (`unqueue`).
 
+use super::turn_rules::{self, SteerStage, SteerTiming};
 use super::{Actor, Cmd, Done, Queued};
 use crate::analytics::{self, Steer, TurnSource};
 use crate::chat::team::RequestStatus;
@@ -51,6 +52,11 @@ fn steer_outcome(answer: &Result<Value>) -> Steer {
     }
 }
 
+/// Whether the message was written by a person, not a routine, a teammate or the host (triage-15730).
+fn from_person(data: &Value) -> bool {
+    data["from"] != "host" && !matches!(data["source"].as_str(), Some("routine" | "scheduled_task" | "bot" | "host"))
+}
+
 impl Actor {
     /// Where the user's queued message `entry_id` waits.
     fn queued_at(&self, entry_id: &str) -> Option<usize> {
@@ -70,16 +76,45 @@ impl Actor {
     /// `steer`: the agent takes the message into its running turn when it can (`_session/steering`). Otherwise the
     /// user's turn stops for it, or, behind other work, it goes first in line.
     pub(super) async fn steer(&mut self, entry_id: String) {
-        // Already with the agent.
-        if self.steers_in_flight.contains_key(&entry_id) {
+        // Already with the agent, or held for this turn's session (v0.78.0).
+        if self.steers_in_flight.contains_key(&entry_id) || self.deferred_steer.as_deref() == Some(entry_id.as_str()) {
             return;
         }
         let Some(at) = self.queued_at(&entry_id) else { return };
         let Some(Queued::User { lane, text, .. }) = self.queue.get(at) else { return };
-        let own = self.answers_user_in(lane);
-        let text = text.clone();
-        if own && self.hand_to_agent(entry_id, &text) {
+        let (lane, text) = (lane.clone(), text.clone());
+        let data = self.hub.store.entry(&entry_id).map(|e| e.data).unwrap_or_default();
+        let source = data["source"].as_str().unwrap_or_default().to_owned();
+        let is_user = from_person(&data);
+        // A step of a Claude agent is not a place for another bot's or a routine's message (triage-15730).
+        let step_running = self.cfg.backend == "claude" && self.watchdog.tool_running();
+        if !turn_rules::interrupt_allowed(&source, is_user, step_running) {
+            self.move_first(at);
+            analytics::message_steered(&self.hub, &self.cfg.backend, Steer::MovedUp);
             return;
+        }
+        // OpenBot v0.78.0: a Stop the provider ignored leaves its flag set; a message now resumes that turn.
+        if turn_rules::steer_after_stop(self.stop_requested, self.provider_still_running()) {
+            self.stop_requested = false;
+            self.cancel_deadline = None;
+        }
+        let own = self.answers_user_in(&lane);
+        if own {
+            let stage = if self.turn.is_some() { SteerStage::Starting } else { SteerStage::BetweenTurns };
+            match turn_rules::steer_during_start(stage, self.turn_session.is_some()) {
+                // The turn has not opened its session yet: deliver the steer the moment it does (v0.78.0).
+                SteerTiming::HoldForSession => {
+                    self.deferred_steer = Some(entry_id);
+                    return;
+                }
+                SteerTiming::Now => {
+                    self.await_steer_ready().await;
+                    if self.hand_to_agent(entry_id, &text) {
+                        return;
+                    }
+                }
+                SteerTiming::Wait => {}
+            }
         }
         self.move_first(at);
         let how = if own {
@@ -89,6 +124,37 @@ impl Actor {
             Steer::MovedUp
         };
         analytics::message_steered(&self.hub, &self.cfg.backend, how);
+    }
+
+    /// Antigravity needs its first update before it takes a steer (OpenBot v0.78.0; Devin has no Codync
+    /// backend). Wait briefly, draining updates the actor already holds so the first one can arrive.
+    async fn await_steer_ready(&mut self) {
+        const TRIES: u32 = 6;
+        const GAP: Duration = Duration::from_millis(50);
+        for _ in 0..TRIES {
+            if turn_rules::steer_ready(&self.cfg.backend, self.watchdog.saw_update()) {
+                return;
+            }
+            loop {
+                let Some(inc) = self.conn.as_mut().and_then(|c| c.rx.try_recv().ok()) else { break };
+                self.on_incoming(Some(inc)).await;
+            }
+            tokio::time::sleep(GAP).await;
+        }
+    }
+
+    /// Whether a provider still runs the turn a Stop asked to end (v0.78.0).
+    fn provider_still_running(&self) -> bool {
+        self.conn.is_some() && self.hub.runtime(&self.id()).started_at.is_some()
+    }
+
+    /// A steer held while this turn opened its session joins the live turn now (OpenBot v0.78.0).
+    pub(super) fn session_opened(&mut self) {
+        let Some(entry_id) = self.deferred_steer.take() else { return };
+        let Some(at) = self.queued_at(&entry_id) else { return };
+        let Some(Queued::User { text, .. }) = self.queue.get(at) else { return };
+        let text = text.clone();
+        self.hand_to_agent(entry_id, &text);
     }
 
     /// Hands the message to the agent to join its running turn (`steered` gets the answer); false when it can't steer.
@@ -214,6 +280,9 @@ impl Actor {
 
     /// `unqueue`: the message never goes out, the chat no longer shows it, and its files leave the bot's folder.
     pub(super) fn unqueue(&mut self, entry_id: &str) {
+        if self.deferred_steer.as_deref() == Some(entry_id) {
+            self.deferred_steer = None;
+        }
         // Already with the agent, which may take it: `steered` decides.
         if let Some(steer) = self.steers_in_flight.get_mut(entry_id) {
             steer.taken_back = true;
