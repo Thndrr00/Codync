@@ -15,13 +15,14 @@
 #![cfg_attr(not(windows), allow(dead_code, reason = "only the Windows CDP bridge reads these values"))]
 
 use crate::hub::Hub;
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
 mod action;
 #[cfg(windows)]
 mod cdp;
+mod decisions;
 mod idle;
 #[cfg(windows)]
 mod live;
@@ -32,13 +33,15 @@ use action::{Action, DEFAULT_TIMEOUT, Kind};
 
 /// The tools this module answers, in the order the chat server lists them. Every name is also a
 /// `run` step, except that a run adds `sleep`.
-pub const TOOLS: [&str; 12] = [
+pub const TOOLS: [&str; 14] = [
     "navigate",
     "snapshot",
+    "screenshot",
     "click",
     "type",
     "press",
     "hover",
+    "drag",
     "scroll",
     "select_option",
     "set_checked",
@@ -70,7 +73,12 @@ pub async fn call(hub: &std::sync::Arc<Hub>, bot: &str, name: &str, args: &Value
 }
 
 /// Runs one parsed action: a run under its budget, or one step of it.
-async fn execute(hub: &Hub, bot: &str, lease: &crate::computer::Lease, action: &Action) -> Result<Value> {
+async fn execute(
+    hub: &std::sync::Arc<Hub>,
+    bot: &str,
+    lease: &crate::computer::Lease,
+    action: &Action,
+) -> Result<Value> {
     lease.check()?;
     match &action.kind {
         Kind::Run { steps } => run(hub, bot, lease, action.timeout, steps).await,
@@ -79,7 +87,7 @@ async fn execute(hub: &Hub, bot: &str, lease: &crate::computer::Lease, action: &
 }
 
 /// One action that is not a run, with the snapshot a call asks for after it.
-async fn step(hub: &Hub, bot: &str, lease: &crate::computer::Lease, action: &Action) -> Result<Value> {
+async fn step(hub: &std::sync::Arc<Hub>, bot: &str, lease: &crate::computer::Lease, action: &Action) -> Result<Value> {
     lease.check()?;
     match &action.kind {
         Kind::Sleep { ms } => {
@@ -89,9 +97,11 @@ async fn step(hub: &Hub, bot: &str, lease: &crate::computer::Lease, action: &Act
         // A run never holds another run, and a step's own `snapshot` is not repeated: the run answers
         // with one snapshot at its end.
         Kind::Run { .. } => bail!("A run cannot hold another run."),
-        Kind::Snapshot => perform(hub, bot, action).await,
+        Kind::Screenshot => attach_shot(hub, bot, &screenshot_bytes(hub, bot).await?).await,
+        Kind::Snapshot => snapshot_value(hub, bot).await,
         _ => {
-            let mut answer = perform(hub, bot, action).await?;
+            let answer = perform(hub, bot, action).await?;
+            let mut answer = attach_if_needed(hub, bot, answer).await?;
             if action.snapshot {
                 answer["snapshot"] = json!(snapshot(hub, bot).await?);
             }
@@ -101,7 +111,7 @@ async fn step(hub: &Hub, bot: &str, lease: &crate::computer::Lease, action: &Act
 }
 
 async fn run(
-    hub: &Hub,
+    hub: &std::sync::Arc<Hub>,
     bot: &str,
     lease: &crate::computer::Lease,
     budget: Duration,
@@ -134,14 +144,61 @@ async fn run(
     Ok(json!({"steps": steps.len(), "snapshot": snapshot(hub, bot).await?}))
 }
 
-/// The page's snapshot text, for a call that asks for one after its action.
-async fn snapshot(hub: &Hub, bot: &str) -> Result<String> {
+/// One snapshot call: the CDP bridge tries a drawn pass when the accessible tree is empty; when
+/// that is empty too it captures a picture and returns the flag below. The file is published here,
+/// where the hub is available, so the CDP bridge stays free of chat dependencies.
+async fn snapshot_value(hub: &std::sync::Arc<Hub>, bot: &str) -> Result<Value> {
     let action = Action { timeout: DEFAULT_TIMEOUT, snapshot: false, kind: Kind::Snapshot };
     let answer = perform(hub, bot, &action).await?;
+    attach_if_needed(hub, bot, answer).await
+}
+
+/// Replaces an empty snapshot's `needsImage` flag with the published screenshot. `navigate` and
+/// `wait_for` also end in a snapshot, so every answer from the CDP bridge goes through here.
+async fn attach_if_needed(hub: &std::sync::Arc<Hub>, bot: &str, mut answer: Value) -> Result<Value> {
+    if answer["needsImage"] == true {
+        let _ = answer.as_object_mut().and_then(|map| map.remove("needsImage"));
+        let shot = screenshot_bytes(hub, bot).await?;
+        answer["screenshot"] = attach_shot(hub, bot, &shot).await?;
+        answer["note"] = json!("The page has no text or controls, so a screenshot of it is attached.");
+    }
+    Ok(answer)
+}
+
+/// The page's snapshot text, for a call that asks for one after its action.
+async fn snapshot(hub: &std::sync::Arc<Hub>, bot: &str) -> Result<String> {
+    let answer = snapshot_value(hub, bot).await?;
     Ok(answer["snapshot"].as_str().unwrap_or_default().to_owned())
 }
 
-async fn perform(_hub: &Hub, bot: &str, action: &Action) -> Result<Value> {
+/// Captures the bot's tab as a PNG data URL with its address, for `attach_shot` to publish.
+async fn screenshot_bytes(hub: &std::sync::Arc<Hub>, bot: &str) -> Result<Value> {
+    let action = Action { timeout: DEFAULT_TIMEOUT, snapshot: false, kind: Kind::Screenshot };
+    perform(hub, bot, &action).await
+}
+
+/// Saves a captured PNG in the file store and shares it with the chat as a file card. The staged
+/// file is removed once `send_file` has committed its immutable copy.
+async fn attach_shot(hub: &std::sync::Arc<Hub>, bot: &str, shot: &Value) -> Result<Value> {
+    let image = shot["image"].as_str().context("The browser gave no picture")?;
+    let limit = usize::try_from(crate::chat::uploads::MAX_FILE).unwrap_or(usize::MAX);
+    let bytes = crate::media::decode_base64(image, limit)?;
+    let name = decisions::screenshot_name(shot["url"].as_str().unwrap_or_default(), now_secs());
+    let path = crate::chat::files::stage(bot, "png", &bytes)?;
+    let sent = crate::chat::outbox::call(hub, bot, "send_file", &json!({"path": path, "name": name})).await;
+    let _ = std::fs::remove_file(&path);
+    sent?;
+    Ok(json!({"sent": true, "name": name, "bytes": bytes.len()}))
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default()
+}
+
+async fn perform(_hub: &std::sync::Arc<Hub>, bot: &str, action: &Action) -> Result<Value> {
     #[cfg(windows)]
     {
         cdp::perform(bot, action).await

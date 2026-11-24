@@ -57,6 +57,8 @@ pub(crate) enum Kind {
     Type { target: Option<Target>, text: String, replace: bool, submit: bool },
     Press { key: Key, target: Option<Target> },
     Hover { target: Target },
+    Drag { from: Target, to: Target },
+    Screenshot,
     Scroll { target: Option<Target>, x: f64, y: f64 },
     Select { target: Target, values: Vec<String> },
     Check { target: Target, checked: bool },
@@ -88,6 +90,8 @@ impl Kind {
             Self::Type { .. } => "type",
             Self::Press { .. } => "press",
             Self::Hover { .. } => "hover",
+            Self::Drag { .. } => "drag",
+            Self::Screenshot => "screenshot",
             Self::Scroll { .. } => "scroll",
             Self::Select { .. } => "select_option",
             Self::Check { .. } => "set_checked",
@@ -403,6 +407,8 @@ fn kind_of(name: &str, args: &Value) -> Result<Kind> {
             target: optional_target(args)?,
         },
         "hover" => Kind::Hover { target: target_arg(args)? },
+        "drag" => Kind::Drag { from: named_target(args, "from")?, to: named_target(args, "to")? },
+        "screenshot" => Kind::Screenshot,
         "scroll" => {
             let delta = |key: &str| -> Result<f64> {
                 let Some(value) = args.get(key).filter(|value| !value.is_null()) else { return Ok(0.0) };
@@ -468,7 +474,7 @@ fn kind_of(name: &str, args: &Value) -> Result<Kind> {
         // `sleep` is a step of a run, never a tool of its own.
         "sleep" => Kind::Sleep { ms: milliseconds(args.get("ms"), 0, MAX_SLEEP_MS)? },
         other => bail!(
-            "`{other}` is not a browser tool. Use navigate, snapshot, click, type, press, hover, scroll, select_option, set_checked, wait_for, evaluate or run."
+            "`{other}` is not a browser tool. Use navigate, snapshot, screenshot, click, type, press, hover, drag, scroll, select_option, set_checked, wait_for, evaluate or run."
         ),
     })
 }
@@ -505,6 +511,12 @@ fn target_arg(args: &Value) -> Result<Target> {
         .or_else(|| args.get("target"))
         .context("Give the element's ref number from the last snapshot, such as 7.")?;
     Target::parse(value)
+}
+
+/// The ref named by `key`, for tools that take two elements (`drag`).
+fn named_target(args: &Value, key: &str) -> Result<Target> {
+    let value = args.get(key).with_context(|| format!("`{key}` is the element's ref from the last snapshot."))?;
+    Target::parse(value).with_context(|| format!("`{key}` is the element's ref from the last snapshot."))
 }
 
 /// The ref of the element a tool acts on, when naming one is optional.
@@ -649,6 +661,18 @@ mod tests {
         assert!(scrolled.snapshot);
         let waited = Action::parse("wait_for", &json!({"text": "Results"})).unwrap();
         assert_eq!(waited.kind, Kind::Wait { text: Some("Results".into()), url: None, state: None });
+    }
+
+    #[test]
+    fn a_drag_names_two_refs_and_a_screenshot_takes_none() {
+        let drag = Action::parse("drag", &json!({"from": 2, "to": 5})).unwrap();
+        assert_eq!(
+            drag.kind,
+            Kind::Drag { from: Target::parse(&json!(2)).unwrap(), to: Target::parse(&json!(5)).unwrap() }
+        );
+        assert_eq!(Action::parse("screenshot", &json!({})).unwrap().kind, Kind::Screenshot);
+        assert!(Action::parse("drag", &json!({"from": 2})).is_err(), "a drag needs both ends");
+        assert!(Action::parse("drag", &json!({})).is_err());
     }
 
     #[test]

@@ -8,15 +8,17 @@
 //! - `Target.getTargets`, `Target.attachToTarget`, `Target.detachFromTarget`, `Target.createTarget`,
 //!   `Target.createBrowserContext`, `Target.closeTarget`: the bot's tab, every call.
 //! - `Page.navigate`, `Page.reload`, `Page.getNavigationHistory`,
-//!   `Page.navigateToHistoryEntry`: `navigate`.
-//! - `Runtime.evaluate`: every page-side op (the snapshot tree, an element's box and focus, the
-//!   select and checkbox changes, and the load probe) and `evaluate` itself.
-//! - `Input.dispatchMouseEvent`: `click` (moved, pressed, released), `hover` (moved) and `scroll`
-//!   (mouse wheel).
+//!   `Page.navigateToHistoryEntry`: `navigate`. `Page.captureScreenshot`: `screenshot` and the
+//!   picture attached to an empty snapshot.
+//! - `Runtime.evaluate`: every page-side op (the accessible and drawn snapshot trees, an element's
+//!   box and focus, the select and checkbox changes, and the load probe) and `evaluate` itself.
+//! - `Input.dispatchMouseEvent`: `click` (moved, pressed, released), `drag` (pressed, held move,
+//!   released), `hover` (moved) and `scroll` (mouse wheel).
 //! - `Input.insertText`: `type`. `Input.dispatchKeyEvent`: `press` and the Enter of a submitting
 //!   `type`.
 
 use super::action::{Action, Button, Direction, Key, Kind, Load, Target};
+use super::decisions::{Point, SnapshotPass, drag_points, needs_visual, snapshot_pass};
 use super::idle;
 use super::snapshot::{self, format as format_snapshot};
 use super::{cut_at, folder_slug};
@@ -428,6 +430,8 @@ async fn act(session: &mut Session, tab: &str, action: &Action) -> Result<Value>
         Kind::Type { target, text, replace, submit } => typed(session, tab, *target, text, *replace, *submit).await,
         Kind::Press { key, target } => press(session, tab, key, *target).await,
         Kind::Hover { target } => hover(session, tab, *target).await,
+        Kind::Drag { from, to } => drag(session, tab, *from, *to).await,
+        Kind::Screenshot => capture(session, tab).await,
         Kind::Scroll { target, x, y } => scroll(session, tab, *target, *x, *y).await,
         Kind::Select { target, values } => select(session, tab, *target, values).await,
         Kind::Check { target, checked } => check(session, tab, *target, *checked).await,
@@ -458,7 +462,10 @@ async fn navigate(
             }
         }
         (None, Some(Direction::Reload)) => {
-            rpc(&mut session.pipe, "Page.reload", json!({"ignoreCache": false}), Some(tab)).await?;
+            // 0.70: a reload gets fresh bytes, not the cache (shared rule in browser_reload).
+            let params =
+                crate::screen::browser_reload::reload_strategy(crate::screen::browser_reload::ReloadKind::Agent);
+            rpc(&mut session.pipe, "Page.reload", params, Some(tab)).await?;
         }
         (None, Some(direction)) => {
             let history = rpc(&mut session.pipe, "Page.getNavigationHistory", json!({}), Some(tab)).await?;
@@ -519,9 +526,46 @@ async fn settle(session: &mut Session, tab: &str, before: &str, limit: Duration)
 }
 
 async fn snapshot(session: &mut Session, tab: &str) -> Result<Value> {
-    let read = call_page(session, tab, "snapshot", &json!({})).await?;
-    let text = format_snapshot(&read, snapshot::MAX_CHARS);
-    Ok(json!({"url": read["url"], "title": read["title"], "snapshot": text}))
+    let read = call_page(session, tab, "snapshot", &snapshot_pass(SnapshotPass::Accessible)).await?;
+    let mut text = format_snapshot(&read, snapshot::MAX_CHARS);
+    let controls = read["elements"].as_array().map_or(0, Vec::len);
+    let body = read["text"].as_str().unwrap_or_default();
+    let mut needs_image = false;
+    if controls == 0 {
+        // 0.70: a page can paint controls it hides from screen readers or makes transparent. `innerText`
+        // still sees their words, so an empty control tree — not just an empty page — tries the drawn
+        // pass. A page with nothing in either pass becomes a picture (see `needs_visual`).
+        let drawn = call_page(session, tab, "snapshot", &snapshot_pass(SnapshotPass::Drawn)).await?;
+        let drawn_controls = drawn["elements"].as_array().map_or(0, Vec::len);
+        let drawn_body = drawn["text"].as_str().unwrap_or_default();
+        if drawn_controls > 0 || (body.trim().is_empty() && !drawn_body.trim().is_empty()) {
+            text = format_snapshot(&drawn, snapshot::MAX_CHARS);
+        } else if needs_visual(drawn_body, drawn_controls) {
+            needs_image = true;
+        }
+    }
+    Ok(json!({
+        "url": read["url"],
+        "title": read["title"],
+        "snapshot": text,
+        "needsImage": needs_image,
+    }))
+}
+
+/// A PNG of the bot's tab as a data URL, with its address for the saved file's name (OpenBot 0.68).
+/// Uses the same `Page.captureScreenshot` primitive as the panel's shot, on the tools' own tab.
+async fn capture(session: &mut Session, tab: &str) -> Result<Value> {
+    let image = rpc(
+        &mut session.pipe,
+        "Page.captureScreenshot",
+        json!({"format": "png", "captureBeyondViewport": false}),
+        Some(tab),
+    )
+    .await?;
+    let data = image["data"].as_str().context("The tab gave no picture")?;
+    let probe = page(session, tab, "probe", &json!({})).await.ok();
+    let url = probe.as_ref().and_then(|answer| answer["url"].as_str()).unwrap_or_default();
+    Ok(json!({"image": format!("data:image/png;base64,{data}"), "url": url}))
 }
 
 async fn click(
@@ -557,6 +601,34 @@ async fn hover(session: &mut Session, tab: &str, target: Target) -> Result<Value
     let (x, y, label) = point(session, tab, target).await?;
     mouse(session, tab, json!({"type": "mouseMoved", "x": x, "y": y, "button": "none", "buttons": 0})).await?;
     Ok(json!({"hovered": label, "x": x, "y": y}))
+}
+
+/// A real press–move–release drag between two refs (OpenBot 0.70), down the same mouse path `click`
+/// uses. The pure rule checks both points before any input is sent, so a twitch is not sent as a drag.
+async fn drag(session: &mut Session, tab: &str, from: Target, to: Target) -> Result<Value> {
+    let (from_x, from_y, from_label) = point(session, tab, from).await?;
+    let (to_x, to_y, to_label) = point(session, tab, to).await?;
+    let (start, end) = drag_points(Point { x: from_x, y: from_y }, Point { x: to_x, y: to_y }).context(
+        "The two elements are too close together or outside the page; move them apart and take a new snapshot.",
+    )?;
+    mouse(session, tab, json!({"type": "mouseMoved", "x": start.x, "y": start.y, "button": "none", "buttons": 0}))
+        .await?;
+    mouse(
+        session,
+        tab,
+        json!({"type":"mousePressed","x":start.x,"y":start.y,"button":"left","buttons":1,"clickCount":1}),
+    )
+    .await?;
+    // The button stays down across the move: that is what a page listens for as a drag.
+    mouse(session, tab, json!({"type":"mouseMoved","x":end.x,"y":end.y,"button":"left","buttons":1})).await?;
+    mouse(session, tab, json!({"type":"mouseReleased","x":end.x,"y":end.y,"button":"left","buttons":0,"clickCount":1}))
+        .await?;
+    Ok(json!({
+        "dragged": from_label,
+        "onto": to_label,
+        "from": {"x": start.x, "y": start.y},
+        "to": {"x": end.x, "y": end.y},
+    }))
 }
 
 async fn scroll(session: &mut Session, tab: &str, target: Option<Target>, x: f64, y: f64) -> Result<Value> {

@@ -43,6 +43,23 @@ pub fn root(bot: &str) -> PathBuf {
     crate::service::data_dir().join("bots").join(bot).join("files")
 }
 
+/// Writes in-memory bytes (a browser screenshot) to a new temporary file under `root`, so they can
+/// go through the same `send_file` path as a file on disk. The caller removes it once the immutable
+/// copy is committed. Only a plain extension is accepted; it never controls the storage path.
+fn stage_at(root: &Path, extension: &str, bytes: &[u8]) -> Result<PathBuf> {
+    ensure!(!extension.is_empty() && extension.chars().all(|c| c.is_ascii_alphanumeric()), "invalid file extension");
+    let folder = root.join("staging");
+    std::fs::create_dir_all(&folder)?;
+    let path = folder.join(format!("{}.{}", uuid::Uuid::new_v4(), extension));
+    std::fs::write(&path, bytes)?;
+    Ok(path)
+}
+
+/// Stages raw bytes for one bot in its own file store (see `stage_at`).
+pub fn stage(bot: &str, extension: &str, bytes: &[u8]) -> Result<PathBuf> {
+    stage_at(&root(bot), extension, bytes)
+}
+
 fn path(root: &Path, id: &str) -> Result<PathBuf> {
     let id = uuid::Uuid::parse_str(id).context("invalid file id")?;
     Ok(root.join(id.to_string()))

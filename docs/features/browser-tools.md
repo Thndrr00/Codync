@@ -1,8 +1,8 @@
 # Browser tools
 
-A bot with **Use the computer** on and its browser permission gets twelve browser tools from the
-built-in `chat` MCP server (`host/src/mcp.rs`): `navigate`, `snapshot`, `click`, `type`, `press`,
-`hover`, `scroll`, `select_option`, `set_checked`, `wait_for`, `evaluate` and `run`. They drive a
+A bot with **Use the computer** on and its browser permission gets fourteen browser tools from the
+built-in `chat` MCP server (`host/src/mcp.rs`): `navigate`, `snapshot`, `screenshot`, `click`, `type`,
+`press`, `hover`, `drag`, `scroll`, `select_option`, `set_checked`, `wait_for`, `evaluate` and `run`. They drive a
 Chrome or Edge browser of the bot's own, so a routine can sign in to a site, fill a form, read a
 result or check a page, and the owner can watch it happen in a real window.
 
@@ -82,15 +82,25 @@ with a note when something was left out. A ref belongs to the page that is open:
 snapshot replaces them, and an old ref answers *The page has no element 7; take a new snapshot.*
 
 The refs are also what the other tools take: `click`, `type`, `press` (an optional ref to focus),
-`hover`, `scroll` (an optional ref to scroll instead of the page), `select_option` and `set_checked`.
+`hover`, `drag` (one ref to pick up, one to drop onto), `scroll` (an optional ref to scroll instead
+of the page), `select_option` and `set_checked`.
+
+Only elements a person could see are numbered. A page that paints content but hides it from screen
+readers with `aria-hidden`, or makes it transparent, is read in a second **drawn** pass when the first
+pass finds no text and no controls; a visible form whose controls are named `hidden` or `inert` still
+counts, because the host reads those attributes from the prototype and a same-named form field cannot
+shadow them (OpenBot 0.69–0.70). If both passes are empty, a PNG of the tab is captured and attached
+to the reply as a file card, so the agent gets a picture instead of an empty tree.
 
 ## What each tool does
 
 | Tool | What it does |
 | --- | --- |
-| `navigate` | Opens an http(s) address, or goes `back`, `forward` or `reload`, waits for the page to finish loading by polling `document.readyState`, and returns a snapshot. A bare host gets `https://`. Other schemes are refused. |
-| `snapshot` | The tree above. Use it first, and again after anything that changes the page. |
+| `navigate` | Opens an http(s) address, or goes `back`, `forward` or `reload`, waits for the page to finish loading by polling `document.readyState`, and returns a snapshot. Reload bypasses the cache (0.70). A bare host gets `https://`. Other schemes are refused. |
+| `snapshot` | The tree above. Use it first, and again after anything that changes the page. An empty page gets a screenshot attached instead. |
+| `screenshot` | Saves a PNG of the bot's tab (`Page.captureScreenshot`) and attaches it to the reply as a file card, named from the page's host and the time (OpenBot 0.68). |
 | `click` | Real mouse input at the element's centre (`Input.dispatchMouseEvent`), with an optional button, double click and held modifiers. |
+| `drag` | Presses the element at `from`, moves with the button held to `to`, then releases (OpenBot 0.70). Both ends must be far enough apart and inside the page, or no input is sent. |
 | `type` | Focuses the field by ref (or uses what the page has focused), then `Input.insertText`. `mode: replace` (the default) replaces the text, `append` adds to the end, and `submit` presses Enter afterwards. |
 | `press` | `Input.dispatchKeyEvent` for one key or shortcut: `Enter`, `Tab`, `Escape`, arrows, `F1`–`F12`, one character, or `Control+A`/`Meta+Shift+P`. |
 | `hover` | Moves the mouse onto the element, for menus and tooltips. |
@@ -102,7 +112,9 @@ The refs are also what the other tools take: `click`, `type`, `press` (an option
 | `run` | A list of the steps above (plus `sleep`) in one call, at most 200 steps and 25 s, returning a final snapshot. A failed step stops the run; the steps before it stay done. A step list, not JavaScript. |
 
 Actions answer with a short status (`{"clicked": "3 button \"Sign in\" <button>"}`, `{"typed": 12,
-"into": …}`); add `snapshot: true` to any of them to get the page again in the same call.
+"into": …}`); add `snapshot: true` to any of them to get the page again in the same call. A
+`screenshot` answers with the published file's name and size; the PNG itself shows in the chat as a
+file card. A snapshot that finds nothing to read answers with the same card and a note.
 
 ## Limits and failures
 
@@ -114,6 +126,8 @@ Actions answer with a short status (`{"clicked": "3 button \"Sign in\" <button>"
 | JavaScript evaluated, and returned | 64000 characters |
 | Address | 2048 characters |
 | Snapshot | 400 elements, 40000 characters |
+| Screenshot | 100 MiB, the same limit as any shared file |
+| Drag | 100000 pixels from the page's origin, at least 8 pixels between the two ends |
 | Scroll | 100000 pixels either way |
 
 The waits stay under the 30 s a chat tool call has in `host/src/mcp.rs`, so an agent gets the page's
@@ -175,6 +189,8 @@ a fixed label; an address is read only to classify a page and is never logged or
 
 The browser is the bot's own: an isolated profile and context, no cookie of the owner's browser, and
 it is removed when the browser stops. Tool results are the page's own text and structure, which the
-agent already reads to work, plus whatever `evaluate` returns. No secret is ever passed to these
-tools: the vault, saved logins and card fills are not part of this surface (see
+agent already reads to work, plus whatever `evaluate` returns. A screenshot is an immutable copy in
+that bot's own file store, staged for the share and removed from staging once it is published; only
+the PNG goes to the chat. No secret is ever passed to these tools: the vault, saved logins and card
+fills are not part of this surface (see
 [OpenBot's browser tool suite on Codync](../plans/openbot-browser-suite.md#not-ported-and-why)).

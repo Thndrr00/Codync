@@ -13,6 +13,13 @@
   var MAX_VALUE = 120;
   var MAX_OPTIONS = 20;
 
+  // OpenBot 0.69: a form control named `hidden` or `inert` shadows the element's own property, so
+  // `el.hidden` would hide a visible form. Read attributes from the prototype instead.
+  var hasAttribute = Element.prototype.hasAttribute;
+  function attribute(el, name) {
+    try { return hasAttribute.call(el, name); } catch (error) { return false; }
+  }
+
   // wait_for's dom-quiet reads this observer's last change, so it starts with the first op of a page.
   if (!window.__codyncMutations) {
     var watched = { at: Date.now(), count: 0 };
@@ -123,16 +130,18 @@
     }
   }
 
-  function shown(el) {
+  // `drawn` is the second pass (OpenBot 0.70): content that is painted but hidden from screen
+  // readers, or made transparent, is kept so the agent still sees it. Hidden/inert never pass.
+  function shown(el, drawn) {
     if (!el || !el.isConnected) return false;
     if (el === document.body || el === document.documentElement) return true;
-    if (el.hidden) return false;
-    if (el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
-    if (typeof el.checkVisibility === "function" && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
+    if (attribute(el, "hidden") || attribute(el, "inert")) return false;
+    if (!drawn && el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
+    if (!drawn && typeof el.checkVisibility === "function" && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
       return false;
     }
     var style = getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+    if (!drawn && (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse")) return false;
     var box = el.getBoundingClientRect();
     return box.width > 0 && box.height > 0;
   }
@@ -172,7 +181,8 @@
     return entry.role + ' "' + entry.name + '" <' + entry.tag + ">";
   }
 
-  function snapshot() {
+  function snapshot(request) {
+    var drawn = !!(request && request.drawn);
     var elements = [];
     var visited = 0;
     var truncated = false;
@@ -184,7 +194,7 @@
         truncated = true;
         return;
       }
-      if (!shown(el)) return;
+      if (!shown(el, drawn)) return;
       var role = roleOf(el);
       var next = depth;
       if (role) {
@@ -214,7 +224,7 @@
     var body = document.body || document.documentElement;
     if (body) walk(body, 0);
     var pageText = body ? cut(body.innerText || body.textContent || "", MAX_TEXT) : "";
-    return { ok: true, url: location.href, title: document.title, elements: elements, truncated: truncated, text: pageText };
+    return { ok: true, url: location.href, title: document.title, elements: elements, truncated: truncated, text: pageText, drawn: drawn };
   }
 
   function entryOf(request) {

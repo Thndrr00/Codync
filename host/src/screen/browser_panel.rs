@@ -380,7 +380,9 @@ pub async fn reload(screen: &Screen, tab: &str) -> Result<Value> {
     let attached = rpc(&mut panel.pipe, "Target.attachToTarget", json!({"targetId":tab,"flatten":true}), None).await?;
     let session = attached["sessionId"].as_str().context("Could not reach the tab")?.to_owned();
     let _ = rpc(&mut panel.pipe, "Page.stopLoading", json!({}), Some(&session)).await;
-    let result = rpc(&mut panel.pipe, "Page.reload", json!({"ignoreCache":false}), Some(&session)).await;
+    // 0.70: the panel's Reload bypasses the cache too, under the same shared rule as the tools.
+    let params = super::browser_reload::reload_strategy(super::browser_reload::ReloadKind::Panel);
+    let result = rpc(&mut panel.pipe, "Page.reload", params, Some(&session)).await;
     rpc(&mut panel.pipe, "Target.detachFromTarget", json!({"sessionId":session}), None).await.ok();
     result?;
     tab.clone_into(&mut panel.active);

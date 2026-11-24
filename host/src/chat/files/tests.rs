@@ -15,6 +15,17 @@ impl Drop for Temp {
 }
 
 #[test]
+fn staged_bytes_are_written_under_the_root_with_a_safe_extension() {
+    let temp = Temp::new();
+    let root = temp.0.join("store");
+    let path = stage_at(&root, "png", &[137, 80, 78, 71]).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), vec![137, 80, 78, 71]);
+    assert!(path.starts_with(root.join("staging")));
+    assert!(stage_at(&root, "../escape", b"x").is_err());
+    assert!(stage_at(&root, "", b"x").is_err());
+}
+
+#[test]
 fn snapshots_preserve_binary_empty_and_hidden_files_after_source_changes() {
     let temp = Temp::new();
     for (name, data) in

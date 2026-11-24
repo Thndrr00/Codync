@@ -36,6 +36,7 @@ mod activity;
 pub(crate) mod browser_cards;
 #[cfg(windows)]
 pub mod browser_panel;
+pub(crate) mod browser_reload;
 pub mod browser_tools;
 mod channel_gate;
 mod computer;

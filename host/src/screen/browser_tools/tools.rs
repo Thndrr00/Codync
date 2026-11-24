@@ -13,10 +13,12 @@ pub(super) fn definitions() -> Vec<Value> {
     vec![
         navigate(),
         snapshot(),
+        screenshot(),
         click(),
         type_text(),
         press(),
         hover(),
+        drag(),
         scroll(),
         select_option(),
         set_checked(),
@@ -45,6 +47,17 @@ fn snapshot() -> Value {
         "description": r#"Read the page as a compact tree: one line per element with its ref, role, "name", <tag>, value and state, in page order and indented by depth, then the page's visible text. Use the refs with click, type, press, hover, scroll, select_option and set_checked. Refs stay valid until the next snapshot or a navigation. The output is bounded: 400 elements and about 40000 characters, with a note when something was left out, so scroll or wait_for to read more."#,
         "inputSchema": {"type": "object", "properties": {}},
         "annotations": {"readOnlyHint": true},
+    })
+}
+
+fn screenshot() -> Value {
+    json!({
+        "name": "screenshot",
+        "description": format!("Save a PNG of the page the bot's browser shows and attach it to your reply as a file card, so the user can see what you see. {NEEDS_ACCESS}"),
+        "inputSchema": {"type": "object", "properties": {
+            "timeoutMs": timeout("How long to wait for the picture, at most 20000."),
+        }},
+        "annotations": {"readOnlyHint": false, "openWorldHint": true},
     })
 }
 
@@ -103,6 +116,20 @@ fn hover() -> Value {
             "timeoutMs": timeout("How long to wait, at most 20000."),
             "snapshot": snapshot_flag(),
         }, "required": ["ref"]},
+        "annotations": {"readOnlyHint": false, "openWorldHint": true},
+    })
+}
+
+fn drag() -> Value {
+    json!({
+        "name": "drag",
+        "description": format!("Drag the element whose ref is `from` onto the one whose ref is `to`, with real press, move and release mouse input, as moving an item into a page needs. {ACTION_RESULT} The refs come from the last snapshot."),
+        "inputSchema": {"type": "object", "properties": {
+            "from": reference("The ref of the element to drag from."),
+            "to": reference("The ref of the element to drop onto."),
+            "timeoutMs": timeout("How long to wait, at most 20000."),
+            "snapshot": snapshot_flag(),
+        }, "required": ["from", "to"]},
         "annotations": {"readOnlyHint": false, "openWorldHint": true},
     })
 }
@@ -182,7 +209,7 @@ fn run() -> Value {
         "name": "run",
         "description": "Run a list of browser steps in one call and return a final snapshot: the same actions as the other browser tools, each with that tool's fields, at most 200 steps and one time limit. A failed step stops the run, and the steps before it stay done. This is a step list that Codync runs, not JavaScript.",
         "inputSchema": {"type": "object", "properties": {
-            "steps": {"type": "array", "minItems": 1, "maxItems": 200, "description": "The steps, in order. Each names its action (navigate, click, type, press, hover, scroll, select_option, set_checked, wait_for, evaluate, snapshot or sleep) and takes the fields of that tool; a step acts on the same tab.", "items": {"type": "object", "properties": {"action": {"type": "string", "enum": ["navigate", "click", "type", "press", "hover", "scroll", "select_option", "set_checked", "wait_for", "evaluate", "snapshot", "sleep"]}, "ms": {"type": "integer", "description": "sleep: milliseconds to pause, at most 25000."}}, "required": ["action"]}},
+            "steps": {"type": "array", "minItems": 1, "maxItems": 200, "description": "The steps, in order. Each names its action (navigate, screenshot, snapshot, click, type, press, hover, drag, scroll, select_option, set_checked, wait_for, evaluate or sleep) and takes the fields of that tool; a step acts on the same tab.", "items": {"type": "object", "properties": {"action": {"type": "string", "enum": ["navigate", "snapshot", "screenshot", "click", "type", "press", "hover", "drag", "scroll", "select_option", "set_checked", "wait_for", "evaluate", "sleep"]}, "ms": {"type": "integer", "description": "sleep: milliseconds to pause, at most 25000."}}, "required": ["action"]}},
             "timeoutMs": timeout("The whole run's limit, at most 25000."),
         }, "required": ["steps"]},
         "annotations": {"readOnlyHint": false, "openWorldHint": true},
@@ -218,16 +245,18 @@ mod tests {
     #[test]
     fn every_tool_has_a_name_a_description_and_an_object_schema() {
         let definitions = definitions();
-        assert_eq!(definitions.len(), 12);
+        assert_eq!(definitions.len(), 14);
         let names: HashSet<&str> = definitions.iter().filter_map(|tool| tool["name"].as_str()).collect();
         assert_eq!(names.len(), definitions.len(), "each tool name appears once");
         for expected in [
             "navigate",
             "snapshot",
+            "screenshot",
             "click",
             "type",
             "press",
             "hover",
+            "drag",
             "scroll",
             "select_option",
             "set_checked",
