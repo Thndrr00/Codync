@@ -2873,5 +2873,10 @@
   "The sign-in from the other device is finished.": "El inicio de sesión desde el otro dispositivo ha terminado.",
   "Paste the address the other browser showed at the end of the sign-in.": "Pega la dirección que mostró el otro navegador al terminar el inicio de sesión.",
   "Open shows the page in the main window, where you can type.": "Abrir muestra la página en la ventana principal, donde puedes escribir.",
-  "Your answer still goes to the agent, even if it stopped waiting.": "Tu respuesta llega al bot aunque haya dejado de esperar."
+  "Your answer still goes to the agent, even if it stopped waiting.": "Tu respuesta llega al bot aunque haya dejado de esperar.",
+  "Tools available from the next message": "Herramientas disponibles desde el siguiente mensaje",
+  "Needs approval: {title} (+{n} earlier)": "Necesita aprobación: {title} (+{n} anteriores)",
+  "Another question is still open": "Queda otra pregunta abierta",
+  "{n} other questions are still open": "Quedan {n} preguntas abiertas",
+  "The processor of this computer cannot run this provider. Use a different provider.": "El procesador de este ordenador no puede ejecutar este proveedor. Usa otro proveedor."
 }

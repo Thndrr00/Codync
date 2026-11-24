@@ -844,5 +844,10 @@
   "The sign-in from the other device is finished.": "The sign-in from the other device is finished.",
   "Paste the address the other browser showed at the end of the sign-in.": "Paste the address the other browser showed at the end of the sign-in.",
   "Open shows the page in the main window, where you can type.": "Open shows the page in the main window, where you can type.",
-  "Your answer still goes to the agent, even if it stopped waiting.": "Your answer still goes to the agent, even if it stopped waiting."
+  "Your answer still goes to the agent, even if it stopped waiting.": "Your answer still goes to the agent, even if it stopped waiting.",
+  "Tools available from the next message": "Tools available from the next message",
+  "Needs approval: {title} (+{n} earlier)": "Needs approval: {title} (+{n} earlier)",
+  "Another question is still open": "Another question is still open",
+  "{n} other questions are still open": "{n} other questions are still open",
+  "The processor of this computer cannot run this provider. Use a different provider.": "The processor of this computer cannot run this provider. Use a different provider."
 }
