@@ -30,6 +30,14 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let health = insights.health
+                    Text(health.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(health.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(health.checks) { item in
+                        Text("\(item.title): \(item.detail)")
+                            .font(.footnote)
+                            .foregroundStyle(item.severity == "error" ? Palette.danger : Palette.secondary)
+                    }
                     let activity = insights.activity
                     Text(activity.headline).font(.footnote).foregroundStyle(Palette.secondary)
                     HStack(spacing: 12) {

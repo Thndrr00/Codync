@@ -14,6 +14,7 @@ mod bdots_activity;
 mod bdots_cron;
 mod bdots_desk;
 mod bdots_extra;
+mod bdots_health;
 mod bdots_links;
 mod bdots_more;
 mod bdots_pure;

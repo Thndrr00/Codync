@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Salud de configuración (23 helpers + UI en 4 clientes)
+
+`bdots_health.rs` aporta 23 helpers puros que validan la configuración de un bot (nombre,
+descripción, modelo, carpeta, skills, rutinas, presupuesto, conectores, nombre de secreto y slug)
+y producen una puntuación, un titular y una lista ordenada de hallazgos. Reutiliza los validadores
+ya portados en lugar de duplicarlos. El endpoint `botInsights` añade el campo `health`, y la
+sección «Health» se renderiza dentro de la pantalla de Insights existente en Desktop, iOS,
+Android y TUI.
+
 ## Timeline de actividad (23 helpers + UI en 4 clientes)
 
 `bdots_activity.rs` añade 23 helpers puros para dar forma a la actividad reciente de un bot:

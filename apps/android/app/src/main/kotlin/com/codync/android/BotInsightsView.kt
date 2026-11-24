@@ -42,6 +42,15 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val health = insights.health
+            CardSection("Health") {
+                row { Text(health.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(health.headline, style = Type.caption, color = Palette.secondary) }
+                for (item in health.checks) row {
+                    Text("${item.title}: ${item.detail}", style = Type.caption,
+                        color = if (item.severity == "error") Palette.danger else Palette.secondary)
+                }
+            }
             val activity = insights.activity
             CardSection("Activity") {
                 row { Text(activity.headline, style = Type.caption, color = Palette.secondary) }

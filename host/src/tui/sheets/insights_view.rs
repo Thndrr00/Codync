@@ -66,6 +66,34 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let health = &data["health"];
+    if health.is_object() {
+        line(buf, &mut y, tr("Health").into_owned(), t.bold.patch(t.panel));
+        let label = health["label"].as_str().unwrap_or("");
+        let headline = health["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        let checks: Vec<String> = health["checks"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(10)
+                    .map(|c| {
+                        format!(
+                            "  {} {}: {}",
+                            if c["severity"] == "error" { "!" } else { "·" },
+                            c["title"].as_str().unwrap_or(""),
+                            c["detail"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for check in checks {
+            line(buf, &mut y, check, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let activity = &data["activity"];
     if activity.is_object() {
         line(buf, &mut y, tr("Activity").into_owned(), t.bold.patch(t.panel));

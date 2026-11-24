@@ -117,6 +117,50 @@ fn activity_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
     })
 }
 
+/// Configuration health: the same checks every client shows, computed here from host state.
+fn health_view(row: &crate::store::BotRow, used: u64, limit: Option<u64>, routines: usize) -> Value {
+    use crate::bdots_health as h;
+
+    let config = &row.config;
+    let secret = format!("bot_{}", bot_key(&row.id));
+    let checks = h::build_checks(
+        &config.name,
+        &config.description,
+        config.model.as_deref().unwrap_or(""),
+        &config.cwd,
+        &config.skills,
+        routines,
+        used,
+        limit,
+        &config.connectors,
+        &secret,
+        &bot_key(&row.id),
+    );
+    let score = h::health_score(&checks);
+    json!({
+        "score": score,
+        "label": h::health_label(score),
+        "tone": h::health_tone(score),
+        "headline": h::health_headline(&checks),
+        "blocking": h::has_blocking(&checks),
+        "errors": h::error_count(&checks),
+        "warnings": h::warn_count(&checks),
+        "counts": h::count_by_severity(&checks).iter().map(|(s, n)| json!({"severity": s, "count": n})).collect::<Vec<_>>(),
+        "checks": h::limit_checks(&checks, 10).iter().map(|c| json!({
+            "id": c.id,
+            "title": c.title,
+            "detail": c.detail,
+            "severity": c.severity,
+            "tone": h::severity_tone(c.severity),
+            "icon": h::severity_icon(c.severity),
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn bot_key(id: &str) -> String {
+    id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
+}
+
 pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
     let row = hub.store.bot(bot)?.filter(|r| !r.deleted).context("Unknown bot")?;
     let now = crate::store::now_ms();
@@ -166,6 +210,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "provider": provider,
         "recentWork": recent,
         "activity": activity_view(hub, bot, now),
+        "health": health_view(&row, used, limit, routines.len()),
         "routines": routines,
         "usage": {
             "used": used,
