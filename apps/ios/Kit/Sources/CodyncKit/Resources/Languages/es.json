@@ -2914,5 +2914,11 @@
   "{name} could not start, so its tools are not available. Check it in Marketplace, Apps, then start a new chat.": "{name} no pudo iniciarse, así que sus herramientas no están disponibles. Compruébalo en Marketplace, Apps, y abre un chat nuevo.",
   "The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot.": "La página se bloqueó (Inspector.targetCrashed). Recárgala con navigate direction=reload y toma una nueva instantánea.",
   "The page ran out of memory and crashed. Reload it with navigate direction=reload, then take a new snapshot.": "La página se quedó sin memoria y se bloqueó. Recárgala con navigate direction=reload y toma una nueva instantánea.",
-  "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again.": "No llegó ninguna imagen de esta pantalla. En Ajustes del sistema › Grabación de pantalla y audio, activa Codync, vuelve a abrirlo e inténtalo de nuevo."
+  "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again.": "No llegó ninguna imagen de esta pantalla. En Ajustes del sistema › Grabación de pantalla y audio, activa Codync, vuelve a abrirlo e inténtalo de nuevo.",
+  "Workspace only blocks this. Try Full access.": "Workspace only bloquea esto. Prueba con Acceso completo.",
+  "Stop planning": "Detener planificación",
+  "Plan mode stopped. Wait for the user's next message.": "Modo de planificación detenido. Espera el siguiente mensaje del usuario.",
+  "What should change?": "¿Qué debería cambiar?",
+  "Tell the agent what to change": "Dile al bot qué cambiar",
+  "Send change": "Enviar cambio"
 }

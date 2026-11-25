@@ -887,5 +887,11 @@
   "{name} could not start, so its tools are not available. Check it in Marketplace, Apps, then start a new chat.": "{name} could not start, so its tools are not available. Check it in Marketplace, Apps, then start a new chat.",
   "The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot.": "The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot.",
   "The page ran out of memory and crashed. Reload it with navigate direction=reload, then take a new snapshot.": "The page ran out of memory and crashed. Reload it with navigate direction=reload, then take a new snapshot.",
-  "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again.": "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again."
+  "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again.": "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again.",
+  "Workspace only blocks this. Try Full access.": "Workspace only blocks this. Try Full access.",
+  "Stop planning": "Stop planning",
+  "Plan mode stopped. Wait for the user's next message.": "Plan mode stopped. Wait for the user's next message.",
+  "What should change?": "What should change?",
+  "Tell the agent what to change": "Tell the agent what to change",
+  "Send change": "Send change"
 }
