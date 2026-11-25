@@ -21,9 +21,34 @@ public struct BotInsights: Decodable, Sendable {
     public let memory: InsightMemory
     public let workspace: InsightWorkspace
     public let session: InsightSession
+    public let advice: InsightAdvice
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed, prioritised suggestion list for one bot.
+public struct InsightAdvice: Decodable, Sendable {
+    public let headline: String
+    public let label: String
+    public let tone: String
+    public let score: Int
+    public let total: String
+    public let urgent: Int
+    public let summary: [InsightSummaryRow]
+    public let items: [InsightAdviceItem]
+}
+
+public struct InsightAdviceItem: Decodable, Sendable {
+    public let id: String
+    public let title: String
+    public let detail: String
+    public let icon: String
+    public let tone: String
+    public let priority: Int
+    public let priorityLabel: String
+    public let priorityIcon: String
+    public let priorityTone: String
 }
 
 /// A host-computed session and sync state for one bot.

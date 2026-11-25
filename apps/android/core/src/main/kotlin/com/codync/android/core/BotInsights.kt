@@ -24,9 +24,29 @@ data class BotInsights(
     val memory: InsightMemory = InsightMemory(),
     val workspace: InsightWorkspace = InsightWorkspace(),
     val session: InsightSession = InsightSession(),
+    val advice: InsightAdvice = InsightAdvice(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed, prioritised suggestion list for one bot. */
+@Serializable
+data class InsightAdvice(
+    val headline: String = "",
+    val label: String = "",
+    val tone: String = "",
+    val score: Int = 0,
+    val total: String = "",
+    val urgent: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val items: List<InsightAdviceItem> = emptyList(),
+)
+
+@Serializable data class InsightAdviceItem(
+    val id: String = "", val title: String = "", val detail: String = "",
+    val icon: String = "", val tone: String = "", val priority: Int = 0,
+    val priorityLabel: String = "", val priorityIcon: String = "", val priorityTone: String = "",
 )
 
 /** A host-computed session and sync state for one bot. */

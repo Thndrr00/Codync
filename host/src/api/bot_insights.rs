@@ -698,6 +698,62 @@ fn session_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Advice: a prioritised list built from findings the host already has, no new I/O.
+fn advice_view(row: &crate::store::BotRow, routines: usize, used: u64, limit: Option<u64>) -> Value {
+    use crate::agent::approval_rules::Decision;
+    use crate::bdots_advice as a;
+
+    let c = &row.config;
+    let mode = match c.permission {
+        crate::store::Permission::Ask => "ask",
+        crate::store::Permission::Auto => "auto",
+    };
+    let memory_skills: Vec<String> =
+        c.skills.iter().filter(|s| crate::bdots_memory::is_memory_skill(s)).cloned().collect();
+    let items = a::build_all(
+        &c.name,
+        &c.description,
+        &c.cwd,
+        c.model.as_deref(),
+        routines,
+        c.connectors.len(),
+        c.skills.len(),
+        c.fallbacks.len(),
+        c.self_fallbacks,
+        c.shared_memory,
+        c.harness_memory,
+        &memory_skills,
+        mode,
+        used,
+        limit,
+        row.rev,
+        row.read_rev,
+    );
+    let score = a::readiness_score(&items);
+    let _ = Decision::Allow; // keep the enum in scope for documentation of the mode mapping
+
+    json!({
+        "headline": a::advice_headline(&items),
+        "label": a::readiness_label(score),
+        "tone": a::readiness_tone(score),
+        "score": score,
+        "total": a::count_label(&items),
+        "urgent": a::urgent_count(&items),
+        "summary": a::summary(&items).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "items": a::top_advice(&items, 8).iter().map(|x| json!({
+            "id": x.id,
+            "title": x.title,
+            "detail": x.detail,
+            "icon": x.icon,
+            "tone": x.tone,
+            "priority": x.priority,
+            "priorityLabel": a::priority_label(x.priority),
+            "priorityIcon": a::priority_icon(x.priority),
+            "priorityTone": a::priority_tone(x.priority),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -764,6 +820,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "memory": memory_view(&row),
         "workspace": workspace_view(&row),
         "session": session_view(&row),
+        "advice": advice_view(&row, routines.len(), used, limit),
         "routines": routines,
         "usage": {
             "used": used,

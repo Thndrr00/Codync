@@ -66,6 +66,33 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let advice = &data["advice"];
+    if advice.is_object() {
+        line(buf, &mut y, tr("Suggestions").into_owned(), t.bold.patch(t.panel));
+        let label = advice["label"].as_str().unwrap_or("");
+        let headline = advice["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        let items: Vec<String> = advice["items"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(8)
+                    .map(|i| {
+                        format!(
+                            "  {}: {}",
+                            i["priorityLabel"].as_str().unwrap_or(""),
+                            i["title"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let session = &data["session"];
     if session.is_object() {
         line(buf, &mut y, tr("Session").into_owned(), t.bold.patch(t.panel));

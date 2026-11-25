@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Recomendaciones (23 helpers + UI en 4 clientes)
+
+`bdots_advice.rs` añade 23 helpers puros que convierten los hallazgos existentes del bot en una
+lista de sugerencias priorizadas (nombre, descripción, carpeta, modelo, confianza, presupuesto,
+fallbacks, rutinas, conectores, skills, memoria, sincronización). Reutiliza `bdots_health`,
+`bdots_profile`, `bdots_activity`, `bdots_memory`, `bdots_session` y `bdots_text`. El endpoint
+`botInsights` añade el campo `advice`, construido solo desde datos que el host ya calcula; la
+sección «Suggestions» se muestra en los cuatro clientes.
+
 ## Sesión y sincronización (23 helpers + UI en 4 clientes)
 
 `bdots_session.rs` añade 23 helpers puros sobre el estado de sesión y sincronización: sesión

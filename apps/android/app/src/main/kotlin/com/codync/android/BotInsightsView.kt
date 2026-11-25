@@ -42,6 +42,17 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val advice = insights.advice
+            CardSection("Suggestions") {
+                row { Text(advice.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(advice.headline, style = Type.caption, color = Palette.secondary) }
+                for (item in advice.items) row {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("${item.priorityLabel}: ${item.title}", style = Type.caption, color = Palette.secondary)
+                        Text(item.detail, style = Type.caption, color = Palette.tertiary)
+                    }
+                }
+            }
             val session = insights.session
             CardSection("Session") {
                 row { Text(session.label, style = Type.subheadline.semibold, color = Palette.text) }

@@ -30,6 +30,15 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let advice = insights.advice
+                    Text(advice.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(advice.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(advice.items, id: \.id) { item in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("\(item.priorityLabel): \(item.title)").font(.footnote).foregroundStyle(Palette.secondary)
+                            Text(item.detail).font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
                     let session = insights.session
                     Text(session.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(session.headline).font(.footnote).foregroundStyle(Palette.secondary)

@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,17 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Suggestions')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(advice.tone)}>{advice.label}</Text>
+        <Text size="footnote" tone="secondary">{advice.headline}</Text>
+        {advice.items.map((item) => (
+          <VStack key={item.id} gap={0}>
+            <Text size="footnote" tone={toneOf(item.priorityTone)}>{`${item.priorityLabel}: ${item.title}`}</Text>
+            <Text size="footnote" tone="tertiary">{item.detail}</Text>
+          </VStack>
+        ))}
       </CardSection>
 
       <CardSection title={tr('Session')}>
