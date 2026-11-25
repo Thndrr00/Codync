@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,20 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Public access')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(access.modeTone)}>{access.mode}</Text>
+        <ValueRow label={tr('Routing')}>{access.routing}</ValueRow>
+        {access.collections.length ? (
+          <VStack gap={2}>
+            {access.collections.map((item) => (
+              <HStack key={item.name} gap={6}>
+                <Text size="footnote" tone={item.valid ? 'text' : 'danger'}>{item.name}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
+      </CardSection>
+
       <CardSection title={tr('Last message')}>
         <Text size="subheadline" weight="semibold">{blocks.headline}</Text>
         <Text size="footnote" tone="tertiary">{blocks.origin}</Text>

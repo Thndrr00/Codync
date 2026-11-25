@@ -35,10 +35,24 @@ data class BotInsights(
     val prompts: InsightPrompts = InsightPrompts(),
     val directory: InsightDirectory = InsightDirectory(),
     val blocks: InsightBlocks = InsightBlocks(),
+    val access: InsightAccess = InsightAccess(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
 )
+
+/** A host-computed public link access summary. */
+@Serializable
+data class InsightAccess(
+    val mode: String = "", val modeIcon: String = "", val modeTone: String = "",
+    val canWrite: Boolean = false, val form: Boolean = false, val count: String = "",
+    val collections: List<InsightAccessCollection> = emptyList(),
+    val invalid: List<String> = emptyList(),
+    val routing: String = "", val routingIcon: String = "", val routingTone: String = "",
+    val liveName: String = "", val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+@Serializable data class InsightAccessCollection(val name: String = "", val valid: Boolean = false)
 
 /** A host-computed transcript view of the last message. */
 @Serializable

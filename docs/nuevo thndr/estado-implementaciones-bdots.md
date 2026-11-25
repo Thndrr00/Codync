@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Acceso público (23 helpers + UI en 4 clientes)
+
+`bdots_access.rs` añade 23 helpers puros portados de `app-access.ts`, `app-store.ts`,
+`apps-runtime.ts` y `email-routing.ts`: modos de enlace, colecciones visibles, validación de
+nombres, limpieza de listas, solapamientos, acceso leído, callers, nombres de apps en vivo y
+estado de routing de correo. Reutiliza `bdots_more`, `bdots_desk`, `bdots_extra`. El endpoint
+`botInsights` añade el campo `access`; la sección «Public access» se muestra en los cuatro clientes.
+
 ## Bloques de mensaje (23 helpers + UI en 4 clientes)
 
 `bdots_blocks.rs` añade 23 helpers puros portados de `message-parts.ts` y `guards.ts`: bloques de

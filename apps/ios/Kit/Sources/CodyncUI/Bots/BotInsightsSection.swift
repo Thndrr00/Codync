@@ -30,6 +30,12 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let access = insights.access
+                    Text(access.mode).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Routing")): \(access.routing)").font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(access.collections, id: \.name) { item in
+                        Text(item.name).font(.footnote).foregroundStyle(item.valid ? Palette.text : Palette.danger)
+                    }
                     let blocks = insights.blocks
                     Text(blocks.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(blocks.origin).font(.footnote).foregroundStyle(Palette.tertiary)

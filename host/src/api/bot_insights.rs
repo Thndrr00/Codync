@@ -1111,6 +1111,32 @@ fn blocks_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Public link access: modes, collections and routing, from the latest bdots source.
+fn access_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_access as a;
+
+    let mode = a::LinkMode::View; // this host exposes read-only insights; no write surface here
+    let collections: Vec<String> = row.config.skills.clone();
+    let visible = a::visible_collections(mode, &[], &collections);
+    let managed = false; // email routing is owned by the host, not the bot's config
+
+    json!({
+        "mode": a::mode_label(mode),
+        "modeIcon": a::mode_icon(mode),
+        "modeTone": a::mode_tone(mode),
+        "canWrite": a::can_write(mode),
+        "form": a::is_form(mode),
+        "count": a::count_label(visible.len()),
+        "collections": visible.iter().map(|c| json!({"name": c, "valid": a::valid_collection(c)})).collect::<Vec<_>>(),
+        "invalid": a::invalid_collections(&collections),
+        "routing": a::routing_label(managed),
+        "routingIcon": a::routing_icon(managed),
+        "routingTone": a::routing_tone(managed),
+        "liveName": a::live_name("user", &row.id, "insights"),
+        "summary": a::summary(mode, visible.len(), 0, &[]).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1197,6 +1223,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "prompts": prompts_view(&row, routines.len()),
         "directory": directory_view(&row),
         "blocks": blocks_view(hub, bot),
+        "access": access_view(&row),
         "description": description,
         "model": model,
         "provider": provider,

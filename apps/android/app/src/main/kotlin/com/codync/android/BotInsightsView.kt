@@ -42,6 +42,14 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val access = insights.access
+            CardSection("Public access") {
+                row { Text(access.mode, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Routing", access.routing) }
+                for (item in access.collections) row {
+                    Text(item.name, style = Type.caption, color = if (item.valid) Palette.text else Palette.danger)
+                }
+            }
             val blocks = insights.blocks
             CardSection("Last message") {
                 row { Text(blocks.headline, style = Type.subheadline.semibold, color = Palette.text) }

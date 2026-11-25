@@ -66,6 +66,22 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let access = &data["access"];
+    if access.is_object() {
+        line(buf, &mut y, tr("Public access").into_owned(), t.bold.patch(t.panel));
+        let mode = access["mode"].as_str().unwrap_or("");
+        let routing = access["routing"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{mode} · {routing}"), t.text.patch(t.panel));
+        let items: Vec<String> = access["collections"]
+            .as_array()
+            .map(|a| a.iter().take(8).map(|c| format!("  {}", c["name"].as_str().unwrap_or(""))).collect())
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let blocks = &data["blocks"];
     if blocks.is_object() {
         line(buf, &mut y, tr("Last message").into_owned(), t.bold.patch(t.panel));

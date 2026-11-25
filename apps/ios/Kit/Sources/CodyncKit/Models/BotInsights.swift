@@ -32,9 +32,32 @@ public struct BotInsights: Decodable, Sendable {
     public let prompts: InsightPrompts
     public let directory: InsightDirectory
     public let blocks: InsightBlocks
+    public let access: InsightAccess
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed public link access summary.
+public struct InsightAccess: Decodable, Sendable {
+    public let mode: String
+    public let modeIcon: String
+    public let modeTone: String
+    public let canWrite: Bool
+    public let form: Bool
+    public let count: String
+    public let collections: [InsightAccessCollection]
+    public let invalid: [String]
+    public let routing: String
+    public let routingIcon: String
+    public let routingTone: String
+    public let liveName: String
+    public let summary: [InsightSummaryRow]
+}
+
+public struct InsightAccessCollection: Decodable, Sendable {
+    public let name: String
+    public let valid: Bool
 }
 
 /// A host-computed transcript view of the last message.
