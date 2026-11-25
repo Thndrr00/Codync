@@ -11,6 +11,7 @@ import {
   NO_ROSTER_VIEW_FILTER, rosterSectionMark, rosterSectionTree, rosterViewFilterIsSet, toggleRosterSection,
   type RosterSectionNode, type RosterViewFilter,
 } from '../lib/roster-view-filter'
+import { rosterTab, selectRosterTab, type RosterTabCounts } from '../lib/roster-tabs'
 import { useTr } from '../lib/use-language'
 import type { RosterItem } from '../store/app-model'
 import { RosterQuery, openRosterHit } from '../store/roster-query'
@@ -27,7 +28,22 @@ export function RosterControls({ query, setQuery, viewFilter, setViewFilter, gro
   /** Every bot the roster can show, for the filter's sections. */
   allItems: RosterItem[]
 }) {
+  // Tabs and the filter menu read the same unread tallies (OpenBot 0.70.0's roster tabs).
+  const counts = useMemo<RosterTabCounts>(() => {
+    const folders: Record<string, number> = {}
+    let all = 0
+    let unread = 0
+    for (const item of allItems) {
+      const n = Math.max(0, item.bot.unread ?? 0)
+      all += n
+      if (n > 0) unread += n
+      const section = item.bot.section ?? ''
+      folders[section] = (folders[section] ?? 0) + n
+    }
+    return { all, unread, folders }
+  }, [allItems])
   return <VStack gap={8} className="roster-controls">
+    <RosterTabs counts={counts} filter={viewFilter} onChange={setViewFilter} />
     <HStack gap={6} className="roster-search-row">
       <input className="roster-search" aria-label="Filter bots by name, project or agent" placeholder="Name, project or agent" value={query} onChange={(event) => setQuery(event.target.value)} />
       <RosterFilterButton filter={viewFilter} onChange={setViewFilter} items={allItems} />
@@ -37,6 +53,23 @@ export function RosterControls({ query, setQuery, viewFilter, setViewFilter, gro
       {active ? <IconButton title={`Stop all (${active})`} icon="stop.fill" onClick={stopAll} /> : null}
     </HStack>
   </VStack>
+}
+
+/** All / Unread / folders as tabs above the search, with each folder's unread as a badge. */
+function RosterTabs({ counts, filter, onChange }: { counts: RosterTabCounts; filter: RosterViewFilter; onChange: (value: RosterViewFilter) => void }) {
+  const tr = useTr()
+  const { tabs, selected } = rosterTab(counts, filter)
+  return <div className="roster-tabs" role="tablist" aria-label={tr('Roster views')}>
+    {tabs.map((tab) => (
+      <button key={tab.id} role="tab" aria-selected={tab.id === selected}
+        className={`roster-tab${tab.id === selected ? ' on' : ''}`}
+        title={tab.id === 'all' || tab.id === 'unread' ? tr(tab.label) : tab.id}
+        onClick={() => onChange(selectRosterTab(filter, tab.id))}>
+        {tab.id === 'all' || tab.id === 'unread' ? tr(tab.label) : tab.label}
+        {tab.badge > 0 ? <span className="unread-badge" aria-label={`${tab.badge} unread`}>{tab.badge}</span> : null}
+      </button>
+    ))}
+  </div>
 }
 
 /** The filter beside the search (OpenBot 0.73.0's sidebar filter): a dot shows that one is set. */

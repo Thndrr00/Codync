@@ -151,6 +151,7 @@
   min-width: 0;
   transition: background-color var(--hover);
 }
+.market-row-error-line { color: var(--danger, var(--secondary)); overflow-wrap: anywhere; }
 .market-row.openable:hover {
   background: color-mix(in srgb, var(--bubble-agent) 60%, transparent);
 }

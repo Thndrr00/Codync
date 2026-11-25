@@ -1,4 +1,6 @@
 /* Settings (ChatGPT's desktop settings): a sidebar of pages and B&W cards. */
+.settings-link-example { align-items: baseline; padding: 6px 0; }
+.settings-link-example + .settings-link-example { border-top: 1px solid var(--separator, rgba(127,127,127,.18)); }
 .settings {
   display: flex;
   height: 100%;

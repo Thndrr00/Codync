@@ -1,7 +1,7 @@
 import { FileDownloadCard } from './FileDownloadCard'
 import { ArtifactCard } from '../library/ArtifactCard'
 import { memo, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { groupBotReactions, isGroup, isReplyable, type Bot, type BotApp, type Entry, type Person, type ReplyQuote } from '@shared/models'
+import { groupBotReactions, isGroup, isReplyable, quoteOf, type Bot, type BotApp, type Entry, type Person, type ReplyQuote } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { ComputerCard } from '../../components/ComputerCard'
 import { Button, IconButton } from '../../components/Controls'
@@ -10,6 +10,7 @@ import { AnchoredMenu, useContextMenu, type MenuItem, type ReactionPick } from '
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { messagePreview } from '../../lib/message-preview'
+import { selectionActions } from '../../lib/selection-actions'
 import { messageLink } from './message-link'
 import { MemberQuestionCard } from './MemberQuestionCard'
 import { useTr } from '../../lib/use-language'
@@ -39,6 +40,19 @@ export function quoteEntry(store: BotStore, entry: Entry) {
   const current = store.composerDrafts.get(entry.botId)
   const quoted = quoteText(text)
   store.composerDrafts.set(entry.botId, current ? `${current}\n${quoted}\n\n` : `${quoted}\n\n`)
+}
+
+/**
+ * Quote / Explain / Improve / Describe for text highlighted in this message (a table cell or a
+ * selection containing a link). Each answer goes back to the side thread the entry belongs to.
+ */
+function selectedTextItems(store: BotStore, entry: Entry): MenuItem[] {
+  const selected = window.getSelection()?.toString() ?? ''
+  return selectionActions(selected, entry.threadId ?? null).map((action) => ({
+    title: action.label,
+    icon: action.icon,
+    action: () => store.send(action.prompt, entry.botId, { thread: action.thread, replyTo: quoteOf(entry) }),
+  }))
 }
 
 /** Whether a message carries something to send on to another chat. */
@@ -419,6 +433,7 @@ export function UserBubble({ entry, chat, reply, forward, branch }: { entry: Ent
   const status = entry.data.status
   const copy = () => entry.data.text && window.codync.app.copy(entry.data.text)
   const copyLink = () => window.codync.app.copy(messageLink(entry.botId, entry.id))
+  const selectionItems = selectedTextItems(store, entry)
   const bubble = yourBubble(chat, yourBubbles)
   return (
     <div className="message user" title={fullDate.format(entry.createdAt)} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
@@ -433,6 +448,7 @@ export function UserBubble({ entry, chat, reply, forward, branch }: { entry: Ent
               { title: 'Copy', icon: 'square.on.square', action: copy },
               { title: 'Copy link', icon: 'link', action: copyLink },
               { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+              ...selectionItems.map((item, i) => i === 0 ? { ...item, divider: true } : item),
               { title: entry.data.pinned ? 'Unpin' : 'Pin', icon: entry.data.pinned ? 'pin.slash' : 'pin', action: () => store.setPinnedMessage(entry, !entry.data.pinned) },
               { title: 'Bookmark', icon: 'bookmark', action: () => void store.saveBookmark(entry.botId, entry.id, entry.data.text ?? '', '', entry.data.author ?? 'user', entry.threadId ?? null) },
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
@@ -484,6 +500,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
   const [previewing, setPreviewing] = useState(false)
   const copy = () => entry.data.text && window.codync.app.copy(entry.data.text)
   const copyLink = () => window.codync.app.copy(messageLink(entry.botId, entry.id))
+  const selectionItems = selectedTextItems(store, entry)
   // A reply carrying a visual page (an HTML artifact) can show an inert preview before it is opened.
   const card = entry.data.artifact
   const html = card ? store.artifacts.html.get(card.id) : null
@@ -499,6 +516,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
             { title: 'Copy', icon: 'square.on.square', action: copy },
             { title: 'Copy link', icon: 'link', action: copyLink },
             { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+            ...selectionItems.map((item, i) => i === 0 ? { ...item, divider: true } : item),
             { title: entry.data.pinned ? 'Unpin' : 'Pin', icon: entry.data.pinned ? 'pin.slash' : 'pin', action: () => store.setPinnedMessage(entry, !entry.data.pinned) },
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(branch ? [{ title: 'Branch from here', icon: 'arrow.triangle.branch', action: branch }] : []),

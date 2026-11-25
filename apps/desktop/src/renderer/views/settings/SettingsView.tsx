@@ -9,6 +9,7 @@ import { useDismiss } from '../../components/Overlay'
 import { HStack, IconSlot, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
+import { linkOpenTarget } from '../../lib/link-open-target'
 import { appLanguages, languageTitle } from '../../lib/l10n'
 import { useTr } from '../../lib/use-language'
 import { DEFAULT_TEXT_SIZE, prefs, TEXT_SIZES, usePref } from '../../lib/prefs'
@@ -52,6 +53,14 @@ import { KeyboardSettings } from './KeyboardSettings'
 export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'keyboard' | 'diagnostics' | 'n8n'
 
 const thisComputer = isMac ? 'This Mac' : 'This computer'
+
+/** The four kinds of link a chat can show, with the decision each one follows. */
+const LINK_EXAMPLES = [
+  { href: 'https://example.com', label: 'Web addresses' },
+  { href: 'codync://marketplace/apps/example', label: 'Codync links' },
+  { href: '/Users/me/page.html', label: 'Local pages and PDFs' },
+  { href: '/Users/me/notes.docx', label: 'Other files' },
+] as const
 const pages: { id: SettingsPage; title: string; label?: string; group: string; icon: string }[] = [
   { id: 'general', title: 'General', group: 'Personal', icon: 'gearshape' },
   { id: 'computers', title: 'Computers & devices', label: 'Computers', group: thisComputer, icon: 'desktopcomputer' },
@@ -303,6 +312,14 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <Switch on={thinkingDetails} onChange={setThinkingDetails}>
           Show thinking details
         </Switch>
+      </CardSection>
+      <CardSection title="Links in messages" footer="What a click opens, so you know before you click.">
+        {LINK_EXAMPLES.map(({ href, label }) => (
+          <HStack key={href} gap={8} className="settings-link-example">
+            <Text size="subheadline" tone="text" grow>{tr(label)}</Text>
+            <Text size="caption" tone="secondary">{tr(linkOpenTarget(href).detail)}</Text>
+          </HStack>
+        ))}
       </CardSection>
       <SendingSettings />
       <McpToolPolicySection />

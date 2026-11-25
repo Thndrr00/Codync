@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { BotImport, type ImportPlan, type ImportResult } from '../../store/bot-import'
 import type { BotStore } from '../../store/bot-store'
 import { useModel } from '../../lib/observable'
+import { importValidation } from '../../lib/import-validation'
 import { useTr } from '../../lib/use-language'
 import { Button, CardForm, CardSection, RowLabel, Spinner, Switch } from '../../components/Controls'
 import { ModalHeader, Sheet, useDismiss } from '../../components/Overlay'
@@ -113,20 +114,31 @@ function Done({ result }: { result: ImportResult }) {
 function Footer({ model }: { model: BotImport }) {
   const dismiss = useDismiss()
   const step = model.step
+  // The exact reason stays in this window: a failed pick doesn't silently close the sheet.
+  const reason = step.kind === 'review'
+    ? importValidation({
+      bots: step.plan.bots.map((bot) => bot.key),
+      picked: step.plan.bots.filter((bot) => model.picked('bot', bot.key)).map((bot) => bot.key),
+      busy: model.busy,
+    })
+    : null
   return (
-    <HStack gap={8} className="create-footer">
-      {model.busy ? <Spinner /> : null}
-      <Spacer />
-      {step.kind === 'done' ? (
-        <Button onClick={dismiss}>Done</Button>
-      ) : (
-        <>
-          <Button kind="secondary" onClick={dismiss} disabled={model.busy}>Cancel</Button>
-          {step.kind === 'start' ? <Button onClick={() => void model.choose()} disabled={model.busy}>Choose file…</Button> : null}
-          {step.kind === 'review' ? <Button onClick={() => void model.importPicked()} disabled={!model.canImport}>Import</Button> : null}
-        </>
-      )}
-    </HStack>
+    <VStack gap={6}>
+      {reason ? <Text size="caption" tone="secondary" className="fade-in">{reason}</Text> : null}
+      <HStack gap={8} className="create-footer">
+        {model.busy ? <Spinner /> : null}
+        <Spacer />
+        {step.kind === 'done' ? (
+          <Button onClick={dismiss}>Done</Button>
+        ) : (
+          <>
+            <Button kind="secondary" onClick={dismiss} disabled={model.busy}>Cancel</Button>
+            {step.kind === 'start' ? <Button onClick={() => void model.choose()} disabled={model.busy}>Choose file…</Button> : null}
+            {step.kind === 'review' ? <Button onClick={() => void model.importPicked()} disabled={reason !== null}>Import</Button> : null}
+          </>
+        )}
+      </HStack>
+    </VStack>
   )
 }
 

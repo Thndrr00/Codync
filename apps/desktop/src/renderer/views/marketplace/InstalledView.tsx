@@ -11,6 +11,7 @@ import { AppLogo, FormSheet, ItemGrid, ItemRow, MarketSection, ScreenHeader, Ser
 import { SkillSheet, type SkillRef } from './SkillSheet'
 import { McpToolsSheet } from './McpToolsSheet'
 import { usePlugins } from './plugins'
+import { mcpFailureLines } from './mcp-failure-lines'
 
 export function InstalledView({ back, connectorId }: { back: () => void; connectorId?: string }) {
   const store = useStore()
@@ -58,7 +59,7 @@ export function InstalledView({ back, connectorId }: { back: () => void; connect
                     <ItemRow
                       key={c.id}
                       title={c.name}
-                      subtitle={c.lastFailure ? `⚠ ${c.lastFailure.kind.toUpperCase()}: ${c.lastFailure.message}` : needsSignIn(c) ? 'Sign in so bots can use it' : (c.command ?? c.url ?? c.description)}
+                      subtitle={c.lastFailure ? mcpFailureLines(c.lastFailure) : needsSignIn(c) ? 'Sign in so bots can use it' : (c.command ?? c.url ?? c.description)}
                       icon={c.kind === 'composio' ? <AppLogo url={c.logo} name={c.name} /> : <ServiceLogo name={c.name} registryName={c.registryName} />}
                       trailing={(
                         <>

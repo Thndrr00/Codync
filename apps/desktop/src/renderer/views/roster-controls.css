@@ -1,4 +1,13 @@
 .roster-controls { padding: 8px 12px 12px; }
+/* Roster tabs: All, Unread and the folders with bots. The badge is unread messages, not rows. */
+.roster-tabs { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.roster-tabs::-webkit-scrollbar { display: none; }
+.roster-tab { display: inline-flex; align-items: center; gap: 5px; flex: none; min-height: 28px; padding: 4px 9px; border-radius: 9px; color: var(--secondary); font: inherit; white-space: nowrap; transition: background-color var(--hover), color var(--hover); }
+.roster-tab:hover { color: var(--text); background: var(--surface); }
+.roster-tab.on { color: var(--text); background: var(--surface); }
+.roster-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.roster-tab .unread-badge { min-width: 16px; height: 16px; padding: 0 4px; font-size: var(--text-caption2, 10px); }
+@media (prefers-reduced-motion: reduce) { .roster-tab { transition: none; } }
 .roster-search-row { min-width: 0; }
 .roster-search-row .roster-search { flex: 1; width: auto; }
 .roster-search { width: 100%; min-width: 0; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; }

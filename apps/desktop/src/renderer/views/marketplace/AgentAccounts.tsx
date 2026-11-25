@@ -7,6 +7,7 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { useTr } from '../../lib/use-language'
 import { errorText } from './market-models'
+import { accountAdd, signInFailureReason } from '../../lib/account-add'
 
 type RotationMode = 'manual' | 'roundRobin' | 'onRateLimit'
 
@@ -94,7 +95,7 @@ export function AgentAccounts({ backend, onChanged }: { backend: Backend; onChan
       setAccounts((current) => [...current.filter((item) => item.id !== account.id), row])
       onChanged()
     } catch (cause) {
-      setError(`Couldn't add the account: ${errorText(cause)}`)
+      setError(`Couldn't add the account: ${signInFailureReason(errorText(cause))}`)
     }
     setAdding(false)
   }
@@ -131,6 +132,9 @@ export function AgentAccounts({ backend, onChanged }: { backend: Backend; onChan
     ? (backend.email ? `Signed in as ${backend.email} on ${host}.` : `Signed in on ${host}.`)
     : backend.signedIn === false ? `Not signed in on ${host}.`
     : `Couldn't tell whether ${host} is signed in.`
+
+  // A second Gemini account is added with a code; the page keeps the first account signed in.
+  const addingAccount = accountAdd({ backendId: backend.id, hasFirstAccount: backend.signedIn === true || accounts.length > 0, adding })
 
   const rotationDetail = rotation.mode === 'roundRobin'
     ? 'A bot without a pinned account uses the next available account each turn.'
@@ -206,13 +210,13 @@ export function AgentAccounts({ backend, onChanged }: { backend: Backend; onChan
       ))}
       <HStack gap={10}>
         <VStack grow gap={2}>
-          <Text size="body" weight="medium" tone="text">{tr('Add account')}</Text>
+          <Text size="body" weight="medium" tone="text">{tr(addingAccount.label)}</Text>
           <Text size="subheadline" tone="secondary">
-            {adding ? `Finish signing in in the browser on ${host}...` : 'Sign in to another account without signing out of this one.'}
+            {adding ? `Finish signing in in the browser on ${host}...` : tr(addingAccount.detail)}
           </Text>
         </VStack>
         <Button disabled={busy} onClick={() => { void add() }}>
-          {adding ? 'Signing in...' : '+ ' + tr('Add account')}
+          {adding ? 'Signing in...' : '+ ' + tr(addingAccount.label)}
         </Button>
       </HStack>
       {error ? <Text size="caption" tone="attention" className="selectable">{error}</Text> : null}

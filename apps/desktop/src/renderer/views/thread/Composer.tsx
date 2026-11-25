@@ -4,7 +4,8 @@ import { artifactDraftKey, artifactQuote, type Artifact } from '@shared/artifact
 import { isGroup, isWorkingIn, quoteOf, type Bot, type Entry } from '@shared/models'
 import type { PickedFile } from '@shared/ipc'
 import { Icon } from '../../components/Icon'
-import { DropdownMenu, IconButton } from '../../components/Controls'
+import { Button, DropdownMenu, IconButton } from '../../components/Controls'
+import { Text } from '../../components/Text'
 import { RecordingPill } from '../../components/RecordingPill'
 import { Sheet, usePresence } from '../../components/Overlay'
 import { VoiceChatSettingsView } from '../settings/VoiceChatSettingsView'
@@ -28,6 +29,7 @@ import { DictationEngineMenu } from './DictationEngineMenu'
 import { mentionSuggestions, returnMentions, withMention } from './mentions'
 import { builtInCommand, returnRuns, slashCommands, slashQuery, type SlashCommand } from './slash-commands'
 import { useVoiceShortcut } from './voice-shortcut-keys'
+import { pageNotice } from '../../lib/page-notice'
 
 type Trailing = 'interrupt' | 'stop' | 'call' | 'send'
 
@@ -37,7 +39,7 @@ type Trailing = 'interrupt' | 'stop' | 'call' | 'send'
  * message it quotes sits at the top of the box and goes out with the next send. Under an artifact, `about` is the
  * artifact: the box keeps a draft of its own, and every message replies to the artifact's card.
  */
-export function Composer({ botId, thread = null, reply = null, about = null, cancelReply, onCall, onInterrupt }: {
+export function Composer({ botId, thread = null, reply = null, about = null, cancelReply, onCall, onInterrupt, openPage }: {
   botId: string
   /** A document's side conversation (`doc:<id>`) the message goes to, instead of the chat. */
   thread?: string | null
@@ -48,15 +50,17 @@ export function Composer({ botId, thread = null, reply = null, about = null, can
   onCall?: (() => void) | null
   /** Interrupts the bot while it is speaking in a voice call. */
   onInterrupt?: (() => void) | null
+  /** Opens a page artifact the agent just published; web links use the system browser. */
+  openPage?: (artifactId: string) => void
 }) {
   const store = useStore()
   // Remount transient editor state (selection, attachments, IME) when its destination changes.
   return <DestinationComposer key={JSON.stringify([store.contextId, store.computer.id, botId, thread, about?.id])}
-    botId={botId} thread={thread} about={about} reply={reply} cancelReply={cancelReply} onCall={onCall} onInterrupt={onInterrupt} />
+    botId={botId} thread={thread} about={about} reply={reply} cancelReply={cancelReply} onCall={onCall} onInterrupt={onInterrupt} openPage={openPage} />
 }
 
-function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall, onInterrupt }: {
-  botId: string; thread: string | null; about: Artifact | null; reply: Entry | null; cancelReply?: () => void; onCall?: (() => void) | null; onInterrupt?: (() => void) | null
+function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall, onInterrupt, openPage }: {
+  botId: string; thread: string | null; about: Artifact | null; reply: Entry | null; cancelReply?: () => void; onCall?: (() => void) | null; onInterrupt?: (() => void) | null; openPage?: (artifactId: string) => void
 }) {
   const store = useStore()
   const tr = useTr()
@@ -83,6 +87,8 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   const canAttach = !!bot && !terminal
 
   const members = bot && isGroup(bot) ? store.members(bot) : []
+  // The page the agent just put here: the notice stays with this conversation, including side threads.
+  const notice = pageNotice(store.chatEntries(botId).filter((e) => e.kind === 'agent' && (e.threadId ?? null) === thread).at(-1) ?? null)
 
   const name = bot?.name ?? ''
   const placeholder = terminal
@@ -234,6 +240,16 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
 
   return (
     <VStack>
+      <ComposerReveal open={notice !== null}>
+        {notice ? (
+          <HStack gap={8} className="composer-page-notice">
+            <Text size="caption" tone="secondary" truncate grow>{tr('The agent opened a page')}</Text>
+            <Button kind="secondary" onClick={() => /^https?:\/\//i.test(notice.href) ? window.codync.app.openExternal(notice.href) : openPage?.(notice.href)}>
+              {tr(notice.label)}
+            </Button>
+          </HStack>
+        ) : null}
+      </ComposerReveal>
       {/* The messages waiting behind the running turn, with what can be done with the next one. */}
       <QueuedStrip botId={botId} thread={thread} />
       <div

@@ -71,7 +71,8 @@ export function MarketRow({ title, subtitle, added, busy = false, addLabel = 'Ad
 /** An `ItemGrid` row: icon, title and subtitle, then `trailing`; `onOpen` makes the whole row a button. */
 export function ItemRow({ title, subtitle, icon, trailing, onOpen }: {
   title: string
-  subtitle: string
+  /** One line, or a wrapped error where every line is shown. */
+  subtitle: string | string[]
   icon: ReactNode
   /** Buttons here stop the click so it doesn't also open the row. */
   trailing?: ReactNode
@@ -93,7 +94,9 @@ export function ItemRow({ title, subtitle, icon, trailing, onOpen }: {
       <div className="market-row-icon">{icon}</div>
       <VStack gap={2} grow>
         <Text size="body" weight="medium" tone="text" truncate title={title}>{title}</Text>
-        <Text size="subheadline" tone="secondary" truncate title={subtitle}>{subtitle}</Text>
+        {Array.isArray(subtitle)
+          ? subtitle.map((line, i) => <Text key={i} size="subheadline" tone="secondary" className="market-row-error-line">{line}</Text>)
+          : <Text size="subheadline" tone="secondary" truncate title={subtitle}>{subtitle}</Text>}
       </VStack>
       {trailing}
     </div>

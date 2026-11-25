@@ -38,6 +38,7 @@ import { registerErrorReports } from './error-reports'
 import { registerRendererRecovery } from './renderer-recovery'
 import { reportHostSetupFailure } from './analytics'
 import { launchAtLogin, openedAtLogin, setLaunchAtLogin, updateLoginItem } from './login-item'
+import { splashDelay } from './splash-visible.ts'
 
 /** macOS's user-facing computer name, else the host name. */
 function computerName() {
@@ -92,6 +93,7 @@ function openChat() {
     chat.focus()
     return chat
   }
+  const launchStarted = Date.now()
   chat = new BrowserWindow({
     width: 1100,
     height: 760,
@@ -103,8 +105,18 @@ function openChat() {
     titleBarStyle: isMac ? 'hidden' : 'default',
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true },
   })
-  // CODYNC_SHOW_INACTIVE: development and UI checks open the window without taking focus.
-  chat.on('ready-to-show', () => (process.env.CODYNC_SHOW_INACTIVE ? chat?.showInactive() : chat?.show()))
+  // The launch surface stays up for at least 1.5 s (splash-min-shown); a slower renderer shows the
+  // workspace as soon as it is ready, with no extra wait on top of its own load.
+  chat.on('ready-to-show', () => {
+    const wait = splashDelay(Date.now() - launchStarted, true)
+    const reveal = () => {
+      if (!chat || chat.isDestroyed()) return
+      if (process.env.CODYNC_SHOW_INACTIVE) chat.showInactive()
+      else chat.show()
+    }
+    if (wait > 0) setTimeout(reveal, wait)
+    else reveal()
+  })
   // Closing hides: the window keeps the stores (and the menu bar's data) alive.
   chat.on('close', (e) => quitLifecycle.closeToBackground(e, () => chat?.hide()))
   chat.on('closed', () => (chat = null))

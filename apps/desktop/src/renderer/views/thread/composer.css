@@ -1,4 +1,6 @@
 /* The box and its attachments. */
+/* The agent's page, offered above the box in the conversation it came from. */
+.composer-page-notice { align-items: center; padding: 4px 2px; }
 .file-chip {
   display: flex;
   align-items: center;
