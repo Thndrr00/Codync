@@ -25,9 +25,31 @@ data class BotInsights(
     val workspace: InsightWorkspace = InsightWorkspace(),
     val session: InsightSession = InsightSession(),
     val advice: InsightAdvice = InsightAdvice(),
+    val digest: InsightDigest = InsightDigest(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed executive digest for one bot. */
+@Serializable
+data class InsightDigest(
+    val headline: String = "",
+    val oneLine: String = "",
+    val label: String = "",
+    val tone: String = "",
+    val score: Int = 0,
+    val areas: String = "",
+    val onTrack: Int = 0,
+    val attention: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val highlights: List<InsightDigestStat> = emptyList(),
+    val stats: List<InsightDigestStat> = emptyList(),
+)
+
+@Serializable data class InsightDigestStat(
+    val id: String = "", val label: String = "", val value: String = "",
+    val icon: String = "", val tone: String = "",
 )
 
 /** A host-computed, prioritised suggestion list for one bot. */

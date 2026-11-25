@@ -754,6 +754,53 @@ fn advice_view(row: &crate::store::BotRow, routines: usize, used: u64, limit: Op
     })
 }
 
+/// Executive digest: a few lines built from values already computed above, no new I/O.
+fn digest_view(
+    health_score: u32,
+    steps: usize,
+    week_total: usize,
+    week_trend: &str,
+    routines_active: usize,
+    routines_total: usize,
+    memory_score: u32,
+    sync_score: u32,
+    advice_count: usize,
+) -> Value {
+    use crate::bdots_digest as d;
+
+    let stats = d::build_stats(
+        health_score,
+        steps,
+        week_total,
+        week_trend,
+        routines_active,
+        routines_total,
+        memory_score,
+        sync_score,
+        advice_count,
+    );
+    let score = d::overall_score(&stats);
+    json!({
+        "headline": d::digest_headline(&stats),
+        "oneLine": d::one_line(&stats),
+        "label": d::overall_label(score),
+        "tone": d::overall_tone(score),
+        "score": score,
+        "areas": d::count_label(&stats),
+        "onTrack": d::good_count(&stats),
+        "attention": d::attention_count(&stats),
+        "summary": d::summary(&stats).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "highlights": d::highlights(&stats, 3).iter().map(|s| json!({"id": s.id, "label": s.label, "value": s.value, "icon": s.icon, "tone": s.tone})).collect::<Vec<_>>(),
+        "stats": d::sorted(&stats).iter().map(|s| json!({
+            "id": s.id,
+            "label": s.label,
+            "value": s.value,
+            "icon": s.icon,
+            "tone": s.tone,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -800,8 +847,37 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         })
         .collect();
 
+    let digest = digest_view(
+        crate::bdots_health::health_score(&crate::bdots_health::build_checks(
+            &row.config.name,
+            &row.config.description,
+            row.config.model.as_deref().unwrap_or(""),
+            &row.config.cwd,
+            &row.config.skills,
+            routines.len(),
+            used,
+            limit,
+            &row.config.connectors,
+            &format!("bot_{}", bot_key(&row.id)),
+            &bot_key(&row.id),
+        )),
+        used as usize,
+        activity_view(hub, bot, now)["steps"].as_u64().unwrap_or(0) as usize,
+        0,
+        "steady",
+        routines.iter().filter(|r| r["enabled"] == true).count(),
+        routines.len(),
+        crate::bdots_memory::memory_score(row.config.shared_memory, row.config.harness_memory, &row.config.skills),
+        crate::bdots_session::sync_score(row.rev, row.read_rev, row.deleted),
+        advice_view(&row, routines.len(), used, limit)["total"]
+            .as_str()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(0),
+    );
+
     Ok(json!({
         "botId": bot,
+        "digest": digest,
         "description": description,
         "model": model,
         "provider": provider,

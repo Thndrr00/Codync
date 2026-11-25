@@ -42,6 +42,15 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val digest = insights.digest
+            CardSection("At a glance") {
+                row { Text(digest.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(digest.headline, style = Type.caption, color = Palette.secondary) }
+                row { Text(digest.oneLine, style = Type.caption, color = Palette.tertiary) }
+                for (item in digest.stats) row {
+                    Text("${item.label}: ${item.value}", style = Type.caption, color = Palette.secondary)
+                }
+            }
             val advice = insights.advice
             CardSection("Suggestions") {
                 row { Text(advice.label, style = Type.subheadline.semibold, color = Palette.text) }

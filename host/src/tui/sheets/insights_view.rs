@@ -66,6 +66,28 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let digest = &data["digest"];
+    if digest.is_object() {
+        line(buf, &mut y, tr("At a glance").into_owned(), t.bold.patch(t.panel));
+        let label = digest["label"].as_str().unwrap_or("");
+        let headline = digest["headline"].as_str().unwrap_or("");
+        let one_line = digest["oneLine"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, one_line.to_owned(), t.tertiary.patch(t.panel));
+        let stats: Vec<String> = digest["stats"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|s| format!("  {}: {}", s["label"].as_str().unwrap_or(""), s["value"].as_str().unwrap_or("")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for stat_line in stats {
+            line(buf, &mut y, stat_line, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let advice = &data["advice"];
     if advice.is_object() {
         line(buf, &mut y, tr("Suggestions").into_owned(), t.bold.patch(t.panel));

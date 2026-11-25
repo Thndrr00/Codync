@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Resumen ejecutivo (23 helpers + UI en 4 clientes)
+
+`bdots_digest.rs` añade 23 helpers puros que condensan el estado del bot en siete cifras (salud,
+trabajo reciente, semana, rutinas, memoria, sincronización y sugerencias), con formatos, iconos,
+tonos, puntuación global, titular, orderedación y una línea resumen. Reutiliza `bdots_health`,
+`bdots_advice`, `bdots_week`, `bdots_session`, `bdots_memory` y `bdots_text`. El endpoint
+`botInsights` añade el campo `digest`, construido solo desde datos que el host ya calcula; la
+sección «At a glance» se muestra en los cuatro clientes.
+
 ## Recomendaciones (23 helpers + UI en 4 clientes)
 
 `bdots_advice.rs` añade 23 helpers puros que convierten los hallazgos existentes del bot en una

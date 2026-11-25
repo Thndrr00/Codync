@@ -30,6 +30,16 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let digest = insights.digest
+                    Text(digest.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(digest.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text(digest.oneLine).font(.footnote).foregroundStyle(Palette.tertiary)
+                    ForEach(digest.stats, id: \.id) { item in
+                        HStack(spacing: 6) {
+                            Text(item.label).font(.footnote).foregroundStyle(Palette.secondary)
+                            Text(item.value).font(.footnote).foregroundStyle(Palette.accent)
+                        }
+                    }
                     let advice = insights.advice
                     Text(advice.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(advice.headline).font(.footnote).foregroundStyle(Palette.secondary)

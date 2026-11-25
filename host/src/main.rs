@@ -15,6 +15,7 @@ mod bdots_advice;
 mod bdots_connectors;
 mod bdots_cron;
 mod bdots_desk;
+mod bdots_digest;
 mod bdots_extra;
 mod bdots_fallbacks;
 mod bdots_health;
