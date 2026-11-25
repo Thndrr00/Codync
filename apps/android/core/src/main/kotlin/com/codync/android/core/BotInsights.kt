@@ -15,9 +15,36 @@ data class BotInsights(
     val profile: InsightProfile = InsightProfile(),
     val week: InsightWeek = InsightWeek(),
     val routineSummary: InsightRoutineSummary = InsightRoutineSummary(),
+    val library: InsightLibrary = InsightLibrary(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed summary of one bot's skill library. */
+@Serializable
+data class InsightLibrary(
+    val headline: String = "",
+    val tone: String = "",
+    val count: String = "",
+    val total: Int = 0,
+    val distinct: Int = 0,
+    val duplicates: List<String> = emptyList(),
+    val hasScript: Boolean = false,
+    val hasReference: Boolean = false,
+    val hasAsset: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val kinds: List<InsightLibraryKind> = emptyList(),
+    val skills: List<InsightLibrarySkill> = emptyList(),
+)
+
+@Serializable data class InsightLibraryKind(
+    val kind: String = "", val count: Int = 0, val icon: String = "",
+    val tone: String = "", val percent: Int = 0, val bar: String = "",
+)
+@Serializable data class InsightLibrarySkill(
+    val name: String = "", val kind: String = "", val icon: String = "",
+    val tone: String = "", val detail: String = "",
 )
 
 /** A host-computed summary of one bot's routines. */

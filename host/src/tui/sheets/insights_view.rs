@@ -66,6 +66,39 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let library = &data["library"];
+    if library.is_object() {
+        line(buf, &mut y, tr("Skill library").into_owned(), t.bold.patch(t.panel));
+        let headline = library["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, headline.to_owned(), t.text.patch(t.panel));
+        let kinds: Vec<String> = library["kinds"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|k| {
+                        format!(
+                            "  {} {} {}",
+                            k["kind"].as_str().unwrap_or(""),
+                            k["bar"].as_str().unwrap_or(""),
+                            k["count"].as_u64().unwrap_or(0)
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for kind in kinds {
+            line(buf, &mut y, kind, t.secondary.patch(t.panel));
+        }
+        let skills: Vec<String> = library["skills"]
+            .as_array()
+            .map(|a| a.iter().take(8).map(|s| format!("  • {}", s["name"].as_str().unwrap_or(""))).collect())
+            .unwrap_or_default();
+        for skill in skills {
+            line(buf, &mut y, skill, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let schedule = &data["routineSummary"];
     if schedule.is_object() {
         line(buf, &mut y, tr("Schedule").into_owned(), t.bold.patch(t.panel));

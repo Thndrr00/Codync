@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Biblioteca de skills (21 helpers + UI en 4 clientes)
+
+`bdots_library.rs` añade 21 helpers puros para la biblioteca de skills: títulos, detectores de
+script/referencia/asset, conteo y porcentajes por tipo, barras, duplicados, títulos distintos,
+ordenación, "más útiles", titular, tono y ensamblaje de líneas. Reutiliza `bdots_desk`,
+`bdots_text` y `bdots_more`. El endpoint `botInsights` añade el campo `library`, construido desde
+`config.skills`, y la sección «Skill library» se muestra en los cuatro clientes.
+
 ## Resumen de rutinas (21 helpers + UI en 4 clientes)
 
 `bdots_routines.rs` añade 21 helpers puros que resumen las rutinas de un bot: activas/pausadas,

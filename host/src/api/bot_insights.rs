@@ -310,6 +310,54 @@ fn routine_summary_view(routines: &[Value], now: i64) -> Value {
     })
 }
 
+/// Skill library summary: reuse the bot's configured skills, no second source of truth.
+fn library_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_library as l;
+
+    let skills = &row.config.skills;
+    let lines: Vec<Value> = l::sorted(skills)
+        .into_iter()
+        .map(|s| {
+            let line = l::skill_line(s);
+            json!({
+                "name": line.name,
+                "kind": line.kind,
+                "icon": line.icon,
+                "tone": line.tone,
+                "detail": line.detail,
+            })
+        })
+        .collect();
+    let kinds: Vec<Value> = l::count_kinds(skills)
+        .into_iter()
+        .map(|(kind, count)| {
+            json!({
+                "kind": kind,
+                "count": count,
+                "icon": l::kind_icon(kind),
+                "tone": l::kind_tone(kind),
+                "percent": l::kind_percent(count, skills.len()),
+                "bar": l::kind_bar(count, skills.len(), 8),
+            })
+        })
+        .collect();
+
+    json!({
+        "headline": l::library_headline(skills),
+        "tone": l::library_tone(skills),
+        "count": l::count_label(skills),
+        "total": l::total_skills(skills),
+        "distinct": l::distinct_skills(skills),
+        "duplicates": l::duplicates(skills),
+        "hasScript": l::has_script(skills),
+        "hasReference": l::has_reference(skills),
+        "hasAsset": l::has_asset(skills),
+        "summary": l::summary(skills).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "kinds": kinds,
+        "skills": lines,
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -367,6 +415,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "profile": profile_view(&row, routines.len()),
         "week": week_view(hub, bot, now),
         "routineSummary": routine_summary_view(&routines, now),
+        "library": library_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

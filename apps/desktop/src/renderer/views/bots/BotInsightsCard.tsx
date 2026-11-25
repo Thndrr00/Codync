@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,31 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Skill library')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(library.tone)}>{library.headline}</Text>
+        {library.kinds.length ? (
+          <VStack gap={2}>
+            {library.kinds.map((kind) => (
+              <HStack key={kind.kind} gap={6}>
+                <Text size="footnote" tone={toneOf(kind.tone)}>{kind.kind}</Text>
+                <Text size="footnote" tone="accent">{kind.bar}</Text>
+                <Text size="footnote" tone="secondary">{String(kind.count)}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
+        {library.skills.length ? (
+          <VStack gap={2}>
+            {library.skills.slice(0, 8).map((skill) => (
+              <VStack key={skill.name} gap={0}>
+                <Text size="footnote" tone={toneOf(skill.tone)}>{skill.name}</Text>
+                <Text size="footnote" tone="tertiary">{skill.detail}</Text>
+              </VStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       <CardSection title={tr('Schedule')}>

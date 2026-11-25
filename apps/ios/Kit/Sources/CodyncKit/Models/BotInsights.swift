@@ -12,9 +12,43 @@ public struct BotInsights: Decodable, Sendable {
     public let profile: InsightProfile
     public let week: InsightWeek
     public let routineSummary: InsightRoutineSummary
+    public let library: InsightLibrary
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of one bot's skill library.
+public struct InsightLibrary: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let count: String
+    public let total: Int
+    public let distinct: Int
+    public let duplicates: [String]
+    public let hasScript: Bool
+    public let hasReference: Bool
+    public let hasAsset: Bool
+    public let summary: [InsightSummaryRow]
+    public let kinds: [InsightLibraryKind]
+    public let skills: [InsightLibrarySkill]
+}
+
+public struct InsightLibraryKind: Decodable, Sendable {
+    public let kind: String
+    public let count: Int
+    public let icon: String
+    public let tone: String
+    public let percent: Int
+    public let bar: String
+}
+
+public struct InsightLibrarySkill: Decodable, Sendable {
+    public let name: String
+    public let kind: String
+    public let icon: String
+    public let tone: String
+    public let detail: String
 }
 
 /// A host-computed summary of one bot's routines.

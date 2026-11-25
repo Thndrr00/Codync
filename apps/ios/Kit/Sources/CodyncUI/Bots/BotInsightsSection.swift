@@ -30,6 +30,21 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let library = insights.library
+                    Text(library.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    ForEach(library.kinds, id: \.kind) { kind in
+                        HStack(spacing: 6) {
+                            Text(kind.kind).font(.footnote).foregroundStyle(Palette.secondary)
+                            Text(kind.bar).font(.footnote).foregroundStyle(Palette.accent)
+                            Text("\(kind.count)").font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
+                    ForEach(library.skills.prefix(8), id: \.name) { skill in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(skill.name).font(.footnote).foregroundStyle(Palette.text)
+                            Text(skill.detail).font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
                     let schedule = insights.routineSummary
                     Text(schedule.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(schedule.bar).font(.footnote).foregroundStyle(Palette.accent)

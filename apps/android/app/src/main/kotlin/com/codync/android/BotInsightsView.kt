@@ -42,6 +42,19 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val library = insights.library
+            CardSection("Skill library") {
+                row { Text(library.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                for (kind in library.kinds) row {
+                    Text("${kind.kind}  ${kind.bar}  ${kind.count}", style = Type.caption, color = Palette.tertiary)
+                }
+                for (skill in library.skills.take(8)) row {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(skill.name, style = Type.caption, color = Palette.text)
+                        Text(skill.detail, style = Type.caption, color = Palette.tertiary)
+                    }
+                }
+            }
             val schedule = insights.routineSummary
             CardSection("Schedule") {
                 row { Text(schedule.headline, style = Type.subheadline.semibold, color = Palette.text) }
