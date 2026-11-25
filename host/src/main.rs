@@ -11,6 +11,7 @@ mod apps_access;
 mod audit;
 mod background;
 mod bdots_activity;
+mod bdots_connectors;
 mod bdots_cron;
 mod bdots_desk;
 mod bdots_extra;

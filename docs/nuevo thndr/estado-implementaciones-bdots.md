@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Cuentas conectadas (23 helpers + UI en 4 clientes)
+
+`bdots_connectors.rs` añade 23 helpers puros que clasifican los conectores del bot (chat, correo,
+código, archivos, dinero, web), con títulos, iconos, tonos, conteos, porcentajes, barras,
+duplicados, detectores de capacidad, titular y ensamblaje. Reutiliza `bdots_library`,
+`bdots_more` y `bdots_activity`. El endpoint `botInsights` añade el campo `connectors` desde
+`config.connectors` y la sección «Connected accounts» se muestra en los cuatro clientes.
+
 ## Identidad en el roster (23 helpers + UI en 4 clientes)
 
 `bdots_identity.rs` añade 23 helpers puros sobre cómo aparece un bot: colores, formas y looks

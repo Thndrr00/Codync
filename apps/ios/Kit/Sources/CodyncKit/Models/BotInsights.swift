@@ -16,9 +16,43 @@ public struct BotInsights: Decodable, Sendable {
     public let trust: InsightTrust
     public let resilience: InsightResilience
     public let identity: InsightIdentity
+    public let connectors: InsightConnectors
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of one bot's connected accounts.
+public struct InsightConnectors: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let total: Int
+    public let distinct: Int
+    public let duplicates: [String]
+    public let chat: Bool
+    public let mail: Bool
+    public let code: Bool
+    public let money: Bool
+    public let summary: [InsightSummaryRow]
+    public let categories: [InsightConnectorCategory]
+    public let connectors: [InsightConnectorLine]
+}
+
+public struct InsightConnectorCategory: Decodable, Sendable {
+    public let kind: String
+    public let count: Int
+    public let icon: String
+    public let tone: String
+    public let percent: Int
+    public let bar: String
+}
+
+public struct InsightConnectorLine: Decodable, Sendable {
+    public let name: String
+    public let category: String
+    public let icon: String
+    public let tone: String
+    public let detail: String
 }
 
 /// A host-computed roster identity for one bot.

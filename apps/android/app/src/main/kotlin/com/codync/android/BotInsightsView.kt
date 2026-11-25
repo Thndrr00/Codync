@@ -42,6 +42,19 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val accounts = insights.connectors
+            CardSection("Connected accounts") {
+                row { Text(accounts.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                for (cat in accounts.categories) row {
+                    Text("${cat.kind}  ${cat.bar}  ${cat.count}", style = Type.caption, color = Palette.tertiary)
+                }
+                for (item in accounts.connectors) row {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(item.name, style = Type.caption, color = Palette.text)
+                        Text(item.detail, style = Type.caption, color = Palette.tertiary)
+                    }
+                }
+            }
             val identity = insights.identity
             CardSection("Identity") {
                 row { Text(identity.headline, style = Type.subheadline.semibold, color = Palette.text) }

@@ -66,6 +66,39 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let accounts = &data["connectors"];
+    if accounts.is_object() {
+        line(buf, &mut y, tr("Connected accounts").into_owned(), t.bold.patch(t.panel));
+        let headline = accounts["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, headline.to_owned(), t.text.patch(t.panel));
+        let cats: Vec<String> = accounts["categories"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|c| {
+                        format!(
+                            "  {} {} {}",
+                            c["kind"].as_str().unwrap_or(""),
+                            c["bar"].as_str().unwrap_or(""),
+                            c["count"].as_u64().unwrap_or(0)
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for cat in cats {
+            line(buf, &mut y, cat, t.secondary.patch(t.panel));
+        }
+        let names: Vec<String> = accounts["connectors"]
+            .as_array()
+            .map(|a| a.iter().map(|n| format!("  • {}", n["name"].as_str().unwrap_or(""))).collect())
+            .unwrap_or_default();
+        for name in names {
+            line(buf, &mut y, name, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let identity = &data["identity"];
     if identity.is_object() {
         line(buf, &mut y, tr("Identity").into_owned(), t.bold.patch(t.panel));

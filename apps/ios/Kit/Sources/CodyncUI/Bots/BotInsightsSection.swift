@@ -30,6 +30,21 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let accounts = insights.connectors
+                    Text(accounts.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    ForEach(accounts.categories, id: \.kind) { cat in
+                        HStack(spacing: 6) {
+                            Text(cat.kind).font(.footnote).foregroundStyle(Palette.secondary)
+                            Text(cat.bar).font(.footnote).foregroundStyle(Palette.accent)
+                            Text("\(cat.count)").font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
+                    ForEach(accounts.connectors, id: \.name) { item in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.name).font(.footnote).foregroundStyle(Palette.text)
+                            Text(item.detail).font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
                     let identity = insights.identity
                     Text(identity.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     HStack(spacing: 12) {

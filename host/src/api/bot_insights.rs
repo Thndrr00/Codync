@@ -515,6 +515,47 @@ fn identity_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Connected accounts: classify the bot's connectors into a readable mix.
+fn connectors_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_connectors as c;
+
+    let names = &row.config.connectors;
+    let cats: Vec<Value> = c::count_categories(names)
+        .into_iter()
+        .map(|(cat, count)| {
+            json!({
+                "kind": cat,
+                "count": count,
+                "icon": c::category_icon(cat),
+                "tone": c::category_tone(cat),
+                "percent": c::category_percent(count, names.len()),
+                "bar": c::category_bar(count, names.len(), 8),
+            })
+        })
+        .collect();
+
+    json!({
+        "headline": c::connector_headline(names),
+        "tone": c::connector_tone(names),
+        "total": names.len(),
+        "distinct": c::distinct(names),
+        "duplicates": c::duplicates(names),
+        "chat": c::can_chat(names),
+        "mail": c::can_mail(names),
+        "code": c::can_code(names),
+        "money": c::can_money(names),
+        "summary": c::summary(names).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "categories": cats,
+        "connectors": c::sorted(names).iter().map(|x| json!({
+            "name": x.name,
+            "category": x.category,
+            "icon": x.icon,
+            "tone": x.tone,
+            "detail": x.detail,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -576,6 +617,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "trust": trust_view(&row),
         "resilience": resilience_view(&row),
         "identity": identity_view(&row),
+        "connectors": connectors_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

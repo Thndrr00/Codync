@@ -19,9 +19,36 @@ data class BotInsights(
     val trust: InsightTrust = InsightTrust(),
     val resilience: InsightResilience = InsightResilience(),
     val identity: InsightIdentity = InsightIdentity(),
+    val connectors: InsightConnectors = InsightConnectors(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed summary of one bot's connected accounts. */
+@Serializable
+data class InsightConnectors(
+    val headline: String = "",
+    val tone: String = "",
+    val total: Int = 0,
+    val distinct: Int = 0,
+    val duplicates: List<String> = emptyList(),
+    val chat: Boolean = false,
+    val mail: Boolean = false,
+    val code: Boolean = false,
+    val money: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val categories: List<InsightConnectorCategory> = emptyList(),
+    val connectors: List<InsightConnectorLine> = emptyList(),
+)
+
+@Serializable data class InsightConnectorCategory(
+    val kind: String = "", val count: Int = 0, val icon: String = "",
+    val tone: String = "", val percent: Int = 0, val bar: String = "",
+)
+@Serializable data class InsightConnectorLine(
+    val name: String = "", val category: String = "", val icon: String = "",
+    val tone: String = "", val detail: String = "",
 )
 
 /** A host-computed roster identity for one bot. */

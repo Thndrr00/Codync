@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,31 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Connected accounts')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(connectors.tone)}>{connectors.headline}</Text>
+        {connectors.categories.length ? (
+          <VStack gap={2}>
+            {connectors.categories.map((cat) => (
+              <HStack key={cat.kind} gap={6}>
+                <Text size="footnote" tone={toneOf(cat.tone)}>{cat.kind}</Text>
+                <Text size="footnote" tone="accent">{cat.bar}</Text>
+                <Text size="footnote" tone="secondary">{String(cat.count)}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
+        {connectors.connectors.length ? (
+          <VStack gap={2}>
+            {connectors.connectors.map((item) => (
+              <VStack key={item.name} gap={0}>
+                <Text size="footnote" tone={toneOf(item.tone)}>{item.name}</Text>
+                <Text size="footnote" tone="tertiary">{item.detail}</Text>
+              </VStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       <CardSection title={tr('Identity')}>
