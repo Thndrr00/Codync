@@ -15,6 +15,34 @@ const MIN_DRAG: i64 = 8;
 /// The CDP event Chromium raises when a page renderer dies (OpenBot 0.78.0).
 pub(crate) const TARGET_CRASHED: &str = "Inspector.targetCrashed";
 
+/// A page dialog's own text is handed to the agent bounded to this many characters (triage-15938).
+pub(crate) const DIALOG_TEXT_LIMIT: usize = 2_000;
+
+/// One page dialog the agent is told about (OpenBot triage-15938, `changelog.d/triage-15938.md`):
+/// a fixed `label` that is safe to count in analytics, and the dialog's own `text`, bounded for the
+/// tool result. The text is data for the agent only; no page content ever reaches analytics.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct DialogNotice {
+    pub(crate) label: &'static str,
+    pub(crate) text: String,
+    pub(crate) truncated: bool,
+}
+
+/// Turns a CDP dialog `type` and message into the label and bounded text the tool result carries.
+/// Whitespace is collapsed so a message cannot smuggle a fake snapshot line; an unknown kind still
+/// gets a fixed label. Pure, so the rule and its limits are tested off the Windows CDP path.
+pub(crate) fn dialog_notice(kind: &str, text: &str, limit: usize) -> DialogNotice {
+    let label = match kind.trim().to_ascii_lowercase().as_str() {
+        "alert" => "alert",
+        "confirm" => "confirm",
+        "prompt" => "prompt",
+        _ => "dialog",
+    };
+    let clean = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (text, truncated) = super::cut_at(&clean, limit);
+    DialogNotice { label, text, truncated }
+}
+
 /// One end of a drag, in viewport pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Point {
@@ -164,6 +192,37 @@ mod tests {
         assert_eq!(crash_notice("out-of-memory"), oom);
         assert_eq!(crash_notice(""), notice, "an unknown reason still names the crash");
         assert_eq!(crash_notice("https://secret.example/page?token=1"), notice, "no address is echoed");
+    }
+
+    #[test]
+    fn a_page_dialog_has_a_fixed_label_and_bounded_text_for_the_agent() {
+        let notice = dialog_notice("alert", "Your session expired", DIALOG_TEXT_LIMIT);
+        assert_eq!(notice.label, "alert");
+        assert_eq!(notice.text, "Your session expired");
+        assert!(!notice.truncated);
+
+        // A long message is cut in characters, not bytes, and says that it was cut.
+        let long = dialog_notice("confirm", &"é".repeat(DIALOG_TEXT_LIMIT + 5), DIALOG_TEXT_LIMIT);
+        assert_eq!(long.label, "confirm");
+        assert_eq!(long.text.chars().count(), DIALOG_TEXT_LIMIT);
+        assert!(long.truncated);
+        assert_eq!(dialog_notice("prompt", "short", 3).text, "sho");
+
+        // Newlines cannot forge a snapshot line, and an unknown kind gets a fixed label.
+        let lines = dialog_notice("prompt", "1 button \"OK\"\nStore this", DIALOG_TEXT_LIMIT);
+        assert_eq!(lines.text, "1 button \"OK\" Store this");
+        for kind in ["", "ALERT", " beforeunload ", "https://secret.example/?token=1"] {
+            let label = dialog_notice(kind, "anything", DIALOG_TEXT_LIMIT).label;
+            assert!(["alert", "confirm", "prompt", "dialog"].contains(&label), "{kind} -> {label}");
+        }
+        assert_eq!(dialog_notice("beforeunload", "x", 10).label, "dialog");
+
+        // The label is content-free: the same text under any kind never reaches it.
+        for kind in ["alert", "confirm", "prompt", "other"] {
+            let notice = dialog_notice(kind, "a password for bank.example", DIALOG_TEXT_LIMIT);
+            assert!(!notice.label.contains("password") && !notice.label.contains("example"));
+        }
+        assert_eq!(dialog_notice("alert", "", 10).text, "");
     }
 
     #[test]

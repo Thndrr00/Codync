@@ -19,7 +19,10 @@
 //!   `type`.
 
 use super::action::{Action, Button, Direction, Key, Kind, Load, Target};
-use super::decisions::{Point, SnapshotPass, TARGET_CRASHED, crash_notice, drag_points, needs_visual, snapshot_pass};
+use super::decisions::{
+    DIALOG_TEXT_LIMIT, Point, SnapshotPass, TARGET_CRASHED, crash_notice, dialog_notice, drag_points, needs_visual,
+    snapshot_pass,
+};
 use super::idle;
 use super::snapshot::{self, format as format_snapshot};
 use super::{cut_at, folder_slug};
@@ -247,6 +250,9 @@ async fn spawn(bot: &str) -> Result<Session> {
     )
     .await?;
     let target = target["targetId"].as_str().context("The browser did not open a tab")?.to_owned();
+    // Only the bot's browser accepts page dialogs (triage-15938); the person's protected browser and
+    // its sign-in cards use other pipes, which leave this off.
+    socket.auto_dialog = true;
     Ok(Session {
         process,
         folder,
@@ -389,11 +395,18 @@ async fn watch(hub: &Hub) {
 
 /// One action on the bot's tab, with a session attached and detached around it.
 async fn run(session: &mut Session, action: &Action) -> Result<Value> {
+    // A run's earlier steps discard their answers, so carry any dialog they saw into this call's
+    // result (the final snapshot of a run is one more call on this same pipe).
+    let mut pending = dialog_values(session.pipe.take_dialogs());
     // A frozen page is woken inside the action's own deadline, so a stuck resume is bounded like any
     // other CDP call here. Live views wake it on their frame and input paths (`live_frame`, `live_input`).
     resume(session).await?;
     ensure_target(session).await?;
     let tab = attach(session).await?;
+    // triage-15938: a dialog is only reported while the Page domain is on this attached session. The
+    // pipe accepts an ordinary one as soon as its event arrives, so the page script cannot hold the
+    // action (or the window) waiting for somebody to click OK.
+    let _ = rpc(&mut session.pipe, "Page.enable", json!({}), Some(tab.as_str())).await;
     let answer = act(session, &tab, action).await;
     // OpenBot 0.78.0: a crashed page is reported as such, with the reload the agent can do, instead
     // of a generic refusal or a snapshot from before the crash. Check while the session is still
@@ -403,8 +416,16 @@ async fn run(session: &mut Session, action: &Action) -> Result<Value> {
         Err(_) => timeout(CRASH_PROBE, crash_reason(session, &tab)).await.ok().flatten(),
     };
     rpc(&mut session.pipe, "Target.detachFromTarget", json!({"sessionId": tab.as_str()}), None).await.ok();
+    // Draining after the detach read also catches a dialog a page opened after the action returned.
+    pending.extend(dialog_values(session.pipe.take_dialogs()));
+    let dialogs = pending;
     match answer {
-        Ok(value) => Ok(value),
+        Ok(mut value) => {
+            if !dialogs.is_empty() {
+                value["dialogs"] = json!(dialogs);
+            }
+            Ok(value)
+        }
         Err(error) => match crash {
             Some(reason) => {
                 let notice = crash_notice(reason);
@@ -414,6 +435,33 @@ async fn run(session: &mut Session, action: &Action) -> Result<Value> {
             None => Err(error),
         },
     }
+}
+
+/// The dialogs a call saw, as tool-result data: a fixed kind and the bounded text, so the agent reads
+/// what the page said. The text goes nowhere near analytics, which only sees the tool name.
+fn dialog_values(dialogs: Vec<Value>) -> Vec<Value> {
+    dialogs
+        .into_iter()
+        .map(|dialog| {
+            let notice = dialog_notice(
+                dialog["kind"].as_str().unwrap_or_default(),
+                dialog["text"].as_str().unwrap_or_default(),
+                DIALOG_TEXT_LIMIT,
+            );
+            json!({"kind": notice.label, "text": notice.text, "truncated": notice.truncated})
+        })
+        .collect()
+}
+
+/// A sign-in page keeps its password and approval-card path (triage-15938): stop accepting its JS
+/// dialogs. A page that has no address in its answer leaves the last decision alone.
+fn allow_dialogs(session: &mut Session, answer: &Value) {
+    if answer.get("url").is_none() {
+        return;
+    }
+    let url = answer["url"].as_str().unwrap_or_default();
+    let sign_in = answer["hasPassword"] == true || crate::screen::browser_cards::is_sign_in_page(url);
+    session.pipe.auto_dialog = !sign_in;
 }
 
 /// Makes `session.target` the bot's open tab, adopting or opening one when the page closed it.
@@ -905,6 +953,7 @@ async fn page(session: &mut Session, tab: &str, op: &str, args: &Value) -> Resul
     .with_context(|| format!("The page did not answer `{op}`"))?;
     let value = answer["result"]["value"].clone();
     ensure!(value.is_object(), "The page answered nothing to `{op}`; take a new snapshot.");
+    allow_dialogs(session, &value);
     Ok(value)
 }
 
@@ -1110,6 +1159,19 @@ mod tests {
         assert!(notice.contains("page crashed"), "{notice}");
         assert!(notice.contains("navigate direction=reload"), "{notice}");
         assert!(CRASH_PROBE < Duration::from_secs(5), "a dead page must not hold the tool call");
+    }
+
+    #[test]
+    fn a_page_dialog_reaches_the_tool_result_as_bounded_data() {
+        let values = dialog_values(vec![
+            json!({"kind": "alert", "text": "Your session expired", "sessionId": "tab"}),
+            json!({"kind": "beforeunload", "text": "Leave site?", "sessionId": "tab"}),
+        ]);
+        assert_eq!(values[0], json!({"kind": "alert", "text": "Your session expired", "truncated": false}));
+        assert_eq!(values[1]["kind"], "dialog", "an unknown kind still gets a fixed label");
+        let long = dialog_values(vec![json!({"kind": "prompt", "text": "x".repeat(DIALOG_TEXT_LIMIT + 1)})]);
+        assert_eq!(long[0]["text"].as_str().map(str::len), Some(DIALOG_TEXT_LIMIT));
+        assert_eq!(long[0]["truncated"], true);
     }
 
     #[test]

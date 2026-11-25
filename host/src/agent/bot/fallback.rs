@@ -265,8 +265,23 @@ impl Actor {
         if self.stop_requested || self.routine_timed_out || self.compacting.is_some() || self.turn.is_none() {
             return false;
         }
-        let (Some(mut reason), Some(attempt)) = (fallback::reason::of(error), self.relay.attempt.clone()) else {
+        let Some(attempt) = self.relay.attempt.clone() else {
             return false;
+        };
+        // triage-15839: a provider's unusable reply has no `Reason` today, so a bot whose backups are
+        // set to switch without asking stayed on a model that could not answer. Move to its next
+        // backup before any work starts, on the same transient path an internal error already uses.
+        // A plain answer, an internal error and a bot without backups keep their existing paths, and
+        // `next_step` still skips resting and model-less backups.
+        let invalid_move = fallback::reason::invalid_reply_fallback(
+            fallback::reason::error_kind(error),
+            !self.base.fallbacks.is_empty(),
+            fallback::steps(&self.base).saturating_sub(1),
+        );
+        let mut reason = match fallback::reason::of(error) {
+            Some(reason) => reason,
+            None if invalid_move => Reason::Overloaded,
+            None => return false,
         };
         // OpenBot 0.78.0: a Codex provider whose API address was removed is not a dead end. Drop the
         // session that still names it, open one on the setup saved now and hand the earlier chat over

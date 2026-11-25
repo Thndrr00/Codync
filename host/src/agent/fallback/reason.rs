@@ -160,6 +160,19 @@ pub fn capacity_next(provider: &str, backups: usize, auto: bool) -> bool {
     auto && backups > 0 && matches!(provider.trim().to_ascii_lowercase().as_str(), "codex" | "chatgpt")
 }
 
+/// Adapter categories for a reply the bot cannot use, not a user-visible answer (OpenBot triage-15839,
+/// `changelog.d/triage-15839.md`). `rpc_error` keeps only lowercase identifiers, so the spellings
+/// adapters use are normalised to one set here.
+const INVALID_REPLY_KINDS: [&str; 4] = ["invalid_reply", "invalid_response", "non_valid_reply", "not_valid_reply"];
+
+/// Whether an unusable reply moves a backup-model agent to its next backup before it starts work.
+/// Only with automatic backups and a backup left: a plain answer stays, and an internal/server error
+/// keeps the existing `Reason::Overloaded` path. Pure, so the rule is tested without a bot or a store.
+pub fn invalid_reply_fallback(error_kind: &str, auto: bool, backups: usize) -> bool {
+    let kind = error_kind.trim().to_ascii_lowercase().replace('-', "_").replace(' ', "_");
+    auto && backups > 0 && INVALID_REPLY_KINDS.contains(&kind.as_str())
+}
+
 /// Adapter categories that mean the provider the bot was using is no longer configured (its API
 /// address was removed), so the chat should carry on with the setup saved now (OpenBot 0.78.0).
 const UNCONFIGURED_KINDS: [&str; 6] = [
@@ -433,6 +446,26 @@ mod tests {
         assert!(!capacity_next("codex", 0, true), "no backup to move to");
         assert!(!capacity_next("codex", 2, false), "backups off wait as before");
         assert!(!capacity_next("claude", 2, true), "only ChatGPT's capacity behaves this way");
+    }
+
+    #[test]
+    fn an_invalid_reply_moves_on_only_with_automatic_backups() {
+        // triage-15839: the provider's unusable reply used to leave the bot asking the person to
+        // choose another model, even with backups set to switch without asking.
+        assert_eq!(of(&rpc(-32603, "Internal error", Some("invalid_reply"))), None, "it has no reason today");
+        for kind in ["invalid_reply", "INVALID_REPLY", " non-valid reply ", "not_valid_reply", "invalid_response"] {
+            assert!(invalid_reply_fallback(kind, true, 1), "{kind}");
+            assert!(invalid_reply_fallback(kind, true, 2), "{kind}");
+        }
+        assert!(!invalid_reply_fallback("invalid_reply", false, 2), "backups off keep the answer");
+        assert!(!invalid_reply_fallback("invalid_reply", true, 0), "no backup keeps the original error");
+        for kind in ["", "answer", "refusal", "invalid_request"] {
+            assert!(!invalid_reply_fallback(kind, true, 2), "{kind} is a user-visible answer or a bad request");
+        }
+        for kind in ["internal_server_error", "server_error", "server_overloaded", "overloaded"] {
+            assert!(!invalid_reply_fallback(kind, true, 2), "{kind} keeps its existing path");
+            assert_eq!(of(&rpc(-32603, "Internal error", Some(kind))), Some(Reason::Overloaded), "{kind}");
+        }
     }
 
     #[test]

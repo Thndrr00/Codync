@@ -42,8 +42,13 @@ Promise.all([
     await write(browser.stdio[3],message,'\0')
   }),
   pump(browser.stdio[4],0,async message=>{
-    // Console/network events from pages must never enter the host receipt/error path.
-    if(!requests.delete(message.id))return
+    // Console/network events from pages must never enter the host receipt/error path. A JS dialog is
+    // the one event the bot tools need (triage-15938): forward only that one for them to accept.
+    if(!requests.delete(message.id)){
+      if(message.method==='Page.javascriptDialogOpening'||message.method==='Page.javascriptDialogClosed')
+        await write(process.stdout,message,'\n')
+      return
+    }
     await write(process.stdout,message,'\n')
   }),
 ]).then(stop,stop)
