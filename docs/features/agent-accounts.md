@@ -52,6 +52,16 @@ existing Antigravity account selection and does not add or remove accounts.
 Host methods: `listAccounts`, `accountAuthenticate`, `deleteAccount` and
 `agentSignOut` (returns the refreshed `auth` check).
 
+## Codex's chosen reasoning effort
+
+When a Codex bot starts, the host writes a `CODEX_CONFIG` for that session holding
+Codync's compact keep-list, its Ask-first policy and the bot's chosen reasoning effort
+as `model_reasoning_effort` (OpenBot 0.70.0, `triage-15917`). A config the person saved
+keeps its other keys, but a conflicting effort such as `none` is overwritten for this
+session, so the agent always uses the effort chosen for the bot. The pure
+`session::codex_effort_config` decides the merge. The host changes only the in-memory
+environment of the agent it starts: the user's config on disk is never touched.
+
 ## Rotation
 
 A provider may keep at most 20 isolated accounts. `account/rotation.rs` keeps one

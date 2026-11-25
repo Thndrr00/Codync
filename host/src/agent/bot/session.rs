@@ -7,7 +7,7 @@ use crate::agent::acp::{self, Incoming};
 use crate::agent::own_memory;
 use crate::agent::registry::Candidate;
 use crate::chat::{context, memory};
-use crate::store::{Lane, run_session_key};
+use crate::store::{EntryKind, Lane, run_session_key};
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 use sha2::Digest as _;
@@ -16,6 +16,34 @@ use std::time::{Duration, Instant};
 /// The session a scheduled check-in uses when the bot has a background model: the model is fixed when a session
 /// starts, so a check-in can only run on it from a session of its own.
 const CHECK_IN_SLOT: &str = "check-in";
+
+/// OpenBot triage-15811: server names a `session/new` reply says it loaded, when the agent
+/// reports them at all. An agent that doesn't report stays unjudged rather than crying wolf.
+/// Only names are read — no tool or page content reaches here. Pure.
+fn reply_servers(reply: &Value) -> Option<Vec<String>> {
+    match reply.get("mcpServers")? {
+        Value::Object(map) => Some(map.keys().cloned().collect()),
+        Value::Array(items) => Some(
+            items
+                .iter()
+                .filter_map(|item| item["name"].as_str().or_else(|| item.as_str()).map(str::to_owned))
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+/// The names Codync declared in `mcpServers` for the session. Pure.
+fn declared_servers(servers: &Value) -> Vec<String> {
+    servers.as_array().into_iter().flatten().filter_map(|server| server["name"].as_str().map(str::to_owned)).collect()
+}
+
+/// OpenBot triage-15811: whether every declared tool was advertised as loaded. An agent that
+/// doesn't advertise its servers is left alone; one that reports fewer did not load them and
+/// must be re-declared on the next message. Pure.
+fn tools_loaded(advertised: Option<&[String]>, expected: &[String]) -> bool {
+    advertised.is_none_or(|names| expected.iter().all(|name| names.contains(name)))
+}
 
 impl Actor {
     /// Whether the running turn is a scheduled check-in that has a background model to run on.
@@ -115,6 +143,23 @@ impl Actor {
             params["additionalDirectories"] = json!(memory::files::folders(&self.cfg));
         }
         params
+    }
+
+    /// OpenBot triage-15811: one plain notice that this session opened without Codync's tools,
+    /// posted once per session in the lane the turn talks in. Only the session id is used as
+    /// the stable key; no tool or page content is stored or logged here.
+    fn notice_tools_missing(&self, sid: &str) {
+        let id = format!("tools-missing:{sid}");
+        let text = "The agent ran without Codync's tools. It will load them again on the next message.";
+        if let Err(error) = self.hub.add_entry_once(
+            &id,
+            &self.lane,
+            EntryKind::Notice,
+            self.hub.store.max_turn(&self.cfg.id),
+            &json!({"text": text}),
+        ) {
+            tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't post the missing-tools notice");
+        }
     }
 
     /// What the turn's session calls Codync's MCP servers that it knows by another name.
@@ -249,11 +294,20 @@ impl Actor {
                 env.retain(|(ek, _)| ek != &k);
                 env.push((k, v));
             }
-            if self.cfg.backend == "codex" && !env.iter().any(|(k, _)| k == "CODEX_CONFIG") {
+            if self.cfg.backend == "codex" {
+                // triage-15917: the bot's chosen effort wins for this session. `codex_effort_config`
+                // keeps the person's other config keys but overwrites a conflicting
+                // `model_reasoning_effort` (e.g. their `none`), in memory only.
+                let chosen =
+                    ["model_reasoning_effort", "reasoning_effort", "reasoning-effort", "thought_level", "effort"]
+                        .into_iter()
+                        .find_map(|key| self.cfg.model_options.get(key).map(String::as_str));
+                let existing = env.iter().find(|(key, _)| key == "CODEX_CONFIG").map(|(_, value)| value.to_owned());
+                let mut config = codex_effort_config(chosen, existing.as_deref());
                 // Codex's `/compact` takes no instructions: the keep-list is its config's `compact_prompt`.
                 // OpenBot nightly `triage-14587`: a bot at Ask first (no auto-approval for its backend)
                 // starts Codex asking before each command and file change, including routines and channels.
-                let mut config = json!({"compact_prompt": codync_mem::compaction::KEEP});
+                config["compact_prompt"] = json!(codync_mem::compaction::KEEP);
                 let auto = crate::approval_automation::enabled(
                     &crate::approval_automation::load(&self.hub.store),
                     &self.cfg.backend,
@@ -263,7 +317,13 @@ impl Actor {
                 {
                     config["approval_policy"] = json!(policy);
                 }
-                env.push(("CODEX_CONFIG".into(), config.to_string()));
+                let encoded = config.to_string();
+                // Replace the saved value in this process's env, never the user's config on disk.
+                if let Some(index) = env.iter().position(|(key, _)| key == "CODEX_CONFIG") {
+                    env[index].1 = encoded;
+                } else {
+                    env.push(("CODEX_CONFIG".into(), encoded));
+                }
             }
             if self.cfg.backend == "opencode" && !env.iter().any(|(k, _)| k == "OPENCODE_CONFIG") {
                 // triage-15626: Ask first must reach OpenCode itself, so it asks before a command or a
@@ -412,11 +472,19 @@ impl Actor {
             .filter(|sid| !sid.is_empty())
             .ok_or_else(|| anyhow!("agent returned no sessionId"))?
             .to_owned();
+        // OpenBot triage-15811: read what the reply reports before it is parked as a model probe.
+        let advertised = reply_servers(&res);
+        let expected = declared_servers(&servers);
         conn.loaded.insert(sid.clone(), Instant::now());
         conn.renamed.insert(sid.clone(), renamed);
         conn.allocation_uncertain = false;
         conn.pending_models.insert(sid.clone(), res);
         self.set_session(slot, Some(&sid));
+        if !tools_loaded(advertised.as_deref(), &expected) {
+            // Say so plainly in this chat, and open a fresh session with the tools next message.
+            self.notice_tools_missing(&sid);
+            self.tools_changed = true;
+        }
         self.session_fresh = true;
         self.turn_session = Some(sid.clone());
         context::adopt_new(&self.hub.store, &self.cfg, &sid, system.clone(), revision)?;
@@ -511,3 +579,81 @@ impl Actor {
 
 /// How long opening a session (`session/new`, `session/load`, `session/resume`) may take.
 const SESSION_TIMEOUT: Duration = Duration::from_mins(3);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_reply_with_every_declared_tool_is_loaded() {
+        let expected = vec!["chat".to_owned(), "team".to_owned()];
+        let advertised = vec!["extra".to_owned(), "team".to_owned(), "chat".to_owned()];
+        assert!(tools_loaded(Some(&advertised), &expected));
+        assert!(tools_loaded(None, &expected), "an agent that doesn't report isn't judged");
+        assert!(tools_loaded(None, &[]), "nothing declared");
+    }
+
+    #[test]
+    fn a_reply_missing_a_declared_tool_is_not_loaded() {
+        let expected = vec!["chat".to_owned(), "team".to_owned()];
+        assert!(!tools_loaded(Some(&["chat".to_owned()]), &expected));
+        assert!(!tools_loaded(Some(&[]), &expected), "an empty report means none loaded");
+        assert!(tools_loaded(Some(&[]), &[]), "no tools declared means nothing to check");
+    }
+
+    #[test]
+    fn only_server_names_are_read_from_a_reply() {
+        let object = json!({"sessionId": "s", "mcpServers": {"chat": {}, "team": {}}});
+        assert_eq!(reply_servers(&object), Some(vec!["chat".to_owned(), "team".to_owned()]));
+        let array = json!({"mcpServers": [{"name": "chat"}, {"name": "team"}]});
+        assert_eq!(reply_servers(&array), Some(vec!["chat".to_owned(), "team".to_owned()]));
+        assert_eq!(reply_servers(&json!({"sessionId": "s"})), None, "no report is not a failure");
+        assert_eq!(
+            declared_servers(&json!([{"name": "chat"}, {"name": "team"}])),
+            vec!["chat".to_owned(), "team".to_owned()]
+        );
+    }
+}
+
+/// OpenBot 0.70.0 (`triage-15917`): the config Codex gets for one session. The bot's chosen effort
+/// is written as `model_reasoning_effort`; a saved config's other keys stay, but a conflicting
+/// effort is overwritten. A malformed or missing config is treated as an empty one. Pure — the
+/// caller edits only the in-memory env, never the user's config on disk.
+fn codex_effort_config(chosen: Option<&str>, existing: Option<&str>) -> Value {
+    let mut config: Value = existing
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .filter(|value| value.is_object())
+        .unwrap_or_else(|| json!({}));
+    if let Some(effort) = chosen.map(str::trim).filter(|effort| !effort.is_empty()) {
+        config["model_reasoning_effort"] = json!(effort);
+    }
+    config
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_chosen_effort_overrides_a_conflicting_saved_value() {
+        let saved = r#"{"model_reasoning_effort":"none","model":"gpt-6"}"#;
+        let config = codex_effort_config(Some("high"), Some(saved));
+        assert_eq!(config["model_reasoning_effort"], "high");
+        assert_eq!(config["model"], "gpt-6", "the person's other keys stay");
+    }
+
+    #[test]
+    fn no_choice_leaves_a_saved_effort_alone() {
+        let saved = r#"{"model_reasoning_effort":"none"}"#;
+        assert_eq!(codex_effort_config(None, Some(saved))["model_reasoning_effort"], "none");
+        assert_eq!(codex_effort_config(Some("  "), Some(saved))["model_reasoning_effort"], "none");
+    }
+
+    #[test]
+    fn a_missing_or_unusable_config_starts_empty() {
+        assert_eq!(codex_effort_config(Some("medium"), None), json!({"model_reasoning_effort": "medium"}));
+        assert_eq!(codex_effort_config(Some("medium"), Some("not json")), json!({"model_reasoning_effort": "medium"}));
+        assert_eq!(codex_effort_config(Some("medium"), Some("[1,2]")), json!({"model_reasoning_effort": "medium"}));
+        assert_eq!(codex_effort_config(None, None), json!({}));
+    }
+}

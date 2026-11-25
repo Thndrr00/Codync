@@ -55,6 +55,8 @@ private fun deletionAgents(d: JsonObject): List<String> =
     val pending = d.text("status") == "pending"
     var expanded by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
+    var changeText by remember { mutableStateOf("") }
+    val plan = d.text("toolKind") == "plan"
     val headline = when (d.text("toolKind")) {
         "execute" -> "Wants to run a command"
         "edit", "delete", "move" -> "Wants to change files"
@@ -92,28 +94,37 @@ private fun deletionAgents(d: JsonObject): List<String> =
             }
         }
         if (pending) {
-            val rank = mapOf("allow_once" to 0, "allow_always" to 1, "reject_once" to 2, "reject_always" to 3)
-            val offered = (d["options"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
-            // "Always allow" is a standing permission: a thumb on a phone doesn't grant one. The computer's apps do, with
-            // the rule it would keep in front of the person; the phone keeps "Allow once" (unless that is all there is).
-            val options = offered.filter { it.text("kind") != "allow_always" || offered.none { o -> o.text("kind") == "allow_once" } }
-                .sortedBy { rank[it.text("kind")] ?: 9 }
-            Column(Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedRectangle(14.dp)).background(Palette.background)) {
-                for ((index, option) in options.withIndex()) {
-                    val id = option.text("optionId") ?: continue
-                    val kind = option.text("kind").orEmpty()
-                    if (index > 0) Box(Modifier.fillMaxWidth().height(0.5.dp).background(Palette.border))
-                    val waiting = answering && chosen != null
-                    Row(Modifier.fillMaxWidth().heightIn(min = 46.dp)
-                        .clickable(enabled = !answering, role = Role.Button) { chosen = id; respond(id) }
-                        .graphicsLayer { alpha = if (!waiting || chosen == id) 1f else 0.4f }
-                        .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(when (kind) {
-                            "allow_once" -> "Allow once"; "allow_always" -> "Always allow"; "reject_once" -> "Deny"; "reject_always" -> "Never"
-                            else -> option.text("name").orEmpty()
-                        }, Modifier.weight(1f), style = if (kind == "allow_once") Type.body.semibold else Type.body,
-                            color = if (kind.startsWith("allow")) Palette.text else Palette.danger)
-                        if (answering && chosen == id) Spinner(14.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val rank = mapOf("allow_once" to 0, "allow_always" to 1, "reject_once" to 2, "reject_always" to 3)
+                val offered = (d["options"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+                // "Always allow" is a standing permission: a thumb on a phone doesn't grant one. The computer's apps do, with
+                // the rule it would keep in front of the person; the phone keeps "Allow once" (unless that is all there is).
+                val options = offered.filter { it.text("kind") != "allow_always" || offered.none { o -> o.text("kind") == "allow_once" } }
+                    .sortedBy { rank[it.text("kind")] ?: 9 }
+                Column(Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedRectangle(14.dp)).background(Palette.background)) {
+                    for ((index, option) in options.withIndex()) {
+                        val id = option.text("optionId") ?: continue
+                        val kind = option.text("kind").orEmpty()
+                        if (index > 0) Box(Modifier.fillMaxWidth().height(0.5.dp).background(Palette.border))
+                        val waiting = answering && chosen != null
+                        Row(Modifier.fillMaxWidth().heightIn(min = 46.dp)
+                            .clickable(enabled = !answering, role = Role.Button) { chosen = id; respond(id) }
+                            .graphicsLayer { alpha = if (!waiting || chosen == id) 1f else 0.4f }
+                            .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(when (kind) {
+                                "allow_once" -> "Allow once"; "allow_always" -> "Always allow"; "reject_once" -> "Deny"; "reject_always" -> "Never"
+                                else -> option.text("name").orEmpty()
+                            }, Modifier.weight(1f), style = if (kind == "allow_once") Type.body.semibold else Type.body,
+                                color = if (kind.startsWith("allow") || kind == "stop") Palette.text else Palette.danger)
+                            if (answering && chosen == id) Spinner(14.dp)
+                        }
+                    }
+                }
+                if (plan) {
+                    Text("What should change?", style = Type.caption, color = Palette.secondary)
+                    FieldBox(changeText, { changeText = it }, "Tell the agent what to change", maxLines = 4, capitalize = false)
+                    SecondaryButton("Send change", enabled = !answering && changeText.isNotBlank()) {
+                        respond("change:" + changeText.trim())
                     }
                 }
             }

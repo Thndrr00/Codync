@@ -152,6 +152,20 @@ pub fn describe_all() -> Value {
     Value::Array(SecurityProfile::ALL.iter().map(|p| p.describe()).collect())
 }
 
+/// OpenBot 0.70.0 (`triage-15934`): the hint on a write a restrictive profile blocked. Only a
+/// denial of a file-changing or shell kind under a profile short of Full gets it; a read, an ask,
+/// Full access and the commands no bot may run keep their own wording. Pure, shared by the denial
+/// notice and its tests.
+pub fn blocked_write_hint(profile: SecurityProfile, kind: &str, denied: bool) -> &'static str {
+    if !denied || profile == SecurityProfile::Full {
+        return "";
+    }
+    match kind.to_ascii_lowercase().as_str() {
+        "edit" | "delete" | "move" | "execute" => "Workspace only blocks this. Try Full access.",
+        _ => "",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,5 +247,18 @@ mod tests {
         assert_eq!(all[0]["permission"], "ask");
         assert_eq!(all[0]["budget"], 300_000);
         assert!(all[3]["budget"].is_null() && all[3]["rules"].as_array().is_some_and(Vec::is_empty));
+    }
+
+    #[test]
+    fn a_blocked_write_names_the_profile_that_stops_it() {
+        const HINT: &str = "Workspace only blocks this. Try Full access.";
+        for profile in [SecurityProfile::ReadOnly, SecurityProfile::Builder, SecurityProfile::Operator] {
+            for kind in ["edit", "delete", "move", "execute", "EDIT"] {
+                assert_eq!(blocked_write_hint(profile, kind, true), HINT, "{profile:?} {kind}");
+            }
+            assert!(blocked_write_hint(profile, "read", true).is_empty(), "{profile:?}: a read is not a write");
+            assert!(blocked_write_hint(profile, "edit", false).is_empty(), "{profile:?}: an ask is not a denial");
+        }
+        assert!(blocked_write_hint(SecurityProfile::Full, "execute", true).is_empty(), "Full needs no hint");
     }
 }

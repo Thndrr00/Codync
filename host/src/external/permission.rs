@@ -74,7 +74,7 @@ pub(super) async fn request(hub: &Arc<Hub>, ev: &Event) -> Option<Decision> {
         return Some(Decision::Deny);
     }
     let title = data["title"].as_str().unwrap_or("Use a tool").to_owned();
-    wait_card(hub, ev, &bot, &config, &data, &title).await
+    wait_card(hub, ev, &bot, &config, &data, &title).await.map(|(decision, _)| decision)
 }
 
 /// The bot standing for the event's session and its settings.
@@ -85,6 +85,7 @@ pub(super) fn target(hub: &Arc<Hub>, ev: &Event) -> Option<(String, BotConfig)> 
 }
 
 /// Shows `data` as a card, tells the person and holds until it is answered; `None` when nobody answers in time.
+/// The entry id comes back with the decision so a plan card's free-text change, committed on the card, can be read.
 pub(super) async fn wait_card(
     hub: &Arc<Hub>,
     ev: &Event,
@@ -92,7 +93,7 @@ pub(super) async fn wait_card(
     config: &BotConfig,
     data: &Value,
     title: &str,
-) -> Option<Decision> {
+) -> Option<(Decision, String)> {
     let entry = hub.add_entry(&Lane::main(bot), EntryKind::Permission, turn_of(hub, &ev.session), data)?;
 
     let (tx, rx) = oneshot::channel();
@@ -106,15 +107,28 @@ pub(super) async fn wait_card(
 
     let answer = tokio::time::timeout(DECISION_WAIT, rx).await;
     drop(waiting);
-    answer.ok()?.ok()?
+    let decision = answer.ok()?.ok()?;
+    Some((decision, entry.id))
 }
 
 /// See [`External::answer`].
+/// triage-15940: a plan card's free-text "what to change" arrives as `change:<text>` in the one
+/// option id `respondPermission` carries. Only a plan card, a matching prefix and non-blank text
+/// count; every other card and option is untouched. Pure.
+fn plan_change(plan: bool, option_id: Option<&str>) -> Option<&str> {
+    plan.then(|| option_id.and_then(|id| id.strip_prefix(super::question::CHANGE_PREFIX)))
+        .flatten()
+        .filter(|text| !text.trim().is_empty())
+}
+
 pub(super) fn answer(external: &External, hub: &Hub, entry_id: &str, option_id: Option<&str>) -> bool {
     let Some(mut entry) = hub.store.entry(entry_id) else { return is_ours(hub, entry_id) };
+    let plan = entry.data["plan"].as_bool() == Some(true);
+    // Keep the free text on the card so the waiting hook can forward it as the plan's reason.
+    let change = plan_change(plan, option_id);
     // An answer must be one of the options the card showed; anything else leaves the card waiting.
     let known = |id: &str| entry.data["options"].as_array().is_some_and(|o| o.iter().any(|o| o["optionId"] == id));
-    if option_id.is_some_and(|id| !known(id)) {
+    if option_id.is_some_and(|id| change.is_none() && !known(id)) {
         return external.state.locked().waiting.contains_key(entry_id) || is_ours(hub, entry_id);
     }
     let provider = entry.data["answerAgent"].as_str().unwrap_or_default();
@@ -124,12 +138,22 @@ pub(super) fn answer(external: &External, hub: &Hub, entry_id: &str, option_id: 
     let Some(waiting) = external.state.locked().waiting.remove(entry_id) else {
         return is_ours(hub, entry_id);
     };
-    let decision = match option_id {
-        Some(ALLOW) => Some(Decision::Allow),
-        Some(DENY) => Some(Decision::Deny),
-        Some(index) => index.parse().ok().map(Decision::Pick),
-        None => None,
+    let decision = if change.is_some() || (plan && option_id == Some(super::question::STOP)) {
+        // Stop planning and a free-text change both deny the plan; the reason on the card tells them apart.
+        Some(Decision::Deny)
+    } else {
+        match option_id {
+            Some(ALLOW) => Some(Decision::Allow),
+            Some(DENY) => Some(Decision::Deny),
+            Some(index) => index.parse().ok().map(Decision::Pick),
+            None => None,
+        }
     };
+    if let Some(text) = change {
+        entry.data["answerText"] = text.trim().to_owned().into();
+    } else if plan && option_id == Some(super::question::STOP) {
+        entry.data["answerText"] = json!(super::question::STOP_REASON);
+    }
     entry.data["status"] = if decision.is_some() { "answered" } else { "cancelled" }.into();
     entry.data["selected"] = option_id.into();
     hub.set_entry(entry_id, &entry.data);
@@ -215,4 +239,18 @@ fn is_ours(hub: &Hub, entry_id: &str) -> bool {
         .entry(entry_id)
         .and_then(|e| hub.store.bot(e.data["author"].as_str().unwrap_or(&e.bot_id)).ok().flatten())
         .is_some_and(|row| super::is_external(&row.config))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_plan_card_carries_a_free_text_change() {
+        assert_eq!(plan_change(true, Some("change:use SQLite")), Some("use SQLite"));
+        assert_eq!(plan_change(true, Some("change:  ")), None, "blank text is not an answer");
+        assert_eq!(plan_change(true, Some("change:")), None);
+        assert_eq!(plan_change(true, Some("allow")), None, "a normal option is not text");
+        assert_eq!(plan_change(false, Some("change:use SQLite")), None, "other cards keep their options");
+    }
 }

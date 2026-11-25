@@ -251,6 +251,9 @@ impl Actor {
             raw["command"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
         });
         let kind = tool["kind"].as_str().unwrap_or("other");
+        use crate::agent::security_profile::SecurityProfile;
+        let profile =
+            self.cfg.security_profile.unwrap_or_else(|| SecurityProfile::from_permission(self.cfg.permission));
         // The forbidden commands, then the user's rules, then the bot's general setting: one decision, the same one the
         // rule editor's tester gives.
         let quick =
@@ -270,7 +273,14 @@ impl Actor {
                 return;
             }
             Outcome::Rule { decision: Decision::Deny, pattern, .. } => {
-                self.refuse(rpc_id, &options, &format!("Denied by your rule \"{pattern}\": {title}")).await;
+                // triage-15934: tell the person which profile stopped a write and how to change it.
+                let hint = SecurityProfile::blocked_write_hint(profile, kind, true);
+                let why = if hint.is_empty() {
+                    format!("Denied by your rule \"{pattern}\": {title}")
+                } else {
+                    format!("Denied by your rule \"{pattern}\": {title} {hint}")
+                };
+                self.refuse(rpc_id, &options, &why).await;
                 return;
             }
             _ => {}
@@ -296,9 +306,6 @@ impl Actor {
         // other servers and every other backend keep their card. `evaluate` has already refused a
         // forbidden command or one denied by the person's rules, so this can only add an own tool.
         if !allowed {
-            use crate::agent::security_profile::SecurityProfile;
-            let profile =
-                self.cfg.security_profile.unwrap_or_else(|| SecurityProfile::from_permission(self.cfg.permission));
             let confined = self.cfg.permission == Permission::Ask && profile != SecurityProfile::Full;
             allowed = approval_rules::own_tool_allowed(
                 &self.cfg.backend,

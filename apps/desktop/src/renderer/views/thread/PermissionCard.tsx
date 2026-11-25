@@ -112,6 +112,7 @@ export function PermissionCard({ entry, hostName, answering, respond, propose, o
   const [expanded, setExpanded] = useState(false)
   const [rejectedShake, setRejectedShake] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
+  const [changeText, setChangeText] = useState('')
   const [always, setAlways] = useState<{ option: PermissionOption; proposal: RuleProposal; pattern: string } | null>(null)
   const d = entry.data
   const guidance = toolGuidance(d.toolKind, d.title)
@@ -199,21 +200,43 @@ export function PermissionCard({ entry, hostName, answering, respond, propose, o
             <Text as="div" size="caption" weight="medium" tone="secondary">{outcome(entry)}</Text>
           )
         ) : pending ? (
-          <div className="permission-card-options">
-            {options.map((o, i) => (
-              <div key={o.optionId}>
-                {i > 0 ? <div className="thread-hairline" /> : null}
-                <button
-                  className={answering === null || answering === o.optionId ? 'permission-option' : 'permission-option dimmed'}
-                  disabled={answering !== null}
-                  onClick={() => void choose(o)}
+          <>
+            <div className="permission-card-options">
+              {options.map((o, i) => (
+                <div key={o.optionId}>
+                  {i > 0 ? <div className="thread-hairline" /> : null}
+                  <button
+                    className={answering === null || answering === o.optionId ? 'permission-option' : 'permission-option dimmed'}
+                    disabled={answering !== null}
+                    onClick={() => void choose(o)}
+                  >
+                    <Text size="body" weight={o.kind === 'allow_once' ? 'semibold' : 'regular'} tone={o.kind.startsWith('allow') || o.kind === 'stop' ? 'text' : 'danger'} className="permission-option-label">{optionLabel(o)}</Text>
+                    {answering === o.optionId ? <Spinner size={14} /> : null}
+                  </button>
+                </div>
+              ))}
+            </div>
+            {d.toolKind === 'plan' ? (
+              <VStack gap={8}>
+                <Text size="caption" tone="secondary">{tr('What should change?')}</Text>
+                <AutoTextArea
+                  className="field-box"
+                  value={changeText}
+                  minRows={1}
+                  maxRows={4}
+                  placeholder={tr('Tell the agent what to change')}
+                  onChange={setChangeText}
+                />
+                <Button
+                  kind="secondary"
+                  disabled={answering !== null || !changeText.trim()}
+                  onClick={() => respond(`change:${changeText.trim()}`)}
                 >
-                  <Text size="body" weight={o.kind === 'allow_once' ? 'semibold' : 'regular'} tone={o.kind.startsWith('allow') ? 'text' : 'danger'} className="permission-option-label">{optionLabel(o)}</Text>
-                  {answering === o.optionId ? <Spinner size={14} /> : null}
-                </button>
-              </div>
-            ))}
-          </div>
+                  {tr('Send change')}
+                </Button>
+              </VStack>
+            ) : null}
+          </>
         ) : (
           <Text as="div" size="caption" weight="medium" tone="secondary">{outcome(entry)}</Text>
         )}

@@ -26,6 +26,13 @@ pub(super) const MAX_SELECTED: usize = MAX_OPTIONS;
 
 const APPROVE: &str = "allow";
 const REJECT: &str = "deny";
+/// OpenBot 0.70.0 (`triage-15940`): end planning without approving, and tell the agent to wait.
+pub(super) const STOP: &str = "stop";
+/// A plan card's free-text "what to change" travels as `change:<text>` in the one option id
+/// `respondPermission` carries; the host decides what it means when it commits the answer.
+pub(super) const CHANGE_PREFIX: &str = "change:";
+/// The reason a *Stop planning* tap sends to the `ExitPlanMode` hook.
+pub(super) const STOP_REASON: &str = "Plan mode stopped. Wait for the user's next message.";
 /// The extra option of a multi-answer card that commits the options the person picked.
 pub(super) const DONE: &str = "done";
 
@@ -129,13 +136,16 @@ pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
     let (bot, config) = target(hub, ev)?;
     if ev.tool == "ExitPlanMode" {
         let data = plan_card(ev, &bot, &config.cwd);
-        return match wait_card(hub, ev, &bot, &config, &data, "Approve the plan").await? {
-            Decision::Allow => Some(json!({"permissionDecision": "allow", "updatedInput": ev.input})),
-            Decision::Deny => {
-                Some(json!({"permissionDecision": "deny", "reason": "The plan was rejected from Codync."}))
-            }
-            Decision::Pick(_) | Decision::Picks(_) => None,
+        let Some((decision, entry_id)) = wait_card(hub, ev, &bot, &config, &data, "Approve the plan").await else {
+            return None; // stopped or timed out with no answer: the terminal asks as usual
         };
+        // The card keeps the free-text change (or the stop note) the person committed in `permission.rs`.
+        let text = hub.store.entry(&entry_id).and_then(|e| e.data["answerText"].as_str().map(str::to_owned));
+        let mut verdict = plan_answer(&decision, text.as_deref());
+        if decision == Decision::Allow {
+            verdict["updatedInput"] = ev.input.clone();
+        }
+        return Some(verdict);
     }
     let questions = questions(&ev.input)?;
     let mut answers = Map::new();
@@ -152,7 +162,7 @@ pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
                 .push(json!({"optionId": DONE, "name": "Done", "kind": "allow_once"}));
             data["selected"] = json!([]);
         }
-        let decision = wait_card(hub, ev, &bot, &config, &data, &question.text).await?;
+        let (decision, _) = wait_card(hub, ev, &bot, &config, &data, &question.text).await?;
         let picks = match decision {
             Decision::Pick(index) => vec![index],
             Decision::Picks(picks) => picks,
@@ -262,11 +272,26 @@ fn plan_card(ev: &Event, bot: &str, cwd: &str) -> Value {
         "options": [
             {"optionId": APPROVE, "name": "Approve", "kind": "allow_once"},
             {"optionId": REJECT, "name": "Reject", "kind": "reject_once"},
+            // A distinct kind so clients show the host's name instead of the generic "Deny".
+            {"optionId": STOP, "name": "Stop planning", "kind": "stop"},
         ],
         "status": "pending",
         "selected": Value::Null,
         "author": bot,
     })
+}
+
+/// OpenBot 0.70.0 (`triage-15940`): the verdict the plan card sends to the `ExitPlanMode` hook.
+/// Approve keeps the agent's own input (added by the caller); a stop or a free-text change denies
+/// the plan with the reason the agent should act on. Pure, so the mapping is testable without a hook.
+pub(super) fn plan_answer(decision: &Decision, text: Option<&str>) -> Value {
+    match decision {
+        Decision::Allow => json!({"permissionDecision": "allow"}),
+        _ => {
+            let reason = text.filter(|text| !text.trim().is_empty()).unwrap_or("The plan was rejected from Codync.");
+            json!({"permissionDecision": "deny", "reason": reason})
+        }
+    }
 }
 
 #[cfg(test)]
@@ -421,5 +446,29 @@ mod tests {
         let answered = card_ref(&entry("routine-q", "bot", "answered"));
         assert!(!answered.open, "an answered card cannot be closed twice");
         assert!(!question_can_close(agent, answered));
+    }
+
+    #[test]
+    fn a_plan_card_offers_approve_reject_and_stop_planning() {
+        let ev = Event::parse(&json!({"agent": "", "payload": {
+            "hook_event_name": "PreToolUse", "session_id": "s", "cwd": "/w",
+            "tool_name": "ExitPlanMode", "tool_input": {"plan": "1. Do it"}}}))
+        .expect("an event");
+        let card = plan_card(&ev, "bot", "/w");
+        assert_eq!(card["plan"], true);
+        assert_eq!(card["options"].as_array().map(Vec::len), Some(3));
+        assert_eq!(card["options"][0], json!({"optionId": "allow", "name": "Approve", "kind": "allow_once"}));
+        assert_eq!(card["options"][1], json!({"optionId": "deny", "name": "Reject", "kind": "reject_once"}));
+        assert_eq!(card["options"][2], json!({"optionId": "stop", "name": "Stop planning", "kind": "stop"}));
+    }
+
+    #[test]
+    fn a_plan_answer_approves_stops_or_passes_on_what_to_change() {
+        assert_eq!(plan_answer(&Decision::Allow, None), json!({"permissionDecision": "allow"}));
+        assert_eq!(plan_answer(&Decision::Deny, None)["reason"], "The plan was rejected from Codync.");
+        assert_eq!(plan_answer(&Decision::Deny, Some(STOP_REASON))["reason"], STOP_REASON);
+        assert_eq!(plan_answer(&Decision::Deny, Some("  use SQLite  "))["reason"], "  use SQLite  ");
+        assert_eq!(plan_answer(&Decision::Deny, Some("   "))["reason"], "The plan was rejected from Codync.");
+        assert_eq!(plan_answer(&Decision::Pick(0), None)["permissionDecision"], "deny");
     }
 }

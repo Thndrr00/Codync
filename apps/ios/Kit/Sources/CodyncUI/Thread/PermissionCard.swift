@@ -22,10 +22,13 @@ struct PermissionCard: View {
     var answering: String?
     let respond: (String?) -> Void
     @State private var expanded = false
+    @State private var changeText = ""
 
     private var d: EntryData { entry.data }
     private var pending: Bool { d.status == "pending" }
     private var deletion: Bool { isDeletionApproval(d) }
+    private var plan: Bool { d.toolKind == "plan" }
+    private var trimmedChange: String { changeText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var headline: String {
         switch d.toolKind {
@@ -33,6 +36,7 @@ struct PermissionCard: View {
         case "edit", "delete", "move": "Wants to change files"
         case "fetch": "Wants to access the web"
         case "read", "search": "Wants to read files"
+        case "plan": "Wants your approval of a plan"
         default: "Wants to use a tool"
         }
     }
@@ -78,7 +82,25 @@ struct PermissionCard: View {
             }
 
             if pending {
-                buttons
+                VStack(alignment: .leading, spacing: 8) {
+                    buttons
+                    if plan {
+                        Text(L10n.tr("What should change?"))
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                        TextField(L10n.tr("Tell the agent what to change"), text: $changeText, axis: .vertical)
+                            .lineLimit(1...4)
+                            .font(.body)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .background(Palette.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        Button { respond("change:" + trimmedChange) } label: {
+                            Text(L10n.tr("Send change")).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.secondary)
+                        .disabled(answering != nil || trimmedChange.isEmpty)
+                    }
+                }
             } else {
                 Text(outcome)
                     .font(.caption.weight(.medium))
@@ -120,7 +142,7 @@ struct PermissionCard: View {
                     HStack(spacing: 8) {
                         Text(label(o))
                             .font(.body.weight(o.kind == "allow_once" ? .semibold : .regular))
-                            .foregroundStyle(o.kind.hasPrefix("allow") ? Palette.text : Palette.danger)
+                            .foregroundStyle(o.kind.hasPrefix("allow") || o.kind == "stop" ? Palette.text : Palette.danger)
                         Spacer(minLength: 0)
                         if answering == o.optionId { Spinner(size: 14) }
                     }

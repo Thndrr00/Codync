@@ -72,6 +72,12 @@ Clients: desktop (the bot's settings, for a new or an existing bot), Android (ne
 new bot dialog, and `P` in the rules sheet) show the choice with its sentence and what it sets, and warn that picking one
 for an existing bot replaces its rules.
 
+When a rule denies a write (edit, delete, move, execute) under a profile short of Full access,
+the chat notice appends *"Workspace only blocks this. Try Full access."* (OpenBot 0.70.0,
+`triage-15934`). The pure `security_profile::blocked_write_hint` decides when that hint
+appears; Full access, reads, an ask and the commands no bot may run keep their own wording.
+The notice is a host chat entry, so every client shows it without its own wording.
+
 ## "Always allow" as a rule
 
 On the computer's clients (desktop and terminal), choosing the agent's `allow_always` option does not answer at once:
@@ -136,6 +142,21 @@ deduplicated and capped at four (the most options a question can offer); the car
 Cancelling before *Done* sends no decision and leaves the terminal to ask as usual. The decision and
 the commit are tested in `host/src/external/question.rs` and `host/src/external/tests.rs`; no question
 text is logged as analytics.
+
+## Plan cards
+
+A terminal agent's `ExitPlanMode` asks for a decision on the card built by
+`host/src/external/question.rs::plan_card` (OpenBot 0.70.0, `triage-15940`). It offers
+**Approve**, **Reject** and **Stop planning**, plus a free-text "what to change" field on
+desktop, iPhone and Android. The pure `plan_answer(decision, text)` maps the card's
+answer to the hook verdict: Approve keeps the plan's own input, Reject and a stop deny
+it, and the free text is forwarded as the reason so the agent knows what to change. A
+stop tells the agent to wait for the user's next message. `permission.rs` commits the
+answer on the card as `change:<text>` — the one option id `respondPermission` carries —
+so Approve and Reject behave exactly as before. When the agent stops or the card times
+out with no answer, the existing Drop/expiry path ends plan mode and the terminal asks
+as usual. The terminal shows the *Stop planning* option from the card but has no
+free-text field in this change.
 
 ## Overlapping questions
 
