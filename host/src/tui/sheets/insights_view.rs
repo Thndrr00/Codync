@@ -66,6 +66,36 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let identity = &data["identity"];
+    if identity.is_object() {
+        line(buf, &mut y, tr("Identity").into_owned(), t.bold.patch(t.panel));
+        let headline = identity["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, headline.to_owned(), t.text.patch(t.panel));
+        let band = identity["band"].as_str().unwrap_or("");
+        let section = identity["section"].as_str().unwrap_or("");
+        let rank = identity["rank"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("  {band} · {section} · #{}", rank), t.secondary.patch(t.panel));
+        let traits: Vec<String> = identity["traits"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|tr| {
+                        format!(
+                            "  {} {}: {}",
+                            if tr["on"] == true { "●" } else { "○" },
+                            tr["label"].as_str().unwrap_or(""),
+                            tr["detail"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for trait_line in traits {
+            line(buf, &mut y, trait_line, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let resilience = &data["resilience"];
     if resilience.is_object() {
         line(buf, &mut y, tr("Resilience").into_owned(), t.bold.patch(t.panel));

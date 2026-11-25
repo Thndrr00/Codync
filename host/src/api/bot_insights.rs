@@ -460,6 +460,61 @@ fn resilience_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Roster identity: how this bot appears to the person, read-only.
+fn identity_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_identity as i;
+
+    let c = &row.config;
+    let traits = i::build_traits(
+        &c.avatar_color,
+        &c.avatar_shape,
+        c.avatar_look.as_deref(),
+        c.avatar_photo.as_deref(),
+        c.pinned,
+        c.lead,
+        c.hidden,
+        c.notify,
+        c.section.as_deref(),
+        c.mode.as_deref(),
+        c.catalog.as_deref(),
+    );
+    let band_name = i::band(c.lead, c.pinned);
+    let section = i::section_label(c.section.as_deref());
+    let score_traits = i::enabled_count(&traits) as u32;
+    let total_traits = traits.len() as u32;
+    let score = crate::bdots_activity::percent(score_traits as usize, total_traits as usize);
+
+    json!({
+        "name": c.name,
+        "headline": i::identity_headline(&c.name, band_name, &section),
+        "tone": i::identity_tone(&c.name, c.hidden),
+        "band": band_name,
+        "bandIcon": i::band_icon(band_name),
+        "bandTone": i::band_tone(band_name),
+        "section": section,
+        "mode": i::mode_label(c.mode.as_deref()),
+        "rank": i::rank(c.position),
+        "color": i::color_label(&c.avatar_color),
+        "colorIcon": i::color_icon(&c.avatar_color),
+        "shape": i::shape_label(&c.avatar_shape),
+        "look": i::look_label(c.avatar_look.as_deref()),
+        "visible": i::is_visible(c.hidden),
+        "score": score,
+        "count": i::count_label(&traits),
+        "summary": i::summary(&traits).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "traits": traits.iter().map(|t| json!({
+            "id": t.id,
+            "label": t.label,
+            "detail": t.detail,
+            "icon": t.icon,
+            "tone": t.tone,
+            "on": t.on,
+            "stateIcon": i::state_icon(t.on),
+            "stateTone": i::state_tone(t.on),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -520,6 +575,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "library": library_view(&row),
         "trust": trust_view(&row),
         "resilience": resilience_view(&row),
+        "identity": identity_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

@@ -30,6 +30,20 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let identity = insights.identity
+                    Text(identity.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    HStack(spacing: 12) {
+                        Text("\(L10n.tr("Roster")): \(identity.band)")
+                        Text("\(L10n.tr("Section")): \(identity.section)")
+                        Text("\(L10n.tr("Rank")): \(identity.rank)")
+                    }
+                    .font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(identity.color) · \(identity.shape) · \(identity.look)")
+                        .font(.footnote).foregroundStyle(Palette.tertiary)
+                    ForEach(identity.traits, id: \.id) { trait in
+                        Text("\(trait.on ? "●" : "○") \(trait.label): \(trait.detail)")
+                            .font(.footnote).foregroundStyle(trait.on ? Palette.text : Palette.secondary)
+                    }
                     let resilience = insights.resilience
                     Text(resilience.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(resilience.bar).font(.footnote).foregroundStyle(Palette.accent)

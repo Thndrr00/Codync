@@ -42,6 +42,17 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val identity = insights.identity
+            CardSection("Identity") {
+                row { Text(identity.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text("Roster: ${identity.band}   Section: ${identity.section}   Rank: ${identity.rank}",
+                    style = Type.caption, color = Palette.secondary) }
+                row { Text("${identity.color} · ${identity.shape} · ${identity.look}", style = Type.caption, color = Palette.tertiary) }
+                for (trait in identity.traits) row {
+                    Text("${if (trait.on) "●" else "○"} ${trait.label}: ${trait.detail}",
+                        style = Type.caption, color = if (trait.on) Palette.text else Palette.secondary)
+                }
+            }
             val resilience = insights.resilience
             CardSection("Resilience") {
                 row { Text(resilience.label, style = Type.subheadline.semibold, color = Palette.text) }

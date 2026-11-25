@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Identidad en el roster (23 helpers + UI en 4 clientes)
+
+`bdots_identity.rs` añade 23 helpers puros sobre cómo aparece un bot: colores, formas y looks
+(usando las constantes reales de `store::model`), banda del roster, sección, modo, rango, foto,
+catálogo, visibilidad y notificaciones, además de puntuación, titular y ensamblaje. Reutiliza
+`bdots_text` y `bdots_more`. El endpoint `botInsights` añade el campo `identity` desde la
+configuración existente y la sección «Identity» se muestra en los cuatro clientes.
+
 ## Resiliencia y fallbacks (22 helpers + UI en 4 clientes)
 
 `bdots_fallbacks.rs` añade 22 helpers puros sobre la cadena de agentes de respaldo y los

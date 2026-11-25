@@ -18,9 +18,39 @@ data class BotInsights(
     val library: InsightLibrary = InsightLibrary(),
     val trust: InsightTrust = InsightTrust(),
     val resilience: InsightResilience = InsightResilience(),
+    val identity: InsightIdentity = InsightIdentity(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed roster identity for one bot. */
+@Serializable
+data class InsightIdentity(
+    val name: String = "",
+    val headline: String = "",
+    val tone: String = "",
+    val band: String = "",
+    val bandIcon: String = "",
+    val bandTone: String = "",
+    val section: String = "",
+    val mode: String = "",
+    val rank: Int = 0,
+    val color: String = "",
+    val colorIcon: String = "",
+    val shape: String = "",
+    val look: String = "",
+    val visible: Boolean = false,
+    val score: Int = 0,
+    val count: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val traits: List<InsightIdentityTrait> = emptyList(),
+)
+
+@Serializable data class InsightIdentityTrait(
+    val id: String = "", val label: String = "", val detail: String = "",
+    val icon: String = "", val tone: String = "", val on: Boolean = false,
+    val stateIcon: String = "", val stateTone: String = "",
 )
 
 /** A host-computed resilience summary for one bot. */

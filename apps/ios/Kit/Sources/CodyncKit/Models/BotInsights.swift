@@ -15,9 +15,43 @@ public struct BotInsights: Decodable, Sendable {
     public let library: InsightLibrary
     public let trust: InsightTrust
     public let resilience: InsightResilience
+    public let identity: InsightIdentity
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed roster identity for one bot.
+public struct InsightIdentity: Decodable, Sendable {
+    public let name: String
+    public let headline: String
+    public let tone: String
+    public let band: String
+    public let bandIcon: String
+    public let bandTone: String
+    public let section: String
+    public let mode: String
+    public let rank: Int
+    public let color: String
+    public let colorIcon: String
+    public let shape: String
+    public let look: String
+    public let visible: Bool
+    public let score: Int
+    public let count: String
+    public let summary: [InsightSummaryRow]
+    public let traits: [InsightIdentityTrait]
+}
+
+public struct InsightIdentityTrait: Decodable, Sendable {
+    public let id: String
+    public let label: String
+    public let detail: String
+    public let icon: String
+    public let tone: String
+    public let on: Bool
+    public let stateIcon: String
+    public let stateTone: String
 }
 
 /// A host-computed resilience summary for one bot.

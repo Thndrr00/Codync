@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,24 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Identity')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(identity.tone)}>{identity.headline}</Text>
+        <ValueRow label={tr('Roster')}>{identity.band}</ValueRow>
+        <ValueRow label={tr('Section')}>{identity.section}</ValueRow>
+        <ValueRow label={tr('Rank')}>{String(identity.rank)}</ValueRow>
+        <Text size="footnote" tone="tertiary">{`${identity.color} · ${identity.shape} · ${identity.look}`}</Text>
+        {identity.traits.length ? (
+          <VStack gap={2}>
+            {identity.traits.map((trait) => (
+              <HStack key={trait.id} gap={6}>
+                <Text size="footnote" tone={toneOf(trait.stateTone)}>{trait.on ? '●' : '○'}</Text>
+                <Text size="footnote" tone={toneOf(trait.stateTone)}>{`${trait.label}: ${trait.detail}`}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       <CardSection title={tr('Resilience')}>
