@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val dictation = insights.dictation
+            CardSection("Voice dictation") {
+                row { Text(dictation.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Engine", dictation.engine) }
+                row { ValueRow("Model", dictation.model) }
+                row { ValueRow("Language", dictation.language) }
+            }
             val access = insights.access
             CardSection("Public access") {
                 row { Text(access.mode, style = Type.subheadline.semibold, color = Palette.text) }

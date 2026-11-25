@@ -33,9 +33,26 @@ public struct BotInsights: Decodable, Sendable {
     public let directory: InsightDirectory
     public let blocks: InsightBlocks
     public let access: InsightAccess
+    public let dictation: InsightDictation
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// Voice dictation settings from host configuration.
+public struct InsightDictation: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let engine: String
+    public let engineIcon: String
+    public let engineTone: String
+    public let model: String
+    public let language: String
+    public let supported: Bool
+    public let needsCommit: Bool
+    public let commitMs: Int
+    public let count: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed public link access summary.

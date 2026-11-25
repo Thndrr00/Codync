@@ -36,9 +36,20 @@ data class BotInsights(
     val directory: InsightDirectory = InsightDirectory(),
     val blocks: InsightBlocks = InsightBlocks(),
     val access: InsightAccess = InsightAccess(),
+    val dictation: InsightDictation = InsightDictation(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** Voice dictation settings from host configuration. */
+@Serializable
+data class InsightDictation(
+    val headline: String = "", val tone: String = "",
+    val engine: String = "", val engineIcon: String = "", val engineTone: String = "",
+    val model: String = "", val language: String = "", val supported: Boolean = false,
+    val needsCommit: Boolean = false, val commitMs: Int = 0, val count: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed public link access summary. */

@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Dictado de voz (23 helpers + UI en 4 clientes)
+
+`bdots_dictation.rs` añade 23 helpers puros portados del crate `mercury-voice` de **mercury-agent
+1.5.4** (repo de referencia distinto de bdots): modelos y etiquetas de engine, URLs WebSocket,
+detección de voz en frames PCM16, peaks y niveles, eventos parciales/finales, idiomas y titulares.
+Reutiliza `bdots_more` y `bdots_desk`. El endpoint `botInsights` añade el campo `dictation`; la
+sección «Voice dictation» se muestra en los cuatro clientes.
+
 ## Acceso público (23 helpers + UI en 4 clientes)
 
 `bdots_access.rs` añade 23 helpers puros portados de `app-access.ts`, `app-store.ts`,

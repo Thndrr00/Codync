@@ -1137,6 +1137,29 @@ fn access_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Dictation: voice-to-text settings shaped with helpers from mercury-agent 1.5.4.
+fn dictation_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_dictation as d;
+
+    let engine = "openai"; // the host's default speech engine; config exposes no override yet
+    let language = None;
+    let model = None;
+    json!({
+        "headline": d::dictation_headline(engine, language, model),
+        "tone": d::dictation_tone(engine),
+        "engine": d::engine_label(engine),
+        "engineIcon": d::engine_icon(engine),
+        "engineTone": d::engine_tone(engine),
+        "model": d::model_label(model, engine),
+        "language": d::language_label(language),
+        "supported": d::is_supported(engine),
+        "needsCommit": d::needs_commit(engine),
+        "commitMs": d::commit_after_quiet_ms(),
+        "count": d::count_label(0),
+        "summary": d::summary(engine, language, model, 0).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1224,6 +1247,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "directory": directory_view(&row),
         "blocks": blocks_view(hub, bot),
         "access": access_view(&row),
+        "dictation": dictation_view(&row),
         "description": description,
         "model": model,
         "provider": provider,

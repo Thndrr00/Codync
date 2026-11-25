@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let dictation = insights.dictation
+                    Text(dictation.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Engine")): \(dictation.engine)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Model")): \(dictation.model)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let access = insights.access
                     Text(access.mode).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Routing")): \(access.routing)").font(.footnote).foregroundStyle(Palette.secondary)

@@ -66,6 +66,16 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let dictation = &data["dictation"];
+    if dictation.is_object() {
+        line(buf, &mut y, tr("Voice dictation").into_owned(), t.bold.patch(t.panel));
+        let headline = dictation["headline"].as_str().unwrap_or("");
+        let engine = dictation["engine"].as_str().unwrap_or("");
+        let model = dictation["model"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {engine} · {model}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let access = &data["access"];
     if access.is_object() {
         line(buf, &mut y, tr("Public access").into_owned(), t.bold.patch(t.panel));
