@@ -25,7 +25,52 @@ pub(super) fn row_entry(r: &rusqlite::Row) -> rusqlite::Result<Entry> {
     })
 }
 
+/// OpenBot triage-15865: `row_entry` maps an undecodable `data` cell to `Value::Null`. A list
+/// drops that row instead of handing a reader an entry with no content. `kind` is the row's
+/// declared kind; a row that decodes keeps its place whatever its kind. Pure.
+fn skip_corrupt(row: &Value, kind: &str) -> bool {
+    row.is_null() && !kind.is_empty()
+}
+
+/// Reads a list's rows, skipping one undecodable row (logged, left on disk) so the rest of the
+/// chat still opens. Only ids, kinds and errors are logged, never a row's data.
+fn readable(st: &mut rusqlite::Statement<'_>, params: impl rusqlite::Params, list: &str) -> Result<Vec<Entry>> {
+    let mut rows = st.query(params)?;
+    let mut out = Vec::new();
+    while let Some(row) = rows.next()? {
+        match row_entry(row) {
+            Ok(entry) if skip_corrupt(&entry.data, &entry.kind) => {
+                tracing::warn!(list, id = %entry.id, kind = %entry.kind, "skipping an undecodable entry");
+            }
+            Ok(entry) => out.push(entry),
+            Err(error) => {
+                tracing::warn!(list, error = format!("{error:#}"), "skipping an undecodable entry row");
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// OpenBot triage-15916: a line the deleted bot left in a channel it shared with other
+/// members — it wrote the line (`author`), or it was a side of a bot message
+/// (`sourceBotId` / `targetBotId`, also under `botMessage`). Its own chat's entries are
+/// cleared by `delete_bot`, so only another chat's lane can hold one of these. Pure.
+fn own_channel_entry(entry: &Entry, bot: &str) -> bool {
+    if entry.bot_id == bot {
+        return false;
+    }
+    let names =
+        |key: &str| entry.data[key].as_str() == Some(bot) || entry.data["botMessage"][key].as_str() == Some(bot);
+    ["author", "sourceBotId", "targetBotId"].iter().any(|key| names(key))
+}
+
 pub(super) const ENTRY_COLS: &str = "seq, id, bot_id, rev, kind, turn, data, created_at, updated_at, thread_id";
+/// A malformed cell makes SQLite's `json_*` predicates throw and the whole list fail, so the
+/// loaders read through this projection: bad data becomes JSON `null`, which `readable` drops
+/// (OpenBot triage-15865). The row itself is never changed on disk.
+const SAFE_ENTRIES: &str = "(SELECT seq, id, bot_id, rev, kind, turn, \
+    CASE WHEN json_valid(data) THEN data ELSE 'null' END AS data, \
+    created_at, updated_at, thread_id FROM entries)";
 /// The chat itself, without its side conversations (`Lane::thread`).
 const MAIN: &str = "thread_id IS NULL";
 /// A bot still winding down after its deletion can't leave lines behind (`?2` is the chat).
@@ -141,12 +186,11 @@ impl Store {
     pub fn call_entries(&self, bot_id: &str, call: &str, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND json_extract(data, '$.call') = ?2 AND
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND {PUBLIC} AND json_extract(data, '$.call') = ?2 AND
                (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1))
              ORDER BY seq DESC LIMIT ?3"
         ))?;
-        let mut rows: Vec<Entry> =
-            st.query_map(params![bot_id, call, limit], row_entry)?.collect::<rusqlite::Result<_>>()?;
+        let mut rows = readable(&mut st, params![bot_id, call, limit], "call entries")?;
         rows.reverse();
         Ok(rows)
     }
@@ -200,25 +244,24 @@ impl Store {
         let c = self.db.locked();
         let sql = if since == 0 {
             format!(
-                "SELECT {ENTRY_COLS} FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY bot_id ORDER BY seq DESC) AS rn FROM entries)
+                "SELECT {ENTRY_COLS} FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY bot_id ORDER BY seq DESC) AS rn FROM {SAFE_ENTRIES})
                  WHERE rn <= ?2 AND rev > ?1 ORDER BY seq"
             )
         } else {
-            format!("SELECT {ENTRY_COLS} FROM entries WHERE rev > ?1 AND ?2 > 0 ORDER BY seq")
+            format!("SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE rev > ?1 AND ?2 > 0 ORDER BY seq")
         };
         let mut st = c.prepare(&sql)?;
-        Ok(st.query_map(params![since, cap], row_entry)?.collect::<rusqlite::Result<_>>()?)
+        readable(&mut st, params![since, cap], "entries since")
     }
 
     /// Older entries of a chat, without the messages taken back: a client hears of those through `entries_since`.
     pub fn history(&self, bot_id: &str, before_seq: i64, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND {MAIN} AND seq < ?2 AND {NOT_REMOVED}
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND {PUBLIC} AND {MAIN} AND seq < ?2 AND {NOT_REMOVED}
              ORDER BY seq DESC LIMIT ?3"
         ))?;
-        let mut rows: Vec<Entry> =
-            st.query_map(params![bot_id, before_seq, limit], row_entry)?.collect::<rusqlite::Result<_>>()?;
+        let mut rows = readable(&mut st, params![bot_id, before_seq, limit], "history")?;
         rows.reverse();
         Ok(rows)
     }
@@ -227,10 +270,9 @@ impl Store {
     pub fn thread(&self, bot_id: &str, root: &str, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id = ?2 ORDER BY seq DESC LIMIT ?3"
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND {PUBLIC} AND thread_id = ?2 ORDER BY seq DESC LIMIT ?3"
         ))?;
-        let mut rows: Vec<Entry> =
-            st.query_map(params![bot_id, root, limit], row_entry)?.collect::<rusqlite::Result<_>>()?;
+        let mut rows = readable(&mut st, params![bot_id, root, limit], "thread")?;
         rows.reverse();
         Ok(rows)
     }
@@ -240,22 +282,22 @@ impl Store {
     pub fn file_messages(&self, bot_id: &str, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND {NOT_REMOVED}
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND {PUBLIC} AND {NOT_REMOVED}
                AND (json_array_length(data, '$.files') > 0 OR json_array_length(data, '$.attachments') > 0)
              ORDER BY seq DESC LIMIT ?2"
         ))?;
-        Ok(st.query_map(params![bot_id, limit], row_entry)?.collect::<rusqlite::Result<_>>()?)
+        readable(&mut st, params![bot_id, limit], "file messages")
     }
 
     /// Permission cards still waiting for this bot's user, newest first: its open approvals.
     pub fn pending_approvals(&self, bot_id: &str) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND kind = 'permission'
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND kind = 'permission'
                AND json_extract(data, '$.status') = 'pending'
              ORDER BY rev DESC LIMIT 50"
         ))?;
-        Ok(st.query_map([bot_id], row_entry)?.collect::<rusqlite::Result<_>>()?)
+        readable(&mut st, [bot_id], "pending approvals")
     }
 
     /// The side conversations this bot has written in, most recently used first: documents, routine threads
@@ -273,26 +315,25 @@ impl Store {
     pub fn pending_sign_ins(&self, backend: &str) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE kind = 'notice'
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE kind = 'notice'
                AND json_extract(data, '$.connectionRequest.kind') = 'agent'
                AND json_extract(data, '$.connectionRequest.status') = 'pending'
                AND json_extract(data, '$.connectionRequest.backend') = ?1
              ORDER BY rev"
         ))?;
-        Ok(st.query_map([backend], row_entry)?.collect::<rusqlite::Result<_>>()?)
+        readable(&mut st, [backend], "pending sign-ins")
     }
 
     /// The newest `limit` bot-to-bot notices in `bot_id`'s main chat that involve `peer_id`, oldest first.
     pub fn bot_conversation(&self, bot_id: &str, peer_id: &str, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND kind = 'notice'
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND kind = 'notice'
                AND json_type(data, '$.botMessage') = 'object'
                AND ?2 IN (json_extract(data, '$.botMessage.sourceBotId'), json_extract(data, '$.botMessage.targetBotId'))
              ORDER BY seq DESC LIMIT ?3"
         ))?;
-        let mut rows: Vec<Entry> =
-            st.query_map(params![bot_id, peer_id, limit], row_entry)?.collect::<rusqlite::Result<_>>()?;
+        let mut rows = readable(&mut st, params![bot_id, peer_id, limit], "bot conversation")?;
         rows.reverse();
         Ok(rows)
     }
@@ -302,12 +343,12 @@ impl Store {
     pub fn conversation_since(&self, bot_id: &str, after_seq: i64, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND seq > ?2 AND {NOT_REMOVED} AND
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND {PUBLIC} AND seq > ?2 AND {NOT_REMOVED} AND
                (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1)
                 OR (kind = 'notice' AND json_extract(data, '$.transcript') IS NOT NULL))
              ORDER BY seq LIMIT ?3"
         ))?;
-        Ok(st.query_map(params![bot_id, after_seq, limit], row_entry)?.collect::<rusqlite::Result<_>>()?)
+        readable(&mut st, params![bot_id, after_seq, limit], "conversation since")
     }
 
     /// The newest entry of a bot's chat.
@@ -324,13 +365,11 @@ impl Store {
     pub fn messages_after(&self, lane: &Lane, after_seq: i64, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS ?4 AND seq > ?2 AND {NOT_REMOVED} AND
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS ?4 AND seq > ?2 AND {NOT_REMOVED} AND
                (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1))
              ORDER BY seq DESC LIMIT ?3"
         ))?;
-        let mut rows: Vec<Entry> = st
-            .query_map(params![lane.chat, after_seq, limit, lane.thread], row_entry)?
-            .collect::<rusqlite::Result<_>>()?;
+        let mut rows = readable(&mut st, params![lane.chat, after_seq, limit, lane.thread], "messages after")?;
         rows.reverse();
         Ok(rows)
     }
@@ -455,6 +494,24 @@ impl Store {
         let rev = next_rev(&tx)?;
         tx.commit()?;
         Ok(Some(rev))
+    }
+
+    /// Ids of a deleted bot's own lines in other chats' channel lanes (OpenBot triage-15916).
+    /// The query only narrows candidates; `own_channel_entry` decides which are the bot's.
+    pub fn bot_channel_entry_ids(&self, bot: &str) -> Result<Vec<String>> {
+        let c = self.db.locked();
+        let mut st = c.prepare(&format!(
+            "SELECT {ENTRY_COLS} FROM {SAFE_ENTRIES} WHERE bot_id != ?1 AND
+             (json_extract(data, '$.author') = ?1 OR json_extract(data, '$.sourceBotId') = ?1
+              OR json_extract(data, '$.targetBotId') = ?1
+              OR json_extract(data, '$.botMessage.sourceBotId') = ?1
+              OR json_extract(data, '$.botMessage.targetBotId') = ?1)"
+        ))?;
+        Ok(readable(&mut st, [bot], "channel entries")?
+            .into_iter()
+            .filter(|entry| own_channel_entry(entry, bot))
+            .map(|entry| entry.id)
+            .collect())
     }
 }
 
@@ -612,5 +669,86 @@ mod tests {
         assert_eq!(texts, ["first", "second"]);
         assert_eq!(s.entry(&old.id).unwrap().data, old_data, "existing notice is untouched");
         assert_eq!(s.bot_conversation("a", "b", 1).unwrap().len(), 1, "limit keeps the newest");
+    }
+
+    #[test]
+    fn a_null_data_row_is_corrupt_but_a_decoded_one_is_not() {
+        // OpenBot triage-15865: `row_entry` maps an undecodable cell to `Value::Null`.
+        assert!(skip_corrupt(&Value::Null, EntryKind::User.as_str()));
+        assert!(!skip_corrupt(&json!({"text": "fine"}), EntryKind::User.as_str()));
+        assert!(!skip_corrupt(&Value::Null, ""), "a row with no kind isn't decided here");
+    }
+
+    #[test]
+    fn an_undecodable_row_is_skipped_but_the_rest_of_the_chat_loads() {
+        let s = temp_store();
+        let lane = Lane::main("b1");
+        let first = s.insert_entry(&lane, EntryKind::User, 1, &json!({"text": "before"})).unwrap();
+        // A raw malformed cell: without the guarded projection SQLite's json_* predicates fail
+        // the whole query, and `row_entry` would hand a reader a null entry.
+        s.db.locked()
+            .execute(
+                "INSERT INTO entries(id, bot_id, rev, kind, turn, data, created_at, updated_at, thread_id)
+                 VALUES ('bad', 'b1', 2, 'user', 1, '{not json', 1, 1, NULL)",
+                [],
+            )
+            .unwrap();
+        let last = s.insert_entry(&lane, EntryKind::User, 1, &json!({"text": "after"})).unwrap();
+        let ids = |rows: Vec<Entry>| rows.into_iter().map(|e| e.id).collect::<Vec<_>>();
+        let expected = [first.id.clone(), last.id.clone()];
+        assert_eq!(ids(s.history("b1", i64::MAX, 10).unwrap()), expected);
+        assert_eq!(ids(s.entries_since(0, 10).unwrap()), expected);
+        assert_eq!(ids(s.messages_after(&lane, 0, 10).unwrap()), expected);
+        assert_eq!(ids(s.conversation_since("b1", 0, 10).unwrap()), expected);
+        let still_there =
+            s.db.locked()
+                .query_row("SELECT COUNT(*) FROM entries WHERE id = 'bad'", [], |r| r.get::<_, i64>(0))
+                .unwrap();
+        assert_eq!(still_there, 1, "the bad row is left on disk");
+    }
+
+    #[test]
+    fn only_the_deleted_bots_own_channel_lines_are_purged() {
+        let entry = |chat: &str, data: Value| Entry {
+            seq: 1,
+            id: "e".into(),
+            bot_id: chat.into(),
+            rev: 1,
+            kind: EntryKind::Agent.as_str().into(),
+            turn: 1,
+            data,
+            created_at: 0,
+            updated_at: 0,
+            thread_id: None,
+        };
+        assert!(own_channel_entry(&entry("g", json!({"author": "a"})), "a"));
+        assert!(own_channel_entry(&entry("g", json!({"sourceBotId": "a"})), "a"));
+        assert!(own_channel_entry(&entry("g", json!({"botMessage": {"targetBotId": "a"}})), "a"));
+        assert!(!own_channel_entry(&entry("g", json!({"author": "b"})), "a"), "another member stays");
+        assert!(!own_channel_entry(&entry("a", json!({"author": "a"})), "a"), "its own chat is cleared elsewhere");
+        assert!(!own_channel_entry(&entry("g", json!({"text": "mentions a"})), "a"), "text is not an author");
+    }
+
+    #[test]
+    fn channel_entry_ids_are_scoped_to_one_bot_and_leave_others_alone() {
+        let s = temp_store();
+        let group = Lane::main("g");
+        let mine = s.insert_entry(&group, EntryKind::Agent, 1, &json!({"text": "a", "author": "a"})).unwrap();
+        let other = s.insert_entry(&group, EntryKind::Agent, 1, &json!({"text": "b", "author": "b"})).unwrap();
+        let notice = s
+            .insert_entry(
+                &group,
+                EntryKind::Notice,
+                1,
+                &json!({"botMessage": {"sourceBotId": "a", "targetBotId": "b"}}),
+            )
+            .unwrap();
+        s.insert_entry(&Lane::main("a"), EntryKind::User, 1, &json!({"text": "own chat"})).unwrap();
+        let mut ids = s.bot_channel_entry_ids("a").unwrap();
+        ids.sort();
+        let mut expected = [mine.id.clone(), notice.id.clone()];
+        expected.sort();
+        assert_eq!(ids, expected);
+        assert!(!ids.contains(&other.id), "another member's channel message stays");
     }
 }

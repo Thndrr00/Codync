@@ -581,7 +581,7 @@ impl Actor {
 const SESSION_TIMEOUT: Duration = Duration::from_mins(3);
 
 #[cfg(test)]
-mod tests {
+mod tools_tests {
     use super::*;
 
     #[test]

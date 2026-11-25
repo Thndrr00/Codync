@@ -247,6 +247,24 @@ impl Hub {
             let _ =
                 self.events.send(json!({"type": "bot", "rev": rev, "bot": {"id": id, "deleted": true, "rev": rev}}));
         }
+        // OpenBot triage-15916: its own lines in the channels it shared go with it; another
+        // member's messages stay. Its own chat's entries were cleared by `delete_bot` above.
+        match self.store.bot_channel_entry_ids(id) {
+            Ok(ids) => {
+                for entry_id in ids {
+                    if let Err(error) = self.store.delete_entry(&entry_id) {
+                        tracing::warn!(
+                            bot = id,
+                            error = format!("{error:#}"),
+                            "couldn't purge a deleted bot's channel entry"
+                        );
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!(bot = id, error = format!("{error:#}"), "couldn't list a deleted bot's channel entries");
+            }
+        }
         crate::network::publish(self);
         // Its shared files and artifacts are unreachable once the bot is deleted.
         let folders = [crate::chat::files::root(id), crate::chat::artifacts::root(id)];
@@ -281,5 +299,39 @@ mod tests {
         assert_eq!(model_change("codex", Some("gpt-5"), &[]).as_deref(), Some("gpt-5"), "no catalog to contradict");
         assert_eq!(model_change("codex", None, &both), None, "a blank name is not a change");
         assert_eq!(model_change("codex", Some(" gpt-5 "), &both).as_deref(), Some("gpt-5"));
+    }
+
+    #[tokio::test]
+    async fn deleting_a_bot_purges_only_its_own_channel_lines() {
+        use crate::remote::identity::Identity;
+        use crate::store::{EntryKind, Lane};
+
+        let dir = std::env::temp_dir().join(format!("codync-bot-delete-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).unwrap();
+        let hub = Hub::new(store, "bots-test".into(), Identity::load_or_create(&dir).unwrap(), "test".into(), 0);
+        for v in [
+            json!({"id": "a", "name": "a", "backend": "claude", "cwd": "/tmp"}),
+            json!({"id": "b", "name": "b", "backend": "claude", "cwd": "/tmp"}),
+            json!({"id": "g", "name": "g", "kind": "group", "members": ["a", "b"]}),
+        ] {
+            hub.store.save_bot(&serde_json::from_value::<BotConfig>(v).unwrap()).unwrap();
+        }
+        let mine = hub
+            .store
+            .insert_entry(&Lane::main("g"), EntryKind::Agent, 1, &json!({"text": "from a", "author": "a"}))
+            .unwrap();
+        let theirs = hub
+            .store
+            .insert_entry(&Lane::main("g"), EntryKind::Agent, 1, &json!({"text": "from b", "author": "b"}))
+            .unwrap();
+        let own = hub.store.insert_entry(&Lane::main("a"), EntryKind::User, 1, &json!({"text": "own chat"})).unwrap();
+
+        hub.delete_bot("a").unwrap();
+
+        assert!(hub.store.entry(&mine.id).is_none(), "the deleted bot's channel line is gone");
+        assert!(hub.store.entry(&theirs.id).is_some(), "another member's channel line stays");
+        assert!(hub.store.entry(&own.id).is_none(), "its own chat still goes with it");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

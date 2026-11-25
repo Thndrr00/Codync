@@ -154,6 +154,12 @@ tests (`host/src/agent/bot/turn_rules.rs`):
 - When a Claude process exits while its subagents or other background work still run, the host posts
   one notice and schedules a short recovery turn that says what stopped and resumes the unfinished
   work without repeating completed steps (triage-15555).
+- An agent can answer a whole turn without the MCP servers Codync handed it. When a `session/new`
+  reply reports its servers and any declared server is missing, the host posts one plain notice in
+  the turn's lane — "The agent ran without Codync's tools" — and marks the tools as changed, so the
+  next message opens a fresh session and declares them again (OpenBot triage-15811). An agent that
+  does not report its servers is left alone; only server names are compared, never tool or page
+  content. The pure decision is `tools_loaded` in `host/src/agent/bot/session.rs`.
 
 Not in this pass: catalog keys, a dedicated `task` type in the SSE catch-up (metadata is refreshed
 with `taskList`), per-task queue reorder and per-task analytics events. No method described here

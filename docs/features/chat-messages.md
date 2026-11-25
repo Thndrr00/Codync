@@ -239,3 +239,17 @@ once the turn ends, its last message's `↳ N steps` line counts them the same w
   opacity and a small scale change together. The transition honors Reduce Motion and reverses
   when work restarts during an exit. iPhone conversation insertion, removal and scrolling
   keep their existing animations.
+
+## Stored messages
+
+- One undecodable transcript row no longer makes a chat unreadable. The entry loaders read through
+  a projection that substitutes a JSON `null` for a malformed cell, so SQLite's `json_*`
+  predicates don't abort the list; `skip_corrupt` then drops just that row from the result while
+  it stays on disk and a warning names only its id and kind (OpenBot triage-15865). Every other
+  message of the chat, and every other chat, still opens.
+- Deleting an agent removes its own lines from the channels it shared with other members — the
+  entries it wrote (`author`) and bot messages it sent to or received from another bot
+  (`sourceBotId` / `targetBotId`) in another chat's lane. Other members' channel messages stay,
+  as do the deleted bot's own chat entries that `deleteBot` already cleared (OpenBot
+  triage-15916). `own_channel_entry` in `host/src/store/entries.rs` is the pure decision, and
+  the purge runs just after the bot row is deleted in `host/src/hub/bots.rs`.
