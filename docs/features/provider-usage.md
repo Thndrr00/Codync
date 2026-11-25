@@ -86,6 +86,27 @@ billing periods, the saved reading and Android decoding of unavailable
 accounts. Real account/provider and installed-app checks must be recorded
 separately; compilation does not establish live quota availability.
 
+## Resetting a spent window with credits
+
+When a provider reports extra credits (a credit balance or bonus-credit note in its usage
+windows) and one of its accounts is held by a spent plan window, the desktop's Settings ›
+Providers and the phone's Usage screen offer **Reset usage** on that provider's row; the
+terminal `U` sheet shows the same offer and "Using credits" state. The host's pure
+`usage/reset.rs` decision requires both facts; it
+adds no row for a rate limit, a top-up-needed state or a provider that can still answer.
+Calling the method spends one of those credits (a durable per-account count in the host's
+`kv`, never a client credential), clears the hold so the next turn tries the agent again, and
+marks the account **Using credits** until the window the provider reported ends. The composer
+says "Using credits" with that reset time instead of "Usage limit reached". The refresh loop
+recomputes offers and drops expired credits; a failed or later reading replaces the credit
+note as usual. The action is the host API method `resetUsageCredits` with the provider id;
+Codync still never buys credits or calls a provider with a client-held login.
+
+On Linux, a Codex bot limited to Workspace whose sandbox cannot start now says plainly that
+Codex couldn't start its sandbox and suggests Ask first or Full access, instead of showing
+the low-level error (OpenBot 16118). The pure `agent/fallback/reason.rs` decision is used by
+the turn's existing error formatter; it adds no approval card.
+
 ## Updating the agent CLIs (OpenBot 0.75.0)
 
 Once an hour the host checks whether a provider CLI it downloaded itself (an ACP

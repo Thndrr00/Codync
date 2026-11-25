@@ -202,10 +202,32 @@ pub fn error_kind(error: &anyhow::Error) -> &str {
     error.chain().find_map(|cause| cause.downcast_ref::<RpcError>()).and_then(|r| r.kind.as_deref()).unwrap_or_default()
 }
 
+/// Phrases a Linux Codex start failure where the Workspace-only sandbox could not be created.
+/// The person can switch to Ask first or Full access, so say so instead of the low-level error
+/// (OpenBot 16118). No new approval card: this is only the turn's failure text. Pure and tested.
+pub fn sandbox_start_failure(error: &str) -> Option<&'static str> {
+    const START_WORDS: [&str; 8] = [
+        "sandbox failed to start",
+        "failed to start sandbox",
+        "could not start sandbox",
+        "couldn't start sandbox",
+        "sandbox could not start",
+        "sandbox couldn't start",
+        "sandbox initialization failed",
+        "failed to initialize sandbox",
+    ];
+    const MESSAGE: &str = "Codex couldn't start its sandbox. Choose Ask first or Full access to keep working.";
+    let lower = error.to_ascii_lowercase();
+    START_WORDS.iter().any(|word| lower.contains(word)).then_some(MESSAGE)
+}
+
 /// Codex's settings reader can fail with a serde detail like "invalid data". That tells the person
 /// nothing they can do: name the fix instead (OpenBot 0.78.0). Other errors keep their detail.
 pub fn settings_failure_message(raw: &str) -> String {
     const PLAIN: &str = "couldn't load your ChatGPT settings; reconnect in Providers and try again";
+    if let Some(sandbox) = sandbox_start_failure(raw) {
+        return sandbox.to_owned();
+    }
     let lower = raw.to_ascii_lowercase();
     let settings_failure = lower.contains("invalid data")
         || lower.contains("invalid settings")
@@ -496,5 +518,27 @@ mod tests {
         }
         assert_eq!(settings_failure_message("The agent timed out"), "The agent timed out");
         assert_eq!(settings_failure_message(""), "");
+    }
+
+    #[test]
+    fn a_workspace_only_sandbox_that_wont_start_says_which_permission_to_choose() {
+        // OpenBot 16118: the raw Linux error names a syscall or a sandbox binary, not a next step.
+        let message = "Codex couldn't start its sandbox. Choose Ask first or Full access to keep working.";
+        for raw in [
+            "Failed to start sandbox: no such device",
+            "Sandbox failed to start (landlock)",
+            "couldn't start sandbox: permission denied",
+            "Sandbox initialization failed",
+            "failed to initialize sandbox bubblewrap",
+        ] {
+            assert_eq!(sandbox_start_failure(raw), Some(message), "{raw}");
+            assert_eq!(settings_failure_message(raw), message, "{raw}");
+        }
+        for raw in
+            ["The agent timed out", "invalid data", "Sandbox denied writing to /etc", "sandboxed app failed to render"]
+        {
+            assert_eq!(sandbox_start_failure(raw), None, "{raw}");
+        }
+        assert_eq!(settings_failure_message("Sandbox denied writing to /etc"), "Sandbox denied writing to /etc");
     }
 }

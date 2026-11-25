@@ -222,6 +222,13 @@ the same checks (`host/src/routines/hooks.rs`); the protocol is
   content type `application/json`, secret = the key. `routineWebhook` with
   `rotate: true` replaces the key; the old one stops working at once, including in
   the cloud.
+  A sender that must keep its own secret can use **Use the sender's secret** in the
+  webhook panel. Standard Webhooks deliveries (`webhook-id`, `webhook-timestamp`,
+  `webhook-signature: v1,<base64>`) signed with it are accepted beside the routine
+  key; the pure check in `routines/events.rs` requires the signature over the exact
+  `<id>.<timestamp>.<body>` and a timestamp within five minutes of the host's clock.
+  The secret is stored only in the host's routine state, never in a client, reply or
+  log. Stopping its use removes it; deleting the routine does too.
 - **Events**: a JSON object is the event as-is; a GitHub delivery becomes
   `{source:"github", event:"<event>.<action>", repo, sender, text, url, payload}`
   (GitHub `ping` succeeds without running); other bodies become `{text}`. Event
@@ -234,6 +241,11 @@ the same checks (`host/src/routines/hooks.rs`); the protocol is
 - **Delivery**: `X-Delivery-Id`, `X-GitHub-Delivery` or `Idempotency-Key`
   deduplicates retries against retained run records. Bodies are limited to 64 KB.
   A paused routine refuses (`409`); a non-matching event is accepted and ignored.
+  Both are recorded in a 50-entry history with a stable reason (`paused` or
+  `mismatch`), shown in the webhook panel without the payload or any secret.
+  **Send test event** has the host build a sample matching the routine's event and
+  filters, sign it with the sender's secret (or the routine key) and send it through
+  the real verification path; a paused routine still runs the test.
   While the routine has a run under way or queued (a retry waiting for its time
   doesn't count), the local endpoint answers `409` and the cloud
   queue retries later (30 s doubling to 15 min).
@@ -260,7 +272,10 @@ All normal methods use the existing authenticated host API / authorized E2E chan
 | `deleteRoutine` | `botId`, `id` |
 | `runRoutine` | `botId`, `id` (a waiting retry runs now instead) |
 | `retryRoutineRun` | `botId`, `runId` of a failed run whose notice offers a retry; returns the new `run` |
-| `routineWebhook` | `botId`, `id`, optional `rotate`; returns `url` (public or null), `localUrl`, `key`, `connected` |
+| `routineWebhook` | `botId`, `id`, optional `rotate`; returns `url` (public or null), `localUrl`, `key`, `connected`, `usesSenderSecret` |
+| `routineSenderSecret` | `botId`, `id`, `secret` (omit to clear); sets the sender's own Standard Webhooks secret on the host |
+| `testRoutineWebhook` | `botId`, `id`; signs a sample delivery and runs it through the real verification path |
+| `routineIgnored` | `botId`, `id`; the bounded ignored-delivery history |
 | `routineFlowCanvas` and seven more | A routine's flow of bot-to-bot hand-offs: canvas, node positions, connect, disconnect, test. See [routine flows](routine-flows.md#host-api). |
 
 The local-only `routineCall` backs the MCP tools. Each MCP instance is scoped to
@@ -309,7 +324,9 @@ keeping only the latest failure's event, the user retry's busy/paused refusals a
 deleting the routine (`routines/retry.rs`), waiting retries vs. Stop, the tick and a
 scheduled fire (`routines/runner.rs`), timezone calculation, invalid schedules, event filters,
 persistence, pause/resume, bot ownership, bearer/HMAC checks, GitHub event mapping and
-the relay's hook registration, acks and retries. `cloud/test/hooks.test.ts` covers the
+the relay's hook registration, acks and retries; unit tests also cover Standard Webhooks
+signatures (freshness, exact body, several offered signatures), sample events matching event filters and the
+bounded ignored-delivery log. `cloud/test/hooks.test.ts` covers the
 edge checks, queue limits, deduplication, ordering, retry and expiry; the cloud e2e
 (`npm run e2e`, step 5b) delivers through a real Worker and host, including a signed
 GitHub delivery queued while the host was down. Swift tests cover the wire model and

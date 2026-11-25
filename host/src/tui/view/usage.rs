@@ -15,17 +15,35 @@ use super::time::{DAYS, MONTHS, clock, local, month_day, now_ms};
 /// One line of the sheet's list.
 enum Line<'a> {
     Provider(&'a str),
+    /// The host offers to spend one extra credit and end this provider's usage hold.
+    Reset,
+    /// The hold ended after a reset; this account is spending credits until its window resets.
+    Using(&'a Value),
     /// Why a provider has no numbers: its agent is too old, or this account can't be read.
     Status(&'a str),
     Window(&'a Value),
     Gap,
 }
 
-/// Each provider's name, why it can't report, its windows and a gap.
-fn lines(providers: &[Value]) -> Vec<Line<'_>> {
+fn base_id(id: &str) -> &str {
+    id.split(':').next().unwrap_or(id)
+}
+
+/// Each provider's name, its credit state, why it can't report, its windows and a gap.
+fn lines(usage: &Value) -> Vec<Line<'_>> {
+    let providers = usage["providers"].as_array().map_or(&[], Vec::as_slice);
+    let offers = usage["creditOffers"].as_array().map_or(&[], Vec::as_slice);
+    let using = usage["usingCredits"].as_array().map_or(&[], Vec::as_slice);
     let mut lines = Vec::new();
     for p in providers {
         lines.push(Line::Provider(p["name"].as_str().unwrap_or_default()));
+        let belongs = |row: &&Value| {
+            row["id"].as_str().is_some_and(|id| p["id"].as_str().is_some_and(|owner| base_id(id) == base_id(owner)))
+        };
+        if offers.iter().any(belongs) {
+            lines.push(Line::Reset);
+        }
+        lines.extend(using.iter().find(belongs).map(Line::Using));
         lines.extend(p["status"].as_str().map(Line::Status));
         lines.extend(p["windows"].as_array().into_iter().flatten().map(Line::Window));
         lines.push(Line::Gap);
@@ -47,8 +65,7 @@ pub(in crate::tui) fn usage_services(app: &App) -> &[Value] {
 
 /// How far the list scrolls on a screen `height` rows tall: more providers than fit scroll with ↑↓.
 pub(in crate::tui) fn usage_scroll_max(app: &App, height: u16) -> usize {
-    let providers = app.usage["providers"].as_array().cloned().unwrap_or_default();
-    let rows = lines(&providers).len();
+    let rows = lines(&app.usage).len();
     let (_, fits) = sheet(Rect::new(0, 0, 80, height), rows);
     rows.saturating_sub(fits.saturating_sub(usize::from(week_line(&app.week).is_some())))
 }
@@ -56,7 +73,7 @@ pub(in crate::tui) fn usage_scroll_max(app: &App, height: u16) -> usize {
 pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App, scroll: usize) {
     let t = theme();
     let providers = app.usage["providers"].as_array().cloned().unwrap_or_default();
-    let lines = lines(&providers);
+    let lines = lines(&app.usage);
     let (r, fits) = sheet(area, lines.len());
     // The week's line takes the row above the footer.
     let fits = fits.saturating_sub(usize::from(week_line(&app.week).is_some()));
@@ -70,6 +87,14 @@ pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App, scroll: usize) {
         match line {
             Line::Provider(name) => {
                 put(buf, inner.x, y, inner.width, name, t.bold.patch(t.panel));
+            }
+            Line::Reset => {
+                put(buf, inner.x + 2, y, inner.width.saturating_sub(2), &tr("Reset usage"), t.amber.patch(t.panel));
+            }
+            Line::Using(credit) => {
+                let until = credit["until"].as_i64().unwrap_or(0);
+                let line = format!("{} · {}", tr("Using credits"), when_future(until));
+                put(buf, inner.x + 2, y, inner.width.saturating_sub(2), &line, t.secondary.patch(t.panel));
             }
             Line::Status(status) => {
                 let message = if *status == "unsupported" {
@@ -204,7 +229,7 @@ pub(in crate::tui) fn when_future(ms: i64) -> String {
 mod tests {
     use super::super::super::app::App;
     use super::super::super::net::Client;
-    use super::{usage_scroll_max, week_line, window};
+    use super::{Line, lines, usage_scroll_max, week_line, window};
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use serde_json::{Value, json};
@@ -219,6 +244,26 @@ mod tests {
             let dots: String = (21..37).map(|x| buf[(x, 0)].symbol()).collect();
             assert_eq!(dots, expected);
         }
+    }
+
+    #[test]
+    fn a_provider_with_a_credit_state_shows_reset_or_using_credits() {
+        let usage = json!({
+            "providers": [{"id": "claude:acc_1", "name": "Claude 2", "windows": []}],
+            "creditOffers": [{"id": "claude:acc_1", "credits": 3}],
+        });
+        assert!(lines(&usage).iter().any(|line| matches!(line, Line::Reset)));
+        let usage = json!({
+            "providers": [{"id": "claude:acc_1", "name": "Claude 2", "windows": []}],
+            "usingCredits": [{"id": "claude:acc_1", "until": 9_000}],
+        });
+        assert!(lines(&usage).iter().any(|line| matches!(line, Line::Using(_))));
+        // A different account's credit state doesn't attach to this provider row.
+        let usage = json!({
+            "providers": [{"id": "claude", "name": "Claude", "windows": []}],
+            "creditOffers": [{"id": "codex", "credits": 3}],
+        });
+        assert!(!lines(&usage).iter().any(|line| matches!(line, Line::Reset)));
     }
 
     #[test]

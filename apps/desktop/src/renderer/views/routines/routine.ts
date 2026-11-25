@@ -142,6 +142,16 @@ export interface RoutineWebhook {
   connected: boolean
   /** In no account, so public deliveries can't reach it. */
   needsAccount?: boolean
+  /** The sender signs with its own Standard Webhooks secret instead of, or beside, this key. */
+  usesSenderSecret?: boolean
+}
+
+/** A signed delivery that was refused or ignored, without its payload or any secret. */
+export interface IgnoredWebhook {
+  at: number
+  /** `paused` or `mismatch`. */
+  reason: string
+  deliveryId?: string | null
 }
 
 /** A moment on the routines calendar: a run that stood for it, or an occurrence still to come. */

@@ -35,9 +35,11 @@ mod origin;
 mod rebinding;
 mod remote;
 mod roster;
+mod routine_webhooks;
 mod saved_searches;
 mod tasks;
 mod templates;
+mod usage_reset;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
@@ -136,6 +138,10 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
             return island_queue::cancel(hub, bot, str_arg(&b, "entryId")?).await;
         }
         "messageLink" => return message_link::call(hub, &b),
+        m if routine_webhooks::METHODS.contains(&m) => {
+            return routine_webhooks::call(hub, caller, m, &b);
+        }
+        m if m == usage_reset::METHOD => return usage_reset::call(hub, caller, &b),
         "mediaModels" => return media::models(hub, &b),
         "sunraModels" => return media::sunra_models(hub, &b).await,
         "sunraCredits" => return media::sunra_credits(hub, &b).await,

@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,18 +40,43 @@ import com.codync.android.core.WeekSummary
 import com.codync.android.core.UsageWindow
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.roundToInt
 
+/** An additive part of the host's usage event: a spent window that can spend one extra credit. */
+private data class CreditOffer(val id: String, val credits: Int)
+private data class UsingCredits(val id: String, val until: Long)
+
+private fun JsonObject.creditOffers(): List<CreditOffer> = (this["creditOffers"]?.jsonArray).orEmpty().mapNotNull { item ->
+    val row = item.jsonObject
+    val id = row["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+    CreditOffer(id, row["credits"]?.jsonPrimitive?.intOrNull ?: 0)
+}
+
+private fun JsonObject.usingCredits(): List<UsingCredits> = (this["usingCredits"]?.jsonArray).orEmpty().mapNotNull { item ->
+    val row = item.jsonObject
+    val id = row["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+    val until = row["until"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
+    UsingCredits(id, until)
+}
+
 /**
  * Usage limits, opened from the State tab (iOS `UsageSheet` + `UsageView`): one card per
  * provider, the tightest limit as a big bar, every limit listed below. Pull down to refresh.
+ * `reset` calls the host's Reset usage method; the host holds every credential and credit count.
  */
 @Composable fun UsageScreen(state: AppState, refresh: (force: Boolean) -> Unit, reload: suspend () -> Unit,
-    week: suspend () -> WeekSummary? = { null }) {
+    week: suspend () -> WeekSummary? = { null }, reset: suspend (String) -> Unit = {}) {
     val dismiss = LocalDismissModal.current
     val report = remember(state.usage) { runCatching { UsageReport.decode(state.usage) }.getOrNull() ?: UsageReport() }
     val online = state.actualConnection is LinkState.Ready
@@ -58,6 +84,8 @@ import kotlin.math.roundToInt
     LaunchedEffect(online) { if (online) refresh(false) }
     var summary by remember { mutableStateOf<WeekSummary?>(null) }
     LaunchedEffect(online) { if (online) summary = week() }
+    val offers = remember(state.usage) { state.usage.creditOffers() }
+    val usingCredits = remember(state.usage) { state.usage.usingCredits() }
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(leading = { IconButton("Close", "xmark", action = dismiss) },
             title = { Text("Usage", style = Type.body.semibold, color = Palette.text) })
@@ -67,7 +95,11 @@ import kotlin.math.roundToInt
         }
         PullToRefresh({ if (online) reload() }, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                for (provider in report.providers) key(provider.id) { ProviderCard(provider) }
+                for (provider in report.providers) key(provider.id) {
+                    val baseId = provider.id.substringBefore(':')
+                    ProviderCard(provider, offers.firstOrNull { it.id.substringBefore(':') == baseId },
+                        usingCredits.firstOrNull { it.id.substringBefore(':') == baseId }, reset, reload)
+                }
                 summary?.takeIf { it.activeBots > 0 }?.let { WeekCard(it) }
                 if (report.providers.isEmpty()) EmptyUsage("No usage yet", "Your computer reads plan limits from the agents installed on it.")
             }
@@ -101,8 +133,10 @@ import kotlin.math.roundToInt
     }
 }
 
-@Composable private fun ProviderCard(provider: UsageProvider) {
+@Composable private fun ProviderCard(provider: UsageProvider, offer: CreditOffer?, using: UsingCredits?,
+    reset: suspend (String) -> Unit, reload: suspend () -> Unit) {
     var collapsed by rememberSaveable(provider.id) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val turn by animateFloatAsState(if (collapsed) 180f else 0f, Motion.layout(), label = "Collapse")
     val tint = provider.widgetTint()
     Column(Modifier.fillMaxWidth().clip(RoundedRectangle(20.dp)).background(Palette.surface).padding(14.dp),
@@ -115,6 +149,11 @@ import kotlin.math.roundToInt
             IconButton(if (collapsed) "Expand" else "Collapse", "chevron.up", Modifier.rotate(turn)) { collapsed = !collapsed }
         }
         provider.statusLabel?.let { Text(tr(it), style = Type.caption, color = Palette.secondary) }
+        if (using != null) Text("${tr("Using credits")} · ${updatedAt(using.until)}",
+            style = Type.caption, color = Palette.secondary)
+        if (offer != null) SecondaryButton(tr("Reset usage")) {
+            scope.launch { reset(offer.id); reload() }
+        }
         provider.tightest?.let { top ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row {

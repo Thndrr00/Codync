@@ -37,12 +37,15 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeMap,
     str::FromStr,
     sync::{Arc, Mutex},
 };
 
 const STATE_KEY: &str = "routines.v1";
 const MAX_FINISHED_RUNS: usize = 1000;
+/// How many refused deliveries stay in the history; a full log drops its oldest entries.
+const MAX_IGNORED_DELIVERIES: usize = 50;
 /// What a routine does with the occurrences that came due while the host was away: record them
 /// and drop them (`skip`), or run the newest one when the host comes back (`runOnce`).
 pub const MISSED_POLICIES: [&str; 2] = ["skip", "runOnce"];
@@ -177,6 +180,17 @@ impl Run {
     }
 }
 
+/// A signed delivery that did not start a run, kept for the panel's short history.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IgnoredDelivery {
+    routine_id: String,
+    at: i64,
+    /// `paused` or `mismatch`: why no run was queued.
+    reason: String,
+    delivery_id: Option<String>,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct State {
     routines: Vec<Routine>,
@@ -184,6 +198,11 @@ struct State {
     /// Written with the terminal run, acknowledged only after its outputs have been queued.
     #[serde(default)]
     pending_flows: Vec<flow::Start>,
+    /// A sender's own Standard Webhooks secret, by routine id. Only the host holds these.
+    #[serde(default)]
+    sender_secrets: BTreeMap<String, String>,
+    #[serde(default)]
+    ignored: Vec<IgnoredDelivery>,
 }
 
 pub struct Routines {
@@ -533,6 +552,7 @@ impl Routines {
             r.deleted = true;
             r.enabled = false;
             r.webhook_key.clear();
+            s.sender_secrets.remove(id);
             cancel_pending(s, id);
             Ok(retry::forget(s, |run| run.routine_id == id))
         })?;
@@ -623,14 +643,13 @@ impl Routines {
         if rotate {
             self.rotate_webhook(hub, bot, id, true)?;
         }
-        let key = {
+        let (key, uses_sender_secret) = {
             let s = self.state.locked();
             s.routines
                 .iter()
                 .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
+                .map(|r| (r.webhook_key.clone(), s.sender_secrets.contains_key(id)))
                 .context("routine not found")?
-                .webhook_key
-                .clone()
         };
         let cloud = hub.cloud.status();
         // Public deliveries go through the relay, for a computer in an account (docs/plans/optional-sign-in.md).
@@ -644,7 +663,71 @@ impl Routines {
             "localUrl": format!("http://127.0.0.1:{}/hooks/routines/{id}", hub.port),
             "key": key,
             "connected": url.is_some() && cloud.connected,
+            "usesSenderSecret": uses_sender_secret,
         }))
+    }
+
+    /// Sets (or clears, with `None`) the sender's own Standard Webhooks secret for `id`. The value
+    /// lives only in the host's routine state; neither a reply nor a log ever carries it.
+    pub fn set_sender_secret(&self, store: &Store, bot: &str, id: &str, secret: Option<String>) -> Result<Value> {
+        let cleaned = secret.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
+        if cleaned.as_ref().is_some_and(|s| s.len() > 512) {
+            bail!("the sender secret is too long");
+        }
+        self.change(store, |s| {
+            s.routines.iter().find(|r| r.id == id && r.bot_id == bot && !r.deleted).context("routine not found")?;
+            match cleaned {
+                Some(value) => {
+                    s.sender_secrets.insert(id.to_owned(), value);
+                }
+                None => {
+                    s.sender_secrets.remove(id);
+                }
+            }
+            Ok(json!({"usesSenderSecret": s.sender_secrets.contains_key(id)}))
+        })
+    }
+
+    /// The latest deliveries that were signed but did not run, for the routine's webhook panel.
+    pub fn ignored(&self, bot: &str, id: &str) -> Value {
+        let state = self.state.locked();
+        if !state.routines.iter().any(|r| r.id == id && r.bot_id == bot && !r.deleted) {
+            return json!({"ignored": []});
+        }
+        json!({"ignored": state.ignored.iter().filter(|entry| entry.routine_id == id).rev().map(|entry| json!({
+            "at": entry.at, "reason": entry.reason, "deliveryId": entry.delivery_id,
+        })).collect::<Vec<_>>()})
+    }
+
+    /// Builds a sample delivery for the routine's triggers, signs it with the secret its sender
+    /// uses, and runs it through the same verification path as a real delivery. The panel's
+    /// "Send test event" button calls this; the secret is never returned.
+    pub fn test_webhook(&self, hub: &Hub, bot: &str, id: &str) -> Result<Value> {
+        let r = {
+            let state = self.state.locked();
+            state
+                .routines
+                .iter()
+                .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
+                .map(|r| (r.clone(), state.sender_secrets.get(id).cloned()))
+                .context("routine not found")?
+        };
+        let (routine, sender_secret) = r;
+        let now = now_ms();
+        let event = events::test_event(&routine, now);
+        let body = serde_json::to_vec(&event)?;
+        let message_id = uuid::Uuid::new_v4().simple().to_string();
+        let timestamp = (now / 1000).to_string();
+        let secret = sender_secret.as_deref().unwrap_or(&routine.webhook_key);
+        let signature =
+            events::sign_sender(secret, &message_id, &timestamp, &body).context("couldn't sign the test event")?;
+        let mut headers = hooks::Headers::new();
+        headers.insert("webhook-id".into(), message_id);
+        headers.insert("webhook-timestamp".into(), timestamp);
+        headers.insert("webhook-signature".into(), signature);
+        // A test runs even when the routine is paused, just like `runRoutine`.
+        let answer = self.receive_inner(hub, id, &headers, &body, true).map_err(|e| anyhow::anyhow!("{e}"))?;
+        Ok(json!({"test": true, "event": event, "answer": answer}))
     }
 
     /// An event from a channel (a Slack or Telegram mention): queues every enabled routine whose event
@@ -671,24 +754,70 @@ impl Routines {
     /// One delivery from the local endpoint or the cloud: checks the key or signature, then
     /// queues a run when the event matches. Retries of a delivery id return its first run.
     pub fn receive(&self, hub: &Hub, id: &str, headers: &hooks::Headers, body: &[u8]) -> Result<Value, Refused> {
-        let r = self.state.locked().routines.iter().find(|r| r.id == id && !r.deleted).cloned();
-        let Some(r) = r.filter(|r| hooks::authorized(&r.webhook_key, headers, body)) else {
+        self.receive_inner(hub, id, headers, body, false)
+    }
+
+    /// The real delivery path; a host-originated test is the only caller with `test` set, so it can
+    /// run a paused routine without loosening what a sender may do.
+    fn receive_inner(
+        &self,
+        hub: &Hub,
+        id: &str,
+        headers: &hooks::Headers,
+        body: &[u8],
+        test: bool,
+    ) -> Result<Value, Refused> {
+        let (r, sender_secret) = {
+            let state = self.state.locked();
+            let r = state.routines.iter().find(|r| r.id == id && !r.deleted).cloned();
+            (r, state.sender_secrets.get(id).cloned())
+        };
+        // A sender may keep its own secret instead of giving the routine's key to the service; both
+        // proofs are accepted, and neither one puts the secret in a log or a reply.
+        let Some(r) = r.filter(|r| {
+            hooks::authorized(&r.webhook_key, headers, body)
+                || sender_secret
+                    .as_deref()
+                    .is_some_and(|secret| events::sender_secret_ok(headers, secret, body, now_ms()))
+        }) else {
             return Err(Refused::Unauthorized);
         };
         let delivery = hooks::delivery_id(headers)?;
         let Some(event) = hooks::event(headers, body)? else {
             return Ok(json!({"ping": true}));
         };
-        if !r.enabled {
+        if !r.enabled && !test {
+            self.note_ignored(&hub.store, id, delivery.as_deref(), "paused");
             return Err(Refused::Paused);
         }
         if !r.triggers.iter().any(|t| matches!(t, Trigger::Webhook) || t.matches(&event)) {
-            return Ok(json!({"ignored": "event does not match this routine"}));
+            self.note_ignored(&hub.store, id, delivery.as_deref(), "mismatch");
+            return Ok(json!({"ignored": "event does not match this routine", "reason": "mismatch"}));
         }
-        self.enqueue(&hub.store, &r.bot_id, id, event, delivery, false).map_err(|e| match e.downcast::<Refused>() {
+        self.enqueue(&hub.store, &r.bot_id, id, event, delivery, test).map_err(|e| match e.downcast::<Refused>() {
             Ok(refused) => refused,
             Err(e) => Refused::Invalid(format!("{e:#}")),
         })
+    }
+
+    /// Records a signed delivery that didn't run, keeping the log small; a store failure must not
+    /// change what the delivery answered.
+    fn note_ignored(&self, store: &Store, id: &str, delivery: Option<&str>, reason: &str) {
+        let saved = self.change(store, |s| {
+            s.ignored.push(IgnoredDelivery {
+                routine_id: id.to_owned(),
+                at: now_ms(),
+                reason: reason.to_owned(),
+                delivery_id: delivery.map(str::to_owned),
+            });
+            if s.ignored.len() > MAX_IGNORED_DELIVERIES {
+                s.ignored.drain(..s.ignored.len() - MAX_IGNORED_DELIVERIES);
+            }
+            Ok(())
+        });
+        if let Err(error) = saved {
+            tracing::warn!(error = format!("{error:#}"), "couldn't record an ignored webhook delivery");
+        }
     }
 }
 
@@ -806,3 +935,92 @@ fn result_notice_id(run_id: &str) -> String {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod webhook_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use crate::hub::Hub;
+    use crate::remote::identity::Identity;
+
+    fn hub_with(routine: Routine) -> std::sync::Arc<Hub> {
+        let dir = std::env::temp_dir().join(format!("codync-webhook-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let hub = Hub::new(store, "webhooks".into(), Identity::load_or_create(&dir).unwrap(), "t".into(), 0);
+        hub.routines
+            .change(&hub.store, |s| {
+                s.routines.push(routine);
+                Ok(())
+            })
+            .unwrap();
+        std::sync::Arc::new(hub)
+    }
+
+    fn bearer() -> hooks::Headers {
+        hooks::Headers::from([("authorization".into(), "Bearer secret".into())])
+    }
+
+    #[test]
+    fn a_senders_own_secret_authorizes_a_delivery_and_the_test_event_runs() {
+        let mut routine = tests::routine();
+        routine.triggers = vec![Trigger::Webhook];
+        let hub = hub_with(routine);
+        hub.routines.set_sender_secret(&hub.store, "bot", "routine", Some("senders-secret".into())).unwrap();
+        let body = br#"{"source":"test","text":"hello"}"#;
+        let now = now_ms();
+        let timestamp = (now / 1000).to_string();
+        let signature = events::sign_sender("senders-secret", "msg-1", &timestamp, body).unwrap();
+        let headers = hooks::Headers::from([
+            ("webhook-id".into(), "msg-1".into()),
+            ("webhook-timestamp".into(), timestamp),
+            ("webhook-signature".into(), signature),
+        ]);
+        let answer = hub.routines.receive(&hub, "routine", &headers, body).unwrap();
+        assert!(answer["run"]["id"].is_string(), "the sender's own signature started a run");
+        let mut tampered = headers.clone();
+        tampered.insert("webhook-id".into(), "msg-2".into());
+        assert_eq!(hub.routines.receive(&hub, "routine", &tampered, body), Err(Refused::Unauthorized));
+        assert!(hub.routines.receive(&hub, "routine", &bearer(), body).is_ok(), "the routine key still works");
+
+        let tested = hub.routines.test_webhook(&hub, "bot", "routine").unwrap();
+        assert_eq!(tested["test"], true);
+        assert!(tested["event"]["source"] == "test");
+        assert!(tested["answer"]["run"]["id"].is_string(), "the signed test went through the real path");
+        assert!(!serde_json::to_string(&tested).unwrap().contains("senders-secret"), "no secret is returned");
+
+        hub.routines.set_sender_secret(&hub.store, "bot", "routine", None).unwrap();
+        assert_eq!(hub.routines.receive(&hub, "routine", &headers, body), Err(Refused::Unauthorized));
+    }
+
+    #[test]
+    fn paused_and_non_matching_deliveries_land_in_a_bounded_history() {
+        let mut routine = tests::routine();
+        routine.triggers =
+            vec![Trigger::Event { source: "github".into(), event: "issues.opened".into(), filters: BTreeMap::new() }];
+        routine.enabled = false;
+        let hub = hub_with(routine);
+        let body = br#"{"source":"slack","event":"app_mention"}"#;
+        assert_eq!(
+            hub.routines.receive(&hub, "routine", &bearer(), body),
+            Err(Refused::Paused),
+            "a routine created enabled=false is paused"
+        );
+        hub.routines.set_enabled(&hub.store, "bot", "routine", true).unwrap();
+        let answer = hub.routines.receive(&hub, "routine", &bearer(), body).unwrap();
+        assert_eq!(answer["reason"], "mismatch");
+
+        let history = hub.routines.ignored("bot", "routine");
+        let ignored = history["ignored"].as_array().unwrap();
+        assert_eq!(ignored.len(), 2);
+        assert_eq!(ignored[0]["reason"], "paused");
+        assert_eq!(ignored[1]["reason"], "mismatch");
+        assert!(hub.routines.ignored("other", "routine")["ignored"].as_array().unwrap().is_empty());
+
+        for i in 0..MAX_IGNORED_DELIVERIES + 5 {
+            hub.routines.note_ignored(&hub.store, "routine", Some(&format!("d-{i}")), "mismatch");
+        }
+        let kept = hub.routines.ignored("bot", "routine")["ignored"].as_array().unwrap().len();
+        assert_eq!(kept, MAX_IGNORED_DELIVERIES, "the history stays bounded");
+    }
+}

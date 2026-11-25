@@ -32,12 +32,14 @@ mod kiro;
 mod omp;
 mod opencode;
 mod reading;
+mod reset;
 mod services;
 pub mod tokens;
 mod vibe;
 
 pub use claude::{ingest_claude_rate_limit, ingest_statusline};
 pub(crate) use command::strip_ansi;
+pub use reset::{refresh_offers, reset_usage};
 pub use services::{bots_changed, set_order, set_shown};
 
 use crate::LockExt;
@@ -72,6 +74,12 @@ pub struct Usage {
     pub providers: Vec<Provider>,
     /// The agents the user can choose among in the Usage screen.
     pub services: Vec<Service>,
+    /// Accounts whose spent window can be reset with one of the provider's extra credits.
+    #[serde(default, rename = "creditOffers", skip_serializing_if = "Vec::is_empty")]
+    pub credit_offers: Vec<reset::CreditOffer>,
+    /// Accounts spending extra credits after a reset, until the window the provider reported.
+    #[serde(default, rename = "usingCredits", skip_serializing_if = "Vec::is_empty")]
+    pub using_credits: Vec<reset::UsingCredits>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -169,7 +177,12 @@ impl Usage {
         let mut providers: Vec<Provider> =
             self.providers.iter().filter(|provider| !hidden(&provider.id)).cloned().collect();
         providers.sort_by_key(|provider| rank(&provider.id));
-        Self { providers, services: self.services.clone() }
+        Self {
+            providers,
+            services: self.services.clone(),
+            credit_offers: self.credit_offers.clone(),
+            using_credits: self.using_credits.clone(),
+        }
     }
 
     /// One window at a time, for Claude's status line and rate-limit events.
@@ -261,6 +274,7 @@ async fn read_all(hub: &Arc<Hub>) {
     let readers = readers(hub, wanted).await;
     read(hub, readers).await;
     account_reports(hub).await;
+    reset::refresh_offers(hub);
 }
 
 /// The readers `pick` names, away from the async workers: it goes to the database and the disk.
@@ -480,6 +494,17 @@ mod tests {
         let value = serde_json::to_value(&u).unwrap();
         assert_eq!(value["providers"][0]["registry"], "github-copilot-cli");
         assert!(value["providers"][1].get("registry").is_none(), "no registry entry: clients use the id");
+    }
+
+    #[test]
+    fn credit_states_reach_clients_in_camel_case() {
+        let mut usage = Usage::default();
+        usage.credit_offers.push(reset::CreditOffer { id: "codex".into(), credits: 2, resets_at: Some(9_000) });
+        usage.using_credits.push(reset::UsingCredits { id: "claude".into(), until: 9_000, credits_left: 1 });
+        let value = serde_json::to_value(&usage.visible()).unwrap();
+        assert_eq!(value["creditOffers"][0]["credits"], 2);
+        assert_eq!(value["usingCredits"][0]["creditsLeft"], 1);
+        assert!(value.get("credit_offers").is_none());
     }
 
     #[test]

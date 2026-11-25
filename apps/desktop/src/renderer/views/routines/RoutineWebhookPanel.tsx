@@ -1,16 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { CardSection, IconButton } from '../../components/Controls'
-import { Dialog } from '../../components/Overlay'
+import { Button, CardSection, IconButton } from '../../components/Controls'
+import { Dialog, DialogField } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
-import { errorText, type RoutineWebhook } from './routine'
+import { errorText, type IgnoredWebhook, type RoutineWebhook } from './routine'
 import { LabeledRow } from './RoutineScheduleFields'
 import './routines.css'
 import { useTr } from '../../lib/use-language'
 
-
-/** A saved webhook routine's address and key: copy either, reveal or replace the key. */
+/**
+ * A saved webhook routine's address and key: copy either, reveal or replace the key, accept the
+ * sender's own Standard Webhooks secret, send a signed test delivery and read ignored deliveries.
+ */
 export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routineId: string }) {
   const tr = useTr()
   const store = useStore()
@@ -23,7 +25,23 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
   const [confirmGive, setConfirmGive] = useState(false)
   const [giving, setGiving] = useState(false)
   const [givenName, setGivenName] = useState<string | null>(null)
+  const [confirmSender, setConfirmSender] = useState(false)
+  const [secretDraft, setSecretDraft] = useState('')
+  const [savingSender, setSavingSender] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
+  const [ignored, setIgnored] = useState<IgnoredWebhook[]>([])
   const agentName = store.bots.get(botId)?.name ?? botId
+
+  const loadIgnored = async () => {
+    try {
+      const value = await (await store.ready()).call<{ ignored: IgnoredWebhook[] }>('routineIgnored', { botId, id: routineId })
+      setIgnored(value.ignored ?? [])
+    } catch {
+      // A host older than this panel has no delivery history; the webhook itself still works.
+      setIgnored([])
+    }
+  }
 
   const load = async (rotate: boolean) => {
     setRotating(rotate)
@@ -44,6 +62,7 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
 
   useEffect(() => {
     void load(false)
+    void loadIgnored()
   }, [routineId])
 
   /** Rotates the key into the agent's own vault; the host returns only the saved key's name. */
@@ -65,6 +84,41 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
       setError(errorText(e))
     } finally {
       setGiving(false)
+    }
+  }
+
+  /** Nothing shows the value again: the host keeps it in its routine state, not in the client. */
+  const saveSender = async (secret: string | null) => {
+    const client = store.client
+    if (!client) return
+    setSavingSender(true)
+    setError(null)
+    try {
+      await client.call('routineSenderSecret', { botId, id: routineId, secret })
+      setSecretDraft('')
+      setConfirmSender(false)
+      await load(false)
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setSavingSender(false)
+    }
+  }
+
+  /** The host signs a sample event and sends it through the real verification path. */
+  const sendTest = async () => {
+    const client = store.client
+    if (!client) return
+    setTesting(true)
+    setError(null)
+    try {
+      const value = await client.call<{ answer?: { run?: { id?: string } } }>('testRoutineWebhook', { botId, id: routineId })
+      setTestResult(value.answer?.run?.id ? tr('Signed test delivered · the routine ran.') : tr('Signed test delivered.'))
+      await loadIgnored()
+    } catch (e) {
+      setTestResult(errorText(e))
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -113,15 +167,48 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
                 disabled={giving || rotating || store.isOffline}
                 onClick={() => setConfirmGive(true)}
               />
+              {webhook.usesSenderSecret ? (
+                <IconButton
+                  title={tr("Stop using the sender's secret")}
+                  icon="xmark.circle"
+                  disabled={savingSender || store.isOffline}
+                  onClick={() => void saveSender(null)}
+                />
+              ) : (
+                <IconButton
+                  title={tr("Use the sender's secret")}
+                  icon="lock"
+                  disabled={savingSender || store.isOffline}
+                  onClick={() => setConfirmSender(true)}
+                />
+              )}
             </>,
           )}
           {givenName ? <Text size="caption" tone="secondary">{`Saved as ${givenName}`}</Text> : null}
+          {webhook.usesSenderSecret ? (
+            <Text size="caption" tone="secondary">
+              {tr("The sender's own Standard Webhooks signature is accepted alongside this key.")}
+            </Text>
+          ) : null}
+          <Button kind="secondary" disabled={testing || store.isOffline} onClick={() => void sendTest()}>
+            {testing ? tr('Sending…') : tr('Send test event')}
+          </Button>
+          {testResult ? <Text size="caption" tone="secondary">{testResult}</Text> : null}
         </CardSection>
       ) : error ? (
         <Text size="caption" tone="danger" className="routine-caption">{error}</Text>
       ) : (
         <Text size="caption" tone="secondary" className="routine-caption">{tr(`Loading webhook…`)}</Text>
       )}
+      {ignored.length > 0 ? (
+        <CardSection title={tr('Ignored deliveries')}>
+          {ignored.slice(0, 5).map((entry, index) => (
+            <Text size="caption" tone="secondary" key={`${entry.at}-${index}`}>
+              {`${entry.reason === 'paused' ? tr('Paused') : tr("Event didn't match")} · ${new Date(entry.at).toLocaleTimeString()}`}
+            </Text>
+          ))}
+        </CardSection>
+      ) : null}
       <Dialog
         open={confirmRotate}
         title={tr('Replace the key?')}
@@ -136,6 +223,21 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
         actions={[{ title: 'Give secret', destructive: true, action: () => void give() }]}
         onClose={() => setConfirmGive(false)}
       />
+      <Dialog
+        open={confirmSender}
+        title={tr("Use the sender's secret")}
+        message={tr('Standard Webhooks deliveries signed with this secret will be accepted as well as the key above. It stays on this computer and is never shown again.')}
+        actions={[{ title: tr('Use secret'), action: () => void saveSender(secretDraft) }]}
+        onClose={() => setConfirmSender(false)}
+      >
+        <DialogField
+          value={secretDraft}
+          onChange={setSecretDraft}
+          onSubmit={() => void saveSender(secretDraft)}
+          placeholder={tr('The secret the sender signs with')}
+          label={tr("Sender's secret")}
+        />
+      </Dialog>
     </VStack>
   )
 }
