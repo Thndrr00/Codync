@@ -205,6 +205,12 @@
   text-underline-offset: 0.15em;
   cursor: pointer;
 }
+/* A folder chain that doesn't agree with a known file keeps its label and says so (OpenBot 0.78.0). */
+.md-missing-note {
+  color: var(--secondary);
+  font-size: 0.92em;
+  white-space: nowrap;
+}
 .md-strong {
   font-weight: 600;
 }

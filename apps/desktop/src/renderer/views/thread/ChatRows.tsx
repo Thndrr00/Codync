@@ -514,7 +514,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
             <>
               <div className="file-message-cards">{entry.data.files.map((file) => <FileDownloadCard key={file.id} entry={entry} file={file} onOpen={openFile ? () => openFile(entry, file) : undefined} />)}</div>
               {/* A file a media tool made keeps what was asked for under it. */}
-              {entry.data.media && entry.data.text?.trim() ? <div className="file-message-caption"><MarkdownText text={entry.data.text} /></div> : null}
+              {entry.data.media && entry.data.text?.trim() ? <div className="file-message-caption"><MarkdownText text={entry.data.text} knownFiles={entry.data.files?.map((file) => file.name)} /></div> : null}
             </>
           ) : (
             <MarkdownText text={entry.data.text ?? ''} />

@@ -43,6 +43,9 @@ export interface LocalPreview {
   path: string
   href: string
   kind: PreviewKind
+  /** `report.md:26` names a place to read; the sandboxed frame cannot scroll a foreign document. */
+  line?: number
+  column?: number
 }
 
 /**
@@ -57,18 +60,25 @@ export const LocalPreviewContext = createContext<(preview: LocalPreview) => void
 export function LocalFilePreviewSheet({ preview, close }: { preview: LocalPreview | null; close: () => void }) {
   const tr = useTr()
   const title = preview ? fileReferenceName(preview.path) : ''
+  // A file:// frame is foreign to the renderer, so it cannot be scrolled to a line from here. The
+  // hash is the narrow additive hand-off: a viewer that understands it can jump, and the header
+  // always says what the agent named (OpenBot 0.78.0).
+  const position = preview?.line ? `${preview.line}${preview.column ? `:${preview.column}` : ''}` : ''
+  const src = preview ? `${preview.href}${position ? `#line=${preview.line}` : ''}` : ''
   return (
     <Sheet open={preview !== null} onClose={close} width={880} maxHeight="82vh" dismissOnDim>
       {preview ? (
         <SheetPage>
           <ModalHeader
             title={title}
-            subtitle={tr('A preview without scripts or outside content')}
-            trailing={<Button onClick={() => window.codync.app.openExternal(preview.href)}>{tr('Open in system app')}</Button>}
+            subtitle={position
+              ? `${tr('A preview without scripts or outside content')} · ${tr('Line {line}').replaceAll('{line}', () => position)}`
+              : tr('A preview without scripts or outside content')}
+            trailing={<Button onClick={() => window.codync.app.openExternal(src)}>{tr('Open in system app')}</Button>}
           />
           <div className="page-preview-stage">
             {/* No `allow-scripts`: a local page cannot run scripts or reach the app's own origin. */}
-            <iframe className="page-preview-frame" src={preview.href} sandbox="" title={title} loading="lazy" tabIndex={-1} aria-hidden />
+            <iframe className="page-preview-frame" src={src} sandbox="" title={title} loading="lazy" tabIndex={-1} aria-hidden />
           </div>
           <Text size="caption" tone="secondary">{tr('If the document does not appear here, open it in its own app.')}</Text>
         </SheetPage>

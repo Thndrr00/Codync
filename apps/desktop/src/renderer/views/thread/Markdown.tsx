@@ -1,4 +1,4 @@
-import { memo, useContext, useState, type MouseEvent, type ReactNode } from 'react'
+import { createContext, memo, useContext, useState, type MouseEvent, type ReactNode } from 'react'
 import { parseMarkdown, type Block } from './markdown-blocks.ts'
 import { Hairline } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -8,7 +8,7 @@ import { highlightSpans } from './code-highlight.ts'
 import { HScroll } from './HScroll.tsx'
 import { looksLikeDiff, parseDiff, type DiffRow } from './diff-rows.ts'
 import { withChatLinkSource } from './link-source.ts'
-import { chatFileHref, chatFileLink, linkTarget, previewKind } from '../../lib/chat-file-link.ts'
+import { chatFileLink, file_link_target, isMissingFileCandidate, linkTarget, previewKind } from '../../lib/chat-file-link.ts'
 import { LocalFilePreviewSheet, LocalPreviewContext, type LocalPreview } from './PagePreview.tsx'
 import './markdown.css'
 
@@ -16,45 +16,50 @@ import './markdown.css'
 // `AttributedString(markdown:)`.
 
 /**
+ * The file paths this chat has already seen, used to resolve a written path with folders
+ * (OpenBot 0.78.0). Without them a bare name still matches by name and a folder chain matches
+ * nothing, so the link handler reports a missing file instead of opening the wrong one.
+ */
+export const FileCandidatesContext = createContext<readonly string[]>([])
+
+/**
  * A link in a reply: PDF and HTML paths open in the chat's inert preview, other file types and web
  * URLs keep opening in the computer's own app. A full path in a code span (including .docx /
  * .pages / .rtf) is a file, while commands stay plain code (OpenBot nightly triage-12380).
  */
-function FileAnchor({ path, href, label }: { path: string; href: string; label: ReactNode }) {
+function FileAnchor({ path, href, label, line, column }: { path: string; href: string; label: ReactNode; line?: number; column?: number }) {
   const preview = useContext(LocalPreviewContext)
+  const knownPaths = useContext(FileCandidatesContext)
   const open = (e: MouseEvent) => {
     e.preventDefault()
-    // A bare name has no workspace to resolve against here, so only a written path can preview.
-    const kind = chatFileLink(path) ? previewKind(path) : null
-    if (kind) preview({ path, href, kind })
+    // Only a written path that still resolves can preview; a bare name needs a known file.
+    const kind = chatFileLink(path, knownPaths) ? previewKind(path) : null
+    if (kind) preview({ path, href, kind, line, column })
     else window.codync.app.openExternal(href)
   }
-  return <a href={href} title={path} className="md-link" onClick={open}>{label}</a>
-}
-
-function localFileLink(path: string, label: string, key: string): ReactNode {
-  return <FileAnchor key={key} path={path} href={chatFileHref(path)} label={label} />
+  const target = line ? `${path}:${line}${column ? `:${column}` : ''}` : path
+  return <a href={href} title={target} className="md-link" onClick={open}>{label}</a>
 }
 
 /** Inline Markdown: `code` (tinted), **bold**, *italic*, ~~strike~~, [links](url). */
-export function inline(text: string, key = 'i'): ReactNode[] {
+export function inline(text: string, key = 'i', knownPaths: readonly string[] = []): ReactNode[] {
   const out: ReactNode[] = []
   // Code spans first: nothing inside them is styled, except a full path to a file.
   text.split(/(`[^`\n]+`)/).forEach((part, i) => {
     if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
       const code = part.slice(1, -1)
-      const file = chatFileLink(code)
+      const file = chatFileLink(code, knownPaths)
       out.push(file
-        ? localFileLink(file.path, code, `${key}${i}`)
+        ? <FileAnchor key={`${key}${i}`} path={file.path} href={file.href} label={code} />
         : <code key={`${key}${i}`} className="md-code-span">{code}</code>)
-    } else if (part) out.push(...emphasis(part, `${key}${i}-`))
+    } else if (part) out.push(...emphasis(part, `${key}${i}-`, knownPaths))
   })
   return out
 }
 
 // A link target inside `<…>` may hold spaces; CommonMark ends a bare target at the first space.
 const pattern = /\[([^\]]+)\]\((?:<[^>]*>|[^)\s]+)\)|\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|\*([^*\n]+)\*|(?<![\w])_([^_\n]+)_(?![\w])/
-function emphasis(text: string, key: string): ReactNode[] {
+function emphasis(text: string, key: string, knownPaths: readonly string[]): ReactNode[] {
   const out: ReactNode[] = []
   let rest = text
   let n = 0
@@ -68,32 +73,44 @@ function emphasis(text: string, key: string): ReactNode[] {
     const k = `${key}${n++}`
     if (m[1] !== undefined) {
       const written = linkTarget(m[2]!)
-      const file = chatFileLink(written)
-      const href = file ? file.href : withChatLinkSource(written)
-      out.push(<FileAnchor key={k} path={written} href={href} label={emphasis(m[1], `${k}-`)} />)
-    } else if (m[3] !== undefined || m[4] !== undefined) out.push(<strong key={k} className="md-strong">{emphasis(m[3] ?? m[4]!, `${k}-`)}</strong>)
-    else if (m[5] !== undefined) out.push(<s key={k}>{emphasis(m[5], `${k}-`)}</s>)
-    else out.push(<em key={k}>{emphasis(m[6] ?? m[7]!, `${k}-`)}</em>)
+      const target = file_link_target(written)
+      if (!target) {
+        out.push(written)
+        rest = rest.slice(m.index + m[0].length)
+        continue
+      }
+      const file = chatFileLink(target.path, knownPaths)
+      const label = emphasis(m[1], `${k}-`, knownPaths)
+      if (file) {
+        out.push(<FileAnchor key={k} path={file.path} href={file.href} label={label} line={target.line} column={target.column} />)
+      } else if (isMissingFileCandidate(target.path)) {
+        out.push(<span key={k} title={written}>{label}<span className="md-missing-note"> · File not found</span></span>)
+      } else {
+        out.push(<FileAnchor key={k} path={written} href={withChatLinkSource(written)} label={label} />)
+      }
+    } else if (m[3] !== undefined || m[4] !== undefined) out.push(<strong key={k} className="md-strong">{emphasis(m[3] ?? m[4]!, `${k}-`, knownPaths)}</strong>)
+    else if (m[5] !== undefined) out.push(<s key={k}>{emphasis(m[5], `${k}-`, knownPaths)}</s>)
+    else out.push(<em key={k}>{emphasis(m[6] ?? m[7]!, `${k}-`, knownPaths)}</em>)
     rest = rest.slice(m.index + m[0].length)
   }
   return out
 }
 
-const MarkdownBlock = memo(function MarkdownBlock({ block }: { block: Block }) {
+const MarkdownBlock = memo(function MarkdownBlock({ block, knownPaths }: { block: Block; knownPaths: readonly string[] }) {
   switch (block.kind) {
     case 'paragraph':
-      return <div className="md-text md-spaced md-body" dir="auto">{inline(block.text)}</div>
+      return <div className="md-text md-spaced md-body" dir="auto">{inline(block.text, 'i', knownPaths)}</div>
     case 'heading':
       return (
         <div className={`md-text md-spaced md-heading-${Math.min(block.level, 3)}`} dir="auto">
-          {inline(block.text)}
+          {inline(block.text, 'i', knownPaths)}
         </div>
       )
     case 'bullet':
       return (
         <HStack align="baseline" gap={6} className="md-spaced md-body" style={{ paddingLeft: block.depth * 16 }}>
           <Text tone="secondary" className="md-marker">{block.marker}</Text>
-          <span className="md-text md-bullet-text" dir="auto">{inline(block.text)}</span>
+          <span className="md-text md-bullet-text" dir="auto">{inline(block.text, 'i', knownPaths)}</span>
         </HStack>
       )
     case 'task':
@@ -104,7 +121,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ block }: { block: Block }) {
             aria-readonly aria-label={block.checked ? 'Checked' : 'Unchecked'}>
             {block.checked ? <Icon name="checkmark" size={10} weight="bold" /> : null}
           </span>
-          <span className={`md-text md-bullet-text${block.checked ? ' done' : ''}`} dir="auto">{inline(block.text)}</span>
+          <span className={`md-text md-bullet-text${block.checked ? ' done' : ''}`} dir="auto">{inline(block.text, 'i', knownPaths)}</span>
         </HStack>
       )
     case 'rule':
@@ -116,18 +133,18 @@ const MarkdownBlock = memo(function MarkdownBlock({ block }: { block: Block }) {
         <HScroll>
           <div className="md-table md-body" style={{ gridTemplateColumns: `repeat(${columns}, max-content)` }}>
             {cols.map((i) => (
-              <Text key={`h${i}`} weight="semibold" dir="auto">{inline(block.header[i] ?? '', `h${i}`)}</Text>
+              <Text key={`h${i}`} weight="semibold" dir="auto">{inline(block.header[i] ?? '', `h${i}`, knownPaths)}</Text>
             ))}
             {block.rows.map((row, r) => [
               <Hairline key={`l${r}`} style={{ gridColumn: `1 / span ${columns}` }} />,
-              ...cols.map((i) => <span key={`${r}-${i}`} dir="auto">{inline(row[i] ?? '', `${r}-${i}`)}</span>),
+              ...cols.map((i) => <span key={`${r}-${i}`} dir="auto">{inline(row[i] ?? '', `${r}-${i}`, knownPaths)}</span>),
             ])}
           </div>
         </HScroll>
       )
     }
     case 'quote':
-      return <div className="md-text md-spaced md-body md-quote" dir="auto">{inline(block.text)}</div>
+      return <div className="md-text md-spaced md-body md-quote" dir="auto">{inline(block.text, 'i', knownPaths)}</div>
     case 'code':
       return <CodeBlock text={block.text} language={block.language} />
   }
@@ -227,16 +244,18 @@ function highlighted(text: string, language: string): ReactNode {
 }
 
 /** The desktop's Markdown for messages; a block that didn't change keeps its rendering. */
-export const MarkdownText = memo(function MarkdownText({ text }: { text: string }) {
+export const MarkdownText = memo(function MarkdownText({ text, knownFiles = [] }: { text: string; knownFiles?: readonly string[] }) {
   const blocks = parseMarkdown(text)
   const [local, setLocal] = useState<LocalPreview | null>(null)
   return (
     <LocalPreviewContext.Provider value={setLocal}>
-      <VStack gap={10} shrink className="markdown selectable">
-        {blocks.map((b, i) => (
-          <MarkdownBlock key={i} block={b} />
-        ))}
-      </VStack>
+      <FileCandidatesContext.Provider value={knownFiles}>
+        <VStack gap={10} shrink className="markdown selectable">
+          {blocks.map((b, i) => (
+            <MarkdownBlock key={i} block={b} knownPaths={knownFiles} />
+          ))}
+        </VStack>
+      </FileCandidatesContext.Provider>
       <LocalFilePreviewSheet preview={local} close={() => setLocal(null)} />
     </LocalPreviewContext.Provider>
   )

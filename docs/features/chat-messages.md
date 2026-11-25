@@ -21,6 +21,20 @@ it has no pointer tooltip or link-opening action.
   app (OpenBot 0.77.0/0.74.0): a sandboxed frame with no scripts or outside content, plus an **Open
   in system app** button. A local path of any other type, and a web link, still opens in its own app.
   On a Markdown surface outside a chat there is no preview to show, so the link keeps that fallback.
+- A written path with folders opens only when all of its folders agree with a file the chat knows;
+  a bare file name still matches by name, and a chain that matches nothing shows **File not found**
+  rather than opening a different file with the same name (OpenBot 0.78.0). The pure decisions
+  `match_file_link` and `file_link_target` live in `lib/chat-file-link.ts`; the Markdown link handler
+  passes the chat's known files in through `FileCandidatesContext`.
+- A target ending in `:line` or `:line:column` (`report.md:26`) opens the file at that place
+  (OpenBot 0.78.0). Windows drive letters and folder names are kept, a malformed or absurd position
+  is no target, and the in-app preview shows the named line next to its title and passes a `#line=`
+  hash to the viewer. The sandboxed `file://` frame is foreign to the renderer, so it cannot scroll
+  the document itself; a viewer that understands the hash can, and **Open in system app** keeps the
+  same target. Scroll placement of new answers is unchanged (`lib/chat-answer-placement.ts`).
+- A card posted during a turn stays at the row position of the entry it came from after it is
+  answered and later messages arrive (OpenBot 0.78.0). `views/thread/card-position.ts` decides the
+  order from the entries and is wired into `openQuestionCards`; it does not touch scrolling.
 - A checklist written as `- [x] …` renders as a checked box and dimmed item text rather than a
   literal `[x]` (OpenBot 0.74.0). It is read-only: the box shows what the agent wrote and does not
   change the task. A picture that cannot be decoded shows **Image unavailable** and its file name.

@@ -450,7 +450,7 @@ function ChatSplitView() {
     { title: BOT_STATUS_DETAIL_TITLE, icon: 'info.circle', action: () => setStatusBot({ bot, store }) },
     { title: bot.pinned ? 'Unpin' : 'Pin', icon: 'pin', action: () => store.setPinned(bot, !bot.pinned) },
     ...moveToSectionItems(bot, store, setNaming),
-    { title: 'Tasks', icon: 'checklist', action: () => setTasksBot({ bot, store }) },
+    { title: 'Threads', icon: 'checklist', action: () => setTasksBot({ bot, store }) },
     { title: 'Agent tasks…', icon: 'square.stack.3d.up', action: () => setAgentTasksBot({ bot, store }) },
     { title: 'Files', icon: 'folder', action: () => setFilesBot({ bot, store }) },
     ...(bot.kind === 'group' ? [] : [{ title: 'Duplicate', icon: 'square.on.square', action: () => void store.duplicateBot(bot) }]),

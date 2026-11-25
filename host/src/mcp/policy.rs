@@ -61,6 +61,27 @@ pub(super) fn field<'a>(body: &'a Value, name: &str) -> Result<&'a str> {
     body[name].as_str().with_context(|| format!("{name} is required"))
 }
 
+/// A Pi/custom endpoint otherwise reports a generic ready state while one of the bot's configured
+/// MCP servers never spawned. Post one plain notice in that bot's chat (OpenBot 0.78.0). The stable
+/// id keeps a repeated tool call from posting it again. Pure decision is in `market::verify`.
+fn notice_failed_server(hub: &Hub, bot: &str, connector: &str) {
+    let backend = hub.store.bot(bot).ok().flatten().map(|row| row.config.backend).unwrap_or_default();
+    if backend != "pi" && backend != "custom" {
+        return;
+    }
+    if crate::market::verify::last_failure(&hub.store, connector).is_none() {
+        return;
+    }
+    let Some(text) = crate::market::verify::mcp_start_notice(connector, true) else {
+        return;
+    };
+    let id = format!("mcp-start-notice:{bot}:{connector}");
+    let lane = hub.runtime(bot).lane.unwrap_or_else(|| Lane::main(bot));
+    if let Err(e) = hub.add_entry_once(&id, &lane, EntryKind::Notice, hub.store.max_turn(bot), &json!({"text": text})) {
+        tracing::warn!(error = format!("{e:#}"), "couldn't post the MCP start notice");
+    }
+}
+
 fn enabled(hub: &Hub, bot: &str, connector: &str) -> Result<()> {
     let bot = hub.store.bot(bot)?.filter(|row| !row.deleted && !row.config.is_group()).context("unknown bot")?;
     if !bot.config.connectors.iter().any(|id| id == connector) {
@@ -203,6 +224,7 @@ pub async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, body: Value) ->
             let connector = field(&body, "connectorId")?;
             enabled(hub, bot, connector)?;
             ensure_fingerprint(hub, connector, &body)?;
+            notice_failed_server(hub, bot, connector);
             let id = hub.store.create_mcp_call(bot, connector, &body["message"])?;
             let request = hub.store.mcp_call(&id)?.context("tool request was not saved")?;
             if request.status == "pending" {

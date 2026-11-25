@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chatFileHref, chatFileLink, fileReferenceName, isAbsoluteDocumentPath, isKnownFileReference, linkTarget, previewKind } from './chat-file-link.ts'
+import { chatFileHref, chatFileLink, file_link_target, fileReferenceName, isAbsoluteDocumentPath, isKnownFileReference, isMissingFileCandidate, linkTarget, match_file_link, previewKind } from './chat-file-link.ts'
 
 test('a full path to any document opens as a file link, including docx, pages and rtf', () => {
   for (const path of ['/Users/e/Documents/Informe.docx', 'C:\\Users\\e\\Notes.pages', '/home/e/notes.rtf', '/Users/e/report.pdf']) {
@@ -53,4 +53,30 @@ test('only local HTML and PDF get an in-app preview, with a safe fallback for th
   for (const path of ['/Users/e/notes.txt', '/Users/e/picture.png', 'https://example.com/page.html', '/a/b/\nfile.pdf', '']) {
     assert.equal(previewKind(path), null, path)
   }
+})
+
+test('a written folder chain only matches a known file whose folders all agree', () => {
+  const known = ['/work/other-repo/skills/y/SKILL.md', '/work/SKILL.md', 'C:/work/notes/report.md']
+  assert.equal(match_file_link('other-repo/skills/y/SKILL.md', known)?.path, '/work/other-repo/skills/y/SKILL.md')
+  assert.equal(match_file_link('other-repo\\skills\\y\\SKILL.md', known)?.path, '/work/other-repo/skills/y/SKILL.md')
+  assert.equal(match_file_link('/work/other-repo/skills/x/SKILL.md', known), null, 'a different folder is not the same file')
+  assert.equal(match_file_link('other-repo/SKILL.md', known), null, 'a shortened chain is not the same file')
+  assert.equal(match_file_link('SKILL.md', known)?.path, '/work/SKILL.md', 'a bare name still matches by name')
+  assert.equal(chatFileLink('other-repo/skills/x/SKILL.md', known), null, 'the link handler follows the same decision')
+  assert.equal(chatFileLink('SKILL.md', known)?.path, '/work/SKILL.md')
+  assert.equal(isMissingFileCandidate('other-repo/skills/x/SKILL.md'), true)
+  assert.equal(isMissingFileCandidate('https://example.com/a/SKILL.md'), false)
+})
+
+test('a file target carries a line and column without losing folders or a drive', () => {
+  assert.deepEqual(file_link_target('report.md:26'), { path: 'report.md', line: 26 })
+  assert.deepEqual(file_link_target('report.md:26:5'), { path: 'report.md', line: 26, column: 5 })
+  assert.deepEqual(file_link_target('other-repo/skills/x/SKILL.md:42'), { path: 'other-repo/skills/x/SKILL.md', line: 42 })
+  assert.deepEqual(file_link_target('C:\\My Docs\\report.md:12:3'), { path: 'C:\\My Docs\\report.md', line: 12, column: 3 })
+  assert.deepEqual(file_link_target('/Users/e/report.md'), { path: '/Users/e/report.md' })
+  assert.deepEqual(file_link_target('  report.md:7  '), { path: 'report.md', line: 7 })
+  assert.equal(file_link_target('report.md:not-a-line'), null, 'a malformed position is no target')
+  assert.equal(file_link_target('report.md:0'), null, 'lines start at one')
+  assert.equal(file_link_target('report.md:99999999'), null, 'an absurd line is refused')
+  assert.equal(file_link_target(''), null)
 })

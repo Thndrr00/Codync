@@ -32,3 +32,10 @@ test('cards in another chat or thread are left out', () => {
   ], 'bot', null)
   assert.deepEqual(cards.map((c) => c.id), ['agent-q'])
 })
+
+test('answering a card mid-turn keeps it at its entry position under later messages', () => {
+  const answered = question('first-q', 'answered')
+  const later = question('second-q', 'pending')
+  const entries = [answered, { ...question('agent-reply', 'pending'), kind: 'agent' as const }, later]
+  assert.deepEqual(openQuestionCards(entries, 'bot', null).map((card) => card.id), ['first-q', 'second-q'])
+})

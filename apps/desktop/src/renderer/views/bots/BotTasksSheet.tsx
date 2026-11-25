@@ -78,7 +78,7 @@ export function BotTasksSheet({ bot, store, onClose }: { bot: Bot; store: BotSto
   const runs = (tasks?.runs ?? []).slice(0, 8)
   return (
     <SheetPage>
-        <ModalHeader title={tr('Tasks')} subtitle={bot.name} onClose={onClose} closeTitle={tr('Close')} />
+        <ModalHeader title={tr('Threads')} subtitle={bot.name} onClose={onClose} closeTitle={tr('Close')} />
         <VStack gap={14} className="channel-sheet">
           <section className="channel-item">
             <HStack gap={8}>

@@ -117,6 +117,16 @@ pub fn github_start_failure_advice() -> &'static str {
     "GitHub did not answer, so its tools are not available. Open GitHub in Marketplace, Apps, connect it again if it asks you to, then start a new chat."
 }
 
+/// A plain notice naming a configured MCP server that failed to start (OpenBot 0.78.0). Pi and
+/// custom endpoints otherwise report a generic ready state and hide the missing tools. Only the
+/// server's own name is used — no error text or tool output leaves the host. Pure, tested.
+pub fn mcp_start_notice(server: &str, failed: bool) -> Option<String> {
+    let name: String = server.trim().chars().take(80).collect();
+    (!failed || name.is_empty()).then(|| {
+        format!("{name} could not start, so its tools are not available. Check it in Marketplace, Apps, then start a new chat.")
+    })
+}
+
 pub fn record_failure(store: &Store, id: &str, message: &str) {
     let mut text = message.to_owned();
     if is_github_connection(id) && cause(message) != FailureCause::Auth {
@@ -125,6 +135,12 @@ pub fn record_failure(store: &Store, id: &str, message: &str) {
     } else if let Some(advice) = failure_advice(message) {
         text.push(' ');
         text.push_str(advice);
+    }
+    // The stored failure is what clients show when the server never came up; say which one it was
+    // (OpenBot 0.78.0) instead of leaving only a generic ready state behind.
+    if let Some(notice) = mcp_start_notice(id, cause(message) == FailureCause::Unreachable) {
+        text.push(' ');
+        text.push_str(&notice);
     }
     let entry = json!({
         "kind": classify_failure(message),
@@ -300,5 +316,33 @@ mod tests {
         let saved = last_failure(&store, "github").expect("the failure");
         assert!(saved["message"].as_str().unwrap().contains("GitHub did not answer"));
         assert_eq!(saved["kind"], "unreachable");
+    }
+
+    #[test]
+    fn a_server_that_failed_to_start_is_named_in_a_plain_notice() {
+        // OpenBot 0.78.0: pi/custom endpoints used to report a generic ready and hide the failure.
+        assert!(mcp_start_notice("  ", true).is_none(), "no server means no notice");
+        assert!(mcp_start_notice("filesystem", false).is_none(), "a working server needs no notice");
+        let notice = mcp_start_notice("GitHub", true).expect("a failed server");
+        assert!(notice.contains("GitHub"));
+        assert!(notice.contains("could not start"));
+        assert!(notice.contains("Marketplace"), "the notice says where to check");
+        let long = mcp_start_notice(&"x".repeat(200), true).expect("a bounded notice");
+        assert!(long.chars().count() < 200, "the name is capped");
+        assert!(!long.contains("error"), "no server error text is carried into chat");
+    }
+
+    #[test]
+    fn a_failed_spawn_records_the_notice_but_an_auth_error_does_not() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        record_failure(&store, "filesystem", "Could not start the connector.");
+        let saved = last_failure(&store, "filesystem").expect("the failure");
+        assert!(saved["message"].as_str().unwrap().contains("filesystem could not start"));
+        record_failure(&store, "filesystem", "Sign in before checking this connection.");
+        let saved = last_failure(&store, "filesystem").expect("the failure");
+        assert!(
+            !saved["message"].as_str().unwrap().contains("could not start"),
+            "an auth error is not a spawn failure"
+        );
     }
 }

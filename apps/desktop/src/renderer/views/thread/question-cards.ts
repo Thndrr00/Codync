@@ -1,5 +1,6 @@
 import type { Entry } from '@shared/models'
 import { questionCardsAfter, type QuestionCardRef } from '../../lib/question-overlap.ts'
+import { card_position } from './card-position.ts'
 
 export interface OpenQuestion extends QuestionCardRef {
   entry: Entry
@@ -27,5 +28,7 @@ export function openQuestionCards(entries: readonly Entry[], botId: string, thre
     }
     cards = questionCardsAfter(cards, incoming)
   }
-  return cards
+  // An answer re-appends its card through `questionCardsAfter`; anchor every card to the row
+  // position of its entry so a card shown mid-turn does not move below later messages (OpenBot 0.78.0).
+  return card_position(cards, entries)
 }

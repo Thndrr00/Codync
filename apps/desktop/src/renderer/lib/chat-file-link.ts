@@ -43,13 +43,102 @@ export function isAbsoluteDocumentPath(value: string): boolean {
 }
 
 /** A chat file path and the URL used to open it, or null for text that stays as written. */
-export function chatFileLink(value: string): { path: string; href: string } | null {
+export function chatFileLink(value: string, candidates: readonly string[] = []): { path: string; href: string } | null {
   const path = value.trim()
   if (!path) return null
   if (UNC.test(path)) return isKnownFileReference(path) ? { path, href: chatFileHref(path) } : null
-  // A bare name has no workspace to resolve against here, so it stays plain code.
-  if (!ABSOLUTE.test(path) || !isAbsoluteDocumentPath(path)) return null
-  return { path, href: chatFileHref(path) }
+  if (ABSOLUTE.test(path)) return isAbsoluteDocumentPath(path) ? { path, href: chatFileHref(path) } : null
+  // A written path with folders must agree with a file the chat already knows; a bare name may
+  // still match by name alone (OpenBot 0.78.0). Pure, so the note is decided without a DOM.
+  return match_file_link(path, candidates)
+}
+
+/** The folders and name of a written path, with separators unified and percent escapes decoded. */
+function pathParts(path: string): string[] {
+  const normalized = path.trim().replaceAll('\\', '/').replace(/^[A-Za-z]:/, '').replace(/^\/+/, '')
+  return normalized.split('/').filter(Boolean).map((part) => {
+    try {
+      return decodeURIComponent(part)
+    } catch {
+      return part
+    }
+  })
+}
+
+/**
+ * Resolve a written file path against the paths the chat already knows (OpenBot 0.78.0). A path
+ * that carries folders only matches a candidate whose every folder agrees, so
+ * `other-repo/skills/x/SKILL.md` cannot open a previously seen `SKILL.md`. A bare name still matches
+ * by name. No match returns null and the link handler shows a "File not found" note. Pure, tested.
+ */
+export function match_file_link(requested: string, candidates: readonly string[]): { path: string; href: string } | null {
+  if (!requested || CONTROL.test(requested)) return null
+  const wanted = pathParts(requested)
+  const name = wanted.at(-1)
+  if (!name) return null
+  const folders = wanted.slice(0, -1).join('/').toLowerCase()
+  const matches = candidates.flatMap((candidate) => {
+    const parts = pathParts(candidate)
+    if (parts.at(-1) !== name) return []
+    // A bare name agrees with any candidate's folders. A written chain must agree with the whole
+    // chain or its end — a path relative to the project still names the same file — never just the
+    // file name when the folders differ.
+    const knownFolders = parts.slice(0, -1).join('/').toLowerCase()
+    if (folders && knownFolders !== folders && !knownFolders.endsWith(`/${folders}`)) return []
+    return [{ candidate, depth: parts.length - 1 }]
+  })
+  // When several files share a name, the least nested one is the least surprising bare-name match.
+  const match = matches.reduce<(typeof matches)[number] | null>(
+    (best, item) => (!best || item.depth < best.depth ? item : best), null,
+  )
+  return match ? { path: match.candidate, href: chatFileHref(match.candidate) } : null
+}
+
+/** Whether a written target is a local relative file path whose link should report a missing file. */
+export function isMissingFileCandidate(value: string): boolean {
+  if (!value || CONTROL.test(value) || ABSOLUTE.test(value) || UNC.test(value)) return false
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(value)) return false
+  const parts = pathParts(value)
+  return parts.length > 1 && KNOWN.test(parts.at(-1) ?? '')
+}
+
+/** A path with an optional `:line` or `:line:col` suffix, as agents write `report.md:26`. */
+export interface FileLinkTarget {
+  path: string
+  line?: number
+  column?: number
+}
+
+const MAX_LINE = 1_000_000
+
+/**
+ * Parse a written file target into the path to open and the line/column to show (OpenBot 0.78.0).
+ * The last one or two colon-separated numbers are the position, so `C:/a/report.md:26:5` and
+ * `/a/report.md:26` keep their drive and folders. A missing, non-numeric or absurd position leaves
+ * just the path; there is no line to scroll to. Pure, tested.
+ */
+export function file_link_target(text: string): FileLinkTarget | null {
+  const value = text.trim()
+  if (!value || CONTROL.test(value)) return null
+  const parts = value.split(':')
+  const numbers: number[] = []
+  while (parts.length > 1) {
+    const last = parts.at(-1)!
+    // A Windows drive letter or a path segment is not a line number. A non-numeric tail on a file
+    // name, though, is a malformed position (`report.md:oops`), not part of the path.
+    if (!/^\d+$/u.test(last)) {
+      if (!numbers.length && !last.includes('/') && !last.includes('\\') && parts.length > 1 && /\./u.test(parts.at(-2)!)) return null
+      break
+    }
+    const number = Number(last)
+    if (!Number.isSafeInteger(number) || number < 1 || number > MAX_LINE) return null
+    numbers.unshift(number)
+    parts.pop()
+    if (numbers.length === 2) break
+  }
+  const path = parts.join(':')
+  if (!path) return null
+  return numbers.length === 2 ? { path, line: numbers[0], column: numbers[1] } : numbers.length === 1 ? { path, line: numbers[0] } : { path }
 }
 
 /** The target of `[label](target)`; CommonMark needs `<…>` when the target holds spaces. */
