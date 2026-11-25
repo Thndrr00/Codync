@@ -358,6 +358,63 @@ fn library_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Trust posture: the bot's permission mode and approval rules, read-only.
+fn trust_view(row: &crate::store::BotRow) -> Value {
+    use crate::agent::approval_rules::Decision;
+    use crate::bdots_trust as t;
+    use crate::store::Permission;
+
+    let mode = match row.config.permission {
+        Permission::Ask => "ask",
+        Permission::Auto => "auto",
+    };
+    let lines: Vec<t::RuleLine> = row
+        .config
+        .approval_rules
+        .iter()
+        .map(|r| {
+            let decision = match r.decision {
+                Decision::Allow => "allow",
+                Decision::Ask => "ask",
+                Decision::Deny => "deny",
+            };
+            t::rule_line(&r.pattern, r.kind.as_deref().unwrap_or(""), decision)
+        })
+        .collect();
+    let score = t::trust_score(mode, &lines);
+    let decisions = lines.iter().map(|r| r.decision).collect::<Vec<_>>();
+    let patterns = lines.iter().map(|r| r.pattern.as_str()).collect::<Vec<_>>();
+
+    json!({
+        "mode": mode,
+        "modeLabel": t::permission_label(mode),
+        "modeIcon": t::permission_icon(mode),
+        "modeTone": t::permission_tone(mode),
+        "modeDetail": t::permission_detail(mode),
+        "score": score,
+        "tone": t::trust_tone(score),
+        "label": t::trust_label(score),
+        "headline": t::trust_headline(mode, &lines),
+        "total": t::total_rules(&lines),
+        "countLabel": t::rule_count_label(&lines),
+        "broad": t::broad_count(&patterns),
+        "command": t::command_count(&patterns),
+        "hasDeny": t::has_deny(&lines),
+        "hasBroadAllow": t::has_broad_allow(&lines),
+        "asksForEverything": t::asks_for_everything(mode, &lines),
+        "decisions": t::count_decisions(&decisions).into_iter().map(|(d, n)| json!({"decision": d, "count": n})).collect::<Vec<_>>(),
+        "summary": t::summary(mode, &lines).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "rules": t::strictest(&lines, 8).into_iter().map(|r| json!({
+            "pattern": r.pattern,
+            "kind": r.kind,
+            "decision": r.decision,
+            "icon": r.icon,
+            "tone": r.tone,
+            "broad": r.broad,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -416,6 +473,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "week": week_view(hub, bot, now),
         "routineSummary": routine_summary_view(&routines, now),
         "library": library_view(&row),
+        "trust": trust_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

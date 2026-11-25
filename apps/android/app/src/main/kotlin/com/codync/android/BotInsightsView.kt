@@ -42,6 +42,19 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val trust = insights.trust
+            CardSection("Trust") {
+                row { Text(trust.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(trust.headline, style = Type.caption, color = Palette.secondary) }
+                row { Text("Approval: ${trust.modeLabel}", style = Type.caption, color = Palette.secondary) }
+                row { Text(trust.modeDetail, style = Type.caption, color = Palette.tertiary) }
+                for (rule in trust.rules) row {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("${rule.decision}: ${rule.pattern}", style = Type.caption, color = Palette.text)
+                        if (rule.kind.isNotBlank()) Text(rule.kind, style = Type.caption, color = Palette.tertiary)
+                    }
+                }
+            }
             val library = insights.library
             CardSection("Skill library") {
                 row { Text(library.headline, style = Type.subheadline.semibold, color = Palette.text) }

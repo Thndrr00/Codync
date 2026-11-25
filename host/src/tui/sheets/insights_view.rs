@@ -66,6 +66,44 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let trust = &data["trust"];
+    if trust.is_object() {
+        line(buf, &mut y, tr("Trust").into_owned(), t.bold.patch(t.panel));
+        let label = trust["label"].as_str().unwrap_or("");
+        let headline = trust["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        let mode = trust["modeLabel"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("  {}: {}", tr("Approval"), mode), t.secondary.patch(t.panel));
+        let rules: Vec<String> = trust["rules"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(8)
+                    .map(|r| {
+                        let kind = r["kind"].as_str().unwrap_or("");
+                        if kind.is_empty() {
+                            format!(
+                                "  {} {}",
+                                r["decision"].as_str().unwrap_or(""),
+                                r["pattern"].as_str().unwrap_or("")
+                            )
+                        } else {
+                            format!(
+                                "  {} {} ({kind})",
+                                r["decision"].as_str().unwrap_or(""),
+                                r["pattern"].as_str().unwrap_or("")
+                            )
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for rule in rules {
+            line(buf, &mut y, rule, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let library = &data["library"];
     if library.is_object() {
         line(buf, &mut y, tr("Skill library").into_owned(), t.bold.patch(t.panel));

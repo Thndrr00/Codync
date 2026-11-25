@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Confianza y aprobaciones (22 helpers + UI en 4 clientes)
+
+`bdots_trust.rs` añade 22 helpers puros sobre el modo de permiso y las reglas de aprobación:
+iconos/tonos de decisión y permiso, detectores de patrones anchos y comandos, conteos por
+decisión, puntuación de confianza, etiquetas, titular, ordenación de reglas y ensamblaje.
+Reutiliza `bdots_more`, `bdots_text` y `bdots_desk`. El endpoint `botInsights` añade el campo
+`trust` desde `config.permission` y `config.approval_rules`, y la sección «Trust» se muestra en
+los cuatro clientes.
+
 ## Biblioteca de skills (21 helpers + UI en 4 clientes)
 
 `bdots_library.rs` añade 21 helpers puros para la biblioteca de skills: títulos, detectores de

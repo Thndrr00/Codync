@@ -13,9 +13,47 @@ public struct BotInsights: Decodable, Sendable {
     public let week: InsightWeek
     public let routineSummary: InsightRoutineSummary
     public let library: InsightLibrary
+    public let trust: InsightTrust
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed trust posture for one bot.
+public struct InsightTrust: Decodable, Sendable {
+    public let mode: String
+    public let modeLabel: String
+    public let modeIcon: String
+    public let modeTone: String
+    public let modeDetail: String
+    public let score: Int
+    public let tone: String
+    public let label: String
+    public let headline: String
+    public let total: Int
+    public let countLabel: String
+    public let broad: Int
+    public let command: Int
+    public let hasDeny: Bool
+    public let hasBroadAllow: Bool
+    public let asksForEverything: Bool
+    public let decisions: [InsightDecisionCount]
+    public let summary: [InsightSummaryRow]
+    public let rules: [InsightTrustRule]
+}
+
+public struct InsightDecisionCount: Decodable, Sendable {
+    public let decision: String
+    public let count: Int
+}
+
+public struct InsightTrustRule: Decodable, Sendable {
+    public let pattern: String
+    public let kind: String
+    public let decision: String
+    public let icon: String
+    public let tone: String
+    public let broad: Bool
 }
 
 /// A host-computed summary of one bot's skill library.

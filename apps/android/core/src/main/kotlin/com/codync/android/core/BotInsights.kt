@@ -16,9 +16,40 @@ data class BotInsights(
     val week: InsightWeek = InsightWeek(),
     val routineSummary: InsightRoutineSummary = InsightRoutineSummary(),
     val library: InsightLibrary = InsightLibrary(),
+    val trust: InsightTrust = InsightTrust(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed trust posture for one bot. */
+@Serializable
+data class InsightTrust(
+    val mode: String = "",
+    val modeLabel: String = "",
+    val modeIcon: String = "",
+    val modeTone: String = "",
+    val modeDetail: String = "",
+    val score: Int = 0,
+    val tone: String = "",
+    val label: String = "",
+    val headline: String = "",
+    val total: Int = 0,
+    val countLabel: String = "",
+    val broad: Int = 0,
+    val command: Int = 0,
+    val hasDeny: Boolean = false,
+    val hasBroadAllow: Boolean = false,
+    val asksForEverything: Boolean = false,
+    val decisions: List<InsightDecisionCount> = emptyList(),
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val rules: List<InsightTrustRule> = emptyList(),
+)
+
+@Serializable data class InsightDecisionCount(val decision: String = "", val count: Int = 0)
+@Serializable data class InsightTrustRule(
+    val pattern: String = "", val kind: String = "", val decision: String = "",
+    val icon: String = "", val tone: String = "", val broad: Boolean = false,
 )
 
 /** A host-computed summary of one bot's skill library. */

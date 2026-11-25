@@ -23,6 +23,7 @@ mod bdots_pure;
 mod bdots_routines;
 mod bdots_spend;
 mod bdots_text;
+mod bdots_trust;
 mod bdots_week;
 mod browser;
 mod budget;

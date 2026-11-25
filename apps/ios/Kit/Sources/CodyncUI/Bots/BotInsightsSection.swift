@@ -30,6 +30,17 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let trust = insights.trust
+                    Text(trust.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(trust.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Approval")): \(trust.modeLabel)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text(trust.modeDetail).font(.footnote).foregroundStyle(Palette.tertiary)
+                    ForEach(trust.rules, id: \.pattern) { rule in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("\(rule.decision): \(rule.pattern)").font(.footnote).foregroundStyle(Palette.text)
+                            if !rule.kind.isEmpty { Text(rule.kind).font(.footnote).foregroundStyle(Palette.tertiary) }
+                        }
+                    }
                     let library = insights.library
                     Text(library.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     ForEach(library.kinds, id: \.kind) { kind in

@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,23 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Trust')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(trust.tone)}>{trust.label}</Text>
+        <Text size="footnote" tone="secondary">{trust.headline}</Text>
+        <ValueRow label={tr('Approval')}>{trust.modeLabel}</ValueRow>
+        <Text size="footnote" tone="tertiary">{trust.modeDetail}</Text>
+        {trust.rules.length ? (
+          <VStack gap={2}>
+            {trust.rules.map((rule) => (
+              <VStack key={`${rule.pattern}-${rule.kind}`} gap={0}>
+                <Text size="footnote" tone={toneOf(rule.tone)}>{`${rule.decision}: ${rule.pattern}`}</Text>
+                {rule.kind ? <Text size="footnote" tone="tertiary">{rule.kind}</Text> : null}
+              </VStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       <CardSection title={tr('Skill library')}>
