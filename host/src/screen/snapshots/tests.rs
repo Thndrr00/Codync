@@ -6,6 +6,13 @@ fn snapshot(id: &str) -> serde_json::Value {
 }
 
 #[test]
+fn a_missing_capture_keeps_the_fixed_freshness_message() {
+    let message = super::capture_failure_message(super::CaptureFailure::StaleSnapshot);
+    assert!(message.contains("stale or unknown"), "{message}");
+    assert!(message.contains("Capture a fresh snapshot"), "{message}");
+}
+
+#[test]
 fn epoch_zero_preserves_legacy_arguments() {
     let state = SnapshotState::default();
     assert_eq!(state.epoch(), 0);

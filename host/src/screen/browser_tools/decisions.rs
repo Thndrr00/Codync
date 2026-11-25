@@ -12,6 +12,8 @@ use serde_json::json;
 const MAX_DRAG_COORD: u64 = 100_000;
 /// Shorter than this is a click that twitched, not a drag (OpenBot 0.70).
 const MIN_DRAG: i64 = 8;
+/// The CDP event Chromium raises when a page renderer dies (OpenBot 0.78.0).
+pub(crate) const TARGET_CRASHED: &str = "Inspector.targetCrashed";
 
 /// One end of a drag, in viewport pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +82,17 @@ pub(crate) fn snapshot_pass(kind: SnapshotPass) -> Value {
     }
 }
 
+/// What the agent is told when a tab crashes (OpenBot 0.78.0). `reason` is a CDP label such as
+/// `Inspector.targetCrashed` or `oom`, never the page's address or text, and is not echoed back:
+/// only one of these fixed sentences reaches the tool result or analytics.
+pub(crate) fn crash_notice(reason: &str) -> &'static str {
+    if reason.eq_ignore_ascii_case("oom") || reason.eq_ignore_ascii_case("out-of-memory") {
+        "The page ran out of memory and crashed. Reload it with navigate direction=reload, then take a new snapshot."
+    } else {
+        "The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot."
+    }
+}
+
 /// Whether an element is shown in a snapshot. The `hidden` and `inert` attributes always hide it;
 /// `page.js` reads them with `Element.prototype.hasAttribute.call` because a form control named
 /// `hidden` or `inert` shadows the element's own property and would otherwise hide a visible form
@@ -136,6 +149,21 @@ mod tests {
         assert_eq!(snapshot_pass(SnapshotPass::Drawn), json!({"drawn": true}));
         assert_eq!(SnapshotPass::Drawn.name(), "drawn");
         assert_ne!(SnapshotPass::Accessible.name(), SnapshotPass::Drawn.name());
+    }
+
+    #[test]
+    fn a_crashed_page_is_named_and_a_reload_is_offered() {
+        let notice = crash_notice(TARGET_CRASHED);
+        assert!(notice.contains("page crashed"), "{notice}");
+        assert!(notice.contains("navigate direction=reload"), "{notice}");
+        assert!(notice.contains("new snapshot"), "{notice}");
+        let oom = crash_notice("oom");
+        assert!(oom.contains("out of memory"), "{oom}");
+        assert!(oom.contains("navigate direction=reload"), "{oom}");
+        assert_eq!(crash_notice("OOM"), oom);
+        assert_eq!(crash_notice("out-of-memory"), oom);
+        assert_eq!(crash_notice(""), notice, "an unknown reason still names the crash");
+        assert_eq!(crash_notice("https://secret.example/page?token=1"), notice, "no address is echoed");
     }
 
     #[test]

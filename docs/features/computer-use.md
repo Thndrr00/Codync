@@ -77,6 +77,8 @@ The desktop setup uses a compact device header and one outlined permission group
 
 Desktop setup polls read-only status while open and checks again on focus. Opening Settings never counts as a grant. Failures retain retry and Settings actions; completion requires actual platform-specific status. Skipping grants no permissions. Older clients ignore the additive `permissionApp` status field.
 
+A connected macOS display that returns no image is not reported as a generic tool error (triage-15679): the agent and the person are told to turn on Codync in **System Settings › Screen & System Audio Recording** and reopen Codync. The pure `capture_failure_message` decision in `host/src/screen/permissions.rs` supplies the fixed words to the capture path (`helper_tools.rs`), the capture-permission request and the snapshot freshness error (`snapshots.rs`). This is a message mapping only: it adds no permission prompt and carries no display name or image into logs or analytics.
+
 ## The driver
 
 The tools come from [cua-driver](https://github.com/trycua/cua) (MIT), which works on apps in the background: by accessibility element where it can (`element_token` from `get_window_state`), by pixels posted to the app otherwise, and in the foreground only when a call asks for `delivery_mode: "foreground"`. The user's cursor and front app stay theirs.

@@ -1,8 +1,9 @@
 //! The bridge from the browser tools to this bot's own browser: one Chrome or Edge process started
 //! over the inherited CDP pipe of `protected_browser::pipe`, in a browser context Codync created,
-//! with one tab. Every call attaches to that tab, acts, and detaches. Nothing here depends on CDP
-//! events: the pipe answers requests and drops events, so the page's load and quiet states are polled
-//! through `Runtime.evaluate` instead.
+//! with one tab. Every call attaches to that tab, acts, and detaches. The pipe answers requests and
+//! drops events, so load and quiet states are polled through `Runtime.evaluate` instead. A dead
+//! renderer is the one event that must reach the agent (OpenBot 0.78.0): `Inspector.targetCrashed`
+//! is detected with a bounded Inspector liveness check when a renderer-side call fails.
 //!
 //! Which CDP methods each action uses:
 //! - `Target.getTargets`, `Target.attachToTarget`, `Target.detachFromTarget`, `Target.createTarget`,
@@ -18,7 +19,7 @@
 //!   `type`.
 
 use super::action::{Action, Button, Direction, Key, Kind, Load, Target};
-use super::decisions::{Point, SnapshotPass, drag_points, needs_visual, snapshot_pass};
+use super::decisions::{Point, SnapshotPass, TARGET_CRASHED, crash_notice, drag_points, needs_visual, snapshot_pass};
 use super::idle;
 use super::snapshot::{self, format as format_snapshot};
 use super::{cut_at, folder_slug};
@@ -47,6 +48,9 @@ const QUIET_MS: u64 = 500;
 const POLL: Duration = Duration::from_millis(150);
 /// How long the whole action may take beyond its own deadline, before the browser counts as hung.
 const HUNG: Duration = Duration::from_secs(5);
+/// OpenBot 0.78.0: bound the crash check so a renderer that stopped answering cannot hold the tool
+/// call after its own failure.
+const CRASH_PROBE: Duration = Duration::from_millis(600);
 /// OpenBot 0.74.0: a close cannot wait for an earlier action that a page which stopped answering
 /// holds. Wait this long for the tab to free itself, then close the browser under the blocked
 /// action so the queued calls end and the agent's turn does not stay on "working".
@@ -80,6 +84,9 @@ struct Session {
     /// Last time a CDP call actually answered. A page with a script that never ends keeps taking
     /// calls but returns nothing, so only this clock can tell the agent the page is stalled.
     last_response: Instant,
+    /// OpenBot 0.78.0: the fixed crash notice from a failed call, kept until `perform` reports it
+    /// instead of replacing it with a generic timeout message.
+    crash: Option<&'static str>,
     /// Whether `Page.setWebLifecycleState('frozen')` is in effect and has not been undone.
     frozen: bool,
 }
@@ -118,17 +125,26 @@ pub(super) async fn perform(bot: &str, action: &Action) -> Result<Value> {
         Err(_) => {
             // 0.77.0: a page whose script never ends stops answering. If the last CDP answer was
             // longer ago than the stall window, say so plainly and name the fix instead of only
-            // reporting a timeout.
-            let stalled = guard.as_ref().and_then(|held| held.as_ref()).is_some_and(|session| {
-                crate::screen::browser_cards::browser_page_stalled(
-                    session.last_response,
-                    Instant::now(),
-                    crate::screen::browser_cards::STALL_AFTER,
+            // reporting a timeout. 0.78.0: a crash notice takes priority over both.
+            let (crashed, stalled) = {
+                let session = guard.as_mut().and_then(|held| held.as_mut());
+                (
+                    session.as_mut().and_then(|session| session.crash.take()),
+                    session.is_some_and(|session| {
+                        crate::screen::browser_cards::browser_page_stalled(
+                            session.last_response,
+                            Instant::now(),
+                            crate::screen::browser_cards::STALL_AFTER,
+                        )
+                    }),
                 )
-            });
+            };
             // A cancelled read leaves the pipe unsure of where the next reply starts, so the browser
             // is stopped instead of reused.
             stop(guard.take()).await;
+            if let Some(notice) = crashed {
+                bail!("{notice}")
+            }
             if stalled {
                 bail!(
                     "{} The page was silent for over {} seconds, so the browser was closed. Open it again with navigate direction=reload, then take a new snapshot.",
@@ -239,6 +255,7 @@ async fn spawn(bot: &str) -> Result<Session> {
         target,
         last_activity: Instant::now(),
         last_response: Instant::now(),
+        crash: None,
         frozen: false,
     })
 }
@@ -378,8 +395,25 @@ async fn run(session: &mut Session, action: &Action) -> Result<Value> {
     ensure_target(session).await?;
     let tab = attach(session).await?;
     let answer = act(session, &tab, action).await;
+    // OpenBot 0.78.0: a crashed page is reported as such, with the reload the agent can do, instead
+    // of a generic refusal or a snapshot from before the crash. Check while the session is still
+    // attached; a cancelled check poisons the pipe, which `perform` then closes rather than reuses.
+    let crash = match &answer {
+        Ok(_) => None,
+        Err(_) => timeout(CRASH_PROBE, crash_reason(session, &tab)).await.ok().flatten(),
+    };
     rpc(&mut session.pipe, "Target.detachFromTarget", json!({"sessionId": tab.as_str()}), None).await.ok();
-    answer
+    match answer {
+        Ok(value) => Ok(value),
+        Err(error) => match crash {
+            Some(reason) => {
+                let notice = crash_notice(reason);
+                session.crash = Some(notice);
+                bail!("{notice}")
+            }
+            None => Err(error),
+        },
+    }
 }
 
 /// Makes `session.target` the bot's open tab, adopting or opening one when the page closed it.
@@ -418,6 +452,21 @@ async fn attach(session: &mut Session) -> Result<String> {
     )
     .await?;
     attached["sessionId"].as_str().map(str::to_owned).context("Could not reach the bot's tab")
+}
+
+/// OpenBot 0.78.0: `Inspector.targetCrashed` is the CDP event a dead renderer raises. The inherited
+/// pipe forwards replies, not events, so the same Inspector agent is asked directly: `Inspector.enable`
+/// cannot succeed on a crashed page, while the browser's own target list still names the tab. Only
+/// the fixed event label comes back; neither the address nor the page text is read or logged.
+async fn crash_reason(session: &mut Session, tab: &str) -> Option<&'static str> {
+    if rpc(&mut session.pipe, "Inspector.enable", json!({}), Some(tab)).await.is_ok() {
+        return None;
+    }
+    let targets = rpc(&mut session.pipe, "Target.getTargets", json!({}), None).await.ok()?;
+    let listed = targets["targetInfos"]
+        .as_array()
+        .is_some_and(|pages| pages.iter().any(|page| page["targetId"] == session.target.as_str()));
+    listed.then_some(TARGET_CRASHED)
 }
 
 async fn act(session: &mut Session, tab: &str, action: &Action) -> Result<Value> {
@@ -1052,6 +1101,15 @@ mod tests {
         assert!(text.contains("api.box({\"ref\":7})"), "{text}");
         assert!(text.contains("window.__codyncRefs || (window.__codyncRefs = new Map())"));
         assert!(text.contains("((refs) =>"), "the helpers are bound to the document's refs: {text}");
+    }
+
+    #[test]
+    fn a_crashed_tab_is_reported_with_the_reload_it_offers() {
+        assert_eq!(TARGET_CRASHED, "Inspector.targetCrashed");
+        let notice = crash_notice(TARGET_CRASHED);
+        assert!(notice.contains("page crashed"), "{notice}");
+        assert!(notice.contains("navigate direction=reload"), "{notice}");
+        assert!(CRASH_PROBE < Duration::from_secs(5), "a dead page must not hold the tool call");
     }
 
     #[test]

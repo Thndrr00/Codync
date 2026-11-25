@@ -136,6 +136,8 @@ a new snapshot, an element that cannot take typing says so, a page that never sh
 *The page did not show "Invoices" within 15 seconds; take a snapshot to see where it is.*, and a run
 that fails names the step that failed and says the steps before it stay done.
 
+A page renderer that dies is named too (OpenBot 0.78.0). When a renderer-side CDP call fails, the host checks the page's Inspector agent: `Inspector.targetCrashed` is Chromium's event for a dead renderer, but the inherited pipe forwards replies rather than events, so `Inspector.enable` (bounded, followed by a browser-level target check) is the signal the tool can read. The result then says *The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot.* instead of a generic refusal or a snapshot from before the crash. The pure `crash_notice` decision in `host/src/screen/browser_tools/decisions.rs` picks one fixed sentence from the CDP label; no address, page text or crash reason is logged or sent to analytics.
+
 Closing a browser is bounded too (OpenBot 0.74.0): a close waits at most ten seconds for an earlier
 action that a stalled page holds, then closes the browser under it, so the tool call ends and the
 agent's turn is not left on "working" until someone presses Stop. A script the agent ran with

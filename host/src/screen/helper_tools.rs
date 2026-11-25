@@ -2,6 +2,7 @@
 //! sessions): bots act through Codync Screen's portal input on screenshot pixels instead.
 
 use super::helper::Link;
+use super::permissions::{CaptureFailure, capture_failure_message};
 use super::protocol::Display;
 use super::{SETTLE, Screen};
 use anyhow::{Result, anyhow, bail};
@@ -221,7 +222,7 @@ async fn act(link: &Link, d: &Display, event: InputEvent) -> Result<Value> {
 async fn shot(link: &Link, d: &Display) -> Result<Value> {
     let (width, height) = d.shot_size();
     let res = link.request("screenshot", json!({"display": d.id, "width": width, "height": height})).await?;
-    let data = res["data"].as_str().ok_or_else(|| anyhow!("the screen helper sent no image"))?;
+    let data = shot_data(&res)?;
     Ok(json!([
         {"type": "image", "data": data, "mimeType": "image/jpeg"},
         {"type": "text", "text": format!(
@@ -229,6 +230,16 @@ async fn shot(link: &Link, d: &Display) -> Result<Value> {
             d.id, d.name
         )},
     ]))
+}
+
+/// triage-15679: a connected display can answer a capture with no image when Codync has no Screen
+/// Recording grant. Say what to turn on and reopen, not "no image", and keep the decision testable
+/// without a helper. No display name or image is carried into the message.
+fn shot_data(res: &Value) -> Result<&str> {
+    res["data"]
+        .as_str()
+        .filter(|data| !data.is_empty())
+        .ok_or_else(|| anyhow!("{}", capture_failure_message(CaptureFailure::NoImage)))
 }
 
 impl Display {
@@ -413,6 +424,15 @@ mod tests {
         assert!(matches!(t, Tool::Click { button: Button::Right, count: None, .. }));
         assert!(read_only("screenshot") && !read_only("click"));
         assert!(tools().iter().all(|t| serde_json::from_value::<Tool>(json!({"name": t["name"], "arguments": {"x": 1, "y": 1, "to_x": 1, "to_y": 1, "text": "", "keys": "a", "name": "x"}})).is_ok()));
+    }
+
+    #[test]
+    fn a_capture_with_no_image_names_the_screen_recording_setting() {
+        let error = shot_data(&json!({})).unwrap_err().to_string();
+        assert!(error.contains("System Settings › Screen & System Audio Recording"), "{error}");
+        assert!(error.contains("turn on Codync") && error.contains("reopen Codync"), "{error}");
+        assert!(shot_data(&json!({"data": ""})).is_err(), "an empty image is no image");
+        assert_eq!(shot_data(&json!({"data": "jpeg-bytes"})).unwrap(), "jpeg-bytes");
     }
 
     #[test]

@@ -1,11 +1,11 @@
 //! Metadata-only freshness checks after a user takeover or permission revocation.
 
+use super::permissions::{CaptureFailure, capture_failure_message};
 use anyhow::{Result, bail};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 
 const MAX_IDS: usize = 64;
-const STALE: &str = "The computer snapshot is stale or unknown. Capture a fresh snapshot before acting.";
 
 #[derive(Default)]
 struct BotSnapshots {
@@ -66,26 +66,26 @@ impl SnapshotState {
             return Ok(());
         }
         let Some(state) = self.bots.get(bot).filter(|state| state.fresh) else {
-            bail!(STALE);
+            bail!("{}", capture_failure_message(CaptureFailure::StaleSnapshot));
         };
         if let Some(token) = args.get("element_token") {
             let Some((snapshot, index)) = token.as_str().and_then(|token| token.rsplit_once(':')) else {
-                bail!(STALE);
+                bail!("{}", capture_failure_message(CaptureFailure::StaleSnapshot));
             };
             if snapshot.is_empty()
                 || index.is_empty()
                 || !index.bytes().all(|byte| byte.is_ascii_digit())
                 || !state.ids.iter().any(|id| id == snapshot)
             {
-                bail!(STALE);
+                bail!("{}", capture_failure_message(CaptureFailure::StaleSnapshot));
             }
         }
         if let Some(capture) = args.get("capture_id") {
             let Some(capture) = identifier(capture) else {
-                bail!(STALE);
+                bail!("{}", capture_failure_message(CaptureFailure::StaleSnapshot));
             };
             if !state.ids.contains(&capture) {
-                bail!(STALE);
+                bail!("{}", capture_failure_message(CaptureFailure::StaleSnapshot));
             }
         }
         Ok(())

@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 /// What every action that changes the page answers, as `OpenBot` words it.
 const ACTION_RESULT: &str = "Returns a status; pass snapshot: true to read the page afterwards.";
 const NEEDS_ACCESS: &str = "The bot needs Use the computer on, with its browser permission.";
+/// OpenBot 0.78.0: a page that crashes is named in the result, with the reload that recovers it.
+const CRASH_NOTE: &str = " If the page crashes, the result says so and tells you to reload with navigate direction=reload, then take a new snapshot.";
 
 pub(super) fn definitions() -> Vec<Value> {
     vec![
@@ -44,7 +46,7 @@ fn navigate() -> Value {
 fn snapshot() -> Value {
     json!({
         "name": "snapshot",
-        "description": r#"Read the page as a compact tree: one line per element with its ref, role, "name", <tag>, value and state, in page order and indented by depth, then the page's visible text. Use the refs with click, type, press, hover, scroll, select_option and set_checked. Refs stay valid until the next snapshot or a navigation. The output is bounded: 400 elements and about 40000 characters, with a note when something was left out, so scroll or wait_for to read more."#,
+        "description": format!(r#"Read the page as a compact tree: one line per element with its ref, role, "name", <tag>, value and state, in page order and indented by depth, then the page's visible text. Use the refs with click, type, press, hover, scroll, select_option and set_checked. Refs stay valid until the next snapshot or a navigation. The output is bounded: 400 elements and about 40000 characters, with a note when something was left out, so scroll or wait_for to read more.{CRASH_NOTE}"#),
         "inputSchema": {"type": "object", "properties": {}},
         "annotations": {"readOnlyHint": true},
     })
@@ -270,6 +272,14 @@ mod tests {
             assert!(tool["description"].as_str().is_some_and(|text| text.len() > 40), "{tool} describes itself");
             assert_eq!(tool["inputSchema"]["type"], "object", "{tool} takes an object");
         }
+    }
+
+    #[test]
+    fn a_snapshot_names_the_crash_reload_in_its_description() {
+        let snapshot = definitions().into_iter().find(|tool| tool["name"] == "snapshot").expect("snapshot is listed");
+        let description = snapshot["description"].as_str().unwrap_or_default();
+        assert!(description.contains("page crashes"), "{description}");
+        assert!(description.contains("navigate direction=reload"), "{description}");
     }
 
     #[test]
