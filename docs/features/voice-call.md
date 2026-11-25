@@ -405,6 +405,20 @@ carries audio and talks to these methods:
   speaker again each time: the engine stops itself then, and without both the microphone stays quiet, or the
   player never finishes its buffers so the phase stays "speaking" and the bot's replies are never said.
   A reply counts as played once its buffers are rendered (`.dataRendered`).
+- Read aloud skips markdown a speaker shouldn't say (OpenBot 0.78.0): headings, quotes, `-`/`+`/`*`/`•` list
+  marks (including nested ones), `[ ]` task boxes and setext `===` underlines. The rule is pure and tested
+  on all three clients (`cleanSpokenText` in the desktop `voice.ts`, `SpokenText` on iPhone and Android);
+  punctuation inside a word (`C++`, `x*2`, `#tag`) is kept.
+- OpenAI Realtime posts a transcribed request or reply once (triage-15781). The same words arriving again
+  inside a short window are dropped; a genuine repeat after the window is a new turn. The decision is pure
+  (`isRepeatUtterance`) and wired into the realtime engine on all three clients.
+- Deferred (triage-15567): read aloud shouldn't be cut off by the same agent's other work. The pure decision
+  (`shouldInterruptSpeech`) and its tests are in place: only a new explicit user message in the main chat
+  interrupts, while a channel, thread or self-started turn does not. The exact client surface isn't reached
+  yet: `CallCue` doesn't carry a source, and the places that cancel speech (the desktop/iPhone cue delivery
+  in `CallView`, Android's chat read-aloud toggle) sit outside the call files, so wiring source through them
+  and the host's cue payload would be a larger cross-client change. Codync's chat read-aloud currently stops
+  only on a bot switch or leaving the chat, so no existing call site cancels it on those turns.
 
 ### Phases and recovery
 

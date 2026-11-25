@@ -1,5 +1,5 @@
 import type { CallLink, CallSession } from './call-link'
-import { errorMessage, microphone, onDevicesChanged, PROGRESS_TAG, reconnect, VoiceEngine, VoiceSettings, type TalkAction } from './voice'
+import { errorMessage, isRepeatUtterance, microphone, onDevicesChanged, PROGRESS_TAG, reconnect, UTTERANCE_REPEAT_MS, VoiceEngine, VoiceSettings, type LastUtterance, type TalkAction } from './voice'
 import { trNow } from '../../lib/l10n.ts'
 
 /**
@@ -29,6 +29,9 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
   private replyPaused = false
   /** Speech was heard while holding, so releasing commits the audio buffer. */
   private hadAudio = false
+  /** The last request and reply posted to the chat, for dropping a duplicate transcript (triage-15781). */
+  private lastUser: LastUtterance | null = null
+  private lastVoice: LastUtterance | null = null
 
   private model: string
   private voice: string
@@ -311,16 +314,30 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
         this.responding = false
         this.flush()
         break
-      case 'conversation.item.input_audio_transcription.completed':
+      case 'conversation.item.input_audio_transcription.completed': {
+        const transcript = typeof msg.transcript === 'string' ? msg.transcript : ''
+        const now = Date.now()
+        if (isRepeatUtterance(transcript, this.lastUser, UTTERANCE_REPEAT_MS, now)) {
+          // The provider re-sent the same request: post it once, but stop waiting for its words.
+          this.link.transcribing(false)
+          break
+        }
+        if (transcript.trim()) this.lastUser = { text: transcript, at: now }
         this.transcript?.openAI(msg)
-        this.link.add('user', typeof msg.transcript === 'string' ? msg.transcript : '')
+        this.link.add('user', transcript)
         this.link.endTurn()
         break
-      case 'response.output_audio_transcript.done':
+      }
+      case 'response.output_audio_transcript.done': {
+        const transcript = typeof msg.transcript === 'string' ? msg.transcript : ''
+        const now = Date.now()
+        if (isRepeatUtterance(transcript, this.lastVoice, UTTERANCE_REPEAT_MS, now)) break
+        if (transcript.trim()) this.lastVoice = { text: transcript, at: now }
         this.transcript?.openAI(msg)
-        this.link.add('voice', typeof msg.transcript === 'string' ? msg.transcript : '')
+        this.link.add('voice', transcript)
         this.link.endTurn()
         break
+      }
       case 'response.function_call_arguments.done': {
         if (typeof msg.call_id !== 'string' || typeof msg.name !== 'string') return
         let args: Record<string, unknown> = {}

@@ -53,6 +53,9 @@ final class OpenAIRealtimeEngine: VoiceEngine {
     private var connected = false
     private var reconnects = 0
     private var audioEvents: AudioSessionEvents?
+    /// The last request and reply posted to the chat, for dropping a duplicate transcript (triage-15781).
+    private var lastUserUtterance: SpokenText.Utterance?
+    private var lastVoiceUtterance: SpokenText.Utterance?
 
     init(model: String, voice: String, link: CallLink) {
         self.model = model
@@ -292,10 +295,28 @@ final class OpenAIRealtimeEngine: VoiceEngine {
             responding = false
             flush()
         case "conversation.item.input_audio_transcription.completed":
-            link.add("user", msg["transcript"] as? String ?? "")
-            link.endTurn()
+            let transcript = msg["transcript"] as? String ?? ""
+            let now = Date()
+            if SpokenText.isRepeatUtterance(transcript, lastUserUtterance,
+                                            windowSeconds: SpokenText.utteranceRepeatSeconds, now: now) {
+                // The provider re-sent the same request: post it once, but stop waiting for its words.
+                link.transcribing(false)
+            } else {
+                if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    lastUserUtterance = SpokenText.Utterance(text: transcript, at: now)
+                }
+                link.add("user", transcript)
+                link.endTurn()
+            }
         case "response.output_audio_transcript.done":
-            link.add("voice", msg["transcript"] as? String ?? "")
+            let transcript = msg["transcript"] as? String ?? ""
+            let now = Date()
+            if SpokenText.isRepeatUtterance(transcript, lastVoiceUtterance,
+                                            windowSeconds: SpokenText.utteranceRepeatSeconds, now: now) { break }
+            if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                lastVoiceUtterance = SpokenText.Utterance(text: transcript, at: now)
+            }
+            link.add("voice", transcript)
             link.endTurn()
         case "response.function_call_arguments.done":
             guard let id = msg["call_id"] as? String, let name = msg["name"] as? String else { return }

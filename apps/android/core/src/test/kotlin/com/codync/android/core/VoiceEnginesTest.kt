@@ -245,6 +245,26 @@ class VoiceEnginesTest {
         engine.end(); engine.awaitEnd()
     }
 
+    @Test fun openAIRealtimePostsATranscribedTurnOnlyOnceInsideTheRepeatWindow() = runTest {
+        var now = 10_000L
+        val peer = Peer(); val link = Link()
+        val engine = OpenAIRealtimeEngine(backgroundScope, VoiceSettings(), "m", "v", "t", link, peer) { _, _ -> "answer" } { now }
+        runCurrent()
+        val user = """{"type":"conversation.item.input_audio_transcription.completed","transcript":"ship it"}"""
+        peer.events!!.received(user); runCurrent()
+        assertEquals(listOf("user" to "ship it"), link.lines); assertEquals(1, link.turns)
+        now += 500
+        peer.events!!.received(user); runCurrent()
+        assertEquals(1, link.lines.size); assertEquals(1, link.turns)
+        peer.events!!.received("""{"type":"response.output_audio_transcript.done","transcript":"Done"}"""); runCurrent()
+        assertEquals(listOf("user" to "ship it", "voice" to "Done"), link.lines)
+        // A genuine repeat, well after the window, is a new turn.
+        now += 2_001
+        peer.events!!.received(user); runCurrent()
+        assertEquals(3, link.lines.size); assertEquals(3, link.turns)
+        engine.end(); engine.awaitEnd()
+    }
+
     @Test fun openAIRealtimeReconnectsADroppedSessionPrimedByTheComputerAndGivesUpAfterThreeTries() = runTest {
         val peer = Peer(); val link = Link()
         var offers = 0

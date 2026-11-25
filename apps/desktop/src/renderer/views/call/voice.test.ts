@@ -58,6 +58,56 @@ test('ElevenLabs holds no live call, so its mode is always speech', async () => 
 })
 
 
+test('spoken text drops bullets, task boxes, nested quotes and setext rules but keeps words', async () => {
+  const { cleanSpokenText, spokenText } = await import('./voice.ts')
+  const reply = [
+    '## Plan',
+    '> - outer bullet',
+    '> > • nested bullet',
+    '1. - [ ] first task',
+    '   * [x] nested task',
+    '+ keep C++, x*2 and #tag intact',
+    'Heading',
+    '===',
+    'Plain prose with a quote: "ship it" and a dash - inside.',
+  ].join('\n')
+  assert.equal(cleanSpokenText(reply), [
+    'Plan',
+    'outer bullet',
+    'nested bullet',
+    'first task',
+    'nested task',
+    'keep C++, x*2 and #tag intact',
+    'Heading',
+    '',
+    'Plain prose with a quote: "ship it" and a dash - inside.',
+  ].join('\n'))
+  assert.equal(spokenText('- **Bold** and [link](https://x.y/1)\n===\n\nMore.'), 'Bold and link\nMore.')
+})
+
+test('a repeated provider utterance is posted once inside the window, not after it', async () => {
+  const { isRepeatUtterance } = await import('./voice.ts')
+  const at = 10_000
+  assert.equal(isRepeatUtterance('ship it', { text: 'ship it', at }, 2_000, 11_000), true)
+  assert.equal(isRepeatUtterance('  ship it  ', { text: 'ship it', at }, 2_000, 11_000), true)
+  assert.equal(isRepeatUtterance('ship it', { text: 'ship it', at }, 2_000, 12_001), false)
+  assert.equal(isRepeatUtterance('ship it again', { text: 'ship it', at }, 2_000, 11_000), false)
+  assert.equal(isRepeatUtterance('ship it', null, 2_000, 11_000), false)
+  assert.equal(isRepeatUtterance('', { text: '', at }, 2_000, 11_000), false)
+  assert.equal(isRepeatUtterance('ship it', { text: 'ship it', at: 11_500 }, 2_000, 11_000), false)
+})
+
+test('only a new explicit user message interrupts a reply being read aloud', async () => {
+  const { shouldInterruptSpeech } = await import('./voice.ts')
+  assert.equal(shouldInterruptSpeech('user', true), true)
+  for (const source of ['channel', 'thread', 'self', 'notice'] as const) {
+    assert.equal(shouldInterruptSpeech(source, true), false)
+    assert.equal(shouldInterruptSpeech(source, false), false)
+  }
+  assert.equal(shouldInterruptSpeech('user', false), false)
+})
+
+
 test('Windows and Linux retain automatic call fallback until a provider is explicitly picked', async () => {
   const { VoiceSettings } = await import('./voice.ts')
   const settings = await import('../settings/voice-settings.ts')

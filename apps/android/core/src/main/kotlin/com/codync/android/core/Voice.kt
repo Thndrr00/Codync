@@ -13,11 +13,37 @@ fun callDuration(seconds: Long): String {
 
 /** Match the existing iOS spoken reply transformation, without sending audio to the host. */
 object SpokenText {
+    /** One utterance the provider already posted, and when (OpenBot triage-15781). */
+    data class Utterance(val text: String, val at: Long)
+
+    /** Where a new turn came from, for whether it may cut off a reply being read aloud. */
+    enum class Source { USER, CHANNEL, THREAD, SELF, NOTICE }
+
+    /**
+     * Markdown a voice never says (OpenBot 0.78.0): headings, quotes, `-`/`+`/`*`/`•`/`1.` list
+     * markers, `[ ]` task boxes and setext `===` underlines. A marker is dropped only at the start
+     * of a line and before whitespace, so punctuation inside words (`C++`, `x*2`, `#tag`) stays;
+     * nested markers are peeled one at a time.
+     */
+    private val quote = Regex("""^\s{0,3}>\s*""")
+    private val marker = Regex("""^\s{0,3}(?:#{1,6}|[•+*-]|\d+[.)]|\[[ xX]\])(?:\s+|$)""")
+    private val underline = Regex("""^\s{0,3}(?:={3,}|-{3,}|_{3,})\s*$""")
+    fun cleanSpokenText(text: String): String = text.split("\n").joinToString("\n") { line ->
+        if (underline.containsMatchIn(line)) "" else {
+            var rest = line
+            while (true) {
+                val next = marker.replace(quote.replace(rest, ""), "")
+                if (next == rest) break
+                rest = next
+            }
+            rest
+        }
+    }
+
     private val rules = listOf(
         "```[\\s\\S]*?```" to "",
         "!?\\[([^\\]]*)\\]\\([^)]*\\)" to "$1",
         "`([^`]*)`" to "$1",
-        "(?m)^\\s{0,3}(#{1,6}|>|[-*+]|\\d+\\.)\\s+" to "",
         "(\\*\\*|\\*|~~)(\\S[^\\n]*?)\\1" to "$2",
         "(?m)^[ \\t]*\\|?[ \\t:|-]{3,}\\|?[ \\t]*$" to "",
         "(?m)^[ \\t]*\\|[ \\t]*|[ \\t]*\\|[ \\t]*$" to "",
@@ -25,10 +51,27 @@ object SpokenText {
     ).map { (pattern, replacement) -> Regex(pattern) to replacement }
     fun from(markdown: String): String {
         require(markdown.length <= 256 * 1024) { "This reply is too long to read aloud." }
-        var text = markdown
+        var text = cleanSpokenText(markdown)
         for ((pattern, replacement) in rules) text = pattern.replace(text, replacement)
         return text.trim()
     }
+
+    /** How soon the same words are one utterance the provider posted twice (triage-15781). */
+    const val utteranceRepeatMs = 2_000L
+
+    /** True when the provider re-sent exactly these words within the window, not a new turn. */
+    fun isRepeatUtterance(text: String, last: Utterance?, windowMs: Long, nowMs: Long): Boolean {
+        val words = text.trim()
+        if (words.isEmpty() || last == null) return false
+        val age = nowMs - last.at
+        return words == last.text.trim() && age >= 0 && age <= windowMs
+    }
+
+    /** Only a new explicit user message in the main chat interrupts a reply; the same agent's
+     * channel, thread or self-started work keeps reading (triage-15567). */
+    fun shouldInterruptSpeech(source: Source, isUserMainMessage: Boolean): Boolean =
+        isUserMainMessage && source == Source.USER
+
     /** Android TTS limits each utterance; split without cutting a UTF-16 surrogate pair. */
     fun chunks(text: String, limit: Int = 3_500): List<String> {
         require(limit >= 2)

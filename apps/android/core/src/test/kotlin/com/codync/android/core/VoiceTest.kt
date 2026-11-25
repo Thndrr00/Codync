@@ -42,6 +42,37 @@ class VoiceTest {
         assertEquals(value, chunks.joinToString(""))
         assertTrue(chunks.all { it.length <= 4 && !it.last().isHighSurrogate() && !it.first().isLowSurrogate() })
     }
+    @Test fun spokenTextDropsBulletsTaskBoxesQuotesAndSetextRulesButKeepsWords() {
+        val reply = listOf(
+            "## Plan", "> - outer bullet", "> > • nested bullet", "1. - [ ] first task",
+            "   * [x] nested task", "+ keep C++, x*2 and #tag intact", "Heading", "===",
+            "Plain prose with a quote: \"ship it\" and a dash - inside.",
+        ).joinToString("\n")
+        assertEquals(listOf(
+            "Plan", "outer bullet", "nested bullet", "first task", "nested task",
+            "keep C++, x*2 and #tag intact", "Heading", "",
+            "Plain prose with a quote: \"ship it\" and a dash - inside.",
+        ).joinToString("\n"), SpokenText.cleanSpokenText(reply))
+        assertEquals("Bold and link\nMore", SpokenText.from("- **Bold** and [link](https://x.y/1)\n===\n\nMore."))
+    }
+    @Test fun aRepeatedProviderUtteranceIsPostedOnceInsideTheWindow() {
+        val at = 10_000L
+        assertTrue(SpokenText.isRepeatUtterance("ship it", SpokenText.Utterance("ship it", at), 2_000, 11_000))
+        assertTrue(SpokenText.isRepeatUtterance("  ship it  ", SpokenText.Utterance("ship it", at), 2_000, 11_000))
+        assertFalse(SpokenText.isRepeatUtterance("ship it", SpokenText.Utterance("ship it", at), 2_000, 12_001))
+        assertFalse(SpokenText.isRepeatUtterance("ship it again", SpokenText.Utterance("ship it", at), 2_000, 11_000))
+        assertFalse(SpokenText.isRepeatUtterance("ship it", null, 2_000, 11_000))
+        assertFalse(SpokenText.isRepeatUtterance("", SpokenText.Utterance("", at), 2_000, 11_000))
+        assertFalse(SpokenText.isRepeatUtterance("ship it", SpokenText.Utterance("ship it", 11_500), 2_000, 11_000))
+    }
+    @Test fun onlyANewExplicitUserMessageInterruptsReadingAloud() {
+        assertTrue(SpokenText.shouldInterruptSpeech(SpokenText.Source.USER, true))
+        for (source in listOf(SpokenText.Source.CHANNEL, SpokenText.Source.THREAD, SpokenText.Source.SELF, SpokenText.Source.NOTICE)) {
+            assertFalse(SpokenText.shouldInterruptSpeech(source, true))
+            assertFalse(SpokenText.shouldInterruptSpeech(source, false))
+        }
+        assertFalse(SpokenText.shouldInterruptSpeech(SpokenText.Source.USER, false))
+    }
     @Test fun unchangedPartialResultsDoNotDelaySubmissionAndLateFinalsCannotResend() = runTest {
         val audio = Audio(); val sent = mutableListOf<String>()
         val session = VoiceSession(backgroundScope, audio, VoiceSettings(), send = sent::add)

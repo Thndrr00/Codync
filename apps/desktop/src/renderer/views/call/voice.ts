@@ -312,20 +312,69 @@ export function fromBase64(text: string) {
 
 // MARK: spoken text
 
+/**
+ * Markdown a voice never says (OpenBot 0.78.0): headings, quotes, `-`/`+`/`*`/`•`/`1.` list markers,
+ * `[ ]` task boxes and setext `===` underlines. A marker is dropped only at the start of a line and
+ * before whitespace, so punctuation inside words (`C++`, `x*2`, `#tag`) stays; nested markers are
+ * peeled one at a time.
+ */
+export function cleanSpokenText(text: string): string {
+  const quote = /^\s{0,3}>\s*/
+  const marker = /^\s{0,3}(?:#{1,6}|[•+*-]|\d+[.)]|\[[ xX]\])(?:\s+|$)/
+  const underline = /^\s{0,3}(?:={3,}|-{3,}|_{3,})\s*$/
+  return text.split('\n').map((line) => {
+    if (underline.test(line)) return ''
+    let rest = line
+    for (;;) {
+      const next = rest.replace(quote, '').replace(marker, '')
+      if (next === rest) break
+      rest = next
+    }
+    return rest
+  }).join('\n')
+}
+
 /** A chat reply as it should sound: markdown syntax and code blocks dropped (kit SpokenText). */
 export function spokenText(markdown: string) {
   const rules: [RegExp, string][] = [
     [/```[\s\S]*?```/g, ''], // code blocks
     [/!?\[([^\]]*)\]\([^)]*\)/g, '$1'], // links and images → their text
     [/`([^`]*)`/g, '$1'], // inline code
-    [/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, ''], // headings, quotes, list markers
     [/(\*\*|\*|~~)(\S[^\n]*?)\1/g, '$2'], // emphasis (not `_`: it's in identifiers)
     [/^[ \t]*\|?[ \t:|-]{3,}\|?[ \t]*$/gm, ''], // table rules
     [/^[ \t]*\|[ \t]*|[ \t]*\|[ \t]*$/gm, ''], // table edges
     [/[ \t]*\|[ \t]*/g, ', '], // table cells
     [/\n{2,}/g, '\n'],
   ]
-  let text = markdown
+  let text = cleanSpokenText(markdown)
   for (const [pattern, template] of rules) text = text.replace(pattern, template)
   return text.trim()
+}
+
+// MARK: utterance decisions (OpenBot triage-15781, 15567)
+
+/** One utterance the provider already posted, and when (ms). */
+export interface LastUtterance {
+  text: string
+  at: number
+}
+
+/** How soon the same words are one utterance the provider posted twice. */
+export const UTTERANCE_REPEAT_MS = 2_000
+
+/** True when the provider re-sent exactly these words within the window, not a new turn. */
+export function isRepeatUtterance(text: string, last: LastUtterance | null, windowMs: number, nowMs: number): boolean {
+  if (!text.trim() || !last) return false
+  return text.trim() === last.text.trim() && nowMs >= last.at && nowMs - last.at <= windowMs
+}
+
+/** Where a new turn came from, for whether it may cut off a reply being read aloud. */
+export type SpeechSource = 'user' | 'channel' | 'thread' | 'self' | 'notice'
+
+/**
+ * Only a new explicit user message in the main chat interrupts a reply; the same agent's channel,
+ * thread or self-started work keeps reading (OpenBot triage-15567).
+ */
+export function shouldInterruptSpeech(source: SpeechSource, isUserMainMessage: boolean): boolean {
+  return isUserMainMessage && source === 'user'
 }

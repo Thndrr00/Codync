@@ -32,6 +32,7 @@ interface RealtimePeer {
 class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, private val model: String, private val voice: String,
     private val transcribe: String, private val link: CallLink, private val peer: RealtimePeer,
     private val exchange: suspend (secret: String, offer: String) -> String,
+    private val clock: () -> Long = { System.currentTimeMillis() },
 ) : ProviderEngine(parent, VoiceProvider.OpenAI, settings, "OpenAI Realtime"), RealtimePeer.Events {
     /** A response is being generated; new replies wait for it to finish. */
     private var responding = false
@@ -48,6 +49,9 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
     private var holding = false
     private var hadAudio = false
     private val micOpen: Boolean get() = !muted && (!pushToTalk || holding) && phase != VoicePhase.Interrupted
+    /** The last request and reply posted to the chat, for dropping a duplicate transcript (triage-15781). */
+    private var lastUser: SpokenText.Utterance? = null
+    private var lastVoice: SpokenText.Utterance? = null
 
     init { hop { open() } }
 
@@ -160,8 +164,22 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
             "output_audio_buffer.stopped", "output_audio_buffer.cleared" -> if (phase == VoicePhase.Speaking) phase(VoicePhase.Listening)
             "response.created" -> responding = true
             "response.done" -> { responding = false; flush() }
-            "conversation.item.input_audio_transcription.completed" -> { transcript?.openAI(message); link.add("user", message.text("transcript").orEmpty()); link.endTurn() }
-            "response.output_audio_transcript.done" -> { transcript?.openAI(message); link.add("voice", message.text("transcript").orEmpty()); link.endTurn() }
+            "conversation.item.input_audio_transcription.completed" -> {
+                val words = message.text("transcript").orEmpty(); val now = clock()
+                if (SpokenText.isRepeatUtterance(words, lastUser, SpokenText.utteranceRepeatMs, now)) {
+                    // The provider re-sent the same request: post it once, but stop waiting for its words.
+                    link.transcribing(false)
+                } else {
+                    if (words.isNotBlank()) lastUser = SpokenText.Utterance(words, now)
+                    transcript?.openAI(message); link.add("user", words); link.endTurn()
+                }
+            }
+            "response.output_audio_transcript.done" -> {
+                val words = message.text("transcript").orEmpty(); val now = clock()
+                if (SpokenText.isRepeatUtterance(words, lastVoice, SpokenText.utteranceRepeatMs, now)) return@hop
+                if (words.isNotBlank()) lastVoice = SpokenText.Utterance(words, now)
+                transcript?.openAI(message); link.add("voice", words); link.endTurn()
+            }
             "response.function_call_arguments.done" -> {
                 val id = message.text("call_id") ?: return@hop
                 val name = message.text("name") ?: return@hop
