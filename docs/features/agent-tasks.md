@@ -171,6 +171,27 @@ tests (`host/src/agent/bot/turn_rules.rs`):
   next message opens a fresh session and declares them again (OpenBot triage-15811). An agent that
   does not report its servers is left alone; only server names are compared, never tool or page
   content. The pure decision is `tools_loaded` in `host/src/agent/bot/session.rs`.
+- A message the person sends while a sign-in/password/code card is open waits with that card: it
+  joins the card's held messages and goes out when they answer, instead of interrupting the turn or
+  cancelling the card (0.78.0, triage-15776; `message_during_card` in `agent/bot/queue.rs`).
+- A routine configured to run in a separate thread still continues a woken open wait in the bot's
+  main chat, not in the routine thread (triage-15775; `wake_target` in `routines/runner.rs`).
+- A later link or status line from a teammate does not replace a result already shown in the
+  delegating agent's chat; a short "Starting now" note still leaves the eventual result to reach
+  the chat (triage-16136/16168; `teammate_update` in `chat/team/assistant.rs`). An optional
+  `ask_member` question ending in "(optional)" ends its card quietly when nobody answers, without
+  another ask (triage-16368; `optional_answer_done` in `chat/team/members.rs`).
+- A background-command answer that a provider reports twice is shown once (triage-16149;
+  `background_answer_seen` in `agent/bot/turn_rules.rs`). A message read by a busy Claude whose
+  session then closes is requeued instead of lost, while a self-continued background reply still
+  reaches the chat (triage-16361/16364; `late_message_action`).
+- A turn that stopped in every place and answered nothing says so plainly — "The agent stopped
+  before it answered. Send your message again…" — so the person knows to resend (triage-15306;
+  `stopped_before_answer`). A "model after this turn" change waits until running turns end
+  (`deferred_change` in `agent/bot/queue.rs`), and a slow model list keeps the chosen model across a
+  restart (`stable_model` in `agent/auth/models.rs`, triage-16212).
+- Vault storage that wasn't ready at startup is reopened on the next settings or agent use
+  (`vault_retry` in `market/vault.rs`, triage-16215).
 
 Not in this pass: catalog keys, a dedicated `task` type in the SSE catch-up (metadata is refreshed
 with `taskList`), per-task queue reorder and per-task analytics events. No method described here

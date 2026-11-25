@@ -53,7 +53,8 @@ fn steer_outcome(answer: &Result<Value>) -> Steer {
 }
 
 /// Whether the message was written by a person, not a routine, a teammate or the host (triage-15730).
-fn from_person(data: &Value) -> bool {
+/// Also used by the queue so a message held for an open card is only a person's (triage-15776).
+pub(super) fn from_person(data: &Value) -> bool {
     data["from"] != "host" && !matches!(data["source"].as_str(), Some("routine" | "scheduled_task" | "bot" | "host"))
 }
 
@@ -86,6 +87,14 @@ impl Actor {
         let data = self.hub.store.entry(&entry_id).map(|e| e.data).unwrap_or_default();
         let source = data["source"].as_str().unwrap_or_default().to_owned();
         let is_user = from_person(&data);
+        // A card opened since this message was queued still owns it: hold it there instead of steering
+        // into (or stopping) the turn that could not sign in (triage-15776).
+        if super::queue::message_during_card(self.card_open(&lane), is_user) == super::queue::CardMessage::Hold
+            && self.hold_for_card(&entry_id, &lane)
+        {
+            self.queue.remove(at);
+            return;
+        }
         // A step of a Claude agent is not a place for another bot's or a routine's message (triage-15730).
         let step_running = self.cfg.backend == "claude" && self.watchdog.tool_running();
         if !turn_rules::interrupt_allowed(&source, is_user, step_running) {
@@ -255,8 +264,14 @@ impl Actor {
         if how != Steer::Joined {
             if steer.taken_back {
                 self.unqueue(entry_id);
-            } else if how == Steer::Next {
-                self.move_first(at);
+            } else {
+                // A message read by a busy Claude whose session closed has nowhere to go now: requeue it
+                // instead of losing it when the session closes (16361). An agent's own continued reply
+                // (Kimi Code) is delivered by the joined path below, not requeued (16364).
+                let late = turn_rules::late_message_action(self.turn_session.is_none(), self.turn.is_some());
+                if how == Steer::Next || late == turn_rules::LateMessage::Requeue {
+                    self.move_first(at);
+                }
             }
             return;
         }
@@ -269,8 +284,12 @@ impl Actor {
         self.joined = true;
         self.turn_entries.push(entry_id.to_owned());
         if let Some(turn_text) = &mut self.turn_text {
-            turn_text.push_str("\n\n");
-            turn_text.push_str(&text);
+            // A provider that echoes a background answer twice (Gemini) must not show it again (16149).
+            let seen = turn_text.contains(text.trim()) && !text.trim().is_empty();
+            if turn_rules::background_answer_seen(&text, seen) == turn_rules::BackgroundAnswer::Show {
+                turn_text.push_str("\n\n");
+                turn_text.push_str(&text);
+            }
         }
         self.relay_joined(entry_id, &text);
         // `send --wait` learns a started message's turn from the bot's next event, and a status and activity that stay

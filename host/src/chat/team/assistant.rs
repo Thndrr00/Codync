@@ -37,6 +37,29 @@ const SHOW: usize = 20;
 const OFF: &str = "Cloud assistants are off on this computer. To let ChatGPT or Claude message its bots, \
 turn on Cloud assistants in Codync's settings on it (or run `codync-host cloud --assistants on`).";
 
+/// What to do with a later note from a teammate after its result has been shown
+/// (OpenBot nightly 16136/16168). A link or status line already on the exchange card must not
+/// replace the result with another wake-up; a short "Starting now" note comes first, so the
+/// eventual result still reaches the chat.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum TeammateUpdate {
+    /// Keep the result the person was already shown.
+    Keep,
+    /// Take the note: it starts the work or is the result.
+    Replace,
+}
+
+pub(super) fn teammate_update(note: &str, result_seen: bool) -> TeammateUpdate {
+    let note = note.trim();
+    let later = note.starts_with('[')
+        || note.starts_with("http://")
+        || note.starts_with("https://")
+        || note.contains("Status:")
+        || note.contains("Waiting for a reply")
+        || note.contains("Running in ");
+    if result_seen && later { TeammateUpdate::Keep } else { TeammateUpdate::Replace }
+}
+
 pub fn enabled(store: &Store) -> bool {
     store.kv_get(KV).as_deref() == Some("on")
 }
@@ -306,6 +329,11 @@ impl Replies {
 
     fn set(&self, request: &str, status: RequestStatus, text: Option<String>) {
         if let Some(r) = self.0.locked().iter_mut().find(|r| r.request == request) {
+            // A teammate's later link/status must not hide a result the person already has.
+            let note = text.as_deref().unwrap_or_default();
+            if teammate_update(note, r.status == RequestStatus::Completed) == TeammateUpdate::Keep {
+                return;
+            }
             r.status = status;
             r.text = text;
         }

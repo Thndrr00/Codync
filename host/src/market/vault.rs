@@ -15,6 +15,16 @@ use chacha20poly1305::{
 use std::{sync::Arc, time::Duration};
 use zeroize::Zeroizing;
 
+/// A settings screen or agent use that asks for the vault while credential storage is not ready
+/// leaves a request behind; the next use opens it again instead of staying locked for this process
+/// (OpenBot triage-16215). Every such use calls [`unlock`] first, so one more try is enough.
+pub fn vault_retry(ready: bool, requested: bool) -> bool {
+    requested && !ready
+}
+
+/// Mark left by a use that found storage not ready at startup.
+const RETRY_KEY: &str = "vault.retry";
+
 const PREFIX: &str = "vault:v1:";
 const SERVICE: &str = match Environment::current() {
     Environment::Main => "dev.codync.credentials",
@@ -29,6 +39,17 @@ const PROMPT_TIMEOUT: Duration = Duration::from_mins(1);
 /// locks on runtime workers. One read runs at a time and owns `vault_unlock`: callers
 /// arriving meanwhile share its outcome instead of prompting again.
 pub async fn unlock(hub: Arc<crate::hub::Hub>) -> Result<()> {
+    let result = unlock_once(Arc::clone(&hub)).await;
+    if result.is_ok() {
+        let _ = hub.store.kv_delete(RETRY_KEY);
+    } else if vault_retry(hub.store.secret_key.locked().is_some(), true) {
+        // Storage was not ready for this settings/agent use; remember it so the next one retries.
+        let _ = hub.store.kv_set(RETRY_KEY, "true");
+    }
+    result
+}
+
+async fn unlock_once(hub: Arc<crate::hub::Hub>) -> Result<()> {
     if is_managed(&hub.store) {
         return crate::keeper::client::wait_unlocked(&hub).await;
     }
@@ -207,6 +228,21 @@ pub(crate) fn open(key: &[u8], aad: &[u8], sealed: &str) -> Result<Zeroizing<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_vault_use_reopens_storage_that_was_not_ready() {
+        assert!(vault_retry(false, true), "a use asks again when storage is still locked");
+        assert!(!vault_retry(true, true), "an open vault needs no retry");
+        assert!(!vault_retry(false, false), "nobody asked: nothing to retry");
+        let path = std::env::temp_dir().join(format!("codync-vault-retry-{}.db", uuid::Uuid::new_v4()));
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.kv_get(RETRY_KEY), None);
+        store.kv_set(RETRY_KEY, "true").unwrap();
+        assert_eq!(store.kv_get(RETRY_KEY).as_deref(), Some("true"));
+        store.kv_delete(RETRY_KEY).unwrap();
+        assert_eq!(store.kv_get(RETRY_KEY), None);
+        std::fs::remove_file(&path).ok();
+    }
 
     #[test]
     fn only_a_dev_host_that_asks_keeps_its_key_in_a_file() {

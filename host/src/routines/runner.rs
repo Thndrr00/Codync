@@ -17,6 +17,19 @@ pub struct Prepared {
     pub timeout: Duration,
 }
 
+/// Where a run that wakes an open wait continues (OpenBot 0.78.0, triage-15775). "Run in a separate
+/// thread" gives a routine its own thread, but a wake that continues a wait the person follows in
+/// the bot's chat belongs in the main chat, not in the routine's thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum WakeTarget {
+    Main,
+    Thread,
+}
+
+pub(super) fn wake_target(separate_thread: bool, open_wait: bool) -> WakeTarget {
+    if separate_thread && !open_wait { WakeTarget::Thread } else { WakeTarget::Main }
+}
+
 impl Routines {
     /// An enabled clock schedule keeps the local daemon's machine awake between
     /// runs. Explicit system sleep or a closed laptop lid still suspends execution.
@@ -93,8 +106,11 @@ impl Routines {
             if !may_run(routine, &run.event) || crate::chat::lead::check_in_waits(hub, &routine.id, &routine.bot_id, &run.event) { cancel_run(run); return Ok(None); }
             run.status = Status::Starting;
             run.pin_outputs(&hub.store, &routine.outputs)?;
+            // A queued retry whose time came is a wake of an open wait: it continues in the main chat
+            // even when the routine asked for a separate thread (15775).
+            let open_wait = run.not_before.is_some();
             // A routine that asks for a thread gets one per routine, kept across runs.
-            let lane = if routine.thread {
+            let lane = if wake_target(routine.thread, open_wait) == WakeTarget::Thread {
                 let key = format!("routine.thread.{}", routine.id);
                 let root = hub.store.kv_get(&key).filter(|id| hub.store.entry(id).is_some()).unwrap_or_else(|| {
                     let root = format!("routine-thread-{}", routine.id);
@@ -526,6 +542,14 @@ fn tick(hub: &Arc<Hub>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_wake_of_an_open_wait_stays_in_the_main_chat() {
+        assert_eq!(wake_target(true, false), WakeTarget::Thread, "a separate-thread routine uses its thread");
+        assert_eq!(wake_target(true, true), WakeTarget::Main, "but a wake of an open wait continues in main");
+        assert_eq!(wake_target(false, false), WakeTarget::Main, "a plain routine posts in main");
+        assert_eq!(wake_target(false, true), WakeTarget::Main, "with or without an open wait");
+    }
 
     #[test]
     fn busy_run_keeps_one_pending_wake_and_interval_cadence() {

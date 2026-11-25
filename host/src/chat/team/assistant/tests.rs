@@ -11,6 +11,16 @@ fn refused(v: &Value, why: &str) {
     assert!(v["ok"] == false && v["error"].as_str().unwrap().contains(why), "{v}");
 }
 
+#[test]
+fn a_later_teammate_link_does_not_duplicate_a_delivered_result() {
+    assert_eq!(teammate_update("[Codync: teammate replied]", true), TeammateUpdate::Keep);
+    assert_eq!(teammate_update("Status: paused", true), TeammateUpdate::Keep);
+    assert_eq!(teammate_update("https://example.com/doc", true), TeammateUpdate::Keep);
+    assert_eq!(teammate_update("Running in Reviewer's chat…", true), TeammateUpdate::Keep);
+    assert_eq!(teammate_update("The report is ready", true), TeammateUpdate::Replace);
+    assert_eq!(teammate_update("Starting now", false), TeammateUpdate::Replace, "the result still comes back");
+}
+
 #[tokio::test]
 async fn the_cloud_assistant_needs_the_switch_and_the_account_and_reads_replies_later() {
     let f = Fixture::new();

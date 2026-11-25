@@ -176,6 +176,43 @@ pub(super) const NO_ANSWER_AFTER_STEPS: &str =
 /// The notice for a turn that did nothing and has no backup to hand the message to.
 pub(super) const NO_ANSWER_EMPTY: &str = "The agent ended its turn with no answer.";
 
+/// What to do with a late message when the provider closed its session while the bot was busy
+/// (OpenBot nightly 16361/16364). A message read by a busy Claude must go back into the queue when
+/// that session closes, or it is lost; a reply the agent continued on its own (Kimi Code) still
+/// reaches the chat instead of being mistaken for a lost message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LateMessage {
+    /// Keep it in the queue for the next turn; nothing can deliver it now.
+    Requeue,
+    /// Put it in front so the next turn takes it (or let the agent's own reply through).
+    Deliver,
+}
+
+pub(super) fn late_message_action(session_closed: bool, busy: bool) -> LateMessage {
+    if session_closed && busy { LateMessage::Requeue } else { LateMessage::Deliver }
+}
+
+/// Whether a provider's repeated background-command answer is new to the chat (OpenBot nightly
+/// 16149). Gemini can report the same answer twice; the second copy must not show again.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum BackgroundAnswer {
+    Show,
+    Skip,
+}
+
+pub(super) fn background_answer_seen(text: &str, seen: bool) -> BackgroundAnswer {
+    if seen || text.trim().is_empty() { BackgroundAnswer::Skip } else { BackgroundAnswer::Show }
+}
+
+/// The plain words for a provider that stopped before it answered (OpenBot triage-15306). `reason`
+/// may be empty; the user is told they can resend rather than being left with a silent turn.
+pub(super) fn stopped_before_answer(reason: &str) -> String {
+    let lead = "The agent stopped before it answered";
+    let reason = reason.trim();
+    let lead = if reason.is_empty() { lead.to_owned() } else { format!("{lead} ({reason})") };
+    format!("{lead}. Send your message again if you still need an answer.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,5 +312,29 @@ mod tests {
         assert!(!interrupt_allowed("bot", false, true), "a teammate waits");
         assert!(!interrupt_allowed("routine", false, true), "a routine waits");
         assert!(!interrupt_allowed("scheduled_task", true, true), "a scheduled message is not the person");
+    }
+
+    #[test]
+    fn a_late_message_is_requeued_only_when_a_busy_turn_lost_its_session() {
+        assert_eq!(late_message_action(true, true), LateMessage::Requeue, "the busy turn can no longer deliver it");
+        assert_eq!(late_message_action(true, false), LateMessage::Deliver, "an idle bot takes the next turn");
+        assert_eq!(late_message_action(false, true), LateMessage::Deliver, "a self-continued reply reaches the chat");
+        assert_eq!(late_message_action(false, false), LateMessage::Deliver);
+    }
+
+    #[test]
+    fn a_background_answer_is_shown_once() {
+        assert_eq!(background_answer_seen("done", false), BackgroundAnswer::Show);
+        assert_eq!(background_answer_seen("done", true), BackgroundAnswer::Skip);
+        assert_eq!(background_answer_seen("  ", false), BackgroundAnswer::Skip, "no answer to show");
+    }
+
+    #[test]
+    fn a_provider_that_stopped_says_so_and_offers_a_resend() {
+        let plain = stopped_before_answer("");
+        assert!(plain.contains("stopped before it answered") && plain.contains("Send your message again"));
+        assert!(!plain.contains("()"), "no empty parentheses");
+        let named = stopped_before_answer(" session closed ");
+        assert!(named.contains("(session closed)"), "the reason is kept when there is one");
     }
 }

@@ -195,6 +195,10 @@ channel notes, under `messaging.facts.<provider>.<connection>`; there is no seco
   prompt; its "Nothing to compact" answer is a quiet success with no notice. Other harnesses compact on their own.
   The keep-list is also in the opening. A compaction queued behind another turn runs only if it is still due when
   its turn comes.
+- **A compaction that fails** is retried for at most ten minutes: the chat says "Compaction failed,
+  retrying." once, the conversation is left due, and a later turn or idle tick tries again. At the
+  cap the failure is reported normally and the queued messages go on (OpenBot triage-15426; pure
+  `compaction_retry` in `agent/bot/compaction.rs`).
 - **The "Compact before the cache expires" switch** (OpenBot 0.77.0) is per bot in `kv`
   (`compact.beforeExpiry.<bot>`, on unless explicitly `false`; the desktop editor has the switch next to the
   compaction menu, and `compactBeforeExpiry` / `setCompactBeforeExpiry` are the host methods). Turned off, idle

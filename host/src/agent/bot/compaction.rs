@@ -8,9 +8,28 @@ use crate::store::{BotConfig, EntryKind, Lane, Store, now_ms, run_session_key};
 use anyhow::{Result, anyhow};
 use codync_mem::compaction::{self as rules, BeforeExpiry, CacheLife, Conversation, Decision, Threshold};
 use serde_json::{Value, json};
+use std::time::Duration;
 
 /// Context use below which a fall isn't read as a compaction: a short session has little to summarize.
 const COMPACTED_FROM: u64 = 20_000;
+
+/// How long a compaction that could not start keeps being retried before the messages waiting
+/// behind it run (OpenBot triage-15426).
+const COMPACTION_RETRY_CAP: Duration = Duration::from_mins(10);
+/// The plain words for the chat when a compaction fails; no jargon about epochs or agents.
+pub(super) const COMPACTION_FAILED: &str = "Compaction failed, retrying.";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CompactionRetry {
+    /// Still inside the ten-minute cap: let a later turn or idle tick try again.
+    Retry,
+    /// The cap passed: give up, report the failure and let queued messages run.
+    GiveUp,
+}
+
+pub(super) fn compaction_retry(elapsed: Duration) -> CompactionRetry {
+    if elapsed < COMPACTION_RETRY_CAP { CompactionRetry::Retry } else { CompactionRetry::GiveUp }
+}
 
 /// The per-bot "Compact before the cache expires" switch (OpenBot 0.77.0). On unless explicitly turned off.
 pub fn before_expiry_key(bot: &str) -> String {
@@ -540,7 +559,25 @@ impl Actor {
         self.active_routine = previous;
         if let Err(e) = started {
             self.compacting = None;
-            self.start_failed(&e);
+            // A failed compaction does not record itself as done, so it stays due. Say so plainly and
+            // let a later turn or idle tick try again, but only for ten minutes (triage-15426).
+            let retry_key = format!("compaction.retry.{}", self.cfg.id);
+            let first = self.hub.store.kv_get(&retry_key).and_then(|v| v.parse::<i64>().ok());
+            let began = first.unwrap_or_else(now_ms);
+            let _ = self.hub.store.kv_set(&retry_key, &began.to_string());
+            let elapsed = Duration::from_millis(u64::try_from(now_ms().saturating_sub(began)).unwrap_or(u64::MAX));
+            if compaction_retry(elapsed) == CompactionRetry::Retry {
+                if first.is_none() {
+                    let _ = self.add(
+                        EntryKind::Notice,
+                        self.turn.unwrap_or(0),
+                        json!({"text": COMPACTION_FAILED, "style": "info"}),
+                    );
+                }
+            } else {
+                let _ = self.hub.store.kv_delete(&retry_key);
+                self.start_failed(&e);
+            }
         }
     }
 
@@ -676,5 +713,14 @@ mod tests {
         assert!(!nothing_new("Summarized the open tasks."));
         assert_eq!(compaction_notice_text(true), "Context compacted before the prompt cache expired");
         assert_eq!(compaction_notice_text(false), "Earlier context was summarized to make room.");
+    }
+
+    #[test]
+    fn a_failed_compaction_retries_for_ten_minutes_then_reports_it() {
+        assert_eq!(compaction_retry(Duration::ZERO), CompactionRetry::Retry);
+        assert_eq!(compaction_retry(COMPACTION_RETRY_CAP - Duration::from_millis(1)), CompactionRetry::Retry);
+        assert_eq!(compaction_retry(COMPACTION_RETRY_CAP), CompactionRetry::GiveUp);
+        assert_eq!(compaction_retry(COMPACTION_RETRY_CAP * 2), CompactionRetry::GiveUp);
+        assert_eq!(COMPACTION_FAILED, "Compaction failed, retrying.");
     }
 }

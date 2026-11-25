@@ -20,6 +20,11 @@ const RELIST_INTERVAL: Duration = Duration::from_secs(10 * 60);
 const SHORT_LIST_TIMEOUT: Duration = Duration::from_secs(5);
 /// The full model-list read budget.
 const LIST_TIMEOUT: Duration = Duration::from_mins(1);
+/// Cursor sometimes answers its own model method with an empty list on the first ask (OpenBot
+/// triage-16062). One quick retry, then a plain hint rather than an empty picker.
+const CURSOR_EMPTY_HINT: &str = "Cursor returned no models. Check it in Settings, Providers.";
+/// The group hidden and superseded ChatGPT models are collected under.
+const OLDER_MODELS: &str = "Older models";
 
 /// Model lists being fetched, by agent, and the last list that came back. A settings screen asks for one
 /// from several places at once (the model picker, Approvals), and each would otherwise start the agent. An
@@ -132,6 +137,48 @@ pub(crate) fn has_models(catalog: &Value) -> bool {
     catalog["models"].as_array().is_some_and(|models| !models.is_empty())
 }
 
+/// Cursor's own method can answer with an empty list once. Only that case gets one retry; a
+/// failed request (`Null`) and every other agent keep their current behavior (OpenBot 16062).
+pub(crate) fn cursor_retry_empty(backend: &str, options: &Value, attempt: usize) -> bool {
+    backend == "cursor" && attempt == 0 && options["models"].as_array().is_some_and(|models| models.is_empty())
+}
+
+/// The plain catalog note when Cursor still has no models after the one retry. No error text
+/// from the agent reaches the picker.
+pub(crate) fn empty_catalog_hint(catalog: &Value) -> Option<&'static str> {
+    (!has_models(catalog)).then_some(CURSOR_EMPTY_HINT)
+}
+
+/// A name the agent itself marks legacy, deprecated or superseded belongs under "Older models".
+fn superseded_model(model: &Value) -> bool {
+    let text =
+        format!("{} {}", model["name"].as_str().unwrap_or_default(), model["description"].as_str().unwrap_or_default())
+            .to_ascii_lowercase();
+    text.contains("legacy") || text.contains("deprecated") || text.contains("superseded")
+}
+
+/// Hidden and superseded ChatGPT models stay in the picker, but at the end under one group
+/// (OpenBot 15268). Pure: the store is read by the caller, so both sides are testable.
+pub(crate) fn group_older_models(mut catalog: Value, hidden: &[String]) -> Value {
+    if let Some(models) = catalog["models"].as_array_mut() {
+        for model in models.iter_mut() {
+            let id = model["id"].as_str().unwrap_or_default();
+            if hidden.iter().any(|turned_off| turned_off == id) || superseded_model(model) {
+                model["group"] = json!(OLDER_MODELS);
+            }
+        }
+        models.sort_by_key(|model| model["group"] == OLDER_MODELS);
+    }
+    catalog
+}
+
+/// The model to show while a provider's list loads slowly (OpenBot triage-16212). A list that
+/// names a current model wins; one that came back empty or before the app applied the choice keeps
+/// the model the person picked, so a restart does not silently move the bot to the provider default.
+pub(crate) fn stable_model<'a>(cached: Option<&'a str>, fresh: Option<&'a str>) -> Option<&'a str> {
+    fresh.or(cached)
+}
+
 /// [`models`], shared with the asks for the same agent (and account) meanwhile.
 pub async fn shared_models(hub: &Hub, backend: &str, account: Option<&str>) -> Result<Value> {
     let key = account.map_or_else(|| backend.to_owned(), |id| format!("{backend}:{id}"));
@@ -148,6 +195,16 @@ pub async fn shared_models(hub: &Hub, backend: &str, account: Option<&str>) -> R
         }
         Err(error) => return Err(error),
     };
+    // A slow list must not put a restarted bot back on the provider's default (16212).
+    if let Some(cached) = hub.model_lists.stale(&key)
+        && let Some(chosen) = stable_model(cached["currentModelId"].as_str(), value["currentModelId"].as_str())
+    {
+        value["currentModelId"] = json!(chosen);
+    }
+    if backend == "codex" {
+        let turned_off: Vec<String> = hidden_map(&hub.store).remove(backend).unwrap_or_default();
+        value = group_older_models(value, &turned_off);
+    }
     if account.is_none() {
         let others = hub.model_lists.account_catalogs(backend);
         value["backupModelChoices"] = json!(backup_model_choices(&value, &others));
@@ -203,13 +260,24 @@ async fn discover(store: &Store, backend: &str, account: Option<&str>, budget: D
             }
         };
         let session_id = session["sessionId"].as_str().map(str::to_owned);
-        // Cursor lists each model's options (effort, fast…) only through its own method.
-        let options = if backend == "cursor" {
-            acp.request("cursor/list_available_models", json!({})).await.unwrap_or_default()
-        } else {
-            Value::Null
-        };
+        // Cursor lists each model's options (effort, fast…) only through its own method. An empty
+        // first answer gets one retry; a second empty answer becomes a plain Providers hint.
+        let mut options = Value::Null;
+        if backend == "cursor" {
+            for attempt in 0..=1 {
+                options = acp.request("cursor/list_available_models", json!({})).await.unwrap_or_default();
+                if !cursor_retry_empty(backend, &options, attempt) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(300)).await;
+            }
+        }
         let mut catalog = model_catalog(&session, &options);
+        if backend == "cursor"
+            && let Some(hint) = empty_catalog_hint(&catalog)
+        {
+            catalog["modelsError"] = json!(hint);
+        }
         catalog["modes"] =
             crate::agent::modes::Modes::from_session(&session, backend).map_or(json!([]), |m| m.catalog());
         if backend != "cursor" {
@@ -491,6 +559,13 @@ pub fn set_hidden(store: &Store, backend: &str, model: &str, hidden: bool) -> Re
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_slow_model_list_keeps_the_chosen_model() {
+        assert_eq!(stable_model(Some("chosen"), None), Some("chosen"), "no fresh list yet");
+        assert_eq!(stable_model(Some("old"), Some("new")), Some("new"), "a fresh answer wins");
+        assert_eq!(stable_model(None, None), None);
+    }
+
     #[tokio::test]
     async fn an_unavailable_model_keeps_other_models_and_their_options() {
         let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/model_options_agent.py");
@@ -640,6 +715,38 @@ mod tests {
         for (cwd, id) in [("/p", ""), ("/p", "../bad"), ("/p", "a/b"), ("", "ok")] {
             assert_eq!(grok_probe_session_file(home, cwd, id), None, "{cwd} / {id}");
         }
+    }
+
+    #[test]
+    fn an_empty_cursor_list_is_retried_once_then_hinted() {
+        let empty = json!({"models": []});
+        assert!(cursor_retry_empty("cursor", &empty, 0));
+        assert!(!cursor_retry_empty("cursor", &empty, 1), "one retry only");
+        assert!(!cursor_retry_empty("cursor", &Value::Null, 0), "a failed request is not an empty answer");
+        assert!(!cursor_retry_empty("codex", &empty, 0));
+        let hint = empty_catalog_hint(&json!({"models": []})).expect("a plain hint");
+        assert!(hint.contains("Settings, Providers"));
+        assert_eq!(empty_catalog_hint(&json!({"models": [{"id": "m"}]})), None);
+    }
+
+    #[test]
+    fn hidden_and_legacy_models_move_to_older_models() {
+        let catalog = json!({"models": [
+            {"id": "current", "name": "Current"},
+            {"id": "gpt-4", "name": "GPT-4", "description": "Legacy model"},
+            {"id": "turned-off", "name": "Turned off"},
+            {"id": "new", "name": "New"}
+        ]});
+        let grouped = group_older_models(catalog, &["turned-off".to_owned()]);
+        let models = grouped["models"].as_array().unwrap();
+        assert_eq!(
+            models.iter().map(|m| m["id"].as_str().unwrap()).collect::<Vec<_>>(),
+            ["current", "new", "gpt-4", "turned-off"]
+        );
+        assert_eq!(models[0].get("group"), None);
+        assert_eq!(models[1].get("group"), None);
+        assert_eq!(models[2]["group"], OLDER_MODELS);
+        assert_eq!(models[3]["group"], OLDER_MODELS);
     }
 
     #[test]

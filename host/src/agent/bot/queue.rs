@@ -11,6 +11,34 @@ use serde_json::json;
 use std::time::Instant;
 use tokio::sync::mpsc;
 
+/// What to do with a message that arrives while a sign-in/password/code card waits in the chat
+/// (OpenBot 0.78.0, triage-15776). The card must stay open and answerable, so the person's message
+/// joins it and goes out when they answer; a routine's or a teammate's message goes on as before.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CardMessage {
+    /// Hold it for the card; it is sent when the card is answered.
+    Hold,
+    /// The card does not concern this message: queue it normally.
+    Proceed,
+}
+
+pub(super) fn message_during_card(card_open: bool, is_user: bool) -> CardMessage {
+    if card_open && is_user { CardMessage::Hold } else { CardMessage::Proceed }
+}
+
+/// Whether a configuration change that asks for a restart applies now or only after the running
+/// turns end (OpenBot triage-14455). A bot may change its own model mid-turn; applying that change
+/// while it works would interrupt the very turn that asked for it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum DeferredChange {
+    Apply,
+    Defer,
+}
+
+pub(super) fn deferred_change(running: bool, change: bool) -> DeferredChange {
+    if running && change { DeferredChange::Defer } else { DeferredChange::Apply }
+}
+
 impl Actor {
     pub(super) async fn on_cmd(&mut self, cmd: Cmd, done_tx: &mpsc::UnboundedSender<Done>) -> bool {
         match cmd {
@@ -37,6 +65,15 @@ impl Actor {
                     ) && (e.data["status"] != "queued"
                         || self.queue.iter().any(|q| matches!(q,Queued::User{entry_id:id,..} if id==&entry_id)))
                 }) {
+                    return true;
+                }
+                // A message sent while a sign-in/password/code card is open waits with the card, and
+                // goes out when it is answered (triage-15776). Steering it now would interrupt the
+                // turn that opened the card, and a Stop would close the card the person still needs.
+                let data = self.hub.store.entry(&entry_id).map(|e| e.data).unwrap_or_default();
+                if message_during_card(self.card_open(&lane), super::steer::from_person(&data)) == CardMessage::Hold
+                    && self.hold_for_card(&entry_id, &lane)
+                {
                     return true;
                 }
                 self.enqueue(Queued::User { lane, entry_id, text, queued_at: Instant::now() }, done_tx).await;
@@ -132,7 +169,15 @@ impl Actor {
                 }
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
-            Cmd::Reconfigure(base) => self.reconfigure(*base).await,
+            Cmd::Reconfigure(base) => {
+                let model_changed = base.model != self.base.model;
+                self.reconfigure(*base).await;
+                // A bot can change its own model from inside a turn. Keep that turn on its old model:
+                // the restart that applies the new one runs after it ends (triage-14455).
+                if deferred_change(self.turn.is_some(), model_changed) == DeferredChange::Defer {
+                    self.restart_after_turn = true;
+                }
+            }
             Cmd::Shutdown => return false,
         }
         true
@@ -144,6 +189,34 @@ impl Actor {
         if self.turn.is_none() {
             self.next_in_queue(done_tx).await;
         }
+    }
+
+    /// A sign-in/password/code card still waiting for the user in this chat (triage-15776).
+    pub(super) fn card_open(&self, lane: &Lane) -> bool {
+        self.hub
+            .store
+            .pending_sign_ins(&self.cfg.backend)
+            .unwrap_or_default()
+            .iter()
+            .any(|card| card.bot_id == self.cfg.id && card.thread_id == lane.thread)
+    }
+
+    /// Holds a person's message on the open card. Joining its `entryIds` marks it
+    /// `waitingForSignIn`; the card's existing answer path sends it again once they sign in. The
+    /// card itself stays pending, so it can still be answered (triage-15776).
+    pub(super) fn hold_for_card(&self, entry_id: &str, lane: &Lane) -> bool {
+        let Some(h) = crate::agent::backends::harness(&self.cfg.backend) else { return false };
+        let id = entry_id.to_owned();
+        crate::market::agent_sign_in::invite(
+            &self.hub,
+            &self.cfg.id,
+            lane,
+            &self.cfg.backend,
+            h.name,
+            std::slice::from_ref(&id),
+        )
+        .inspect_err(|error| tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't hold message for sign-in"))
+        .is_ok()
     }
 
     /// Where the waiting message `entry_id` sits in the queue.
@@ -401,15 +474,12 @@ impl Actor {
         self.held_done = None;
         self.steers_in_flight.clear();
         self.deferred_steer = None;
+        let stopped = super::turn_rules::stopped_before_answer("");
         if self.active_routine.is_some() {
-            self.finish_routine(
-                crate::routines::Status::Interrupted,
-                Some("The agent's turn stopped before it answered".into()),
-                None,
-            );
+            self.finish_routine(crate::routines::Status::Interrupted, Some(stopped.clone()), None);
         }
-        self.complete_request(Err(anyhow!("the agent's turn stopped before it answered")), false);
-        self.complete_group(Err(anyhow!("the agent's turn stopped before it answered")));
+        self.complete_request(Err(anyhow!("{stopped}")), false);
+        self.complete_group(Err(anyhow!("{stopped}")));
         self.turn = None;
         self.reply_hops = None;
         self.active_prompt = false;
@@ -727,5 +797,26 @@ impl Actor {
         if let Err(error) = self.hub.store.set_turn_marker(&self.cfg.id, &value, sources.as_ref()) {
             tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't record the running turn");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_persons_message_waits_for_an_open_card() {
+        assert_eq!(message_during_card(true, true), CardMessage::Hold);
+        assert_eq!(message_during_card(true, false), CardMessage::Proceed, "routines and teammates go on");
+        assert_eq!(message_during_card(false, true), CardMessage::Proceed);
+        assert_eq!(message_during_card(false, false), CardMessage::Proceed);
+    }
+
+    #[test]
+    fn a_model_change_is_deferred_only_while_a_turn_runs() {
+        assert_eq!(deferred_change(true, true), DeferredChange::Defer);
+        assert_eq!(deferred_change(false, true), DeferredChange::Apply);
+        assert_eq!(deferred_change(true, false), DeferredChange::Apply);
+        assert_eq!(deferred_change(false, false), DeferredChange::Apply);
     }
 }
