@@ -258,6 +258,10 @@ impl Routines {
     fn publish(&self, hub: &Hub) -> Result<()> {
         let pending: Vec<_> = self.state.locked().runs.iter().filter(|r| r.report_pending).cloned().collect();
         for run in pending {
+            // One controller names how the run ended (agentes.chat ADR 0097), so the notice and the
+            // client read the same vocabulary. The routine's own text is kept as its handoff summary
+            // (ADR 0047); the conversation run says it in the agent's voice via `routineHandoff`.
+            let verdict = crate::chat::continuation::verdict(false, run.failure_code.is_some(), run.retry_at.is_some());
             let (text, kind, added) = if let Some(text) = run.result {
                 (text, Some(AlertKind::Done), true)
             } else {
@@ -271,6 +275,7 @@ impl Routines {
                     None => (failure, "error", Some(AlertKind::Failed)),
                 };
                 let data = json!({"text": text, "style": style, "routineId": run.routine_id, "runId": run.id, "retry": run.retryable,
+                    "verdict": verdict,
                     "source": "scheduled_task", "scheduledMessage": {"version": 1, "runId": run.id, "phase": "result"}});
                 let id = super::result_notice_id(&run.id);
                 let lane = match &run.thread_root {

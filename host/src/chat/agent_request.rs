@@ -34,6 +34,12 @@ pub fn card(agent: &str, reason: &str, request_id: &str) -> Result<Value> {
     }))
 }
 
+/// Who asked for the decision: the agent (a bot) or a person. A bot's own agent id is always a
+/// bot; this is the field the client shows so an agent's request isn't mistaken for the person's.
+pub fn request(agent: &str, reason: &str) -> Value {
+    json!({"kind": "agent", "id": agent, "reason": reason})
+}
+
 /// Applies an answer once: the card moves from pending to decided with the chosen option.
 pub fn decide(mut card: Value, option: &str) -> Result<Value> {
     if card["status"] != "pending" {

@@ -304,6 +304,9 @@ impl Actor {
             "selected": Value::Null,
             // The rule that asked for this card, when one did (the bot itself approves everything).
             "rule": rule_pattern,
+            // Who asked, as a structured request (agentes.chat ADR 0126); clients can show it and
+            // tell an agent's request from a person's, without changing how the card is answered.
+            "requestedBy": crate::chat::agent_request::request(&self.cfg.id, &title),
         });
         self.show_card(&title, data, Answer::Agent(rpc_id));
     }
