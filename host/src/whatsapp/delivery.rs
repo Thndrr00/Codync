@@ -22,6 +22,31 @@ pub(super) fn unsent(error: anyhow::Error, bound: bool) -> anyhow::Error {
     if bound { anyhow::Error::new(Unsent(error)) } else { error }
 }
 
+/// Why a WhatsApp post didn't reach its destination, as far as the person can tell. Kept small and
+/// pure so the line shown to them is testable without a link or a bridge (OpenBot 14456/13597).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DeliveryReason {
+    /// The link or the bridge refused the send: nothing arrived.
+    Unsent,
+    /// The destination was a bare number: it needs its country code to be re-added.
+    MissingCountryCode,
+    /// The number was unlinked or its authorization was revoked before the send.
+    Revoked,
+}
+
+/// The line shown under an answer when its WhatsApp post failed. OpenBot 14456 puts a short line
+/// under the answer; 13597 adds a re-add hint when the contact was missing its country code. Pure
+/// so both messages are tested without a network call.
+pub(crate) fn delivery_notice(reason: DeliveryReason) -> Option<&'static str> {
+    match reason {
+        DeliveryReason::Unsent => Some("No se pudo entregar en WhatsApp."),
+        DeliveryReason::MissingCountryCode => {
+            Some("Ese contacto necesita el código de país: quítalo y vuelve a añadirlo como +código y número.")
+        }
+        DeliveryReason::Revoked => Some("Ese número de WhatsApp ya no está vinculado; no se envió nada."),
+    }
+}
+
 /// The linked number as a messaging place: its writable allowlist, plus the owner's own chat, and
 /// the bot it routes to (empty when the number still uses the default). A number with no allowlist
 /// answers anyone but may only post to its own chat, so an agent can never pick an unallowed
@@ -99,4 +124,31 @@ pub(crate) fn jid(value: &str) -> bool {
         && id.split('-').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
         && (domain != "s.whatsapp.net" || !id.contains('-'))
         && matches!(domain, "s.whatsapp.net" | "g.us")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_undelivered_post_shows_a_line_under_the_answer() {
+        let notice = delivery_notice(DeliveryReason::Unsent).expect("a delivery line");
+        assert_eq!(notice, "No se pudo entregar en WhatsApp.");
+        assert!(!notice.is_empty() && notice.len() < 120, "one short line fits under the answer");
+    }
+
+    #[test]
+    fn a_contact_without_a_country_code_gets_a_readd_hint() {
+        let hint = delivery_notice(DeliveryReason::MissingCountryCode).expect("a re-add hint");
+        assert!(hint.contains("código de país"), "{hint}");
+        assert!(hint.contains("añadir"), "{hint}");
+        assert_ne!(hint, delivery_notice(DeliveryReason::Unsent).unwrap(), "a distinct cause gets a distinct line");
+    }
+
+    #[test]
+    fn a_revoked_link_says_nothing_was_posted() {
+        let notice = delivery_notice(DeliveryReason::Revoked).expect("a revocation line");
+        assert!(notice.contains("no está vinculado"), "{notice}");
+        assert!(notice.contains("no se envió nada"), "{notice}");
+    }
 }

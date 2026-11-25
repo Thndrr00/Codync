@@ -22,7 +22,7 @@ use crate::store::{BotConfig, BotKind, Entry, EntryKind, Lane, Store};
 use anyhow::{Result, anyhow, bail};
 pub use rooms::Rooms;
 use rooms::Turn;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot;
@@ -348,6 +348,29 @@ fn route_channel_result(
     {
         return;
     }
+    // OpenBot 16003: only the first handoff in this request replies to the channel message. The
+    // room keeps the later answers; the marker lives with the requester's lane so a late answer
+    // from another task can't reopen the reply either.
+    let key = format!("group.handoff.{}", asking_lane.key());
+    let seen: HashSet<String> = hub
+        .store
+        .kv_read(&key)
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+        .map(|ids| ids.into_iter().collect())
+        .unwrap_or_default();
+    if !seen.is_empty() {
+        return;
+    }
+    let room = hub.store.messages_after(&Lane::main(&group.id), 0, HISTORY_LINES).unwrap_or_default();
+    let Some(first) = first_handoff(&room, &seen) else { return };
+    if first.data["author"].as_str() != Some(member.id.as_str()) {
+        return;
+    }
+    if let Ok(mark) = serde_json::to_string(&[&first.id]) {
+        let _ = hub.store.kv_set(&key, &mark);
+    }
     let lane = channel_returns::return_lane(Some(requester.as_str()), asking_lane, archived);
     if lane.thread.is_some() {
         // One lane only: posting into the thread wakes the agent there, so no second main turn starts.
@@ -384,6 +407,16 @@ fn thread_archived(hub: &Hub, requester: &str, lane: &Lane) -> bool {
     lane.thread
         .as_deref()
         .is_some_and(|root| crate::chat::tasks::thread_archived(&hub.store, requester, root).unwrap_or(false))
+}
+
+/// The first handoff of a channel request: the first member's final answer in the room that hasn't
+/// already been handled. OpenBot 16003: once a request has handed off once, later answers stay in
+/// the room instead of replying to the person's channel message again. Pure so the rule is tested
+/// without a store, a room or an actor.
+pub(crate) fn first_handoff<'a>(entries: &'a [Entry], seen: &HashSet<String>) -> Option<&'a Entry> {
+    entries.iter().find(|entry| {
+        entry.kind == EntryKind::Agent.as_str() && entry.data["final"] == true && !seen.contains(&entry.id)
+    })
 }
 
 /// Whether a member's channel reply may notify the user (OpenBot nightly `triage-13696`).

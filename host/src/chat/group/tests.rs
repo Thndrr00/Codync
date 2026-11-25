@@ -21,6 +21,25 @@ fn said(text: &str) -> Entry {
 }
 
 #[test]
+fn only_the_first_handoff_of_a_request_is_available_to_reply() {
+    let by = |id: &str, seq: i64, final_answer: bool| Entry {
+        id: id.into(),
+        seq,
+        kind: "agent".into(),
+        data: json!({"author": id, "text": "done", "final": final_answer}),
+        ..said("request")
+    };
+    let room = [said("from the channel"), by("a", 2, false), by("b", 3, true), by("c", 4, true)];
+    let seen = HashSet::new();
+    let first = first_handoff(&room, &seen).expect("a first handoff");
+    assert_eq!(first.data["author"], "b", "a partial step isn't a handoff");
+    let handled: HashSet<String> = [first.id.clone()].into_iter().collect();
+    assert!(first_handoff(&room, &handled).is_none(), "once it handed off, no later answer replies to the channel");
+    let partial = [said("from the channel"), by("a", 2, false)];
+    assert!(first_handoff(&partial, &seen).is_none(), "an unfinished turn isn't a handoff");
+}
+
+#[test]
 fn a_typo_in_an_agent_id_names_the_almost_equal_agent() {
     let right = "9f8b7c6d-5e4f-3a2b-1c0d-eeddccbbaa99";
     let wrong = "9f8b7c6d-5e4f-3a2b-1c0d-eeddccbbaa98";

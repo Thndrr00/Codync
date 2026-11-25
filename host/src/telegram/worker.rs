@@ -34,8 +34,29 @@ pub(super) struct Route {
     /// Entries of this turn and later belong to it.
     turn: i64,
     live: Option<Live>,
+    /// The "Working on it…" line, while it is still on Telegram (OpenBot 15568).
+    busy: Option<i64>,
     /// Approval cards shown in the chat, by entry id → Telegram message id.
     cards: HashMap<String, i64>,
+}
+
+/// Why Telegram's "Working on it…" line is being taken down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BusyReason {
+    /// The message was an internal teammate result, not a request for this bot.
+    NotForBot,
+    /// The final answer carries only files, so there is no text to leave the line above.
+    FilesOnly,
+}
+
+/// Whether the "Working on it…" line should be deleted. OpenBot 15568 removes it when the message
+/// wasn't for the bot, or when the answer is files-only. Pure so the decision has a test without a
+/// bot or a socket; the caller does the transport delete.
+fn drop_busy_post(reason: BusyReason, has_text: bool) -> bool {
+    match reason {
+        BusyReason::NotForBot => true,
+        BusyReason::FilesOnly => !has_text,
+    }
 }
 
 /// The Telegram message the current reply is being written into.
@@ -200,8 +221,33 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
         return answer_button(hub, ep, &bot, query).await;
     }
     let message = &update["message"];
-    // Only a private chat: a group would let everyone in it speak to the bot.
+    let group_text = message["text"].as_str().or_else(|| message["caption"].as_str()).unwrap_or_default().trim();
+    // A group may not talk to the bot as an agent, but a new mention can start a workflow. That
+    // mention is handed to trigger nodes here and never opens an agent conversation.
     if message["chat"]["type"] != "private" {
+        if !super::mentions::mentions_bot(message, &bot.username) {
+            return;
+        }
+        let Some(chat) = message["chat"]["id"].as_i64() else { return };
+        let user = message["from"]["id"].as_i64().unwrap_or_default();
+        let message_id = message["message_id"].as_i64().unwrap_or_default();
+        let event = json!({
+            "source": "telegram", "event": "mention", "connection": chat.to_string(),
+            "chat": chat.to_string(), "chatId": chat.to_string(),
+            "user": user.to_string(), "author": user.to_string(), "text": group_text,
+            "messageId": message_id.to_string(),
+            "thread": message["message_thread_id"].as_i64().map(|id| id.to_string()).unwrap_or_default(),
+        });
+        let skipped =
+            hub.routines.receive_chat_event(&hub.store, &event, Some(format!("tg-{name}-{message_id}"))).all_skipped();
+        if skipped {
+            let (hub, name) = (hub.clone(), name.to_owned());
+            tokio::spawn(async move {
+                if let Err(error) = super::react(&hub.store, &name, chat, message_id, "👎").await {
+                    tracing::warn!(error = format!("{error:#}"), "couldn't mark a skipped Telegram workflow mention");
+                }
+            });
+        }
         return;
     }
     let (Some(chat), Some(user)) = (message["chat"]["id"].as_i64(), message["from"]["id"].as_i64()) else { return };
@@ -221,14 +267,23 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
     }
     let mentioned = super::mentions::mentions_bot(message, &bot.username);
     if mentioned {
-        hub.routines.receive_event(
-            &hub.store,
-            &json!({
-                "source": "telegram", "event": "mention", "chat": chat, "user": user,
-                "username": message["from"]["username"], "text": text,
-            }),
-            Some(format!("tg-{name}-{}", update["update_id"])),
-        );
+        let nonce = format!("tg-{name}-{}", update["update_id"]);
+        let event = json!({
+            "source": "telegram", "event": "mention", "connection": chat.to_string(),
+            "chat": chat.to_string(), "chatId": chat.to_string(), "user": user,
+            "author": user, "username": message["from"]["username"], "text": text,
+            "messageId": message["message_id"],
+        });
+        let skipped = hub.routines.receive_chat_event(&hub.store, &event, Some(nonce)).all_skipped();
+        if skipped {
+            let message_id = message["message_id"].as_i64().unwrap_or_default();
+            let (hub, name) = (hub.clone(), name.to_owned());
+            tokio::spawn(async move {
+                if let Err(error) = super::react(&hub.store, &name, chat, message_id, "👎").await {
+                    tracing::warn!(error = format!("{error:#}"), "couldn't mark a skipped Telegram workflow mention");
+                }
+            });
+        }
     }
     if let Some(command) = commands::parse(text, Some(&bot.username)) {
         return say(ep, &bot, chat, &commands::run(hub, &bot.bot_id, &command)).await;
@@ -316,7 +371,14 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
     {
         let mut route = shared.lock().await;
         if route.as_ref().is_none_or(|route| route.chat != chat || route.turn != turn) {
-            *route = Some(Route { chat, turn, live: None, cards: HashMap::new() });
+            *route = Some(Route { chat, turn, live: None, busy: None, cards: HashMap::new() });
+        }
+        // OpenBot 15568: acknowledge the request while the bot works. The line is taken down when
+        // the request turns out to be internal, or when the answer has no text of its own.
+        if let Ok(message) = client::message(ep, &bot.token, chat, "Working on it…", None).await
+            && let Some(route) = route.as_mut()
+        {
+            route.busy = Some(message);
         }
     }
     match super::input::post(hub, name, user, expected, &note, &nonce) {
@@ -448,6 +510,17 @@ async fn stream(hub: Arc<Hub>, ep: Endpoint, name: String, shared: Shared) {
         }
         let mut route = shared.lock().await;
         let Some(route) = route.as_mut().filter(|r| entry["turn"].as_i64().unwrap_or(0) >= r.turn) else { continue };
+        // A teammate's internal result isn't a message for this bot: take the working line down
+        // instead of leaving it hanging over a reply nobody in this chat asked for (15568).
+        if entry["data"]["internal"] == true
+            && let Some(busy) = route.busy.take()
+            && drop_busy_post(BusyReason::NotForBot, false)
+        {
+            if let Err(error) = client::delete(ep, &bot.token, route.chat, busy).await {
+                tracing::warn!(error = format!("{error:#}"), telegram = name, "working line was not deleted");
+            }
+            continue;
+        }
         let result = match entry["kind"].as_str() {
             Some("agent") => reply(&ep, &bot, route, entry).await.map(|finished| {
                 if finished {
@@ -468,7 +541,15 @@ async fn reply(ep: &Endpoint, bot: &TgBot, route: &mut Route, entry: &Value) -> 
     let text = entry["data"]["text"].as_str().unwrap_or_default();
     let finished = entry["data"]["final"] == true;
     let id = entry["id"].as_str().unwrap_or_default();
-    if text.is_empty() {
+    let has_text = !text.is_empty();
+    if !has_text {
+        // A files-only answer has no text to leave above: drop the working line (15568).
+        if finished
+            && let Some(busy) = route.busy.take()
+            && drop_busy_post(BusyReason::FilesOnly, has_text)
+        {
+            client::delete(ep, &bot.token, route.chat, busy).await?;
+        }
         return Ok(false);
     }
     match route.live.as_mut().filter(|l| l.entry == id) {
@@ -523,6 +604,14 @@ async fn card(ep: &Endpoint, bot: &TgBot, route: &mut Route, entry: &Value) -> a
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_working_line_goes_when_the_message_isnt_for_the_bot_or_the_answer_is_files_only() {
+        assert!(drop_busy_post(BusyReason::NotForBot, false));
+        assert!(drop_busy_post(BusyReason::NotForBot, true), "an internal result drops it even with text");
+        assert!(drop_busy_post(BusyReason::FilesOnly, false), "files-only has no text to show");
+        assert!(!drop_busy_post(BusyReason::FilesOnly, true), "a text answer keeps the line");
+    }
 
     #[test]
     fn a_reply_shows_the_answered_message_and_a_quote_shows_only_the_selection() {

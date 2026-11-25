@@ -36,6 +36,32 @@ impl Incoming {
     }
 }
 
+/// One line a channel list can preview: the text, when it was written, and who wrote it (`None`
+/// for the user). The store can build these from a row; the pure decision below needs no database.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreviewEntry {
+    pub text: String,
+    pub at: i64,
+    pub author: Option<String>,
+}
+
+/// A hidden step, not a message anyone in the channel wrote. Routines end a quiet run with a
+/// marker instead of posting, and that marker must not become the list's preview (OpenBot 15542).
+fn hidden_step(text: &str) -> bool {
+    let upper = text.trim().to_ascii_uppercase();
+    upper.is_empty()
+        || upper == crate::chat::routine_quiet::NO_UPDATE.to_ascii_uppercase()
+        || upper == "NO_UPDATE"
+        || upper == "[SILENT]"
+        || upper == "[[SILENT]]"
+}
+
+/// OpenBot 15542: the newest *real* message in `entries` (newest first), skipping hidden steps such
+/// as `[[no-update]]`. Pure so the preview is testable without a store, a routine or a channel.
+pub fn channel_preview(entries: &[PreviewEntry]) -> Option<&PreviewEntry> {
+    entries.iter().find(|entry| !hidden_step(&entry.text))
+}
+
 /// The pictures a channel can wear, as SF Symbols both clients already draw.
 pub const ICONS: &[&str] = &[
     "bubble.left",
@@ -177,6 +203,24 @@ mod tests {
         assert_eq!(with_memory("", "hi"), "hi");
         assert_eq!(with_memory("  ", "hi"), "hi");
         assert_eq!(with_memory("the shop project", "hi"), "[Channel memory]\nthe shop project\n\nhi");
+    }
+
+    #[test]
+    fn the_list_previews_the_newest_real_message_not_a_hidden_step() {
+        let entry = |text: &str, at: i64| PreviewEntry { text: text.to_owned(), at, author: Some("a".to_owned()) };
+        let entries = [
+            entry("[[no-update]]", 4),
+            entry("   ", 3),
+            entry("[SILENT]", 2),
+            entry("the actual answer", 1),
+            entry("older", 0),
+        ];
+        let newest = channel_preview(&entries).expect("a real message");
+        assert_eq!(newest.text, "the actual answer");
+        assert_eq!(newest.at, 1);
+        assert!(channel_preview(&[]).is_none(), "nothing to preview");
+        assert!(channel_preview(&[entry("[[NO-UPDATE]]", 1), entry("(pass)", 0)]).is_some());
+        assert_eq!(channel_preview(&[entry("Hello", 1), entry("Newer", 2)]).unwrap().text, "Hello");
     }
 
     #[test]

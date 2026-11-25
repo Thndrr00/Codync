@@ -97,6 +97,15 @@ pub(crate) fn front_matter(md: &str) -> (Option<String>, Option<String>) {
     (name, description)
 }
 
+/// OpenBot 15339: a marketplace skill whose id is already in the bot's folder resolves by that id;
+/// the person is told to rename or delete the skill that took it. Pure so the collision message is
+/// testable without a store or a download.
+pub(crate) fn skill_collision(id: &str, existing: Option<&Skill>) -> Option<String> {
+    existing.map(|skill| {
+        format!("The skill \"{}\" already uses the id `{id}`. Rename it or delete it, then add this one.", skill.name)
+    })
+}
+
 /// The bundled skill already installed as `id`, or `None` once its folder is taken.
 pub fn reserve_bundled(store: &crate::store::Store, id: &str) -> Result<Option<Skill>> {
     let _guard = SKILLS_LOCK.locked();
@@ -353,7 +362,11 @@ fn reserve_download(store: &crate::store::Store, id: &str, source: &str) -> Resu
     let _guard = SKILLS_LOCK.locked();
     match skills(store).into_iter().find(|s| s.id == id) {
         Some(s) if s.source == source => Ok(Some(s.public())),
-        Some(s) => bail!("The skill {} written in Codync has the id {id}: remove it to add this one", s.name),
+        Some(s) => bail!(
+            "{}",
+            skill_collision(id, Some(&s))
+                .unwrap_or_else(|| format!("The skill {} written in Codync has the id {id}", s.name))
+        ),
         None => {
             std::fs::create_dir_all(skills_dir().join(id))?;
             Ok(None)
@@ -426,13 +439,31 @@ pub async fn install_from_link(store: &crate::store::Store, url: &str) -> Result
     })
 }
 
-/// Whether `bot` can save one more skill.
-fn room_for(all: &[Skill], bot: &str) -> Result<()> {
+/// OpenBot 15507: at the per-bot skill cap, the first refusal asks for room; a bot that keeps
+/// trying is not asked again. Pure so the wording and the stop are testable without a store.
+fn skill_cap_notice(count: usize, asked: bool) -> Option<String> {
+    (count >= MAX_WRITTEN_PER_BOT).then(|| {
+        if asked {
+            "You've reached the skill limit for this bot.".to_owned()
+        } else {
+            format!(
+                "You've already saved {count} skills, the most a bot keeps. Rewrite one of them (pass its id) or ask the user to remove some."
+            )
+        }
+    })
+}
+
+/// Whether `bot` can save one more skill. The first refusal at the cap records that it asked, so a
+/// repeated attempt doesn't ask the person again (OpenBot 15507).
+fn room_for(store: &crate::store::Store, all: &[Skill], bot: &str) -> Result<()> {
     let written = all.iter().filter(|s| s.written_by.as_deref() == Some(bot)).count();
-    if written >= MAX_WRITTEN_PER_BOT {
-        bail!(
-            "You've already saved {written} skills, the most a bot keeps. Rewrite one of them (pass its id) or ask the user to remove some."
-        );
+    let key = format!("skillCapAsked.{bot}");
+    let asked = store.kv_get(&key).is_some();
+    if let Some(notice) = skill_cap_notice(written, asked) {
+        if !asked {
+            let _ = store.kv_set(&key, "1");
+        }
+        bail!("{notice}");
     }
     Ok(())
 }
@@ -451,7 +482,7 @@ pub fn add_custom_skill(
     }
     update_skills(store, |all| {
         if let Some(bot) = written_by {
-            room_for(all, bot)?;
+            room_for(store, all, bot)?;
         }
         // A folder the list doesn't have yet (a download in progress) is taken too. OpenBot 0.70.0:
         // an empty folder left by the agent's tools is not a local change, so it does not take the id.
@@ -681,15 +712,39 @@ mod tests {
 
     #[test]
     fn a_bot_keeps_a_limited_number_of_skills_of_its_own() {
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("memory store");
         let mut all: Vec<Skill> = (0..MAX_WRITTEN_PER_BOT - 1).map(|n| written(n, Some("a"))).collect();
         all.extend((100..110).map(|n| written(n, Some("b"))));
         all.extend((200..210).map(|n| written(n, None)));
-        assert!(room_for(&all, "a").is_ok(), "one below the limit still has room");
+        assert!(room_for(&store, &all, "a").is_ok(), "one below the limit still has room");
         all.push(written(300, Some("a")));
-        let refused = room_for(&all, "a").unwrap_err().to_string();
+        let refused = room_for(&store, &all, "a").unwrap_err().to_string();
         assert!(refused.contains("40") && refused.contains("id"), "{refused}");
-        assert!(room_for(&all, "b").is_ok(), "other bots' and the user's skills don't count");
-        assert!(room_for(&all, "c").is_ok());
+        assert!(room_for(&store, &all, "b").is_ok(), "other bots' and the user's skills don't count");
+        assert!(room_for(&store, &all, "c").is_ok());
+        // 15507: the first refusal asks; the next one does not ask the person again.
+        let again = room_for(&store, &all, "a").unwrap_err().to_string();
+        assert!(again.contains("limit"), "{again}");
+        assert!(!again.contains("Rewrite"), "{again}");
+    }
+
+    #[test]
+    fn a_colliding_marketplace_skill_names_the_skill_to_rename_or_delete() {
+        assert_eq!(skill_collision("pdf", None), None, "a free id has no collision");
+        let taken = written(1, Some("a"));
+        let message = skill_collision("pdf", Some(&taken)).expect("a collision message");
+        assert!(message.contains("`pdf`"), "{message}");
+        assert!(message.contains("Rename") && message.contains("delete"), "{message}");
+    }
+
+    #[test]
+    fn at_the_cap_the_first_refusal_asks_and_a_repeat_does_not() {
+        assert_eq!(skill_cap_notice(MAX_WRITTEN_PER_BOT - 1, false), None, "room below the cap");
+        let first = skill_cap_notice(MAX_WRITTEN_PER_BOT, false).expect("a first refusal");
+        assert!(first.contains("Rewrite") && first.contains("40"), "{first}");
+        let repeat = skill_cap_notice(MAX_WRITTEN_PER_BOT, true).expect("a repeat refusal");
+        assert!(!repeat.contains("Rewrite"), "{repeat}");
+        assert_ne!(first, repeat);
     }
 
     #[test]

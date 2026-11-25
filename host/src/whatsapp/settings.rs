@@ -1,5 +1,6 @@
 //! Connection settings and revocation epochs are published together under the connector lock.
 
+use super::delivery::{DeliveryReason, delivery_notice};
 use crate::hub::Hub;
 use anyhow::{Context, Result, ensure};
 use rusqlite::params;
@@ -99,6 +100,13 @@ pub(crate) fn set_allowed(hub: &Hub, jid: &str, allowed: bool, read_only: Option
     ensure!(
         !jid.is_empty() && jid.len() <= 120 && !jid.contains(char::is_whitespace),
         "Use a WhatsApp id, such as 5215555555555@s.whatsapp.net."
+    );
+    // OpenBot 13597: a bare number has no country code. Tell the person to re-add it with one
+    // instead of accepting a destination the bridge can never deliver to.
+    ensure!(
+        jid.contains('@'),
+        "{}",
+        delivery_notice(DeliveryReason::MissingCountryCode).unwrap_or("Use a WhatsApp id with its country code.")
     );
     let _guard = crate::LockExt::locked(&hub.store.connector_lock);
     let mut list = read_allowed(&hub.store)?;
@@ -280,6 +288,10 @@ mod tests {
         let (hub, dir) = hub();
         assert!(set_allowed(&hub, "has space@s.whatsapp.net", true, Some(true)).is_err());
         assert!(set_allowed(&hub, "", true, None).is_err());
+        assert!(
+            set_allowed(&hub, "5555555555", true, None).unwrap_err().to_string().contains("código de país"),
+            "a contact without a country code gets a re-add hint"
+        );
         assert!(set_allowed(&hub, "x".repeat(121).as_str(), true, None).is_err());
         for n in 0..200 {
             set_allowed(&hub, &format!("{n}@s.whatsapp.net"), true, None).unwrap();

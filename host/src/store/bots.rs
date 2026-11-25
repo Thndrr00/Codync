@@ -217,27 +217,34 @@ impl Store {
     /// its line, so they aren't it.
     pub fn last_message(&self, id: &str) -> Option<LastMessage> {
         let c = self.db.locked();
-        let row = c.query_row(
-            &format!(
-                "SELECT kind, data, updated_at FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS NULL AND
-                   (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1)) AND
-                   json_extract(data, '$.call') IS NULL AND {NOT_REMOVED}
-                 ORDER BY seq DESC LIMIT 1"
-            ),
-            [id],
-            |r| {
-                let kind: String = r.get(0)?;
-                let data: String = r.get(1)?;
-                let at: i64 = r.get(2)?;
-                let data = serde_json::from_str::<Value>(&data).unwrap_or_default();
-                // A files-only message previews as its file names.
-                let text = message_text(&data);
-                let author =
-                    (kind != EntryKind::User.as_str()).then(|| data["author"].as_str().unwrap_or(id).to_owned());
-                Ok(LastMessage { text, at, author })
-            },
-        );
-        logged("last message", row.optional()).flatten()
+        // OpenBot 15542: read a few of the newest lines and pick the newest *real* one. A quiet
+        // routine's `[[no-update]]` marker must not become the channel list's preview.
+        let Ok(mut statement) = c.prepare(&format!(
+            "SELECT kind, data, updated_at FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS NULL AND
+               (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1)) AND
+               json_extract(data, '$.call') IS NULL AND {NOT_REMOVED}
+             ORDER BY seq DESC LIMIT 20"
+        )) else {
+            return None;
+        };
+        let Ok(rows) = statement.query_map([id], |r| {
+            let kind: String = r.get(0)?;
+            let data: String = r.get(1)?;
+            let at: i64 = r.get(2)?;
+            let data = serde_json::from_str::<Value>(&data).unwrap_or_default();
+            // A files-only message previews as its file names.
+            let text = message_text(&data);
+            let author = (kind != EntryKind::User.as_str()).then(|| data["author"].as_str().unwrap_or(id).to_owned());
+            Ok(crate::channels::PreviewEntry { text, at, author })
+        }) else {
+            return None;
+        };
+        let entries = rows.filter_map(|row| row.ok()).collect::<Vec<_>>();
+        crate::channels::channel_preview(&entries).map(|entry| LastMessage {
+            text: entry.text.clone(),
+            at: entry.at,
+            author: entry.author.clone(),
+        })
     }
 }
 

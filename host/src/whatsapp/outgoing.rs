@@ -1,6 +1,7 @@
 //! Outbound chat replies and approval cards stay bound to their original `WhatsApp` link.
 
 use super::{Arc, Hub, Result, WhatsApp, approvals, delivery, json};
+use crate::store::{EntryKind, Lane};
 
 /// An agent's answer as it goes out: without the empty lines it may end in, which `WhatsApp` shows as
 /// blank space under the message. Ported from `OpenBot` 0.71.0 ("each message from an agent no longer
@@ -42,6 +43,18 @@ impl WhatsApp {
             hub.store.finish_whatsapp_reply(&reply.entry, if sent.is_ok() { "sent" } else { "failed" })?;
             if let Err(error) = sent {
                 tracing::warn!(%error,entry=%reply.entry,"WhatsApp reply was not sent");
+                // OpenBot 14456: a post that never arrived gets a line under its answer, in the
+                // conversation the answer belongs to. The outbox keeps this entry out of later
+                // ticks, so the line is added once.
+                if let Some(notice) = delivery::delivery_notice(delivery::DeliveryReason::Unsent)
+                    && let Some(entry) = hub.store.entry(&reply.entry)
+                {
+                    let lane = match &entry.thread_id {
+                        Some(root) => Lane::in_thread(&entry.bot_id, root),
+                        None => Lane::main(&entry.bot_id),
+                    };
+                    hub.add_entry(&lane, EntryKind::Notice, entry.turn, &json!({"text": notice, "style": "error"}));
+                }
             }
         }
         self.cards(hub).await?;

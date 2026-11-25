@@ -204,6 +204,12 @@ pub(super) async fn message(ep: &Endpoint, token: &str, chat: i64, text: &str, k
     sent["message_id"].as_i64().context("Telegram sent no message id")
 }
 
+/// Takes down an earlier post, such as the "Working on it…" line (OpenBot 15568).
+pub(super) async fn delete(ep: &Endpoint, token: &str, chat: i64, message: i64) -> Result<()> {
+    call(ep, token, "deleteMessage", &json!({"chat_id": chat, "message_id": message})).await?;
+    Ok(())
+}
+
 /// Sends an agent's reply, keeping its bold, italic and links (and `***bold italic***`).
 pub(super) async fn reply(ep: &Endpoint, token: &str, chat: i64, text: &str) -> Result<i64> {
     let sent = call(ep, token, "sendMessage", &text_body(chat, text, true)).await?;
@@ -218,6 +224,17 @@ pub(crate) async fn post(ep: &Endpoint, token: &str, chat: i64, text: &str, repl
         body["reply_parameters"] = json!({"message_id": message});
     }
     call(ep, token, "sendMessage", &body).await?;
+    Ok(())
+}
+
+/// Adds a reaction to a message. Workflow triggers use this to mark a mention whose every matching
+/// node skipped the run (`setMessageReaction` accepts one emoji a bot may set).
+pub(super) async fn react(ep: &Endpoint, token: &str, chat: i64, message: i64, emoji: &str) -> Result<()> {
+    let body = json!({
+        "chat_id": chat, "message_id": message,
+        "reaction": [{"type": "emoji", "emoji": emoji}],
+    });
+    call(ep, token, "setMessageReaction", &body).await?;
     Ok(())
 }
 
