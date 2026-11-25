@@ -661,6 +661,43 @@ fn workspace_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Session and sync state: the live session, revision and read mark.
+fn session_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_session as s;
+
+    let session = row.session_id.as_deref();
+    let rev = row.rev;
+    let read = row.read_rev;
+    let deleted = row.deleted;
+    let lines = s::build_lines(session, rev, read, deleted);
+    let score = s::sync_score(rev, read, deleted);
+
+    json!({
+        "headline": s::session_headline(rev, read, deleted),
+        "label": s::sync_label(score),
+        "tone": s::sync_tone(score),
+        "score": score,
+        "session": s::session_label(session),
+        "sessionIcon": s::session_icon(session),
+        "sessionTone": s::session_tone(session),
+        "revision": s::revision_label(rev),
+        "unread": s::unread_label(rev, read),
+        "bar": s::read_bar(rev, read, 12),
+        "deleted": deleted,
+        "summary": s::summary(session, rev, read, deleted).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "lines": lines.iter().map(|l| json!({
+            "id": l.id,
+            "label": l.label,
+            "detail": l.detail,
+            "icon": l.icon,
+            "tone": l.tone,
+            "ok": l.ok,
+            "stateIcon": s::state_icon(l.ok),
+            "stateTone": s::state_tone(l.ok),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -726,6 +763,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "tuning": tuning_view(&row),
         "memory": memory_view(&row),
         "workspace": workspace_view(&row),
+        "session": session_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

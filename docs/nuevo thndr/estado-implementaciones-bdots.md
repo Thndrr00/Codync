@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Sesión y sincronización (23 helpers + UI en 4 clientes)
+
+`bdots_session.rs` añade 23 helpers puros sobre el estado de sesión y sincronización: sesión
+activa, revisión y marca de lectura, revisiones sin leer, barra de progreso, estado de archivo,
+puntuación, etiquetas, titular, líneas y estados. Reutiliza `bdots_text`, `bdots_more` y
+`bdots_activity`. El endpoint `botInsights` añade el campo `session` desde `BotRow` (session_id,
+rev, read_rev, deleted); la sección «Session» se muestra en los cuatro clientes.
+
 ## Espacio de trabajo (23 helpers + UI en 4 clientes)
 
 `bdots_workspace.rs` añade 23 helpers puros sobre el entorno de trabajo del bot: carpeta, comando

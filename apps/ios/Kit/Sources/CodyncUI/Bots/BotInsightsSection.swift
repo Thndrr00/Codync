@@ -30,6 +30,14 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let session = insights.session
+                    Text(session.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(session.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text(session.bar).font(.footnote).foregroundStyle(Palette.accent)
+                    ForEach(session.lines, id: \.id) { item in
+                        Text("\(item.ok ? "●" : "○") \(item.label): \(item.detail)")
+                            .font(.footnote).foregroundStyle(item.ok ? Palette.text : Palette.secondary)
+                    }
                     let workspace = insights.workspace
                     Text(workspace.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(workspace.headline).font(.footnote).foregroundStyle(Palette.secondary)

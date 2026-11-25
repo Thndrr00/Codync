@@ -66,6 +66,34 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let session = &data["session"];
+    if session.is_object() {
+        line(buf, &mut y, tr("Session").into_owned(), t.bold.patch(t.panel));
+        let label = session["label"].as_str().unwrap_or("");
+        let headline = session["headline"].as_str().unwrap_or("");
+        let bar = session["bar"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{bar} {label} · {headline}"), t.text.patch(t.panel));
+        let lines: Vec<String> = session["lines"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|l| {
+                        format!(
+                            "  {} {}: {}",
+                            if l["ok"] == true { "●" } else { "○" },
+                            l["label"].as_str().unwrap_or(""),
+                            l["detail"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in lines {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let workspace = &data["workspace"];
     if workspace.is_object() {
         line(buf, &mut y, tr("Workspace").into_owned(), t.bold.patch(t.panel));

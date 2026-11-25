@@ -20,9 +20,38 @@ public struct BotInsights: Decodable, Sendable {
     public let tuning: InsightTuning
     public let memory: InsightMemory
     public let workspace: InsightWorkspace
+    public let session: InsightSession
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed session and sync state for one bot.
+public struct InsightSession: Decodable, Sendable {
+    public let headline: String
+    public let label: String
+    public let tone: String
+    public let score: Int
+    public let session: String
+    public let sessionIcon: String
+    public let sessionTone: String
+    public let revision: String
+    public let unread: String
+    public let bar: String
+    public let deleted: Bool
+    public let summary: [InsightSummaryRow]
+    public let lines: [InsightSessionLine]
+}
+
+public struct InsightSessionLine: Decodable, Sendable {
+    public let id: String
+    public let label: String
+    public let detail: String
+    public let icon: String
+    public let tone: String
+    public let ok: Bool
+    public let stateIcon: String
+    public let stateTone: String
 }
 
 /// A host-computed summary of one bot's work environment.

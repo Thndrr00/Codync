@@ -42,6 +42,17 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val session = insights.session
+            CardSection("Session") {
+                row { Text(session.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(session.headline, style = Type.caption, color = Palette.secondary) }
+                row { Text(session.bar, style = Type.caption, color = Palette.accent) }
+                row { ValueRow("Unread", session.unread) }
+                for (item in session.lines) row {
+                    Text("${if (item.ok) "●" else "○"} ${item.label}: ${item.detail}",
+                        style = Type.caption, color = if (item.ok) Palette.text else Palette.secondary)
+                }
+            }
             val workspace = insights.workspace
             CardSection("Workspace") {
                 row { Text(workspace.label, style = Type.subheadline.semibold, color = Palette.text) }

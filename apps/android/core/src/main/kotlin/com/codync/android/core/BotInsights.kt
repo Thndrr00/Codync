@@ -23,9 +23,34 @@ data class BotInsights(
     val tuning: InsightTuning = InsightTuning(),
     val memory: InsightMemory = InsightMemory(),
     val workspace: InsightWorkspace = InsightWorkspace(),
+    val session: InsightSession = InsightSession(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed session and sync state for one bot. */
+@Serializable
+data class InsightSession(
+    val headline: String = "",
+    val label: String = "",
+    val tone: String = "",
+    val score: Int = 0,
+    val session: String = "",
+    val sessionIcon: String = "",
+    val sessionTone: String = "",
+    val revision: String = "",
+    val unread: String = "",
+    val bar: String = "",
+    val deleted: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val lines: List<InsightSessionLine> = emptyList(),
+)
+
+@Serializable data class InsightSessionLine(
+    val id: String = "", val label: String = "", val detail: String = "",
+    val icon: String = "", val tone: String = "", val ok: Boolean = false,
+    val stateIcon: String = "", val stateTone: String = "",
 )
 
 /** A host-computed summary of one bot's work environment. */

@@ -25,6 +25,7 @@ mod bdots_more;
 mod bdots_profile;
 mod bdots_pure;
 mod bdots_routines;
+mod bdots_session;
 mod bdots_spend;
 mod bdots_text;
 mod bdots_trust;

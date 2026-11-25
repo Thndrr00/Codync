@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,20 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Session')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(session.tone)}>{session.label}</Text>
+        <Text size="footnote" tone="secondary">{session.headline}</Text>
+        <Text size="footnote" tone="accent">{session.bar}</Text>
+        <ValueRow label={tr('Session')}>{session.session}</ValueRow>
+        <ValueRow label={tr('Unread')}>{session.unread}</ValueRow>
+        {session.lines.map((item) => (
+          <HStack key={item.id} gap={6}>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{item.ok ? '●' : '○'}</Text>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{`${item.label}: ${item.detail}`}</Text>
+          </HStack>
+        ))}
       </CardSection>
 
       <CardSection title={tr('Workspace')}>
