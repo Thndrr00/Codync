@@ -17,9 +17,35 @@ data class BotInsights(
     val routineSummary: InsightRoutineSummary = InsightRoutineSummary(),
     val library: InsightLibrary = InsightLibrary(),
     val trust: InsightTrust = InsightTrust(),
+    val resilience: InsightResilience = InsightResilience(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed resilience summary for one bot. */
+@Serializable
+data class InsightResilience(
+    val headline: String = "",
+    val label: String = "",
+    val tone: String = "",
+    val score: Int = 0,
+    val bar: String = "",
+    val chain: String = "",
+    val total: Int = 0,
+    val hasChain: Boolean = false,
+    val hasOverride: Boolean = false,
+    val customCommands: Int = 0,
+    val selfFallbacks: Boolean = false,
+    val switches: List<InsightSwitch> = emptyList(),
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val fallbacks: List<InsightFallback> = emptyList(),
+)
+
+@Serializable data class InsightSwitch(val label: String = "", val on: Boolean = false)
+@Serializable data class InsightFallback(
+    val backend: String = "", val model: String = "", val command: String = "",
+    val label: String = "", val icon: String = "", val tone: String = "",
 )
 
 /** A host-computed trust posture for one bot. */

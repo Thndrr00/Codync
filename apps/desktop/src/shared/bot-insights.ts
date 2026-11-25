@@ -1,6 +1,23 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightResilience {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  bar: string
+  chain: string
+  total: number
+  hasChain: boolean
+  hasOverride: boolean
+  customCommands: number
+  selfFallbacks: boolean
+  switches: { label: string; on: boolean }[]
+  summary: { key: string; value: string }[]
+  fallbacks: { backend: string; model: string; command: string; label: string; icon: string; tone: string }[]
+}
+
 export interface InsightTrust {
   mode: string
   modeLabel: string
@@ -136,6 +153,7 @@ export interface BotInsights {
   routineSummary: InsightRoutineSummary
   library: InsightLibrary
   trust: InsightTrust
+  resilience: InsightResilience
   routines: InsightRoutine[]
   usage: {
     used: number

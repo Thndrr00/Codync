@@ -30,6 +30,15 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let resilience = insights.resilience
+                    Text(resilience.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(resilience.bar).font(.footnote).foregroundStyle(Palette.accent)
+                    Text(resilience.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text(resilience.switches.map { "\($0.on ? "●" : "○") \($0.label)" }.joined(separator: "  "))
+                        .font(.footnote).foregroundStyle(Palette.tertiary)
+                    ForEach(resilience.fallbacks, id: \.backend) { fb in
+                        Text(fb.label).font(.footnote).foregroundStyle(Palette.text)
+                    }
                     let trust = insights.trust
                     Text(trust.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(trust.headline).font(.footnote).foregroundStyle(Palette.secondary)

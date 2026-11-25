@@ -415,6 +415,51 @@ fn trust_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Resilience: the fallback chain and the switches that keep the bot working.
+fn resilience_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_fallbacks as f;
+
+    let config = &row.config;
+    let lines: Vec<f::FallbackLine> = config
+        .fallbacks
+        .iter()
+        .enumerate()
+        .map(|(i, fb)| f::fallback_line(i, &fb.backend, fb.model.as_deref(), fb.command.as_deref()))
+        .collect();
+    let score = f::resilience_score(
+        &lines,
+        config.self_fallbacks,
+        config.fast_mode,
+        config.saver,
+        config.background_model.as_deref(),
+    );
+
+    json!({
+        "headline": f::resilience_headline(&lines, config.self_fallbacks),
+        "label": f::resilience_label(score),
+        "tone": f::resilience_tone(score),
+        "score": score,
+        "bar": f::resilience_bar(score, 12),
+        "chain": f::count_label(&lines),
+        "total": f::total_options(&lines, config.self_fallbacks),
+        "hasChain": f::has_chain(&lines),
+        "hasOverride": f::has_override(&lines),
+        "customCommands": f::custom_command_count(&lines),
+        "selfFallbacks": config.self_fallbacks,
+        "switches": f::switches(config.fast_mode, config.saver, config.background_model.as_deref())
+            .into_iter().map(|(label, on)| json!({"label": label, "on": on})).collect::<Vec<_>>(),
+        "summary": f::summary(&lines, config.self_fallbacks).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "fallbacks": f::ordered(&lines).iter().map(|l| json!({
+            "backend": l.backend,
+            "model": l.model,
+            "command": l.command,
+            "label": l.label,
+            "icon": l.icon,
+            "tone": l.tone,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -474,6 +519,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "routineSummary": routine_summary_view(&routines, now),
         "library": library_view(&row),
         "trust": trust_view(&row),
+        "resilience": resilience_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

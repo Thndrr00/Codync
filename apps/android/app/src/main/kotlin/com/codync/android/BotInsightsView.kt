@@ -42,6 +42,19 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val resilience = insights.resilience
+            CardSection("Resilience") {
+                row { Text(resilience.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(resilience.bar, style = Type.caption, color = Palette.accent) }
+                row { Text(resilience.headline, style = Type.caption, color = Palette.secondary) }
+                if (resilience.switches.isNotEmpty()) row {
+                    Text(resilience.switches.joinToString("  ") { "${if (it.on) "●" else "○"} ${it.label}" },
+                        style = Type.caption, color = Palette.tertiary)
+                }
+                for (fb in resilience.fallbacks) row {
+                    Text(fb.label, style = Type.caption, color = Palette.text)
+                }
+            }
             val trust = insights.trust
             CardSection("Trust") {
                 row { Text(trust.label, style = Type.subheadline.semibold, color = Palette.text) }

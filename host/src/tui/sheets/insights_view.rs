@@ -66,6 +66,36 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let resilience = &data["resilience"];
+    if resilience.is_object() {
+        line(buf, &mut y, tr("Resilience").into_owned(), t.bold.patch(t.panel));
+        let label = resilience["label"].as_str().unwrap_or("");
+        let headline = resilience["headline"].as_str().unwrap_or("");
+        let bar = resilience["bar"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{bar} {label} · {headline}"), t.text.patch(t.panel));
+        let switches: Vec<String> = resilience["switches"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|s| {
+                        format!("{} {}", if s["on"] == true { "●" } else { "○" }, s["label"].as_str().unwrap_or(""))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !switches.is_empty() {
+            line(buf, &mut y, format!("  {}", switches.join("  ")), t.secondary.patch(t.panel));
+        }
+        let fallbacks: Vec<String> = resilience["fallbacks"]
+            .as_array()
+            .map(|a| a.iter().map(|f| format!("  {}", f["label"].as_str().unwrap_or(""))).collect())
+            .unwrap_or_default();
+        for fb in fallbacks {
+            line(buf, &mut y, fb, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let trust = &data["trust"];
     if trust.is_object() {
         line(buf, &mut y, tr("Trust").into_owned(), t.bold.patch(t.panel));

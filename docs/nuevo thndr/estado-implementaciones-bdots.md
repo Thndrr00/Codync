@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Resiliencia y fallbacks (22 helpers + UI en 4 clientes)
+
+`bdots_fallbacks.rs` añade 22 helpers puros sobre la cadena de agentes de respaldo y los
+interruptores que mantienen al bot funcionando (modo rápido, ahorro, modelo de fondo): iconos y
+tonos por posición, etiquetas de backend, detectores de modelo/comando, conteos, puntuación de
+resiliencia, titular, barra, ordenación y ensamblaje. Reutiliza `bdots_desk`, `bdots_profile` y
+`bdots_activity`. El endpoint `botInsights` añade el campo `resilience` desde `config.fallbacks`
+y los switches, y la sección «Resilience» se muestra en los cuatro clientes.
+
 ## Confianza y aprobaciones (22 helpers + UI en 4 clientes)
 
 `bdots_trust.rs` añade 22 helpers puros sobre el modo de permiso y las reglas de aprobación:

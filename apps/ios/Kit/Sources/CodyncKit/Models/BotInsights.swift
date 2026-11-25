@@ -14,9 +14,42 @@ public struct BotInsights: Decodable, Sendable {
     public let routineSummary: InsightRoutineSummary
     public let library: InsightLibrary
     public let trust: InsightTrust
+    public let resilience: InsightResilience
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed resilience summary for one bot.
+public struct InsightResilience: Decodable, Sendable {
+    public let headline: String
+    public let label: String
+    public let tone: String
+    public let score: Int
+    public let bar: String
+    public let chain: String
+    public let total: Int
+    public let hasChain: Bool
+    public let hasOverride: Bool
+    public let customCommands: Int
+    public let selfFallbacks: Bool
+    public let switches: [InsightSwitch]
+    public let summary: [InsightSummaryRow]
+    public let fallbacks: [InsightFallback]
+}
+
+public struct InsightSwitch: Decodable, Sendable {
+    public let label: String
+    public let on: Bool
+}
+
+public struct InsightFallback: Decodable, Sendable {
+    public let backend: String
+    public let model: String
+    public let command: String
+    public let label: String
+    public let icon: String
+    public let tone: String
 }
 
 /// A host-computed trust posture for one bot.
