@@ -954,6 +954,47 @@ fn conversation_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Agent profile: the backend account, mode and fast switch.
+fn agent_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_agent as a;
+
+    let c = &row.config;
+    let account = c.account.as_deref();
+    let mode = c.mode.as_deref();
+    let fast = c.fast_mode;
+    let catalog = c.catalog.as_deref();
+    let lines = a::build_lines(account, mode, fast, catalog);
+    let score = a::agent_score(account, mode, fast, catalog);
+
+    json!({
+        "headline": a::agent_headline(account, mode, fast, catalog),
+        "label": a::agent_label(score),
+        "tone": a::agent_tone(score),
+        "score": score,
+        "account": a::account_label(account),
+        "accountIcon": a::account_icon(account),
+        "accountTone": a::account_tone(account),
+        "mode": a::mode_label(mode),
+        "modeIcon": a::mode_icon(mode),
+        "modeTone": a::mode_tone(mode),
+        "fast": fast,
+        "fastIcon": a::fast_icon(fast),
+        "fastTone": a::fast_tone(fast),
+        "catalog": a::catalog_label(catalog),
+        "summary": a::summary(account, mode, fast, catalog).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "lines": lines.iter().map(|l| json!({
+            "id": l.id,
+            "label": l.label,
+            "detail": l.detail,
+            "icon": l.icon,
+            "tone": l.tone,
+            "set": l.set,
+            "stateIcon": a::state_icon(l.set),
+            "stateTone": a::state_tone(l.set),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1035,6 +1076,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "approvals": approvals_view(hub, bot, now),
         "failures": failures_view(hub, bot, now),
         "conversation": conversation_view(hub, bot),
+        "agent": agent_view(&row),
         "description": description,
         "model": model,
         "provider": provider,

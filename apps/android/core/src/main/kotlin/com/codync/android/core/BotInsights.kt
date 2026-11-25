@@ -30,9 +30,37 @@ data class BotInsights(
     val approvals: InsightApprovals = InsightApprovals(),
     val failures: InsightFailures = InsightFailures(),
     val conversation: InsightConversation = InsightConversation(),
+    val agent: InsightAgentProfile = InsightAgentProfile(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed agent profile for one bot. */
+@Serializable
+data class InsightAgentProfile(
+    val headline: String = "",
+    val label: String = "",
+    val tone: String = "",
+    val score: Int = 0,
+    val account: String = "",
+    val accountIcon: String = "",
+    val accountTone: String = "",
+    val mode: String = "",
+    val modeIcon: String = "",
+    val modeTone: String = "",
+    val fast: Boolean = false,
+    val fastIcon: String = "",
+    val fastTone: String = "",
+    val catalog: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val lines: List<InsightAgentLine> = emptyList(),
+)
+
+@Serializable data class InsightAgentLine(
+    val id: String = "", val label: String = "", val detail: String = "",
+    val icon: String = "", val tone: String = "", val set: Boolean = false,
+    val stateIcon: String = "", val stateTone: String = "",
 )
 
 /** A host-computed summary of a bot's chat rhythm. */

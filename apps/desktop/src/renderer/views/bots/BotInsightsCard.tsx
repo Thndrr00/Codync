@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,17 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Agent profile')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(agent.tone)}>{agent.label}</Text>
+        <Text size="footnote" tone="secondary">{agent.headline}</Text>
+        {agent.lines.map((item) => (
+          <HStack key={item.id} gap={6}>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{item.set ? '●' : '○'}</Text>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{`${item.label}: ${item.detail}`}</Text>
+          </HStack>
+        ))}
+      </CardSection>
+
       <CardSection title={tr('Conversation')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(conversation.tone)}>{conversation.headline}</Text>
         <Text size="footnote" tone="secondary">{conversation.line}</Text>

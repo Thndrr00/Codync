@@ -42,6 +42,15 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val agent = insights.agent
+            CardSection("Agent profile") {
+                row { Text(agent.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(agent.headline, style = Type.caption, color = Palette.secondary) }
+                for (item in agent.lines) row {
+                    Text("${if (item.set) "●" else "○"} ${item.label}: ${item.detail}",
+                        style = Type.caption, color = if (item.set) Palette.text else Palette.secondary)
+                }
+            }
             val conversation = insights.conversation
             CardSection("Conversation") {
                 row { Text(conversation.headline, style = Type.subheadline.semibold, color = Palette.text) }

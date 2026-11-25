@@ -30,6 +30,13 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let agent = insights.agent
+                    Text(agent.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(agent.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(agent.lines, id: \.id) { item in
+                        Text("\(item.set ? "●" : "○") \(item.label): \(item.detail)")
+                            .font(.footnote).foregroundStyle(item.set ? Palette.text : Palette.secondary)
+                    }
                     let conversation = insights.conversation
                     Text(conversation.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(conversation.line).font(.footnote).foregroundStyle(Palette.secondary)

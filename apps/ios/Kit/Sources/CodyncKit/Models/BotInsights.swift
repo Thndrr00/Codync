@@ -27,9 +27,41 @@ public struct BotInsights: Decodable, Sendable {
     public let approvals: InsightApprovals
     public let failures: InsightFailures
     public let conversation: InsightConversation
+    public let agent: InsightAgentProfile
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed agent profile for one bot.
+public struct InsightAgentProfile: Decodable, Sendable {
+    public let headline: String
+    public let label: String
+    public let tone: String
+    public let score: Int
+    public let account: String
+    public let accountIcon: String
+    public let accountTone: String
+    public let mode: String
+    public let modeIcon: String
+    public let modeTone: String
+    public let fast: Bool
+    public let fastIcon: String
+    public let fastTone: String
+    public let catalog: String
+    public let summary: [InsightSummaryRow]
+    public let lines: [InsightAgentLine]
+}
+
+public struct InsightAgentLine: Decodable, Sendable {
+    public let id: String
+    public let label: String
+    public let detail: String
+    public let icon: String
+    public let tone: String
+    public let set: Bool
+    public let stateIcon: String
+    public let stateTone: String
 }
 
 /// A host-computed summary of a bot's chat rhythm.

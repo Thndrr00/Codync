@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Perfil del agente (23 helpers + UI en 4 clientes)
+
+`bdots_agent.rs` añade 23 helpers puros sobre el agente del bot: cuenta backend, modo, fast mode y
+origen del catálogo, con normalización de cuentas, iconos, tonos, puntuación, titular, líneas y
+resúmenes. Reutiliza `bdots_identity`, `bdots_tuning`, `bdots_desk` y `bdots_text`. El endpoint
+`botInsights` añade el campo `agent` desde la configuración existente; la sección «Agent profile»
+se muestra en los cuatro clientes.
+
 ## Ritmo de conversación (23 helpers + UI en 4 clientes)
 
 `bdots_conversation.rs` añade 23 helpers puros sobre la mezcla de entradas de chat (mensajes,
