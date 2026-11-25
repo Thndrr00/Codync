@@ -3,6 +3,7 @@
 //! links of that routine only.
 
 use crate::store::FlowLink;
+use crate::store::flows::{Branch, PortType};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 
@@ -19,6 +20,70 @@ pub enum Problem {
     Duplicate,
     Cycle,
     TooDeep(usize),
+    /// OpenBot `WORKFLOW_PORTS` and edge rules refuse this typed connection.
+    Port(PortProblem),
+}
+
+/// Why a typed edge cannot join two nodes, from OpenBot `workflowEdgeProblem`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PortProblem {
+    Annotation,
+    Port,
+    ConditionBranch,
+    Branch,
+    Duplicate,
+}
+
+pub const ALL_PORTS: &[PortType] = &[PortType::Text, PortType::Image, PortType::File];
+const TEXT_PORT: &[PortType] = &[PortType::Text];
+const MEDIA_PORTS: &[PortType] = &[PortType::Image, PortType::File];
+const NO_PORTS: &[PortType] = &[];
+
+/// The ports a node accepts and gives, from OpenBot `WORKFLOW_PORTS`. The prefix of a node key names
+/// its kind (`bot:`, `media:`, `condition:`…); an unknown or drawing-only node has no ports.
+pub fn ports_of(node: &str) -> Option<(&'static [PortType], &'static [PortType])> {
+    let kind = node.split_once(':').map_or("bot", |(prefix, _)| prefix);
+    match kind {
+        "routine" | "bot" | "agent" | "llm" => Some((ALL_PORTS, TEXT_PORT)),
+        "media" | "image" => Some((ALL_PORTS, MEDIA_PORTS)),
+        "asset" | "trigger" | "prompt" => Some((NO_PORTS, TEXT_PORT)),
+        "condition" | "approval" => Some((TEXT_PORT, TEXT_PORT)),
+        "output" => Some((ALL_PORTS, NO_PORTS)),
+        "text" | "note" | "shape" => None,
+        _ => None,
+    }
+}
+
+/// Checks one edge against its ends and every other edge of the flow. A legacy text edge keeps
+/// working even where a newer port table would not list text: old flows must not break on upgrade.
+pub fn edge_problem(from: &str, to: &str, edges: &[FlowLink]) -> Option<PortProblem> {
+    let edge = edges.iter().find(|link| link.from_bot_id == from && link.to_bot_id == to)?;
+    let (Some((out, _)), Some((input, to_out))) = (ports_of(from), ports_of(to)) else {
+        return Some(PortProblem::Annotation);
+    };
+    if out.is_empty() && to_out.is_empty() {
+        return Some(PortProblem::Annotation);
+    }
+    if edge.port != PortType::Text && (!out.contains(&edge.port) || !input.contains(&edge.port)) {
+        return Some(PortProblem::Port);
+    }
+    let condition = from.starts_with("condition:");
+    match (condition, edge.branch.as_deref()) {
+        (true, None) => return Some(PortProblem::ConditionBranch),
+        (true, Some(branch)) if Branch::parse(branch).is_none() => return Some(PortProblem::ConditionBranch),
+        (false, Some(_)) => return Some(PortProblem::Branch),
+        _ => {}
+    }
+    let same = edges
+        .iter()
+        .filter(|link| {
+            link.from_bot_id == from
+                && link.to_bot_id == to
+                && link.port == edge.port
+                && link.branch.as_deref() == edge.branch.as_deref()
+        })
+        .count();
+    (same > 1).then_some(PortProblem::Duplicate)
 }
 
 impl fmt::Display for Problem {
@@ -34,6 +99,13 @@ impl fmt::Display for Problem {
             Self::Duplicate => f.write_str("these two bots are already connected in this routine"),
             Self::Cycle => f.write_str("that link would make the flow loop"),
             Self::TooDeep(max) => write!(f, "a flow reaches at most {max} bots deep"),
+            Self::Port(problem) => match problem {
+                PortProblem::Annotation => f.write_str("a drawing note cannot hand work on"),
+                PortProblem::Port => f.write_str("these two steps do not share that port type"),
+                PortProblem::ConditionBranch => f.write_str("a condition needs a yes or no branch on its edge"),
+                PortProblem::Branch => f.write_str("only a condition can route a yes or no branch"),
+                PortProblem::Duplicate => f.write_str("these two steps already have that edge"),
+            },
         }
     }
 }
@@ -107,8 +179,22 @@ pub fn downstream<'a>(start: &'a str, links: &'a [FlowLink]) -> BTreeSet<&'a str
     seen
 }
 
-/// Why `from` can't hand work to `to` in this routine, or `None` when it can.
+/// Why `from` can't hand work to `to` in this routine, or `None` when it can. A legacy text edge
+/// with no branch is assumed; callers adding a typed edge use `connect_problem_typed`.
 pub fn connect_problem(owner: &str, links: &[FlowLink], from: &str, to: &str, max_depth: usize) -> Option<Problem> {
+    connect_problem_typed(owner, links, from, to, max_depth, PortType::Text, None)
+}
+
+/// The same path rules as `connect_problem`, with the port and branch of the edge being added.
+pub fn connect_problem_typed(
+    owner: &str,
+    links: &[FlowLink],
+    from: &str,
+    to: &str,
+    max_depth: usize,
+    port: PortType,
+    branch: Option<&str>,
+) -> Option<Problem> {
     if from == to {
         return Some(Problem::SameBot);
     }
@@ -127,7 +213,28 @@ pub fn connect_problem(owner: &str, links: &[FlowLink], from: &str, to: &str, ma
     }
     // The new hop puts `to` one step after `from`, and everything `to` hands work on moves with it.
     let deepest_after = longest_from(to, links);
-    (current[from] + 1 + deepest_after > max_depth).then_some(Problem::TooDeep(max_depth))
+    if current[from] + 1 + deepest_after > max_depth {
+        return Some(Problem::TooDeep(max_depth));
+    }
+    // `links` holds the edges already stored, so add the candidate to check its type and branch
+    // against both ends and against an existing edge between the same two steps.
+    let candidate = FlowLink {
+        id: String::new(),
+        routine_id: String::new(),
+        owner_bot_id: owner.to_owned(),
+        from_bot_id: from.to_owned(),
+        to_bot_id: to.to_owned(),
+        name: String::new(),
+        instruction: String::new(),
+        model: None,
+        model_options: BTreeMap::new(),
+        branch: branch.map(str::to_owned),
+        port,
+        created_at: 0,
+    };
+    let mut edges = links.to_vec();
+    edges.push(candidate);
+    edge_problem(from, to, &edges).map(Problem::Port)
 }
 
 /// The longest chain of hops that starts at `bot`.
@@ -168,6 +275,8 @@ mod tests {
             instruction: String::new(),
             model: None,
             model_options: BTreeMap::new(),
+            branch: None,
+            port: PortType::Text,
             created_at: 0,
         }
     }
@@ -215,6 +324,34 @@ mod tests {
         assert_eq!(order(&d), [("media:1", 1), ("b", 2)]);
         assert_eq!(connect_problem("a", &links, "b", "media:1", 5), Some(Problem::Cycle));
         assert_eq!(connect_problem("a", &links, "media:1", "c", 2), None);
+    }
+
+    #[test]
+    fn typed_edges_refuse_mismatched_duplicate_and_branchless_links() {
+        let mut image = link("media:1", "b");
+        image.port = PortType::Image;
+        assert_eq!(edge_problem("media:1", "b", &[image]), None, "a media step gives an image");
+        let mut accept = link("a", "b");
+        accept.port = PortType::Image;
+        assert_eq!(edge_problem("a", "b", &[accept]), Some(PortProblem::Port), "a bot does not give images");
+
+        let mut file = link("media:1", "b");
+        file.port = PortType::File;
+        assert_eq!(edge_problem("media:1", "b", &[file.clone(), file.clone()]), Some(PortProblem::Duplicate));
+
+        let mut condition = link("condition:1", "b");
+        assert_eq!(edge_problem("condition:1", "b", &[condition.clone()]), Some(PortProblem::ConditionBranch));
+        condition.branch = Some("yes".into());
+        assert_eq!(edge_problem("condition:1", "b", &[condition.clone()]), None);
+        let mut plain = link("a", "b");
+        plain.branch = Some("no".into());
+        assert_eq!(edge_problem("a", "b", &[plain]), Some(PortProblem::Branch));
+        assert_eq!(
+            connect_problem_typed("a", &[], "a", "b", 5, PortType::Text, Some("no")),
+            Some(Problem::Port(PortProblem::Branch)),
+            "the connect path uses the same typed-edge decision"
+        );
+        assert_eq!(edge_problem("note:1", "b", &[link("note:1", "b")]), Some(PortProblem::Annotation));
     }
 
     #[test]

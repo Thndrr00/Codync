@@ -6,11 +6,71 @@ use super::{Store, now_ms};
 use anyhow::Result;
 use rusqlite::{Connection, params};
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 /// How much of a step's input or output is kept.
 const MAX_TEXT_BYTES: usize = 32_000;
 /// Runs of one routine whose steps are kept.
 const KEPT_RUNS: i64 = 50;
+/// OpenBot `INPUT_LIMITS.workflowRunsPage`.
+pub const MAX_RUN_PAGE: usize = 50;
+/// OpenBot `WORKFLOW_RUN_SOURCES`: how a run was started.
+pub const RUN_SOURCES: &[&str] = &["manual", "schedule", "webhook", "github", "discord", "telegram", "slack"];
+/// A run keeps at most this many numbered attempts of one step.
+pub const MAX_ATTEMPTS: u32 = 100;
+
+/// The source of a run, decided from its trigger instead of trusting whatever a client sends. OpenBot
+/// records the same seven sources on each run; anything unknown is a manual start.
+pub fn run_source(trigger: &str) -> &'static str {
+    match trigger.to_ascii_lowercase().as_str() {
+        "schedule" | "cron" | "interval" => "schedule",
+        "webhook" => "webhook",
+        "github" => "github",
+        "discord" => "discord",
+        "telegram" => "telegram",
+        "slack" => "slack",
+        _ => "manual",
+    }
+}
+
+/// The attempt number of a retry: one more than the attempt that failed, capped so a broken loop
+/// cannot number steps forever.
+pub fn retry_attempt(attempt: u32) -> u32 {
+    attempt.saturating_add(1).min(MAX_ATTEMPTS)
+}
+
+fn one() -> u32 {
+    1
+}
+
+fn manual() -> String {
+    "manual".to_owned()
+}
+
+/// A numbered, bounded page of run history. `before` is a run id (the cursor sent by a client); the
+/// page holds at most `limit` runs and `next_before` names the cursor for the next page.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FlowRunPage {
+    pub entries: Vec<(FlowRun, Vec<FlowStep>)>,
+    pub next_before: Option<String>,
+}
+
+pub fn paginate_runs(entries: &[(FlowRun, Vec<FlowStep>)], before: Option<&str>, limit: usize) -> FlowRunPage {
+    let limit = limit.clamp(1, MAX_RUN_PAGE);
+    let start = before.and_then(|id| entries.iter().position(|entry| entry.0.run_id == id)).map_or(0, |at| at + 1);
+    let end = start.saturating_add(limit).min(entries.len());
+    FlowRunPage {
+        entries: entries[start..end].to_vec(),
+        next_before: (end < entries.len()).then(|| entries[end - 1].0.run_id.clone()),
+    }
+}
+
+/// The 1-based number of each run of a routine, oldest first, for a numbered history list.
+pub fn numbered_runs(runs: &[FlowRun]) -> BTreeMap<String, usize> {
+    let mut ordered: Vec<&FlowRun> = runs.iter().collect();
+    ordered.sort_by_key(|run| (run.run_at, run.run_id.as_str()));
+    ordered.into_iter().enumerate().map(|(index, run)| (run.run_id.clone(), index + 1)).collect()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +127,18 @@ pub struct FlowStep {
     /// have none, which a client reads as one result made before batches existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub results: Option<Vec<crate::media::BatchResult>>,
+    /// Which attempt of this step in the run this row is; a retry makes the next one.
+    #[serde(default = "one")]
+    pub attempt: u32,
+    /// The condition branch that led here, when the step came out of a condition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// The step is still waiting on the agent or a human decision (OpenBot `waiting`).
+    #[serde(default)]
+    pub waiting: bool,
+    /// How the run started, frozen on each of its steps.
+    #[serde(default = "manual")]
+    pub source: String,
     pub created_at: i64,
     pub updated_at: i64,
     #[serde(skip)]
@@ -85,6 +157,8 @@ pub struct FlowRun {
     pub routine_id: String,
     pub owner_bot_id: String,
     pub run_at: i64,
+    /// The run's source, read from the steps it left.
+    pub source: String,
 }
 
 pub struct NewStep<'a> {
@@ -97,13 +171,17 @@ pub struct NewStep<'a> {
     pub status: StepStatus,
     pub output: Option<&'a str>,
     pub error: Option<&'a str>,
+    pub attempt: u32,
+    pub branch: Option<&'a str>,
+    pub waiting: bool,
+    pub source: &'a str,
 }
 
 const COLUMNS: &str = "id, run_id, bot_id, delivery_id, input, output, status, error, created_at, updated_at, \
-                       routine_id, owner_bot_id, run_at, files";
+                       routine_id, owner_bot_id, run_at, files, attempt, branch, waiting, source";
 /// The insert columns plus the settings a media step uses for its per-result progress.
 const READ_COLUMNS: &str = "id, run_id, bot_id, delivery_id, input, output, status, error, created_at, updated_at, \
-                            routine_id, owner_bot_id, run_at, files, settings";
+                            routine_id, owner_bot_id, run_at, files, settings, attempt, branch, waiting, source";
 
 fn row_step(r: &rusqlite::Row) -> rusqlite::Result<FlowStep> {
     Ok(FlowStep {
@@ -126,6 +204,10 @@ fn row_step(r: &rusqlite::Row) -> rusqlite::Result<FlowStep> {
             .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
             .and_then(|settings| settings.get("results").cloned())
             .and_then(|results| serde_json::from_value(results).ok()),
+        attempt: r.get::<_, i64>(15).unwrap_or(1) as u32,
+        branch: r.get(16)?,
+        waiting: r.get::<_, i64>(17).unwrap_or(0) != 0,
+        source: r.get(18)?,
     })
 }
 
@@ -149,7 +231,7 @@ impl Store {
             let added = tx.execute(
                 &format!(
                     "INSERT OR IGNORE INTO routine_flow_steps({COLUMNS})
-                     VALUES(?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, NULL)"
+                     VALUES(?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, NULL, ?12, ?13, ?14, ?15)"
                 ),
                 params![
                     id,
@@ -162,7 +244,11 @@ impl Store {
                     now,
                     new.routine_id,
                     new.owner_bot_id,
-                    new.run_at
+                    new.run_at,
+                    new.attempt,
+                    new.branch,
+                    new.waiting,
+                    run_source(new.source)
                 ],
             )?;
             if added == 0 {
@@ -186,19 +272,58 @@ impl Store {
     pub fn flow_runs(&self) -> Result<Vec<FlowRun>> {
         self.with_connection(|c| {
             let mut st = c.prepare(
-                "SELECT run_id, routine_id, owner_bot_id, run_at FROM routine_flow_steps
+                "SELECT run_id, routine_id, owner_bot_id, run_at, MIN(source) FROM routine_flow_steps
                  GROUP BY run_id ORDER BY run_at DESC",
             )?;
             let rows = st.query_map([], |r| {
-                Ok(FlowRun { run_id: r.get(0)?, routine_id: r.get(1)?, owner_bot_id: r.get(2)?, run_at: r.get(3)? })
+                Ok(FlowRun {
+                    run_id: r.get(0)?,
+                    routine_id: r.get(1)?,
+                    owner_bot_id: r.get(2)?,
+                    run_at: r.get(3)?,
+                    source: r.get(4)?,
+                })
             })?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
         })
     }
 
+    /// One step by id, or `None` when it has been pruned from the history.
+    pub fn flow_step(&self, id: &str) -> Result<Option<FlowStep>> {
+        self.with_connection(|c| Ok(query(c, "id = ?1", [id])?.pop()))
+    }
+
     /// The steps of one run, oldest first.
     pub fn flow_run_steps(&self, run_id: &str) -> Result<Vec<FlowStep>> {
         self.with_connection(|c| query(c, "run_id = ?1", [run_id]))
+    }
+
+    /// One routine's runs and their steps, newest first, for a bounded history page.
+    pub fn flow_run_history(&self, routine_id: &str) -> Result<Vec<(FlowRun, Vec<FlowStep>)>> {
+        self.with_connection(|c| {
+            let mut st = c.prepare(
+                "SELECT run_id, routine_id, owner_bot_id, run_at, MIN(source) FROM routine_flow_steps
+                 WHERE routine_id = ?1 GROUP BY run_id ORDER BY run_at DESC",
+            )?;
+            let runs = st
+                .query_map([routine_id], |r| {
+                    Ok(FlowRun {
+                        run_id: r.get(0)?,
+                        routine_id: r.get(1)?,
+                        owner_bot_id: r.get(2)?,
+                        run_at: r.get(3)?,
+                        source: r.get(4)?,
+                    })
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            drop(st);
+            runs.into_iter()
+                .map(|run| {
+                    let steps = query(c, "run_id = ?1", [&run.run_id])?;
+                    Ok((run, steps))
+                })
+                .collect::<Result<Vec<_>>>()
+        })
     }
 
     /// The steps of a routine's newest run.
@@ -314,6 +439,10 @@ mod tests {
             status: StepStatus::Queued,
             output: None,
             error: None,
+            attempt: 1,
+            branch: None,
+            waiting: true,
+            source: "manual",
         };
         let (step, _) = store.flow_add_step(&new).unwrap().unwrap();
         assert_eq!(step.status, StepStatus::Queued);
@@ -336,6 +465,10 @@ mod tests {
             status: StepStatus::Queued,
             output: None,
             error: None,
+            attempt: 1,
+            branch: None,
+            waiting: true,
+            source: "manual",
         };
         let (step, _) = store.flow_add_step(&queued).unwrap().unwrap();
         assert!(
@@ -367,6 +500,10 @@ mod tests {
             status: StepStatus::Running,
             output: None,
             error: None,
+            attempt: 1,
+            branch: None,
+            waiting: false,
+            source: "manual",
         };
         let (step, _) = store.flow_add_step(&new).unwrap().unwrap();
         assert!(step.results.is_none(), "a step made before a batch has no per-result status");

@@ -1,7 +1,8 @@
 //! Field-level three-way merge of one bot's routine-flow document.
 //!
-//! The document is the canvas's editable drawing state: `nodes` (positions and placed bots),
-//! `links`, `settings` (the picture and clip steps) and `groups`, each a map from an id to its
+//! The document is the canvas's editable drawing state: `nodes` (positions, size, locking and
+//! placed bots), `links`, `settings` (the picture and clip steps), `strokes` (freehand drawing) and
+//! `groups`, each a map from an id to its
 //! version. Two people can edit the same canvas: one saves, the other saves on top with the
 //! revision they started from. The host keeps a bounded history of stamped documents, so it can
 //! find the common base and fold the two edits together here, with no database or Hub.
@@ -28,6 +29,8 @@ pub const MAX_NODES: usize = 1000;
 pub const MAX_LINKS: usize = 1000;
 pub const MAX_SETTINGS: usize = 500;
 pub const MAX_GROUPS: usize = 100;
+/// OpenBot `INPUT_LIMITS.workflowStrokes`: a canvas holds at most this many freehand strokes.
+pub const MAX_STROKES: usize = 500;
 
 /// One field of a flow document: an id (node key, link id, media id, group id) to its version.
 pub type Entries = BTreeMap<String, Value>;
@@ -46,6 +49,8 @@ pub struct FlowDocument {
     pub links: Entries,
     #[serde(default)]
     pub settings: Entries,
+    #[serde(default)]
+    pub strokes: Entries,
     #[serde(default)]
     pub groups: Entries,
 }
@@ -96,6 +101,7 @@ pub fn bound(document: &FlowDocument) -> FlowDocument {
         nodes: bounded(&document.nodes, MAX_NODES),
         links: bounded(&document.links, MAX_LINKS),
         settings: bounded(&document.settings, MAX_SETTINGS),
+        strokes: bounded(&document.strokes, MAX_STROKES),
         groups: bounded(&document.groups, MAX_GROUPS),
     }
 }
@@ -158,12 +164,21 @@ pub fn merge(base: Option<&FlowDocument>, local: &FlowDocument, incoming: &FlowD
     let (links, l) = merge_entries("links", MAX_LINKS, &base.links, &local.links, &incoming.links, &mut conflicts);
     let (settings, s) =
         merge_entries("settings", MAX_SETTINGS, &base.settings, &local.settings, &incoming.settings, &mut conflicts);
+    let (strokes, st) =
+        merge_entries("strokes", MAX_STROKES, &base.strokes, &local.strokes, &incoming.strokes, &mut conflicts);
     let (groups, g) =
         merge_entries("groups", MAX_GROUPS, &base.groups, &local.groups, &incoming.groups, &mut conflicts);
     MergeResult {
-        document: FlowDocument { rev: base.rev.max(local.rev).max(incoming.rev), nodes, links, settings, groups },
+        document: FlowDocument {
+            rev: base.rev.max(local.rev).max(incoming.rev),
+            nodes,
+            links,
+            settings,
+            strokes,
+            groups,
+        },
         conflicts,
-        merged: n || l || s || g,
+        merged: n || l || s || st || g,
     }
 }
 
@@ -172,6 +187,7 @@ fn entries_mut<'a>(document: &'a mut FlowDocument, field: &str) -> Option<&'a mu
         "nodes" => Some(&mut document.nodes),
         "links" => Some(&mut document.links),
         "settings" => Some(&mut document.settings),
+        "strokes" => Some(&mut document.strokes),
         "groups" => Some(&mut document.groups),
         _ => None,
     }
@@ -303,6 +319,29 @@ mod tests {
         let mut resolved = result.document.clone();
         resolve(&mut resolved, &result.conflicts[0], Version::Incoming);
         assert_eq!(resolved.nodes["bot:a"]["x"], 7.0);
+    }
+
+    #[test]
+    fn a_stroke_drawn_by_one_editor_survives_a_merge_and_is_capped() {
+        let base = sample();
+        let local = FlowDocument {
+            strokes: document(json!({"s1": {"id": "s1", "points": [{"x": 1, "y": 2}]}})).strokes,
+            ..base.clone()
+        };
+        let incoming = FlowDocument {
+            strokes: document(json!({"s2": {"id": "s2", "points": [{"x": 3, "y": 4}]}})).strokes,
+            ..base.clone()
+        };
+        let result = merge(Some(&base), &local, &incoming);
+        assert!(result.conflicts.is_empty());
+        assert_eq!(result.document.strokes.len(), 2, "both people's drawings survive");
+
+        let mut many = Entries::new();
+        for index in 0..(MAX_STROKES + 5) {
+            many.insert(format!("s{index:04}"), json!({"id": format!("s{index:04}")}));
+        }
+        let capped = merge(None, &FlowDocument { strokes: many, ..base }, &FlowDocument::default());
+        assert_eq!(capped.document.strokes.len(), MAX_STROKES);
     }
 
     #[test]

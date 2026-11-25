@@ -4,14 +4,17 @@ use super::answer_paths;
 use super::answers;
 use super::merge::{FlowDocument, Version};
 use super::{
-    FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, folders, format, graph, groups, merge, workflow_api,
+    FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, folders, format, graph, groups, merge, nodes,
+    workflow_api,
 };
 use crate::LockExt;
 use crate::chat::team::flow::recipient;
 use crate::hub::Hub;
 use crate::routines::{Routine, default_timeout};
+use crate::store::flows::FlowNode;
+use crate::store::flows::{PortType, parse_port};
 use crate::store::{FlowChange, FlowLink, FlowMedia, now_ms};
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -43,6 +46,19 @@ pub const METHODS: &[&str] = &[
     "runRoutineFlowFromStep",
     "renameRoutineFlowStep",
     "setRoutineFlowAnswers",
+    // OpenBot 0.70.0 node kinds: standalone model steps, routed conditions, approvals, outputs,
+    // assets and trigger nodes, plus the decision that resumes a paused approval step.
+    "createRoutineFlowNode",
+    "updateRoutineFlowNode",
+    "removeRoutineFlowNode",
+    "decideWorkflowStep",
+    // Workflow trigger surfaces (OpenBot 0.70.0): webhook rotation/receipts, trigger histories
+    // and "run with last event" for a GitHub or chat trigger node.
+    "workflowWebhookCredentials",
+    "workflowWebhookReceipts",
+    "workflowGitHubHistory",
+    "workflowChatHistory",
+    "runWorkflowWithLastEvent",
 ];
 
 /// An answer or check spec from a request: text, bounded well below the canvas document limit.
@@ -123,6 +139,16 @@ fn name_arg(b: &Value) -> Result<String> {
     Ok(name)
 }
 
+/// The `yes`/`no` branch of a condition edge, absent on a plain hand-off.
+fn branch_arg(b: &Value, current: Option<&str>) -> Result<Option<String>> {
+    match b.get("branch") {
+        None | Some(Value::Null) => Ok(current.map(str::to_owned)),
+        Some(Value::String(branch)) if branch == "yes" || branch == "no" => Ok(Some(branch.clone())),
+        Some(Value::String(branch)) if branch.is_empty() => Ok(None),
+        _ => bail!("`branch` must be yes, no or null"),
+    }
+}
+
 fn instruction_arg(b: &Value, required: bool) -> Result<String> {
     let text = match b.get("instruction") {
         Some(Value::String(text)) => text.trim(),
@@ -158,10 +184,11 @@ fn node_exists(hub: &Hub, key: &str) -> Result<()> {
         Some(("routine", id)) => routine(hub, id).is_ok(),
         Some(("bot", id)) => hub.store.bot(id)?.is_some_and(|b| !b.deleted),
         Some(("media", id)) => hub.store.flow_media_node(id)?.is_some(),
-        _ => false,
+        Some((_, _)) => hub.store.flow_node_by_key(key)?.is_some(),
+        None => false,
     };
     if !known {
-        bail!("nodeKey must name an existing routine, bot or media step");
+        bail!("nodeKey must name an existing routine, bot, media step or workflow node");
     }
     Ok(())
 }
@@ -207,7 +234,11 @@ fn end_node(hub: &Hub, routine: &Routine, id: &str) -> Result<()> {
             hub.store.flow_media_in(media, &routine.id)?.context("that media step is not part of this routine")?;
             Ok(())
         }
-        None => recipient(hub, id).map(drop),
+        None => match hub.store.flow_node_by_key(id)? {
+            Some(node) if node.routine_id == routine.id => Ok(()),
+            Some(_) => bail!("that workflow node is not part of this routine"),
+            None => recipient(hub, id).map(drop),
+        },
     }
 }
 
@@ -220,6 +251,8 @@ pub(super) fn connect(
     instruction: String,
     answer: Option<&str>,
     check: Option<&str>,
+    branch: Option<&str>,
+    port: PortType,
 ) -> Result<FlowLink> {
     end_node(hub, routine, to)?;
     if from != routine.bot_id {
@@ -250,12 +283,21 @@ pub(super) fn connect(
         instruction,
         model: None,
         model_options: BTreeMap::new(),
+        branch: branch.map(str::to_owned),
+        port,
         created_at: now_ms(),
     };
     let max = super::max_depth();
     candidate.push(link.clone());
-    let graph =
-        engine::answer_graph(&routine.id, &routine.bot_id, &routine.instruction, &specs, &run_fields, &candidate);
+    let graph = engine::answer_graph(
+        &hub.store,
+        &routine.id,
+        &routine.bot_id,
+        &routine.instruction,
+        &specs,
+        &run_fields,
+        &candidate,
+    );
     if let Some(problem) = answer_paths::graph_problems(&graph)
         .into_iter()
         .find(|problem| matches!(problem, answer_paths::GraphProblem::Repeated { .. }) && problem.node_key() == to)
@@ -267,7 +309,7 @@ pub(super) fn connect(
     }
     hub.emit_flow_change(|| {
         let change = hub.store.flow_add_link(&link, |links| {
-            match graph::connect_problem(&routine.bot_id, links, from, to, max) {
+            match graph::connect_problem_typed(&routine.bot_id, links, from, to, max, port, branch) {
                 Some(problem) => Err(problem.into()),
                 None => Ok(()),
             }
@@ -474,6 +516,7 @@ fn test(hub: &Arc<Hub>, routine: &Routine, reply: String, input: Option<&Value>)
         answer_specs: specs,
         run_fields,
         trigger_fields: super::trigger_fields::fixed_answers(now, &routine.triggers, &engine_start_event()),
+        attempt: 1,
     };
     hub.routines.stage_flow(&hub.store, start.clone())?;
     tokio::spawn(engine::execute(hub.clone(), start));
@@ -512,7 +555,15 @@ fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String
     let specs = answers::load_specs(&hub.store, &routine.bot_id);
     let run_fields =
         answers::fields_of(specs.get(&format!("routine:{}", routine.id)).unwrap_or(&answers::NodeSpec::default()));
-    let graph = engine::answer_graph(&routine.id, &routine.bot_id, &routine.instruction, &specs, &run_fields, &links);
+    let graph = engine::answer_graph(
+        &hub.store,
+        &routine.id,
+        &routine.bot_id,
+        &routine.instruction,
+        &specs,
+        &run_fields,
+        &links,
+    );
     let statuses: BTreeMap<String, crate::store::StepStatus> =
         saved_steps.iter().map(|saved| (saved.bot_id.clone(), saved.status)).collect();
     let sources = answer_paths::source_ids(&graph, &answer_paths::forward_edges(&graph), step);
@@ -553,10 +604,123 @@ fn run_from_step(hub: &Arc<Hub>, routine: &Routine, step: &str) -> Result<String
         answer_specs: specs,
         run_fields,
         trigger_fields: super::trigger_fields::fixed_answers(now, &routine.triggers, &engine_start_event()),
+        attempt: 1,
     };
     hub.routines.stage_flow(&hub.store, start.clone())?;
     tokio::spawn(engine::execute(hub.clone(), start));
     Ok(run_id)
+}
+
+/// The kinds of workflow node a client may create besides bots and media steps. The drawing-only
+/// kinds live in the document's `nodes` map; these are the ones the engine can route to.
+fn step_node_kind(b: &Value) -> Result<&'static str> {
+    match str_arg(b, "kind")? {
+        "llm" => Ok("llm"),
+        "condition" => Ok("condition"),
+        "approval" => Ok("approval"),
+        "output" => Ok("output"),
+        "asset" => Ok("asset"),
+        "trigger" => Ok("trigger"),
+        other => bail!("`kind` must be a workflow step node, not {other}"),
+    }
+}
+
+fn node_fields_arg(b: &Value) -> Result<BTreeMap<String, Value>> {
+    match b.get("fields") {
+        None | Some(Value::Null) => Ok(BTreeMap::new()),
+        Some(Value::Object(fields)) => {
+            ensure!(fields.len() <= nodes::MAX_FIELDS, "`fields` has too many entries");
+            for (name, value) in fields {
+                ensure!(!name.is_empty() && name.chars().count() <= 64, "a field name is at most 64 characters");
+                ensure!(
+                    matches!(value, Value::String(_) | Value::Number(_) | Value::Bool(_) | Value::Null),
+                    "field `{name}` must be text, a number or true or false"
+                );
+                if let Value::String(text) = value {
+                    ensure!(text.chars().count() <= nodes::MAX_FIELD_CHARS, "field `{name}` is too long");
+                }
+            }
+            Ok(fields.clone())
+        }
+        _ => bail!("`fields` must be an object"),
+    }
+}
+
+/// Validates the node's own fields with the pure decision of its kind before anything is stored.
+fn check_node_fields(kind: &str, node: &Value) -> Result<()> {
+    match kind {
+        "llm" => nodes::llm_step_spec(node).map(drop),
+        "output" => nodes::output_action(node).map(drop),
+        _ => Ok(()),
+    }
+}
+
+fn create_node(hub: &Hub, b: &Value) -> Result<Value> {
+    let routine_id = id_arg(b, "routineId")?;
+    let r = routine(hub, routine_id)?;
+    let kind = step_node_kind(b)?;
+    let id = match b.get("nodeId").filter(|value| !value.is_null()) {
+        Some(Value::String(text)) => id_arg(b, "nodeId")?.to_owned(),
+        None => uuid::Uuid::new_v4().to_string(),
+        _ => bail!("`nodeId` must be text"),
+    };
+    let fields = node_fields_arg(b)?;
+    let node = FlowNode {
+        id,
+        routine_id: routine_id.to_owned(),
+        owner_bot_id: r.bot_id.clone(),
+        kind: kind.to_owned(),
+        fields,
+        created_at: now_ms(),
+    };
+    check_node_fields(kind, &serde_json::to_value(&node)?)?;
+    hub.emit_flow_change(|| Ok(((), Some(hub.store.flow_add_node(&node)?))))?;
+    Ok(json!({"node": node}))
+}
+
+fn update_node(hub: &Hub, b: &Value) -> Result<Value> {
+    let (routine_id, id) = (id_arg(b, "routineId")?, id_arg(b, "nodeId")?);
+    routine(hub, routine_id)?;
+    let mut node = hub.store.flow_node(routine_id, id)?.context("workflow node not found")?;
+    if let Some(kind) = b.get("kind").filter(|value| !value.is_null()) {
+        ensure!(kind.as_str() == Some(node.kind.as_str()), "a workflow node's kind cannot change");
+    }
+    if b.get("fields").is_some() {
+        node.fields = node_fields_arg(b)?;
+    }
+    check_node_fields(&node.kind, &serde_json::to_value(&node)?)?;
+    let changed = hub.emit_flow_change(|| {
+        let change = hub.store.flow_update_node(&node)?;
+        Ok((change.is_some(), change))
+    })?;
+    Ok(json!({"node": node, "changed": changed}))
+}
+
+fn remove_node(hub: &Hub, b: &Value) -> Result<Value> {
+    let (routine_id, id) = (id_arg(b, "routineId")?, id_arg(b, "nodeId")?);
+    routine(hub, routine_id)?;
+    hub.emit_flow_change(|| Ok(((), hub.store.flow_remove_node(routine_id, id)?)))?;
+    Ok(json!({"ok": true}))
+}
+
+/// `decideWorkflowStep`: the host half of an approval step. The card and the step are settled with
+/// the same pure decision, and a waiting engine is woken to continue the run.
+fn decide_step(hub: &Arc<Hub>, b: &Value) -> Result<Value> {
+    let step_id = id_arg(b, "stepId")?;
+    let approved = b["approved"].as_bool().context("`approved` must be true or false")?;
+    let outcome = nodes::approval_outcome(approved);
+    let settings = hub.store.flow_step_settings(step_id)?.context("workflow step not found")?;
+    let entry_id = settings["entryId"].as_str().unwrap_or_default().to_owned();
+    if !entry_id.is_empty()
+        && let Some(mut card) = hub.store.entry(&entry_id)
+        && card.data["status"].as_str() == Some("pending")
+    {
+        card.data["status"] = "answered".into();
+        card.data["selected"] = nodes::approval_option(outcome).into();
+        hub.set_entry(&entry_id, &card.data);
+    }
+    let resumed = engine::decide_approval(step_id, outcome);
+    Ok(json!({"stepId": step_id, "status": outcome.as_str(), "resumed": resumed}))
 }
 
 /// Answers a routine-flow method, or hands the body back (`None`) when it isn't one.
@@ -577,6 +741,7 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
                     specs.get(&format!("routine:{}", routine.id)).unwrap_or(&answers::NodeSpec::default()),
                 );
                 let graph = engine::answer_graph(
+                    &hub.store,
                     &routine.id,
                     &routine.bot_id,
                     &routine.instruction,
@@ -626,7 +791,9 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             let (routine_id, from, to) = (id_arg(b, "routineId")?, id_arg(b, "fromBotId")?, id_arg(b, "toBotId")?);
             let r = routine(hub, routine_id)?;
             let (answer, check) = (spec_arg(b, "answer")?, spec_arg(b, "check")?);
-            json!({"link": connect(hub, &r, from, to, instruction_arg(b, false)?, answer.as_deref(), check.as_deref())?})
+            let branch = branch_arg(b, None)?;
+            let port = parse_port(b.get("port").and_then(Value::as_str))?;
+            json!({"link": connect(hub, &r, from, to, instruction_arg(b, false)?, answer.as_deref(), check.as_deref(), branch.as_deref(), port)?})
         }
         "disconnectRoutineFlow" => {
             disconnect(hub, id_arg(b, "linkId")?)?;
@@ -638,8 +805,9 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             // Left out, each keeps what the link already had; given empty, it clears.
             let model = if b.get("model").is_some() { model_arg(b)? } else { current.model };
             let options = if b.get("modelOptions").is_some() { model_options_arg(b)? } else { current.model_options };
+            let branch = branch_arg(b, current.branch.as_deref())?;
             let updated = hub.emit_flow_change(|| {
-                match hub.store.flow_update_link(id, &instruction, model.as_deref(), &options)? {
+                match hub.store.flow_update_link(id, &instruction, model.as_deref(), &options, branch.as_deref())? {
                     Some((link, change)) => Ok((Some(link), Some(change))),
                     None => Ok((None, None)),
                 }
@@ -836,6 +1004,46 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             }
             answers::save_spec(&hub.store, bot, &key, answer.as_deref(), check.as_deref())?;
             json!({"ok": true})
+        }
+        "createRoutineFlowNode" => create_node(hub, b)?,
+        "updateRoutineFlowNode" => update_node(hub, b)?,
+        "removeRoutineFlowNode" => remove_node(hub, b)?,
+        "decideWorkflowStep" => decide_step(hub, b)?,
+        "workflowWebhookCredentials" => {
+            let (bot, id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
+            let r = routine(hub, id)?;
+            if r.bot_id != bot {
+                bail!("routine not found among this bot's routines");
+            }
+            hub.routines.workflow_webhook_credentials(hub, bot, id, b["rotate"].as_bool().unwrap_or(false))?
+        }
+        "workflowWebhookReceipts" => {
+            let (bot, id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
+            if !hub.routines.owns(bot, id) {
+                bail!("routine not found among this bot's routines");
+            }
+            hub.routines.webhook_receipts(bot, id)
+        }
+        "workflowGitHubHistory" => {
+            let (bot, id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
+            if !hub.routines.owns(bot, id) {
+                bail!("routine not found among this bot's routines");
+            }
+            hub.routines.github_history(bot, id)
+        }
+        "workflowChatHistory" => {
+            let (bot, id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
+            if !hub.routines.owns(bot, id) {
+                bail!("routine not found among this bot's routines");
+            }
+            hub.routines.chat_history(bot, id)
+        }
+        "runWorkflowWithLastEvent" => {
+            let (bot, id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
+            if !hub.routines.owns(bot, id) {
+                bail!("routine not found among this bot's routines");
+            }
+            hub.routines.run_last_event(hub, bot, id)?
         }
         _ => {
             let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);

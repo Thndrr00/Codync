@@ -7,11 +7,13 @@
 //! pure — no store, no clock — so it can be tested on its own and run before any write begins.
 
 use super::MAX_INSTRUCTION_BYTES;
-use super::merge::{FlowDocument, MAX_LINKS, MAX_NODES, MAX_SETTINGS};
+use super::format;
+use super::merge::{FlowDocument, MAX_LINKS, MAX_NODES, MAX_SETTINGS, MAX_STROKES};
+use super::nodes;
 use crate::store::FlowMedia;
 use crate::store::flow_media;
-use crate::store::flows::{FlowLink, FlowPosition, check_coordinate, check_node_key};
-use anyhow::{Context, Result, bail};
+use crate::store::flows::{FlowLink, FlowNode, FlowPosition, check_coordinate, check_node_key, parse_port};
+use anyhow::{Context, Result, bail, ensure};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -29,6 +31,8 @@ pub struct RunnableFlow {
     pub positions: Vec<FlowPosition>,
     pub placed: Vec<String>,
     pub media: Vec<FlowMedia>,
+    /// The non-bot workflow nodes the document carried: routed steps and canvas-only nodes.
+    pub nodes: Vec<FlowNode>,
 }
 
 /// A required string field of an entry.
@@ -69,7 +73,14 @@ fn node(position: &Value, key: &str, state: &mut RunnableFlow) -> Result<()> {
     let entry = position.as_object().with_context(|| format!("{where_} must be an object"))?;
     let x = coordinate(entry, "x", &where_)?;
     let y = coordinate(entry, "y", &where_)?;
+    if format::node_size(entry).is_none() {
+        bail!("{where_} has an invalid `size`");
+    }
     state.positions.push(FlowPosition { node_key: key.to_owned(), x, y });
+    if format::node_locked(entry) {
+        // A locked node is a newer kind's placeholder: it is drawn, never handed work.
+        return Ok(());
+    }
     if let Some(placed) = entry.get("placed") {
         let placed = placed.as_bool().with_context(|| format!("{where_}'s `placed` must be true or false"))?;
         if placed {
@@ -120,6 +131,13 @@ fn link(id: &str, value: &Value, bot: &str) -> Result<FlowLink> {
             model_options.insert(name.clone(), value.to_owned());
         }
     }
+    // Condition edges carry a yes/no branch (OpenBot 0.70.0); a plain hand-off carries none.
+    let branch = match entry.get("branch") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(branch)) if branch == "yes" || branch == "no" => Some(branch.clone()),
+        _ => bail!("{where_}'s `branch` must be yes, no or null"),
+    };
+    let port = parse_port(entry.get("port").and_then(Value::as_str))?;
     let created_at = entry
         .get("createdAt")
         .and_then(Value::as_i64)
@@ -137,6 +155,8 @@ fn link(id: &str, value: &Value, bot: &str) -> Result<FlowLink> {
         instruction,
         model,
         model_options,
+        branch,
+        port,
         created_at,
     })
 }
@@ -218,6 +238,54 @@ fn media(id: &str, value: &Value, bot: &str) -> Result<FlowMedia> {
     })
 }
 
+/// A settings entry whose kind is not a media kind is one of the routed node kinds of the
+/// OpenBot 0.70.0 registry. It is validated here and kept as a node; it has no row of its own until
+/// an API creates it, so a document save can carry it without executing it.
+fn workflow_node(id: &str, value: &Value, bot: &str) -> Result<FlowNode> {
+    let where_ = format!("node settings {id}");
+    let entry = value.as_object().with_context(|| format!("{where_} must be an object"))?;
+    let node_id = text(entry, "id", &where_)?;
+    if node_id != id {
+        bail!("{where_} do not match their id");
+    }
+    short(id, &where_)?;
+    let routine_id = text(entry, "routineId", &where_)?;
+    short(routine_id, &format!("{where_} routineId"))?;
+    let kind = text(entry, "kind", &where_)?;
+    ensure!(
+        matches!(kind, "llm" | "condition" | "approval" | "output" | "asset" | "trigger"),
+        "{where_} has an unknown kind `{kind}`"
+    );
+    let fields: BTreeMap<String, Value> = match entry.get("fields") {
+        None | Some(Value::Null) => BTreeMap::new(),
+        Some(Value::Object(fields)) => fields.clone(),
+        _ => bail!("{where_}'s `fields` must be an object"),
+    };
+    // Validate the fields the engine or the API will read, so a bad document never reaches them.
+    match kind {
+        "llm" => {
+            nodes::llm_step_spec(value)?;
+        }
+        "output" => {
+            nodes::output_action(value)?;
+        }
+        _ => {}
+    }
+    let created_at = entry
+        .get("createdAt")
+        .and_then(Value::as_i64)
+        .with_context(|| format!("{where_} needs `createdAt` as a number"))?;
+    let owner_bot_id = entry.get("ownerBotId").and_then(Value::as_str).unwrap_or(bot).to_owned();
+    Ok(FlowNode {
+        id: id.to_owned(),
+        routine_id: routine_id.to_owned(),
+        owner_bot_id,
+        kind: kind.to_owned(),
+        fields,
+        created_at,
+    })
+}
+
 /// Converts a merged document into the validated shapes the flow tables take. `bot` owns the canvas
 /// and is the owner of last resort for a link or media entry the wire form does not name one for.
 pub fn runnable(bot: &str, document: &FlowDocument) -> Result<RunnableFlow> {
@@ -230,6 +298,11 @@ pub fn runnable(bot: &str, document: &FlowDocument) -> Result<RunnableFlow> {
     if document.settings.len() > MAX_SETTINGS {
         bail!("a document holds at most {MAX_SETTINGS} step settings");
     }
+    if document.strokes.len() > MAX_STROKES {
+        bail!("a document holds at most {MAX_STROKES} strokes");
+    }
+    // Strokes are persisted and merged but never executed: a bad one is still refused on save.
+    format::check_strokes(&document.strokes)?;
     let mut state = RunnableFlow::default();
     for (key, value) in &document.nodes {
         node(value, key, &mut state)?;
@@ -238,7 +311,12 @@ pub fn runnable(bot: &str, document: &FlowDocument) -> Result<RunnableFlow> {
         state.links.push(link(id, value, bot)?);
     }
     for (id, value) in &document.settings {
-        state.media.push(media(id, value, bot)?);
+        let kind = value.get("kind").and_then(Value::as_str).unwrap_or_default();
+        if kind == "image" || kind == "video" {
+            state.media.push(media(id, value, bot)?);
+        } else {
+            state.nodes.push(workflow_node(id, value, bot)?);
+        }
     }
     Ok(state)
 }
@@ -387,6 +465,36 @@ mod tests {
         assert_eq!(runnable("owner", &document).unwrap().media[0].batch, 4);
         document.settings.get_mut("pic").unwrap().as_object_mut().unwrap().insert("batch".into(), json!("four"));
         assert!(runnable("owner", &document).is_err(), "a batch that is not a number is refused");
+    }
+
+    #[test]
+    fn strokes_are_kept_out_of_the_runnable_tables_but_still_checked() {
+        let mut document = sample();
+        document.strokes.insert(
+            "s1".into(),
+            json!({"id": "s1", "brush": "pen", "color": "red", "width": 2.0, "points": [{"x": 1, "y": 2}]}),
+        );
+        let state = runnable("owner", &document).expect("a drawing on the canvas");
+        assert_eq!(state.links.len(), 2, "a stroke never becomes a link");
+        assert_eq!(state.positions.len(), 2);
+
+        document.strokes.insert("bad".into(), json!({"id": "bad", "width": -1.0, "points": []}));
+        assert!(runnable("owner", &document).is_err(), "a malformed stroke is refused");
+    }
+
+    #[test]
+    fn a_sized_locked_node_is_drawn_but_never_placed() {
+        let mut document = sample();
+        document.nodes.insert(
+            "bot:grace".into(),
+            json!({"x": 3.0, "y": 4.0, "placed": true, "locked": true, "size": {"font": 12.0}}),
+        );
+        let state = runnable("owner", &document).expect("a locked node");
+        assert_eq!(state.positions.len(), 3, "its place on the canvas survives");
+        assert!(state.placed.is_empty(), "a locked node cannot be placed");
+
+        document.nodes.insert("bot:bad".into(), json!({"x": 1.0, "y": 2.0, "size": {"width": 0.0}}));
+        assert!(runnable("owner", &document).is_err(), "an invalid size is refused");
     }
 
     #[test]

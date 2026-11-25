@@ -59,6 +59,8 @@ impl Fixture {
             instruction: instruction.into(),
             model: None,
             model_options: BTreeMap::default(),
+            branch: None,
+            port: crate::store::flows::PortType::Text,
             created_at: 1,
         };
         self.hub.store.flow_add_link(&link, |_| Ok(())).unwrap();
@@ -86,6 +88,7 @@ impl Fixture {
             answer_specs: BTreeMap::new(),
             run_fields: Vec::new(),
             trigger_fields: answers::Answer::new(),
+            attempt: 1,
         }
     }
 
@@ -226,6 +229,10 @@ async fn hermes_recovery_delivers_a_saved_step_even_when_its_bot_is_now_hidden()
             status: StepStatus::Succeeded,
             output: Some("Saved report"),
             error: None,
+            attempt: 1,
+            branch: None,
+            waiting: false,
+            source: "manual",
         },
     )
     .unwrap();
@@ -369,6 +376,10 @@ async fn a_restart_fails_the_steps_it_interrupted_and_skips_the_rest() {
         status,
         output: None,
         error: None,
+        attempt: 1,
+        branch: None,
+        waiting: false,
+        source: "manual",
     };
     f.hub.store.flow_add_step(&step("a", StepStatus::Succeeded)).unwrap();
     f.hub.store.flow_add_step(&step("b", StepStatus::Running)).unwrap();
@@ -485,6 +496,8 @@ fn a_links_model_and_effort_ride_its_step_alone() {
         instruction: String::new(),
         model: None,
         model_options: BTreeMap::default(),
+        branch: None,
+        port: crate::store::flows::PortType::Text,
         created_at: 0,
     };
     assert!(engine::override_of(&link).is_none());
@@ -646,6 +659,10 @@ async fn deleting_a_routine_or_a_bot_takes_its_flow_with_it() {
             status: StepStatus::Succeeded,
             output: None,
             error: None,
+            attempt: 1,
+            branch: None,
+            waiting: false,
+            source: "manual",
         })
         .unwrap();
     f.hub.routines.remove(&f.hub, "a", &r).unwrap();
@@ -831,6 +848,10 @@ async fn the_answer_tool_checks_an_answer_before_the_step_takes_it() {
         status: StepStatus::Running,
         output: None,
         error: None,
+        attempt: 1,
+        branch: None,
+        waiting: false,
+        source: "manual",
     };
     f.hub.store.flow_add_step(&step).unwrap();
     // Recorded in the flow run store so the tool can find the waiting step.

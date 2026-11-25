@@ -101,8 +101,12 @@ version does not know. An imported workflow always starts paused; importing over
 routine (`replaceRoutineId`) keeps settings that were saved locally but left out of the file.
 
 Trigger fields and output templates complete the step path: a schedule publishes `weekday` and
-`local_date`, GitHub publishes `title`, `author` and `labels`, and Discord/Telegram/Slack publish
-`channel`, `text` and `author` (`trigger_fields.rs`). They are checked answer values, so a condition
+`local_date`, GitHub publishes all 24 typed fields of OpenBot's `ipc-workflow-trigger-fields.ts`
+(`repository`, `actor`, `action`, `number`, `pull_request`, `url`, `title`, `body`, `author`,
+`state`, `labels`, `label`, `assignee`, `reviewer`, `comment_*`, `review_*`, `check_conclusion`,
+`check_app`, `head_branch`), and Discord/Telegram/Slack publish `text`, `author`, `author_id`,
+`message_id`, `channel`/`chat`, their ids, `server`/`workspace` and `thread_id` (`trigger_fields.rs`).
+They are checked answer values, so a condition
 such as `author = ana` works in a check step with no model before it, and the fields fill `{{name}}`
 in a step's instruction. An output step can send its own message in place of its input; `{{name}}`
 in the message, `title`, `labels` and `person` takes a field from an earlier step or the trigger,
@@ -113,6 +117,48 @@ the user before a retry — the host sends a phone alert through the same push p
 result: the pure `workflow_push(text, kind)` decision trims and bounds the card text into the sealed
 alert body (`host/src/routines/flow/output_template.rs`, `host/src/routines/runner.rs`, OpenBot
 0.78.0). Analytics only ever sees the alert kind, never the card text.
+
+## Event triggers (OpenBot 0.70.0)
+
+The host owns the trigger decisions; pure functions in `host/src/routines/events.rs` are shared by
+the editor, the receive paths and their tests.
+
+- **GitHub.** A trigger saves one of OpenBot's 12 events (`issue.opened`, `issue.closed`,
+  `issue.labeled`, `pr.opened`, `pr.updated`, `pr.reviewRequested`, `pr.reviewSubmitted`,
+  `pr.checksFailed`, `pr.merged`, `comment`, `mention`, `assigned`) or `*`, with the four filters
+  `notBot`, `firstTime`, `title` and `branch` beside Codync's older `repo`/`sender`/`conclusion`.
+  The signed GitHub webhook already handled by `routines::hooks` is the ingress: `hooks::event`
+  normalizes it, and `github_aliases` maps both the raw GitHub spelling and the canonical one onto
+  the same delivery, so workflows saved by older clients keep firing. `github_trigger` decides
+  whether an event and its filters match; `delivery_reason` adds the skip reasons `filter`, `self`,
+  `chain`, `offline` and `refused` in that order. A chain is three runs on the same item in ten
+  minutes. Every delivery is recorded in a bounded history of 50 rows on the routine card
+  (`githubDeliveries`): the item, time, outcome (`started`/`waiting`/`skipped`), reason and run id,
+  never the event body. `runWorkflowWithLastEvent` replays the last normalized event into a new run.
+- **Discord, Telegram and Slack.** The generic `Trigger::Event` receive path matches a mention by
+  connection (guild/workspace/chat), channel (empty means any), Discord author roles (empty means
+  any) and a text filter. `chat_trigger_match` is the pure decision; Telegram and Discord group
+  mentions, Slack `app_mention` and private Telegram mentions all call `receive_chat_event`. Slack
+  has no author filter because the host has no people catalog. A channel-limited Discord trigger
+  does not start for a mention in a thread of that channel: the ingress names the thread, not the
+  parent. The matched mention starts one run per trigger with a stable delivery id; if every node
+  that matched skipped (busy, paused or refused) the host adds the platform's failed reaction
+  (❌ Discord, 👎 Telegram, `:x:` Slack). `chatDeliveries` shows the bounded history; message text is
+  never stored there or sent to analytics.
+- **Workflow webhook.** A workflow with a webhook trigger has its own URL and secret. Rotation is
+  `workflowWebhookCredentials` with `rotate: true`: the new secret is returned once, the old one
+  stops working at once, and the canvas never projects it (`webhook.hasSecret` is enough). Rotation
+  reuses `Routines::credentials`, and `workflow_webhook` reuses the host's bearer/HMAC and Standard
+  Webhooks verification (`hooks::authorized`, `sender_secret_ok`, `hooks::event`) rather than a
+  second signature implementation. Signed deliveries are deduplicated by id with seven-day
+  receipts (`workflowWebhookReceipts`), stored without the body. A body over 64 KiB is refused
+  before a receipt is written. A workflow webhook has no test event; use `testRoutineFlow` instead.
+
+Codync has no cloud relay route for GitHub, so a local delivery is always treated as online: the
+`offline` reason is part of the pure decision and history contract but is not emitted by this host.
+Workflows that a mention starts still hand that mention to the bound bot's own conversation; OpenBot
+suppresses that conversation, which needs changes outside this slice (chat routing and history), so
+it is deliberately left alone here.
 
 ## Running a flow
 
@@ -243,6 +289,11 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `importRoutineWorkflow` | `botId`, `file` (base64 or JSON), `names` (name → id), optional `name`, `replaceRoutineId` | `{"routineId": "…", "paused": true, "names": …, "assets": [name…]}` |
 | `setRoutineFlowOutput` | `botId`, `routineId`, optional `message`, `title`, `labels`, `person` (each ≤ 2000 chars) | `{"output": OutputTemplate}` |
 | `workflowOutputNotification` | `botId`, `routineId`, optional `input`, `fields` (name → text) | `{"message": "…", "title": "…", "labels": [], "person": null}` |
+| `workflowWebhookCredentials` | `botId`, `routineId`, `rotate` (optional bool) | `{url, localUrl, connected, needsAccount, hasSecret, usesSenderSecret, key}`; `key` is null unless `rotate` is true |
+| `workflowWebhookReceipts` | `botId`, `routineId` | `{"receipts": [{deliveryId, receivedAt, reason}]}` (seven days, no bodies) |
+| `workflowGitHubHistory` | `botId`, `routineId` | `{"deliveries": [{id, event, item, receivedAt, outcome, reason, runId}]}` (newest 50) |
+| `workflowChatHistory` | `botId`, `routineId` | `{"deliveries": [{source, connection, channel, messageId, receivedAt, outcome, reason, runId}]}` (no message text) |
+| `runWorkflowWithLastEvent` | `botId`, `routineId` | `{"run": Run}` replaying the newest GitHub or chat event |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`
 (a sample sentence by default), so a link can be tried without spending a run. Its steps carry the returned
@@ -262,7 +313,11 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
     "steps": [ { /* … */, "files": [ { "id": "…", "name": "…", "size": 0, "sha256": "…" } ] } ],
     "stepSettings": { /* step id → the settings and inputs it ran with; absent for older runs */ },
     "paused": false,
-    "output": { "message": null, "title": null, "labels": null, "person": null }
+    "output": { "message": null, "title": null, "labels": null, "person": null },
+    "triggerFields": [ { "name": "title", "step": "", "icon": "bolt", "type": "text", "values": [] } ],
+    "githubDeliveries": [ { "id": "…", "event": "issue.opened", "item": { "repository": "o/r", "number": 7, "pullRequest": false, "title": "Hi" }, "receivedAt": 0, "outcome": "started", "reason": null, "runId": "…" } ],
+    "chatDeliveries": [ { "source": "slack", "connection": "T1", "channel": "C1", "messageId": "1712.0004", "receivedAt": 0, "outcome": "skipped", "reason": "busy", "runId": null } ],
+    "webhook": { "url": null, "localUrl": "http://127.0.0.1:…/hooks/routines/…", "connected": false, "hasSecret": false, "usesSenderSecret": false }
   }],
   "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "name": "", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
   "mediaNodes": [ { "id": "…", "routineId": "…", "name": "", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "batch": 1, "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],

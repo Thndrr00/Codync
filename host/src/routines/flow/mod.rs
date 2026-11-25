@@ -25,6 +25,7 @@ pub mod format;
 pub mod graph;
 pub mod groups;
 mod merge;
+mod nodes;
 mod output_template;
 mod pause;
 mod portable;

@@ -11,16 +11,143 @@
 //! written by a newer one as a plain value and a newer host keeps the highest version it has seen.
 //! Everything here except the two kv wrappers is pure and tested.
 
+use super::document::NodeSize;
 use super::merge::Entries;
 use crate::store::Store;
-use anyhow::Result;
-use serde_json::Value;
+use anyhow::{Result, bail};
+use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
-/// The workflow format this host writes. Bump when step kinds or settings are added.
-pub const FORMAT_VERSION: u32 = 1;
+/// The workflow format this host writes. Bump when step kinds or settings are added. Version 2 adds
+/// freehand strokes, per-node size and locking, and typed ports on links.
+pub const FORMAT_VERSION: u32 = 2;
 /// kv prefix of a bot's stored workflow format version, followed by its id.
 pub const VERSION_PREFIX: &str = "routineflow.format.";
+
+/// The longest id, brush or color name a stroke may carry (OpenBot `INPUT_LIMITS.identifier`).
+pub const MAX_ID_CHARS: usize = 128;
+/// The largest side a node size may name (OpenBot `MAX_SIZE`).
+pub const MAX_SIZE: f64 = 100_000.0;
+/// OpenBot `INPUT_LIMITS.workflowStrokePoints`.
+pub const MAX_STROKE_POINTS: usize = 2_000;
+/// OpenBot `INPUT_LIMITS.workflowStrokes`.
+pub const MAX_STROKES: usize = 500;
+
+fn bounded_id(value: Option<&Value>) -> bool {
+    value
+        .and_then(Value::as_str)
+        .is_some_and(|id| !id.is_empty() && id.chars().count() <= MAX_ID_CHARS && !id.chars().any(char::is_control))
+}
+
+fn bounded_number(value: Option<&Value>) -> bool {
+    value.and_then(Value::as_f64).is_some_and(|number| number.is_finite() && number > 0.0 && number <= MAX_SIZE)
+}
+
+fn bounded_coordinate(value: Option<&Value>) -> bool {
+    value
+        .and_then(Value::as_f64)
+        .is_some_and(|number| number.is_finite() && number.abs() <= crate::store::flows::MAX_COORDINATE)
+}
+
+/// A freehand stroke: an id, a brush and color, a positive width and bounded points. Strokes are
+/// drawing data: they are saved and merged but never executed. Kept pure so a save can refuse a bad
+/// one before anything is written.
+pub fn stroke_valid(value: &Value) -> bool {
+    let Some(entry) = value.as_object() else { return false };
+    let Some(points) = entry.get("points").and_then(Value::as_array) else { return false };
+    bounded_id(entry.get("id"))
+        && bounded_id(entry.get("brush"))
+        && bounded_id(entry.get("color"))
+        && bounded_number(entry.get("width"))
+        && points.len() <= MAX_STROKE_POINTS
+        && points.iter().all(|point| {
+            point.as_object().is_some_and(|p| bounded_coordinate(p.get("x")) && bounded_coordinate(p.get("y")))
+        })
+}
+
+/// Refuses a stroke that is malformed or whose id does not match its key, before any write.
+pub fn check_strokes(entries: &Entries) -> Result<()> {
+    for (id, stroke) in entries {
+        if !stroke_valid(stroke) {
+            bail!("stroke {id} is invalid");
+        }
+        if stroke.get("id").and_then(Value::as_str) != Some(id.as_str()) {
+            bail!("stroke {id} does not match its id");
+        }
+    }
+    Ok(())
+}
+
+/// A node's optional width, height and font. `None` means the field is absent or malformed; a node
+/// with no size reads as the default one. Every named side must be a positive, finite, bounded number.
+pub fn node_size(value: &Value) -> Option<NodeSize> {
+    let Some(size) = value.as_object()?.get("size") else { return Some(NodeSize::default()) };
+    let object = size.as_object()?;
+    let side = |key: &str| -> Option<Option<f64>> {
+        match object.get(key) {
+            None | Some(Value::Null) => Some(None),
+            Some(number) => bounded_number(Some(number)).then_some(number.as_f64()),
+        }
+    };
+    let (width, height, font) = (side("width")?, side("height")?, side("font")?);
+    Some(NodeSize { width: width.flatten(), height: height.flatten(), font: font.flatten() })
+}
+
+/// A locked node is read-only in the model: its place cannot be moved and it is not applied to the
+/// runnable flow tables. Locked note nodes stand in for kinds this host does not know yet.
+pub fn node_locked(value: &Value) -> bool {
+    value.as_object().and_then(|entry| entry.get("locked")).and_then(Value::as_bool).unwrap_or(false)
+}
+
+/// The kinds this host can show. A node or setting naming anything else becomes a locked note.
+pub const KNOWN_NODE_KINDS: &[&str] = &[
+    "routine",
+    "bot",
+    "media",
+    "note",
+    "text",
+    "prompt",
+    "asset",
+    "llm",
+    "agent",
+    "image",
+    "trigger",
+    "condition",
+    "approval",
+    "output",
+    "shape",
+    "check",
+];
+
+/// OpenBot `workflowGraphPlaceholders`: an unknown node kind becomes a locked note with a short
+/// reason instead of making the whole workflow unreadable. The kind is truncated to a bounded id.
+pub fn placeholder_for(kind: &str) -> Value {
+    let short: String = kind.chars().take(MAX_ID_CHARS).collect();
+    json!({"kind": "note", "locked": true, "note": format!("This step needs a newer app ({short}).")})
+}
+
+/// Projects the entries of a document, replacing unknown kinds with locked placeholders. The bool
+/// is `needsNewerApp`: the canvas shows the placeholder and stays readable rather than refusing all.
+pub fn project_unknown(entries: &Entries) -> (Entries, bool) {
+    let mut projected = Entries::new();
+    let mut newer = false;
+    for (key, value) in entries {
+        let kind = value
+            .as_object()
+            .and_then(|entry| entry.get("kind").and_then(Value::as_str).map(str::to_owned))
+            .or_else(|| key.split_once(':').map(|(prefix, _)| prefix.to_owned()));
+        match kind {
+            Some(kind) if !KNOWN_NODE_KINDS.contains(&kind.as_str()) => {
+                projected.insert(key.clone(), placeholder_for(&kind));
+                newer = true;
+            }
+            _ => {
+                projected.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    (projected, newer)
+}
 
 /// Setting keys this host understands. A workflow setting with any other key came from a newer
 /// editor and is read-only here (or refused on a save that introduces it).
@@ -177,5 +304,75 @@ mod tests {
         assert_eq!(version(&store, "b"), 4);
         save_version(&store, "b", 2).expect("an older client's save");
         assert_eq!(version(&store, "b"), 4);
+    }
+
+    #[test]
+    fn a_stroke_is_bounded_in_width_color_and_points() {
+        let good = json!({
+            "id": "s1", "brush": "pen", "color": "#123456", "width": 2.5,
+            "points": [{"x": 1.0, "y": 2.0}, {"x": -3.0, "y": 4.0}]
+        });
+        assert!(stroke_valid(&good));
+        let mut long = good.clone();
+        long["points"] = json!(vec![json!({"x": 0, "y": 0}); MAX_STROKE_POINTS + 1]);
+        assert!(!stroke_valid(&long), "too many points");
+        let mut wide = good.clone();
+        wide["width"] = json!(MAX_SIZE + 1.0);
+        assert!(!stroke_valid(&wide), "an unbounded width");
+        let mut color = good.clone();
+        color["color"] = json!("x".repeat(MAX_ID_CHARS + 1));
+        assert!(!stroke_valid(&color), "an unbounded color");
+        let mut far = good.clone();
+        far["points"] = json!([{"x": 1e9, "y": 0.0}]);
+        assert!(!stroke_valid(&far), "a point outside the canvas");
+        assert!(!stroke_valid(&json!({"id": "s", "brush": "pen", "color": "red", "width": 1})), "no points");
+    }
+
+    #[test]
+    fn node_size_accepts_only_positive_bounded_sides() {
+        assert_eq!(node_size(&json!({"x": 1.0})), Some(NodeSize::default()), "an old node has no size");
+        let sized = json!({"size": {"width": 200.0, "font": 14.0}});
+        assert_eq!(node_size(&sized), Some(NodeSize { width: Some(200.0), height: None, font: Some(14.0) }));
+        assert_eq!(node_size(&json!({"size": {"width": 0.0}})), None, "a zero side is not a size");
+        assert_eq!(node_size(&json!({"size": {"height": -1.0}})), None);
+        assert_eq!(node_size(&json!({"size": {"font": "big"}})), None);
+        assert_eq!(node_size(&json!({"size": {"width": MAX_SIZE + 1.0}})), None);
+    }
+
+    #[test]
+    fn a_locked_node_is_named_only_by_a_true_flag() {
+        assert!(node_locked(&json!({"locked": true})));
+        assert!(!node_locked(&json!({"locked": false})));
+        assert!(!node_locked(&json!({})));
+        assert!(!node_locked(&json!({"locked": "true"})));
+    }
+
+    #[test]
+    fn an_unknown_kind_becomes_a_locked_note_with_a_flag() {
+        let placeholder = placeholder_for("future-step");
+        assert_eq!(placeholder["kind"], "note");
+        assert_eq!(placeholder["locked"], true);
+        assert!(placeholder["note"].as_str().is_some_and(|text| text.contains("future-step")));
+        assert!(
+            placeholder_for(&"x".repeat(MAX_ID_CHARS + 10))["note"]
+                .as_str()
+                .is_some_and(|text| text.chars().count() < MAX_ID_CHARS * 2)
+        );
+
+        let entries = entries(json!({
+            "bot:a": {"x": 1.0, "y": 2.0},
+            "future:1": {"kind": "future-step", "x": 3.0},
+            "bot:b": {"x": 4.0, "y": 5.0, "locked": true}
+        }));
+        let (projected, newer) = project_unknown(&entries);
+        assert!(newer);
+        assert_eq!(projected["bot:a"], entries["bot:a"]);
+        assert_eq!(projected["bot:b"], entries["bot:b"], "a known locked node stays as it was");
+        assert_eq!(projected["future:1"]["kind"], "note");
+        assert_eq!(projected["future:1"]["locked"], true);
+
+        let known = entries(json!({"bot:a": {"x": 1.0, "y": 2.0}}));
+        let (same, newer) = project_unknown(&known);
+        assert!(!newer && same == known);
     }
 }

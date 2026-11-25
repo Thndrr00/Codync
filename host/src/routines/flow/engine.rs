@@ -1,23 +1,44 @@
 //! Running a flow: after a routine's run ends, level by level from the routine's own bot, each
 //! bot with the replies of the bots linked to it.
 
-use super::{answer_paths, answers, graph};
+use super::{answer_paths, answers, graph, nodes};
 use crate::chat::team::ModelOverride;
 use crate::chat::team::flow::{FlowCancelled, Handoff, handoff, recipient};
 use crate::hub::Hub;
 use crate::routines::{Routine, Run, Status, Trigger, local_zone};
-use crate::store::{BotConfig, FlowLink, FlowStep, NewStep, StepStatus, Store};
+use crate::store::{BotConfig, FlowLink, FlowStep, NewStep, StepStatus, Store, flow_steps};
 use answers::ValueProblem;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use tokio::task::JoinSet;
 
 /// Why a step after a cancelled flow never ran.
 const CANCELLED_BEFORE: &str = "The flow was cancelled before this step started";
+
+/// Approval steps wait here for `decideWorkflowStep`. The card is the durable record; this map only
+/// holds the in-flight waiter, so a restart leaves the step to recovery like any other running step.
+static APPROVALS: OnceLock<Mutex<HashMap<String, oneshot::Sender<nodes::ApprovalOutcome>>>> = OnceLock::new();
+
+fn approvals() -> &'static Mutex<HashMap<String, oneshot::Sender<nodes::ApprovalOutcome>>> {
+    APPROVALS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Registers the waiter for one approval step and returns the decision channel.
+pub(super) fn wait_approval(step_id: &str) -> oneshot::Receiver<nodes::ApprovalOutcome> {
+    let (tx, rx) = oneshot::channel();
+    approvals().lock().expect("an approval map").insert(step_id.to_owned(), tx);
+    rx
+}
+
+/// Wakes an approval step with the person's decision. False means no engine is waiting (a run that
+/// stopped or restarted); the card and the step still carry the decision.
+pub(super) fn decide_approval(step_id: &str, outcome: nodes::ApprovalOutcome) -> bool {
+    approvals().lock().expect("an approval map").remove(step_id).is_some_and(|tx| tx.send(outcome).is_ok())
+}
 
 /// OpenBot 0.77.0: a loop runs each step once per round. Stored flows are acyclic, so a run here is
 /// a single round; the pure round decisions still guard the answers a step reads and how often it
@@ -197,6 +218,13 @@ pub struct Start {
     /// the run so a retry or a run from one step sees the same values as the first attempt.
     #[serde(default)]
     pub trigger_fields: answers::Answer,
+    /// Which attempt of this step this is. A retry from a failed step increments it.
+    #[serde(default = "first_attempt")]
+    pub attempt: u32,
+}
+
+fn first_attempt() -> u32 {
+    1
 }
 
 impl Start {
@@ -332,6 +360,8 @@ fn settle_with(
 }
 
 fn new_step<'a>(start: &'a Start, bot: &'a str, input: &'a str, status: StepStatus) -> NewStep<'a> {
+    let source =
+        flow_steps::run_source(start.event.get("source").and_then(serde_json::Value::as_str).unwrap_or("manual"));
     NewStep {
         run_id: &start.run_id,
         routine_id: &start.routine_id,
@@ -342,6 +372,10 @@ fn new_step<'a>(start: &'a Start, bot: &'a str, input: &'a str, status: StepStat
         status,
         output: None,
         error: None,
+        attempt: start.attempt,
+        branch: None,
+        waiting: matches!(status, StepStatus::Queued),
+        source,
     }
 }
 
@@ -560,6 +594,7 @@ fn begin(
     // Fail closed when a field this step uses has no supplier that finished, or when a name or
     // check does not match the steps before it. A flow with no typed steps stays literal.
     let graph = answer_graph(
+        &hub.store,
         &start.routine_id,
         &start.owner,
         &start.instruction,
@@ -638,7 +673,9 @@ fn begin(
         inputs: names,
         ..StepSettings::default()
     };
-    match record(hub, &new_step(start, bot, &body, initial_step_status(bot)))? {
+    let mut fresh = new_step(start, bot, &body, initial_step_status(bot));
+    fresh.branch = inputs.first().and_then(|(link, _)| link.branch.as_deref());
+    match record(hub, &fresh)? {
         Some(step) => {
             record_settings(hub, &step.id, &settings);
             let hops = u8::try_from(depth).unwrap_or(u8::MAX);
@@ -660,6 +697,7 @@ fn begin(
 /// The graph of answer fields a run started with. The routine's own bot is the trigger that gives
 /// the run input; each link end is a step whose spec was frozen when the run began.
 pub(super) fn answer_graph(
+    store: &Store,
     routine_id: &str,
     owner: &str,
     instruction: &str,
@@ -700,9 +738,30 @@ pub(super) fn answer_graph(
         graph.edges.push(answer_paths::GraphEdge {
             from: link.from_bot_id.clone(),
             to: link.to_bot_id.clone(),
-            branch: None,
+            branch: link.branch.clone(),
             is_loop: false,
         });
+    }
+    // Routed nodes carry their answer/check fields themselves rather than through a link's spec.
+    // Loading them here keeps the graph of a run identical to the one the canvas editor checks.
+    if let Ok(saved) = store.flow_nodes(routine_id) {
+        for node in saved {
+            let check = node.fields.get("check").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let answer = node.fields.get("answer").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let instruction = node.fields.get("prompt").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let kind = match node.kind.as_str() {
+                "llm" => answer_paths::NodeKind::Model,
+                "condition" => answer_paths::NodeKind::Condition,
+                "approval" => answer_paths::NodeKind::Approval,
+                "trigger" => answer_paths::NodeKind::Trigger,
+                _ => answer_paths::NodeKind::Other,
+            };
+            let key = node.key();
+            graph.nodes.insert(
+                key.clone(),
+                answer_paths::GraphNode { id: key, kind, spec: answers::NodeSpec { answer, check }, instruction },
+            );
+        }
     }
     graph
 }
@@ -846,7 +905,9 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
         ..StepSettings::default()
     };
     let key = crate::store::flow_media::key(id);
-    match record(hub, &new_step(start, &key, &body, initial_step_status(&key)))? {
+    let mut fresh = new_step(start, &key, &body, initial_step_status(&key));
+    fresh.branch = inputs.first().and_then(|(link, _)| link.branch.as_deref());
+    match record(hub, &fresh)? {
         Some(step) => {
             record_settings(hub, &step.id, &settings);
             Ok(Begin::Make(Box::new(MediaPending { step, node, body, settings })))
@@ -1380,6 +1441,7 @@ pub fn start_for(
         answer_specs: BTreeMap::new(),
         run_fields: Vec::new(),
         trigger_fields: super::trigger_fields::fixed_answers(run.created_at, &routine.triggers, &run.event),
+        attempt: first_attempt(),
     })
 }
 
@@ -1544,6 +1606,7 @@ mod tests {
             answer_specs: BTreeMap::new(),
             run_fields: Vec::new(),
             trigger_fields: answers::Answer::new(),
+            attempt: 1,
         }
     }
 

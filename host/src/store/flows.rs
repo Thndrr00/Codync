@@ -8,9 +8,10 @@
 //! what a client's catch-up compares against.
 
 use super::{Store, next_rev};
-use anyhow::{Context, Result, bail};
-use rusqlite::{Connection, Transaction, params};
-use serde::Serialize;
+use anyhow::{Context, Result, bail, ensure};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The coordinate limit of a node; far beyond any canvas a person would build.
@@ -18,12 +19,97 @@ pub const MAX_COORDINATE: f64 = 1_000_000.0;
 /// kv prefix of the per-bot canvas revision.
 pub const REV_PREFIX: &str = "routineflow.rev.";
 
+/// The edge types of a workflow graph, from OpenBot `WORKFLOW_PORT_TYPES`. Text is the default so a
+/// link saved before ports existed keeps working exactly as it did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PortType {
+    #[default]
+    Text,
+    Image,
+    File,
+}
+
+impl PortType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Image => "image",
+            Self::File => "file",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "text" => Some(Self::Text),
+            "image" => Some(Self::Image),
+            "file" => Some(Self::File),
+            _ => None,
+        }
+    }
+
+    /// A text edge needs no field on the wire, so old links round-trip unchanged.
+    pub const fn is_text(self) -> bool {
+        matches!(self, Self::Text)
+    }
+}
+
+/// The two ways out of a condition, from OpenBot `WORKFLOW_BRANCHES`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Branch {
+    Yes,
+    No,
+}
+
+impl Branch {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Yes => "yes",
+            Self::No => "no",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "yes" => Some(Self::Yes),
+            "no" => Some(Self::No),
+            _ => None,
+        }
+    }
+}
+
+/// Reads the port of a link from a wire value, defaulting to text. A value the host does not know
+/// fails rather than becoming a different edge type.
+pub fn parse_port(value: Option<&str>) -> Result<PortType> {
+    match value {
+        None => Ok(PortType::Text),
+        Some(text) => PortType::parse(text).with_context(|| format!("`port` must be text, image or file, not {text}")),
+    }
+}
+
+/// Reads a link's branch from a wire value. Absent and null both mean "not a condition edge".
+pub fn parse_branch(value: Option<&str>) -> Result<Option<Branch>> {
+    match value {
+        None => Ok(None),
+        Some(text) => Branch::parse(text).map(Some).with_context(|| format!("`branch` must be yes or no, not {text}")),
+    }
+}
+/// kv prefix of a routine's non-bot workflow nodes, followed by its id.
+pub const NODES_PREFIX: &str = "routineflow.nodes.";
+
+fn nodes_key(routine_id: &str) -> String {
+    format!("{NODES_PREFIX}{routine_id}")
+}
+
 /// The caps a merged document's shapes must respect, mirroring the document's own caps. Each write
 /// is checked again here so a store call can never grow a table past what a canvas can hold.
 const MERGE_LINKS_CAP: usize = 1000;
 const MERGE_NODES_CAP: usize = 1000;
 const MERGE_MEDIA_CAP: usize = 500;
 const MERGE_INSTRUCTION_CAP: usize = 8_000;
+/// The most fields one workflow node may carry.
+const NODE_FIELDS_CAP: usize = 20;
 /// The media columns, in the order `row_media` of `flow_media` reads them.
 const MEDIA_COLUMNS: &str = "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id, name, batch";
 
@@ -43,10 +129,40 @@ pub struct FlowLink {
     pub model: Option<String>,
     /// The model's options (effort…) that go with `model`, or on their own.
     pub model_options: BTreeMap<String, String>,
+    /// Which way out of a condition this edge leaves: `yes` or `no` (OpenBot 0.70.0). Only a
+    /// condition edge carries one; a plain hand-off has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// The kind of value this edge carries. Text is the legacy default.
+    #[serde(default, skip_serializing_if = "PortType::is_text")]
+    pub port: PortType,
     pub created_at: i64,
     /// The bot that owns the routine, whose run starts the flow.
     #[serde(skip)]
     pub owner_bot_id: String,
+}
+
+/// A workflow node that is not a bot, a media step or a drawing-only position: an `llm`,
+/// `condition`, `approval`, `output`, `asset` or `trigger` node. Its fields are a small bounded map,
+/// kept in one kv blob per routine beside the flow tables (OpenBot 0.70.0 node registry).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowNode {
+    pub id: String,
+    pub routine_id: String,
+    #[serde(skip)]
+    pub owner_bot_id: String,
+    pub kind: String,
+    pub fields: BTreeMap<String, Json>,
+    pub created_at: i64,
+}
+
+impl FlowNode {
+    /// The canvas node key other nodes and links name. One prefix per kind keeps the namespace
+    /// disjoint from bots, media steps and annotations.
+    pub fn key(&self) -> String {
+        format!("{}:{}", self.kind, self.id)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -71,7 +187,7 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             from_bot_id TEXT NOT NULL, to_bot_id TEXT NOT NULL, instruction TEXT NOT NULL DEFAULT '',
             model TEXT, model_options TEXT NOT NULL DEFAULT '{}',
             name TEXT NOT NULL DEFAULT '',
-            created_at INTEGER NOT NULL, UNIQUE(routine_id, from_bot_id, to_bot_id));
+            created_at INTEGER NOT NULL, port TEXT NOT NULL DEFAULT 'text', UNIQUE(routine_id, from_bot_id, to_bot_id));
          CREATE INDEX IF NOT EXISTS routine_flow_links_routine ON routine_flow_links(routine_id);
          CREATE INDEX IF NOT EXISTS routine_flow_links_owner ON routine_flow_links(owner_bot_id);
          CREATE INDEX IF NOT EXISTS routine_flow_links_to ON routine_flow_links(to_bot_id);
@@ -80,7 +196,8 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             bot_id TEXT NOT NULL, delivery_id TEXT, input TEXT NOT NULL, output TEXT,
             status TEXT NOT NULL CHECK(status IN ('running','succeeded','failed','skipped','cancelled')),
             error TEXT, files TEXT, settings TEXT, run_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-            UNIQUE(run_id, bot_id));
+            attempt INTEGER NOT NULL DEFAULT 1, branch TEXT, waiting INTEGER NOT NULL DEFAULT 0,
+            source TEXT NOT NULL DEFAULT 'manual', UNIQUE(run_id, bot_id));
          CREATE INDEX IF NOT EXISTS routine_flow_steps_routine ON routine_flow_steps(routine_id, run_at DESC);
          CREATE INDEX IF NOT EXISTS routine_flow_steps_status ON routine_flow_steps(status);
          CREATE INDEX IF NOT EXISTS routine_flow_steps_bot ON routine_flow_steps(bot_id);
@@ -130,6 +247,42 @@ pub(super) fn open(c: &Connection) -> Result<()> {
     if !has_batch {
         c.execute_batch("ALTER TABLE routine_flow_media ADD COLUMN batch INTEGER NOT NULL DEFAULT 1;")?;
     }
+    // A condition's two routed edges were added after links existed (OpenBot 0.70.0); older links
+    // read as plain hand-offs.
+    let has_branch: bool = c.query_row(
+        "SELECT count(*) > 0 FROM pragma_table_info('routine_flow_links') WHERE name = 'branch'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_branch {
+        c.execute_batch("ALTER TABLE routine_flow_links ADD COLUMN branch TEXT;")?;
+    }
+    // A link's typed port was added with the connectivity rules (OpenBot `WORKFLOW_PORTS`); old
+    // links read as text edges and keep behaving exactly as before.
+    let has_port: bool = c.query_row(
+        "SELECT count(*) > 0 FROM pragma_table_info('routine_flow_links') WHERE name = 'port'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_port {
+        c.execute_batch("ALTER TABLE routine_flow_links ADD COLUMN port TEXT NOT NULL DEFAULT 'text';")?;
+    }
+    // Run history grew per-step attempt, branch and waiting state, and a source on each run's steps.
+    for (column, statement) in [
+        ("attempt", "ALTER TABLE routine_flow_steps ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1"),
+        ("branch", "ALTER TABLE routine_flow_steps ADD COLUMN branch TEXT"),
+        ("waiting", "ALTER TABLE routine_flow_steps ADD COLUMN waiting INTEGER NOT NULL DEFAULT 0"),
+        ("source", "ALTER TABLE routine_flow_steps ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'"),
+    ] {
+        let has: bool = c.query_row(
+            &format!("SELECT count(*) > 0 FROM pragma_table_info('routine_flow_steps') WHERE name = '{column}'"),
+            [],
+            |row| row.get(0),
+        )?;
+        if !has {
+            c.execute_batch(statement)?;
+        }
+    }
     Ok(())
 }
 
@@ -143,16 +296,51 @@ fn row_link(r: &rusqlite::Row) -> rusqlite::Result<FlowLink> {
         instruction: r.get(5)?,
         model: r.get(6)?,
         model_options: serde_json::from_str(r.get::<_, String>(7)?.as_str()).unwrap_or_default(),
+        branch: r.get(10)?,
+        port: r.get::<_, String>(11).map(|text| PortType::parse(&text).unwrap_or_default())?,
         created_at: r.get(8)?,
         name: r.get(9)?,
     })
 }
 
-const LINK_COLUMNS: &str =
-    "id, routine_id, owner_bot_id, from_bot_id, to_bot_id, instruction, model, model_options, created_at, name";
+const LINK_COLUMNS: &str = "id, routine_id, owner_bot_id, from_bot_id, to_bot_id, instruction, model, model_options, created_at, name, branch, port";
 
 fn options_json(options: &BTreeMap<String, String>) -> String {
     serde_json::to_string(options).unwrap_or_else(|_| "{}".into())
+}
+
+fn nodes_at(c: &Connection, routine_id: &str) -> Result<Vec<FlowNode>> {
+    let raw: Option<String> =
+        c.query_row("SELECT v FROM kv WHERE k = ?1", [nodes_key(routine_id)], |row| row.get(0)).optional()?;
+    Ok(raw.and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or_default())
+}
+
+fn put_nodes(tx: &Transaction, routine_id: &str, nodes: &[FlowNode]) -> Result<()> {
+    let value = serde_json::to_string(nodes)?;
+    tx.execute(
+        "INSERT INTO kv(k, v) VALUES(?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2",
+        params![nodes_key(routine_id), value],
+    )?;
+    Ok(())
+}
+
+/// The nodes of one routine, parsed from its kv blob. A blob written by an older host, or one that
+/// cannot be read, is an empty list: a workflow saved before these nodes existed still runs.
+fn check_node(node: &FlowNode) -> Result<()> {
+    if node.id.is_empty() || node.routine_id.is_empty() || node.kind.is_empty() {
+        bail!("a workflow node needs an id, a routine and a kind");
+    }
+    check_node_key(&node.key())?;
+    ensure!(node.fields.len() <= NODE_FIELDS_CAP, "a workflow node has too many fields");
+    for (name, value) in &node.fields {
+        ensure!(!name.is_empty() && name.len() <= 64, "a workflow node field name is too long");
+        match value {
+            Json::String(text) => ensure!(text.chars().count() <= 8_000, "workflow node `{name}` is too long"),
+            Json::Number(_) | Json::Bool(_) | Json::Null => {}
+            _ => bail!("workflow node `{name}` must be text, a number or true or false"),
+        }
+    }
+    Ok(())
 }
 
 fn links_of(c: &Connection, routine_id: &str) -> Result<Vec<FlowLink>> {
@@ -208,11 +396,28 @@ pub(crate) fn check_name(name: &str) -> Result<()> {
 }
 
 pub(crate) fn check_node_key(key: &str) -> Result<()> {
-    let ok = key
-        .split_once(':')
-        .is_some_and(|(kind, id)| matches!(kind, "routine" | "bot" | "media") && !id.is_empty() && !id.contains(':'));
+    let ok = key.split_once(':').is_some_and(|(kind, id)| {
+        matches!(
+            kind,
+            "routine"
+                | "bot"
+                | "media"
+                // OpenBot 0.70.0 node keys: routed steps, drawings and canvas-only nodes.
+                | "llm"
+                | "condition"
+                | "approval"
+                | "output"
+                | "asset"
+                | "trigger"
+                | "text"
+                | "prompt"
+                | "note"
+                | "shape"
+        ) && !id.is_empty()
+            && !id.contains(':')
+    });
     if !ok || key.len() > 200 {
-        bail!("nodeKey must be routine:<id>, bot:<id> or media:<id>");
+        bail!("nodeKey must name a routine, bot, media step or workflow node");
     }
     Ok(())
 }
@@ -292,6 +497,84 @@ impl Store {
         Ok(all)
     }
 
+    /// The non-bot workflow nodes of one routine, oldest first.
+    pub fn flow_nodes(&self, routine_id: &str) -> Result<Vec<FlowNode>> {
+        self.with_connection(|c| nodes_at(c, routine_id))
+    }
+
+    /// The nodes of several routines on one canvas, in routine order.
+    pub fn flow_nodes_for(&self, routine_ids: &[String]) -> Result<Vec<FlowNode>> {
+        let mut all = Vec::new();
+        for routine_id in routine_ids {
+            all.extend(self.flow_nodes(routine_id)?);
+        }
+        Ok(all)
+    }
+
+    pub fn flow_node(&self, routine_id: &str, id: &str) -> Result<Option<FlowNode>> {
+        Ok(self.flow_nodes(routine_id)?.into_iter().find(|node| node.id == id))
+    }
+
+    /// The node named by a canvas key, across all routines. A key outlives the routine in a stray
+    /// link, so this is what a canvas edit checks before accepting it.
+    pub fn flow_node_by_key(&self, key: &str) -> Result<Option<FlowNode>> {
+        for routine in self.kv_prefix(NODES_PREFIX) {
+            let id = routine.strip_prefix(NODES_PREFIX).unwrap_or_default();
+            if let Some(node) = self.flow_node(id, key) {
+                return Ok(Some(node));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Adds a node and stamps the routine's audience, the same way a link or media step does.
+    pub fn flow_add_node(&self, node: &FlowNode) -> Result<FlowChange> {
+        check_node(node)?;
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let mut nodes = nodes_at(&tx, &node.routine_id)?;
+            if nodes.iter().any(|saved| saved.id == node.id) {
+                bail!("a workflow node with this id already exists");
+            }
+            nodes.push(node.clone());
+            put_nodes(&tx, &node.routine_id, &nodes)?;
+            let bots = audience(&tx, &node.routine_id, &node.owner_bot_id)?;
+            let change = touch(&tx, bots)?.expect("the owner is always in the audience");
+            tx.commit()?;
+            Ok(change)
+        })
+    }
+
+    /// Rewrites a node's fields, keeping the ones the request left out only if it sent none at all.
+    pub fn flow_update_node(&self, node: &FlowNode) -> Result<Option<FlowChange>> {
+        check_node(node)?;
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let mut nodes = nodes_at(&tx, &node.routine_id)?;
+            let Some(saved) = nodes.iter_mut().find(|saved| saved.id == node.id) else { return Ok(None) };
+            *saved = node.clone();
+            put_nodes(&tx, &node.routine_id, &nodes)?;
+            let bots = audience(&tx, &node.routine_id, &node.owner_bot_id)?;
+            let change = touch(&tx, bots)?;
+            tx.commit()?;
+            Ok(change)
+        })
+    }
+
+    pub fn flow_remove_node(&self, routine_id: &str, id: &str) -> Result<Option<FlowChange>> {
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let mut nodes = nodes_at(&tx, routine_id)?;
+            let Some(saved) = nodes.iter().find(|node| node.id == id).cloned() else { return Ok(None) };
+            nodes.retain(|node| node.id != id);
+            put_nodes(&tx, routine_id, &nodes)?;
+            let bots = audience(&tx, routine_id, &saved.owner_bot_id)?;
+            let change = touch(&tx, bots)?;
+            tx.commit()?;
+            Ok(change)
+        })
+    }
+
     /// Adds a link after `validate` accepts it against the routine's current links, in one
     /// transaction so two connects can't together make a cycle.
     pub fn flow_add_link(
@@ -299,12 +582,15 @@ impl Store {
         link: &FlowLink,
         validate: impl FnOnce(&[FlowLink]) -> Result<()>,
     ) -> Result<FlowChange> {
+        if let Some(branch) = &link.branch {
+            ensure!(Branch::parse(branch).is_some(), "a link's branch must be yes or no");
+        }
         self.with_connection(|c| {
             let tx = c.unchecked_transaction()?;
             validate(&links_of(&tx, &link.routine_id)?)?;
             tx.execute(
                 &format!(
-                    "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"
+                    "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
                 ),
                 params![
                     link.id,
@@ -316,7 +602,9 @@ impl Store {
                     link.model,
                     options_json(&link.model_options),
                     link.created_at,
-                    link.name
+                    link.name,
+                    link.branch,
+                    link.port.as_str()
                 ],
             )?;
             let bots = audience(&tx, &link.routine_id, &link.owner_bot_id)?;
@@ -326,19 +614,24 @@ impl Store {
         })
     }
 
-    /// Rewrites a link's instruction, model and model options (an empty `model` clears it).
+    /// Rewrites a link's instruction, model, model options and routed branch (an empty `model`
+    /// clears it; a `None` branch makes it a plain hand-off).
     pub fn flow_update_link(
         &self,
         id: &str,
         instruction: &str,
         model: Option<&str>,
         model_options: &BTreeMap<String, String>,
+        branch: Option<&str>,
     ) -> Result<Option<(FlowLink, FlowChange)>> {
+        if branch.is_some_and(|value| value != "yes" && value != "no") {
+            bail!("a link's branch must be yes or no");
+        }
         self.with_connection(|c| {
             let tx = c.unchecked_transaction()?;
             let gone = tx.execute(
-                "UPDATE routine_flow_links SET instruction = ?2, model = ?3, model_options = ?4 WHERE id = ?1",
-                params![id, instruction, model, options_json(model_options)],
+                "UPDATE routine_flow_links SET instruction = ?2, model = ?3, model_options = ?4, branch = ?5 WHERE id = ?1",
+                params![id, instruction, model, options_json(model_options), branch],
             )?;
             if gone == 0 {
                 return Ok(None);
@@ -480,6 +773,7 @@ impl Store {
         positions: &[FlowPosition],
         placed: &[String],
         media: &[super::FlowMedia],
+        nodes: &[FlowNode],
     ) -> Result<FlowChange> {
         if links.len() > MERGE_LINKS_CAP {
             bail!("a merged document has at most {MERGE_LINKS_CAP} links");
@@ -489,6 +783,15 @@ impl Store {
         }
         if media.len() > MERGE_MEDIA_CAP {
             bail!("a merged document has at most {MERGE_MEDIA_CAP} media steps");
+        }
+        if nodes.len() > MERGE_MEDIA_CAP {
+            bail!("a merged document has at most {MERGE_MEDIA_CAP} workflow nodes");
+        }
+        for node in nodes {
+            check_node(node)?;
+            if !routine_ids.contains(&node.routine_id) {
+                bail!("merged node {} names a routine that is not on this canvas", node.id);
+            }
         }
         for routine in routine_ids {
             if routine.is_empty() {
@@ -527,6 +830,9 @@ impl Store {
                 if link.instruction.len() > MERGE_INSTRUCTION_CAP {
                     bail!("merged link {} has too long an instruction", link.id);
                 }
+                if let Some(branch) = &link.branch {
+                    ensure!(Branch::parse(branch).is_some(), "merged link {} has an invalid branch", link.id);
+                }
                 check_name(&link.name).with_context(|| format!("merged link {}", link.id))?;
                 if !routine_ids.contains(&link.routine_id) {
                     bail!("merged link {} names a routine that is not on this canvas", link.id);
@@ -548,9 +854,10 @@ impl Store {
                 }
                 tx.execute(
                     &format!(
-                        "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                        "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                          ON CONFLICT(id) DO UPDATE SET routine_id = ?2, from_bot_id = ?4, to_bot_id = ?5,
-                         instruction = ?6, model = ?7, model_options = ?8, created_at = ?9, name = ?10"
+                         instruction = ?6, model = ?7, model_options = ?8, created_at = ?9, name = ?10,
+                         branch = ?11, port = ?12"
                     ),
                     params![
                         link.id,
@@ -562,7 +869,9 @@ impl Store {
                         link.model,
                         options_json(&link.model_options),
                         at,
-                        link.name
+                        link.name,
+                        link.branch,
+                        link.port.as_str()
                     ],
                 )?;
                 bots.insert(owner.to_owned());
@@ -672,6 +981,16 @@ impl Store {
                 bots.insert(owner.to_owned());
             }
 
+            // Non-bot nodes live in one blob per routine. A merge replaces the whole blob for the
+            // routines on this canvas, the way positions are replaced for the canvas itself.
+            for routine in routine_ids {
+                let kept: Vec<FlowNode> = nodes.iter().filter(|node| node.routine_id == *routine).cloned().collect();
+                put_nodes(&tx, routine, &kept)?;
+                for node in &kept {
+                    bots.insert(node.owner_bot_id.clone());
+                }
+            }
+
             let change = touch_at(&tx, rev, bots)?.expect("the canvas bot is always touched");
             tx.commit()?;
             Ok(change)
@@ -759,6 +1078,8 @@ mod tests {
             instruction: "Translate".into(),
             model: None,
             model_options: BTreeMap::new(),
+            branch: None,
+            port: PortType::Text,
             created_at: 1,
         }
     }

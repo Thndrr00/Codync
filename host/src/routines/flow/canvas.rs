@@ -1,11 +1,11 @@
 //! One bot's canvas as clients load it: its routines and those whose flow passes through it, the
 //! links, where the nodes sit and the bots placed before any link reaches them.
 
-use super::{folders, format, groups, output_template, pause, trigger_fields};
+use super::{document, folders, format, groups, output_template, pause, trigger_fields};
 use crate::LockExt;
 use crate::hub::{Hub, flows::flow_event};
 use crate::routines::{Routine, Routines, Run, public};
-use crate::store::{Store, now_ms};
+use crate::store::{Store, flow_steps, now_ms};
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -17,7 +17,7 @@ const UPCOMING_WINDOW_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 const UPCOMING_LIMIT: usize = 400;
 
 impl Routines {
-    fn flow_routine(&self, store: &Store, r: &Routine, now: i64) -> Result<Value> {
+    fn flow_routine(&self, hub: &Hub, store: &Store, r: &Routine, now: i64) -> Result<Value> {
         let runs: Vec<Run> = self
             .state
             .locked()
@@ -29,6 +29,7 @@ impl Routines {
             .cloned()
             .collect();
         let steps = store.flow_last_steps(&r.id)?;
+        let flow_runs = store.flow_runs()?.into_iter().filter(|run| run.routine_id == r.id).collect::<Vec<_>>();
         // What each step actually ran with, keyed by step id. Older runs have no settings, so a
         // client can show "no saved settings" rather than treating the field as missing.
         let mut step_settings = serde_json::Map::new();
@@ -42,6 +43,7 @@ impl Routines {
             "paused": pause::is_paused(store, &r.id),
             "upcomingRuns": if r.enabled && !pause::is_paused(store, &r.id) { upcoming(r, now) } else { vec![] },
             "recentRuns": runs,
+            "runNumbers": flow_steps::numbered_runs(&flow_runs),
             "steps": steps,
             "stepSettings": step_settings,
             "output": output_template::load(store, &r.id),
@@ -50,6 +52,11 @@ impl Routines {
                 .into_iter()
                 .map(|(name, ty)| json!({"name": name, "step": "", "icon": "bolt", "type": ty, "values": []}))
                 .collect::<Vec<_>>(),
+            // Bounded histories of the event triggers; no event bodies or message text are sent.
+            "githubDeliveries": self.github_history(&r.bot_id, &r.id)["deliveries"],
+            "chatDeliveries": self.chat_history(&r.bot_id, &r.id)["deliveries"],
+            // The webhook trigger node's URL. Its secret is never projected: rotation returns it once.
+            "webhook": self.webhook_status(hub, &r.bot_id, &r.id),
         }))
     }
 
@@ -71,7 +78,7 @@ pub(super) fn canvas(hub: &Hub, bot: &str) -> Result<Value> {
     let (store, now) = (&hub.store, now_ms());
     let routines = hub.routines.canvas_routines(store, bot)?;
     let ids: Vec<String> = routines.iter().map(|r| r.id.clone()).collect();
-    let cards = routines.iter().map(|r| hub.routines.flow_routine(store, r, now)).collect::<Result<Vec<_>>>()?;
+    let cards = routines.iter().map(|r| hub.routines.flow_routine(hub, store, r, now)).collect::<Result<Vec<_>>>()?;
     let rev = store.flow_revs_since(-1).into_iter().find(|(b, _)| b == bot).map_or(0, |(_, rev)| rev);
     let mut canvas = json!({
         "botId": bot,
@@ -84,6 +91,20 @@ pub(super) fn canvas(hub: &Hub, bot: &str) -> Result<Value> {
         "groups": groups::load(store, bot),
         "formatVersion": format::version(store, bot),
     });
+    // The saved document carries drawing state the runnable tables do not: node sizes and locks,
+    // freehand strokes and kinds this host may not know. An unknown kind is shown as a locked note
+    // and flagged, so the rest of the canvas stays usable instead of the whole workflow failing.
+    let stored = document::history(store, bot).last().map(|snapshot| snapshot.document.clone()).unwrap_or_default();
+    let (nodes, needs_newer) = format::project_unknown(&stored.nodes);
+    if let Some(object) = canvas.as_object_mut() {
+        object.insert("nodeSizes".to_owned(), serde_json::to_value(document::node_sizes(&stored))?);
+        object.insert("lockedNodes".to_owned(), serde_json::to_value(document::locked_nodes(&stored))?);
+        object.insert("strokes".to_owned(), serde_json::to_value(document::strokes(&stored))?);
+        object.insert("placeholderNodes".to_owned(), serde_json::to_value(nodes)?);
+        if needs_newer {
+            object.insert("needsNewerApp".to_owned(), json!(true));
+        }
+    }
     // An older canvas has no folder blob at all, so the field is omitted rather than sent empty.
     if let Some(snapshot) = folders::load(store) {
         canvas["folders"] = serde_json::to_value(folders::pruned(&snapshot, &super::api::known_workflows(hub)))?;

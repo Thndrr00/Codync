@@ -36,6 +36,10 @@ fn skip_unreached(hub: &Hub, run: &FlowRun) -> Result<()> {
             status: StepStatus::Skipped,
             output: None,
             error: Some(INTERRUPTED),
+            attempt: 1,
+            branch: None,
+            waiting: false,
+            source: "manual",
         };
         record(hub, &step)?;
     }

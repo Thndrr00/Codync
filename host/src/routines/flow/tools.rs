@@ -116,6 +116,8 @@ pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value
                 instruction.to_owned(),
                 answer.as_deref(),
                 check.as_deref(),
+                None,
+                crate::store::flows::PortType::Text,
             )?;
             Ok(json!({"link": link, "note": "Linked. The routine's next run hands its reply on."}))
         }

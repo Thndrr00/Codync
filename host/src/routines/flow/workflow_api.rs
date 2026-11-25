@@ -310,6 +310,8 @@ fn import_steps(
             instruction,
             Some(answer).filter(|text| !text.is_empty()),
             Some(check).filter(|text| !text.is_empty()),
+            None,
+            crate::store::flows::PortType::Text,
         )?;
         from = to;
     }
@@ -500,6 +502,8 @@ mod tests {
             instruction: String::new(),
             model: None,
             model_options: BTreeMap::new(),
+            branch: None,
+            port: crate::store::flows::PortType::Text,
             created_at: 1,
         };
         store.flow_add_link(&link, |_| Ok(())).expect("a link");
