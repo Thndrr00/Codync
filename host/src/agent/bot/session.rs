@@ -265,6 +265,31 @@ impl Actor {
                 }
                 env.push(("CODEX_CONFIG".into(), config.to_string()));
             }
+            if self.cfg.backend == "opencode" && !env.iter().any(|(k, _)| k == "OPENCODE_CONFIG") {
+                // triage-15626: Ask first must reach OpenCode itself, so it asks before a command or a
+                // file change. The config is written once per bot; the card is the existing one in
+                // `updates.rs::on_permission`. A saved config of the person's own still wins.
+                let auto = crate::approval_automation::enabled(
+                    &crate::approval_automation::load(&self.hub.store),
+                    &self.cfg.backend,
+                );
+                if let Some(config) = super::launch::opencode_permissions(self.cfg.permission, auto) {
+                    let dir = crate::service::data_dir().join("opencode");
+                    let saved = async {
+                        tokio::fs::create_dir_all(&dir).await?;
+                        let path = dir.join(format!("{}.json", self.cfg.id));
+                        tokio::fs::write(&path, config.to_string()).await?;
+                        Ok::<_, std::io::Error>(path)
+                    }
+                    .await;
+                    match saved {
+                        Ok(path) => env.push(("OPENCODE_CONFIG".into(), path.to_string_lossy().into_owned())),
+                        Err(error) => {
+                            tracing::warn!(error = format!("{error:#}"), "couldn't write OpenCode's Ask first config")
+                        }
+                    }
+                }
+            }
             if pi {
                 env.extend(pi_tools::env(&servers).await?);
             }

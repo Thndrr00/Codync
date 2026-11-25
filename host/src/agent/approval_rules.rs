@@ -75,6 +75,15 @@ pub fn codex_approval_policy(backend: &str, permission: Permission, auto_approve
     Some(if permission == Permission::Ask && !auto_approved { "untrusted" } else { "on-request" })
 }
 
+/// OpenBot nightly triage-15626: OpenCode at Ask first asks before commands and file changes. The
+/// caller has already established that this is OpenCode; an opted-in backend keeps its automation.
+/// Pure and shared by the real permission path and its tests.
+pub fn opencode_ask_first(permission: Permission, auto_approved: bool, kind: &str) -> bool {
+    permission == Permission::Ask
+        && !auto_approved
+        && matches!(kind.to_ascii_lowercase().as_str(), "execute" | "edit" | "delete" | "move")
+}
+
 /// OpenBot 0.77.0: with this many MCP tools Antigravity's schema budget is tight enough that its CLI may
 /// leave the tool search out, so own tools must stay findable through the declarations it does keep.
 pub const MANY_MCP_TOOLS: usize = 20;
@@ -632,5 +641,16 @@ mod tests {
         assert_eq!(codex_approval_policy("codex", Permission::Ask, true), Some("on-request"));
         assert_eq!(codex_approval_policy("codex", Permission::Auto, false), Some("on-request"));
         assert_eq!(codex_approval_policy("claude", Permission::Ask, false), None, "only Codex reads this");
+    }
+
+    #[test]
+    fn opencode_ask_first_asks_before_commands_and_file_changes() {
+        for kind in ["execute", "edit", "delete", "move", "EXECUTE"] {
+            assert!(opencode_ask_first(Permission::Ask, false, kind), "{kind} gets a card");
+        }
+        assert!(!opencode_ask_first(Permission::Ask, false, "read"), "reads keep their reach");
+        assert!(!opencode_ask_first(Permission::Ask, false, "fetch"));
+        assert!(!opencode_ask_first(Permission::Ask, true, "execute"), "an opted-in backend stays automatic");
+        assert!(!opencode_ask_first(Permission::Auto, false, "edit"), "Always allow keeps its setting");
     }
 }

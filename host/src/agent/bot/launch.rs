@@ -4,7 +4,7 @@
 use super::{Adapter, Conn, SessionCaps};
 use crate::agent::acp::{self, Acp};
 use crate::agent::registry::{Candidate, Cmd};
-use crate::store::BotConfig;
+use crate::store::{BotConfig, Permission};
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -108,6 +108,21 @@ fn model_choice<'a>(
 fn model_error(model: &str, e: &anyhow::Error) -> anyhow::Error {
     tracing::warn!(model, error = format!("{e:#}"), "couldn't set model");
     acp::Failure::error(acp::FailureKind::NoModel, format!("Couldn't select model {model}: {e:#}"))
+}
+
+/// OpenCode's own permission config for a bot at Ask first, like Codex's `CODEX_CONFIG` policy
+/// (OpenBot nightly triage-15626). The same `opencode_ask_first` decision that guards a card decides
+/// each entry; `None` leaves OpenCode's default alone.
+pub(super) fn opencode_permissions(permission: Permission, auto_approved: bool) -> Option<Value> {
+    let ask = |kind| crate::agent::approval_rules::opencode_ask_first(permission, auto_approved, kind);
+    let (bash, edit) = (ask("execute"), ask("edit"));
+    if !bash && !edit {
+        return None;
+    }
+    Some(json!({"permission": {
+        "bash": if bash { "ask" } else { "allow" },
+        "edit": if edit { "ask" } else { "allow" },
+    }}))
 }
 
 /// Cursor names a model variant `grok-4.7[reasoning_effort=high,fast=true]`. When the agent
@@ -354,6 +369,15 @@ mod tests {
         ]});
         let own = [("mode", "auto"), ("effort", "high")].map(|(k, v)| (k.to_owned(), v.to_owned())).into();
         assert_eq!(model_choice(&res, "opus[mode=acceptEdits]", &own), ("opus", vec![("effort", "high")]));
+    }
+
+    #[test]
+    fn opencode_ask_first_is_set_when_the_agent_starts() {
+        let config = opencode_permissions(Permission::Ask, false).expect("a config");
+        assert_eq!(config["permission"]["bash"], "ask");
+        assert_eq!(config["permission"]["edit"], "ask");
+        assert!(opencode_permissions(Permission::Ask, true).is_none(), "an opted-in backend stays automatic");
+        assert!(opencode_permissions(Permission::Auto, false).is_none(), "Always allow keeps OpenCode's default");
     }
 
     #[test]

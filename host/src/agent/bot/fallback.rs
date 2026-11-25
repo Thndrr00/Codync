@@ -53,6 +53,9 @@ pub(super) struct Relay {
     /// The main session moved off this agent (and its session): its next turn there starts with a recap or a
     /// catch-up. Kept until the main session comes up on an agent.
     recap: Option<(String, Option<String>)>,
+    /// This turn already recovered from a provider that stopped being configured: do it once, and give
+    /// the new session the current-setup handoff instead of an ordinary takeover (OpenBot 0.78.0).
+    unconfigured: bool,
     /// This attempt's move in the chat, which shows what the agent was told once its session is up.
     line: Option<String>,
     /// What this attempt's agent hears first after the user's handoff (`carry_in`); this turn's only.
@@ -141,7 +144,7 @@ impl Actor {
         let mut carried = Vec::new();
         if self.slot().is_none()
             && let Some((agent, session)) = self.relay.recap.take()
-            && let Some(text) = self.recap(&agent, session.as_deref())
+            && let Some(text) = self.recap(&agent, session.as_deref(), self.relay.unconfigured)
         {
             carried.push(text);
         }
@@ -205,7 +208,7 @@ impl Actor {
     /// What the agent the main session just moved to should hear first: a catch-up when it resumed its own
     /// session, a recap of the conversation when it started a new one. Only the user's messages and the bot's
     /// replies count, never from before the user last started a new session.
-    fn recap(&self, from: &str, from_session: Option<&str>) -> Option<String> {
+    fn recap(&self, from: &str, from_session: Option<&str>, unconfigured: bool) -> Option<String> {
         let bot = &self.base.id;
         let main = Lane::main(bot);
         let fresh: i64 = self.hub.store.kv_get(&park::fresh_key(bot)).and_then(|v| v.parse().ok()).unwrap_or(0);
@@ -233,7 +236,11 @@ impl Actor {
             .last_of_kind(&main, EntryKind::Plan, oldest.max(fresh))
             .map(|e| crate::chat::handoff::plan_text(&e.data));
         let bookmark = entries.last().map(|e| e.id.as_str());
-        Some(carry::recap(&fallback::name(from), summary.as_deref(), &said, plan.as_deref(), bookmark))
+        Some(if unconfigured {
+            carry::unconfigured_recap(&fallback::name(from), summary.as_deref(), &said)
+        } else {
+            carry::recap(&fallback::name(from), summary.as_deref(), &said, plan.as_deref(), bookmark)
+        })
     }
 
     /// What the failing attempt did: its tool calls, the messages it sent, its last words.
@@ -261,11 +268,41 @@ impl Actor {
         let (Some(mut reason), Some(attempt)) = (fallback::reason::of(error), self.relay.attempt.clone()) else {
             return false;
         };
+        // OpenBot 0.78.0: a Codex provider whose API address was removed is not a dead end. Drop the
+        // session that still names it, open one on the setup saved now and hand the earlier chat over
+        // with a summary. Once per turn: a second failure still falls back or reports as usual.
+        if reason == Reason::Unconfigured
+            && self.cfg.backend == "codex"
+            && fallback::reason::unconfigured_recovery(fallback::reason::error_kind(error))
+            && !self.relay.unconfigured
+        {
+            self.relay.unconfigured = true;
+            let from = fallback::name(&self.cfg.backend);
+            self.forget_session();
+            self.relay.recap = Some((from, None));
+            self.close_attempt(true);
+            self.relay.retrying = true;
+            return match self.start_turn(attempt.lane.clone(), &attempt.entries, &attempt.text, false, done_tx).await {
+                Ok(()) => true,
+                Err(e) => {
+                    self.start_failed(&e);
+                    true
+                }
+            };
+        }
+        // triage-15582: ChatGPT at capacity moves straight to the next backup model or account when
+        // automatic backups are configured, even after this attempt did some work.
+        let capacity_move = reason == Reason::Capacity
+            && fallback::reason::capacity_next(
+                &self.cfg.backend,
+                fallback::steps(&self.base).saturating_sub(1),
+                !self.base.fallbacks.is_empty(),
+            );
         // triage-14512: a turn that already started work only moves to the backup for causes the backup can carry
         // on from. Network and timeout were missing from that set, so a dropped connection after work used to stop
         // with an error and the person had to send the message again.
         let worked = !self.tools.is_empty() || !self.sent.is_empty() || self.watchdog.tool_calls() > 0;
-        if worked && !fallback::reason::continues_after_work(reason) {
+        if worked && !fallback::reason::continues_after_work(reason) && !capacity_move {
             return false;
         }
         let mut start_error: Option<anyhow::Error> = None;

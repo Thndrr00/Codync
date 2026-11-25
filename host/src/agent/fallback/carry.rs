@@ -73,6 +73,16 @@ pub fn recap(from: &str, summary: Option<&str>, said: &[Said], plan: Option<&str
     out.join("\n")
 }
 
+/// Starting over on the setup saved now after a provider stopped being configured (OpenBot 0.78.0):
+/// the same handoff a takeover gets, always with a summary line even when no stored summary exists.
+pub fn unconfigured_recap(from: &str, summary: Option<&str>, said: &[Said]) -> String {
+    let summary = summary
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("The earlier conversation is listed below; carry it on with the current setup.");
+    recap(from, Some(summary), said, None, None)
+}
+
 /// Back in a session it had before: what was said while other agents answered. `None` when nothing was.
 pub fn catch_up(said: &[Said]) -> Option<String> {
     (!said.is_empty()).then(|| {
@@ -170,6 +180,18 @@ mod tests {
         assert!(recap.contains("search_history with from: \"e5\""));
         assert!(catch_up(&said(&entries[5..])).is_none());
         assert!(catch_up(&all).is_some_and(|c| c.contains("User (2026-09-21): \"Fix the login tests\"")));
+    }
+
+    #[test]
+    fn an_unconfigured_provider_hands_the_chat_to_the_current_setup_with_a_summary() {
+        let said = [Said { user: true, date: "2026-11-24".into(), text: "Keep going".into() }];
+        let recap = unconfigured_recap("Codex", None, &said);
+        assert!(recap.contains("Summary of the earlier conversation:"), "the existing handoff prompt is reused");
+        assert!(recap.contains("carry it on with the current setup"));
+        assert!(recap.contains("User (2026-11-24): \"Keep going\""));
+        let with_summary = unconfigured_recap("Codex", Some("Working on auth"), &said);
+        assert!(with_summary.contains("Working on auth"));
+        assert!(!with_summary.contains("The earlier conversation is listed below"), "a real summary wins");
     }
 
     #[test]

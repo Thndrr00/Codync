@@ -184,18 +184,32 @@ impl Usage {
         self.providers.sort_by(|a, b| a.id.cmp(&b.id));
     }
 
-    /// A probe's full reading. Windows it no longer reports are dropped, and an
-    /// empty reading removes the provider.
+    /// A probe's full reading. Windows it no longer reports are dropped. An empty reading keeps the
+    /// provider's last windows (and their reset times) until a later reading replaces them.
     fn replace(&mut self, id: &str, name: &str, source: &str, new: Vec<Window>) {
+        let windows = {
+            let previous = self.providers.iter().find(|p| p.id == id);
+            keep_last_on_empty(previous, new)
+        };
         self.providers.retain(|p| p.id != id);
-        if new.is_empty() {
+        if windows.is_empty() {
             return;
         }
-        let mut windows = new;
+        let mut windows = windows;
         windows.sort_by(|a, b| a.id.cmp(&b.id));
         self.providers.push(Provider::new(id, name, source, windows));
         self.providers.sort_by(|a, b| a.id.cmp(&b.id));
     }
+}
+
+/// OpenBot 0.78.0: a plan probe that answers with no windows is a failed reading, not an empty plan.
+/// The last reading stays until its windows reset (or a later reading replaces them). A first empty
+/// reading still leaves no provider. Pure and shared by the full-reading path and its tests.
+fn keep_last_on_empty(previous: Option<&Provider>, incoming: Vec<Window>) -> Vec<Window> {
+    if incoming.is_empty() {
+        return previous.map_or_else(Vec::new, |p| p.windows.clone());
+    }
+    incoming
 }
 
 impl Provider {
@@ -412,8 +426,23 @@ mod tests {
         u.replace("cursor", "Cursor", "Cursor", vec![Window::note("unlimited", "Monthly", "Unlimited")]);
         assert_eq!(u.providers[0].windows.len(), 1);
         assert_eq!(u.providers[0].windows[0].id, "unlimited");
-        u.replace("cursor", "Cursor", "Cursor", Vec::new());
-        assert_eq!(u.providers, []);
+    }
+
+    #[test]
+    fn an_empty_plan_reading_keeps_the_last_reading_until_it_resets() {
+        let held = vec![Window::new("five_hour", "5-hour", 71.0, Some(9_000))];
+        let previous = Provider::new("claude", "Claude", "claude", held.clone());
+        assert_eq!(keep_last_on_empty(Some(&previous), Vec::new()), held, "a failed probe loses no row");
+        assert!(keep_last_on_empty(None, Vec::new()).is_empty(), "a first empty probe adds no provider");
+        let fresh = vec![Window::new("five_hour", "5-hour", 4.0, Some(9_000))];
+        assert_eq!(keep_last_on_empty(Some(&previous), fresh.clone()), fresh, "fresh data wins");
+
+        let mut usage = Usage::default();
+        usage.replace("claude", "Claude", "claude", held.clone());
+        usage.replace("claude", "Claude", "claude", Vec::new());
+        assert_eq!(usage.providers.len(), 1);
+        assert_eq!(usage.providers[0].windows, held);
+        assert_eq!(usage.providers[0].windows[0].resets_at, Some(9_000), "its reset is still shown");
     }
 
     #[test]

@@ -159,3 +159,28 @@ after a recent failure, the chat says that models of one account can share a
 limit and that a backup on another provider or account lets it continue; the
 provider's own text stays in the log. On a joined server the server must also
 run this version for these host-side changes.
+
+## Full readings, model picks and recovery (OpenBot 0.78.0)
+
+A plan probe that answers with no windows is a failed reading, not an empty
+plan: the provider's last windows and their reset times stay in the report
+until the next reading replaces them. A first reading that comes back empty
+still adds no provider. The decision is pure in `usage/mod.rs`.
+
+Changing only a model in a bot's settings keeps that bot's provider. A name
+that another provider also lists is not a reason to switch; the host applies
+the name when the bot's own provider lists it (or no catalog contradicts it),
+and otherwise keeps the saved model. The rule is pure in `hub/bots.rs`.
+
+ChatGPT has two failures that do not end the turn where other providers wait.
+A capacity error ("at capacity", "capacity limit") is its own fallback cause:
+with automatic backups configured and a backup to run on, a turn that already
+did work moves straight to the next backup model or account, and the provider
+rests only briefly. When the provider the bot was using is no longer
+configured (its API address was removed), a Codex chat drops that session,
+starts one on the setup saved now and receives the earlier conversation through
+the existing handoff prompt, so the chat carries on with a summary. A Codex
+settings read that fails with a bare "invalid data" is reported to the person
+as "couldn't load your ChatGPT settings; reconnect in Providers and try again";
+other errors keep their detail. These rules are pure in
+`agent/fallback/{reason,carry,rest}.rs` and tested there.

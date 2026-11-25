@@ -25,9 +25,16 @@ impl BackupStatus {
             None => Self::Available,
             Some(Reason::UsageLimit | Reason::OutOfCredits) => Self::Limited,
             Some(
-                Reason::RateLimited | Reason::Overloaded | Reason::NotStarting | Reason::Network | Reason::Timeout,
+                Reason::RateLimited
+                | Reason::Overloaded
+                | Reason::NotStarting
+                | Reason::Network
+                | Reason::Timeout
+                | Reason::Capacity,
             ) => Self::Failed,
-            Some(Reason::SignedOut | Reason::RefusedKey | Reason::ModelMissing) => Self::SignedOut,
+            Some(Reason::SignedOut | Reason::RefusedKey | Reason::ModelMissing | Reason::Unconfigured) => {
+                Self::SignedOut
+            }
         }
     }
 }

@@ -8,6 +8,42 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
+/// OpenBot 0.78.0: a model picker can offer the same name on another provider. A patch that names only
+/// a model must keep the bot's own provider: apply the name when this provider lists it (or nobody
+/// does), and ignore a name that belongs to another one. `available` is `(provider, model)` pairs.
+fn model_change(provider: &str, model: Option<&str>, available: &[(String, String)]) -> Option<String> {
+    let model = model.map(str::trim).filter(|m| !m.is_empty())?;
+    let listed_by_another = available.iter().any(|(p, m)| m == model && p != provider);
+    let listed_here = available.iter().any(|(p, m)| m == model && p == provider);
+    if listed_by_another && !listed_here {
+        return None;
+    }
+    Some(model.to_owned())
+}
+
+/// The model names a patch could have been picked from: this provider's cached catalog, and the models
+/// the computer's other bots already use (which is where a same-named choice on another provider shows).
+fn available_models(hub: &Hub, provider: &str) -> Vec<(String, String)> {
+    let key = provider.to_owned();
+    let now = std::time::Instant::now();
+    let catalog = hub.model_lists.fresh(&key, now).or_else(|| hub.model_lists.stale(&key));
+    let mut out: Vec<(String, String)> = catalog
+        .as_ref()
+        .and_then(|value| value["models"].as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|m| m["id"].as_str().map(|id| (provider.to_owned(), id.to_owned())))
+        .collect();
+    if let Ok(rows) = hub.store.bots() {
+        for row in rows {
+            if let Some(model) = row.config.model.as_deref().filter(|m| !m.is_empty()) {
+                out.push((row.config.backend.clone(), model.to_owned()));
+            }
+        }
+    }
+    out
+}
+
 impl Hub {
     /// Copies a bot's setup into a new one: same agent, folder, permissions, skills and persona, but no
     /// conversation, no pinned/lead place and no owner. Groups are not copied.
@@ -100,6 +136,19 @@ impl Hub {
             }
         }
         let mut cfg: BotConfig = serde_json::from_value(merged)?;
+        // A model-only patch keeps this bot's provider even when another lists the same name
+        // (OpenBot 0.78.0). Null explicitly clears the model; a cross-provider pick keeps the old one.
+        if patch.get("model").is_some() && patch.get("backend").is_none() && patch.get("command").is_none() {
+            if patch["model"].is_null() {
+                cfg.model = None;
+            } else if let Some(model) =
+                model_change(&row.config.backend, patch["model"].as_str(), &available_models(self, &row.config.backend))
+            {
+                cfg.model = Some(model);
+            } else {
+                cfg.model.clone_from(&row.config.model);
+            }
+        }
         if cfg.name.trim().is_empty() {
             cfg.name.clone_from(&row.config.name);
         }
@@ -214,5 +263,23 @@ impl Hub {
         });
         crate::usage::bots_changed(self);
         self.leave_groups(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_model_only_change_keeps_the_bots_provider() {
+        let listed =
+            |pairs: &[(&str, &str)]| pairs.iter().map(|(p, m)| ((*p).to_owned(), (*m).to_owned())).collect::<Vec<_>>();
+        let both = listed(&[("codex", "gpt-5"), ("cursor", "gpt-5")]);
+        assert_eq!(model_change("codex", Some("gpt-5"), &both).as_deref(), Some("gpt-5"));
+        let other = listed(&[("cursor", "gpt-5")]);
+        assert_eq!(model_change("codex", Some("gpt-5"), &other), None, "another provider's model is ignored");
+        assert_eq!(model_change("codex", Some("gpt-5"), &[]).as_deref(), Some("gpt-5"), "no catalog to contradict");
+        assert_eq!(model_change("codex", None, &both), None, "a blank name is not a change");
+        assert_eq!(model_change("codex", Some(" gpt-5 "), &both).as_deref(), Some("gpt-5"));
     }
 }

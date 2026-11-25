@@ -105,7 +105,7 @@ pub fn rest_key(agent: &str, account: Option<&str>) -> String {
 /// account sees them on the old provider-wide key.
 pub fn key_for(agent: &str, account: Option<&str>, reason: Reason) -> String {
     match reason {
-        Reason::UsageLimit | Reason::RateLimited | Reason::Overloaded => rest_key(agent, account),
+        Reason::UsageLimit | Reason::RateLimited | Reason::Overloaded | Reason::Capacity => rest_key(agent, account),
         _ => rest_key(agent, None),
     }
 }
@@ -197,7 +197,9 @@ fn record_at(
     let mut failures = before.filter(|r| now - r.until < BACKOFF[3]).map_or(0, |r| r.failures) + 1;
     let held = before.filter(|r| r.reason == Reason::UsageLimit).and_then(|r| r.reset_at);
     let (wait, reset_at) = match reason {
-        Reason::ModelMissing => return None,
+        Reason::ModelMissing | Reason::Unconfigured => return None,
+        // A provider at capacity comes back quickly; automatic backups carry this turn (triage-15582).
+        Reason::Capacity => (BACKOFF[0], None),
         Reason::UsageLimit => usage_wait(resets_at, held, now),
         Reason::OutOfCredits => (OUT_OF_CREDITS, None),
         Reason::SignedOut if crate::agent::backends::harness(backend_of(account)).is_some() => (SIGNED_OUT, None),
@@ -417,6 +419,12 @@ mod tests {
         assert_eq!(record(&store, "gemini", Reason::Overloaded, 0, None).map(|r| r.until), Some(MINUTE));
         assert!(!clear(&store, "cursor"));
         assert_eq!(record(&store, "cursor", Reason::ModelMissing, 0, None), None);
+        assert_eq!(
+            record(&store, "codex", Reason::Capacity, 0, None).map(|r| r.until),
+            Some(MINUTE),
+            "capacity rests briefly while a backup takes the turn"
+        );
+        assert_eq!(record(&store, "codex", Reason::Unconfigured, 0, None), None, "a removed provider holds nothing");
 
         let mut custom: crate::store::BotConfig =
             serde_json::from_value(serde_json::json!({"id": "b", "name": "B", "backend": "custom", "command": "a"}))
@@ -437,10 +445,12 @@ mod tests {
         assert_eq!(rest_key("custom#abc123", Some("acc_1")), "rest.custom#abc123:acc_1");
 
         // A limit one profile hit is scoped; every other reason stays where older hosts wrote it.
-        for reason in [Reason::UsageLimit, Reason::RateLimited, Reason::Overloaded] {
+        for reason in [Reason::UsageLimit, Reason::RateLimited, Reason::Overloaded, Reason::Capacity] {
             assert_eq!(key_for("claude", Some("acc_1"), reason), "rest.claude:acc_1");
         }
-        for reason in [Reason::OutOfCredits, Reason::SignedOut, Reason::NotStarting, Reason::ModelMissing] {
+        for reason in
+            [Reason::OutOfCredits, Reason::SignedOut, Reason::NotStarting, Reason::ModelMissing, Reason::Unconfigured]
+        {
             assert_eq!(
                 key_for("claude", Some("acc_1"), reason),
                 "rest.claude",

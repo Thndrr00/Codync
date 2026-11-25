@@ -224,6 +224,22 @@ classifier already marks them), computer use (`toolKind: computer`) and public f
 Nothing here changes a bot's own rules or the blocklist, and the per-agent setting never grants
 more than those cards allow.
 
+## OpenCode Ask first (OpenBot nightly triage-15626)
+
+An OpenCode bot at **Ask first** writes its own permission config when the agent
+starts, so it asks before a shell command or a file change in routines and
+channels too. Reads and fetches keep their reach; a backend opted into automatic
+approval, or a bot set to **Always allow**, keeps OpenCode's default and does
+not get a config file. A config the person saved themselves is never replaced:
+the host writes one only when none was set for that start. The pure decision is
+`approval_rules::opencode_ask_first`, shared by the config and its tests; the
+question itself is the existing approval card in `bot/updates.rs`.
+
+An OpenCode reply that only narrates actions as prose ("I updated the file",
+"Done — committed") with no tool call behind it is not a completed turn
+(triage-15547): the bounded self-check runs on it and asks for real evidence
+before success is reported. The pure rule is `self_check::narrated_actions`.
+
 Ideas from rakazo's `action-approval.ts`, `approval-effect-key.ts` and `answerable-ask.ts`
 (Apache-2.0); no code copied. Rakazo's channel receipts and message commands need messaging
 channels, which Codync doesn't have.

@@ -29,6 +29,12 @@ pub enum Reason {
     NotStarting,
     /// The agent doesn't have the step's model.
     ModelMissing,
+    /// ChatGPT has no capacity for the request right now; an automatic backup can take it at once
+    /// (OpenBot nightly triage-15582).
+    Capacity,
+    /// The provider this bot was using is no longer configured (its API address was removed). The chat
+    /// carries on on the setup saved now, with the earlier conversation summed up (OpenBot 0.78.0).
+    Unconfigured,
 }
 
 impl Reason {
@@ -45,6 +51,8 @@ impl Reason {
             Self::RefusedKey => "refused the saved API key",
             Self::NotStarting => "couldn't start",
             Self::ModelMissing => "doesn't have this bot's model",
+            Self::Capacity => "is at capacity",
+            Self::Unconfigured => "is no longer configured",
         }
     }
 }
@@ -135,6 +143,65 @@ pub fn refused_credential_text(message: &str) -> bool {
     REFUSED_KEY_WORDS.iter().any(|word| lower.contains(word))
 }
 
+/// Words a provider uses when it has no capacity for a request right now, as distinct from this
+/// account's usage limit (OpenBot nightly triage-15582).
+const CAPACITY_WORDS: [&str; 3] = ["at capacity", "capacity limit", "capacity reached"];
+
+/// Whether an error text names capacity rather than a quota the account spent.
+pub fn capacity_text(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    CAPACITY_WORDS.iter().any(|word| lower.contains(word))
+}
+
+/// Whether a capacity failure moves straight to the next backup model or account. Only ChatGPT's
+/// provider does, and only with automatic backups configured and at least one backup to run on.
+/// Pure, so the rule is tested without a bot or a store.
+pub fn capacity_next(provider: &str, backups: usize, auto: bool) -> bool {
+    auto && backups > 0 && matches!(provider.trim().to_ascii_lowercase().as_str(), "codex" | "chatgpt")
+}
+
+/// Adapter categories that mean the provider the bot was using is no longer configured (its API
+/// address was removed), so the chat should carry on with the setup saved now (OpenBot 0.78.0).
+const UNCONFIGURED_KINDS: [&str; 6] = [
+    "unconfigured",
+    "not_configured",
+    "no_provider",
+    "provider_not_configured",
+    "no_base_url",
+    "custom_endpoint_missing",
+];
+
+/// Whether a failure kind is a removed configuration, not a refusal, a limit or a missing model.
+pub fn unconfigured_recovery(kind: &str) -> bool {
+    UNCONFIGURED_KINDS.iter().any(|name| kind.trim().eq_ignore_ascii_case(name))
+}
+
+/// The same failure named in text by an adapter that has no category for it.
+fn unconfigured_text(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    ["no provider configured", "provider is not configured", "api address is not configured", "no base url"]
+        .iter()
+        .any(|word| lower.contains(word))
+}
+
+/// The adapter's own category on an error, so a caller can tell why it moved on without reading text.
+pub fn error_kind(error: &anyhow::Error) -> &str {
+    error.chain().find_map(|cause| cause.downcast_ref::<RpcError>()).and_then(|r| r.kind.as_deref()).unwrap_or_default()
+}
+
+/// Codex's settings reader can fail with a serde detail like "invalid data". That tells the person
+/// nothing they can do: name the fix instead (OpenBot 0.78.0). Other errors keep their detail.
+pub fn settings_failure_message(raw: &str) -> String {
+    const PLAIN: &str = "couldn't load your ChatGPT settings; reconnect in Providers and try again";
+    let lower = raw.to_ascii_lowercase();
+    let settings_failure = lower.contains("invalid data")
+        || lower.contains("invalid settings")
+        || lower.contains("couldn't load model settings")
+        || (lower.contains("settings") && lower.contains("expected value"))
+        || (lower.contains("settings") && lower.contains("failed to parse"));
+    if settings_failure { PLAIN.to_owned() } else { raw.to_owned() }
+}
+
 /// The reasons that let a turn which already started work move on to the backup model
 /// (OpenBot's `CONTINUE_CAUSES`, extended with network and timeout in triage-14512). A turn that
 /// did nothing may be retried on the backup for any fallback reason; one that did work needs a
@@ -151,6 +218,8 @@ pub fn continues_after_work(reason: Reason) -> bool {
             | Reason::SignedOut
             | Reason::RefusedKey
             | Reason::NotStarting
+            | Reason::Capacity
+            | Reason::Unconfigured
     )
 }
 
@@ -164,8 +233,11 @@ pub fn skip_reason(reason: Reason) -> Option<&'static str> {
         | Reason::Network
         | Reason::Timeout
         | Reason::RefusedKey
-        | Reason::NotStarting => Some("Not available now · skipped"),
-        Reason::UsageLimit | Reason::OutOfCredits | Reason::SignedOut | Reason::ModelMissing => None,
+        | Reason::NotStarting
+        | Reason::Capacity => Some("Not available now · skipped"),
+        Reason::UsageLimit | Reason::OutOfCredits | Reason::SignedOut | Reason::ModelMissing | Reason::Unconfigured => {
+            None
+        }
     }
 }
 
@@ -197,6 +269,15 @@ pub fn of_rpc(r: &RpcError) -> Option<Reason> {
     // JSON-RPC code or only in its message, so check both before any other cause.
     if r.code == GONE || gone_text(&r.message) {
         return Some(Reason::ModelMissing);
+    }
+    // A provider whose API address was removed is not a refusal to answer: the turn continues on the
+    // setup saved now (OpenBot 0.78.0). Check the adapter's category and the text it sends.
+    let kind = r.kind.as_deref().unwrap_or_default();
+    if unconfigured_recovery(kind) || unconfigured_text(&r.message) {
+        return Some(Reason::Unconfigured);
+    }
+    if capacity_text(&r.message) {
+        return Some(Reason::Capacity);
     }
     let usage_text = USAGE_LIMIT_TEXT.iter().any(|t| r.message.contains(t));
     // Claude's adapter sends the Agent SDK's assistant error (`rate_limit`…); codex-acp its `codexErrorInfo`
@@ -334,5 +415,53 @@ mod tests {
         assert_eq!(of(&rpc(-32603, "Internal error", Some("invalid_request"))), None);
         assert_eq!(of(&rpc(-32602, "Invalid params", None)), None);
         assert_eq!(of(&anyhow::anyhow!("no session")), None);
+    }
+
+    #[test]
+    fn chatgpt_at_capacity_moves_on_only_with_automatic_backups() {
+        // triage-15582: a capacity error is its own reason, and the next backup can take the turn
+        // at once when the bot has backups configured.
+        assert_eq!(of(&rpc(-32603, "ChatGPT is at capacity right now", None)), Some(Reason::Capacity));
+        assert_eq!(of(&rpc(-32603, "The model has reached its capacity limit", None)), Some(Reason::Capacity));
+        assert_eq!(of(&rpc(-32603, "Internal error: capacity reached", None)), Some(Reason::Capacity));
+        assert_eq!(of(&rpc(-32603, "usage limit", None)), Some(Reason::UsageLimit), "a quota is not capacity");
+        assert_eq!(skip_reason(Reason::Capacity), Some("Not available now · skipped"));
+        assert!(continues_after_work(Reason::Capacity), "work already done can be carried on");
+
+        assert!(capacity_next("codex", 2, true), "Codex with backups moves straight on");
+        assert!(capacity_next("ChatGPT", 1, true));
+        assert!(!capacity_next("codex", 0, true), "no backup to move to");
+        assert!(!capacity_next("codex", 2, false), "backups off wait as before");
+        assert!(!capacity_next("claude", 2, true), "only ChatGPT's capacity behaves this way");
+    }
+
+    #[test]
+    fn a_removed_provider_recovers_on_the_setup_saved_now() {
+        for kind in ["unconfigured", "NOT_CONFIGURED", "no_provider", "provider_not_configured", "no_base_url"] {
+            assert!(unconfigured_recovery(kind), "{kind}");
+            assert_eq!(of(&rpc(-32603, "Internal error", Some(kind))), Some(Reason::Unconfigured), "{kind}");
+        }
+        assert_eq!(of(&rpc(-32603, "No provider configured for this model", None)), Some(Reason::Unconfigured));
+        assert_eq!(of(&rpc(-32603, "The API address is not configured", None)), Some(Reason::Unconfigured));
+        assert!(!unconfigured_recovery("invalid_request"));
+        assert!(!unconfigured_recovery(""));
+        assert_eq!(error_kind(&rpc(-32603, "Internal error", Some("unconfigured"))), "unconfigured");
+        assert_eq!(error_kind(&anyhow::anyhow!("no session")), "");
+        assert!(continues_after_work(Reason::Unconfigured));
+    }
+
+    #[test]
+    fn a_codex_settings_load_error_says_what_to_do_not_the_serde_detail() {
+        let plain = "couldn't load your ChatGPT settings; reconnect in Providers and try again";
+        for raw in [
+            "invalid data",
+            "Failed to parse settings: expected value at line 1 column 4",
+            "invalid settings file",
+            "Couldn't load model settings: invalid data",
+        ] {
+            assert_eq!(settings_failure_message(raw), plain, "{raw}");
+        }
+        assert_eq!(settings_failure_message("The agent timed out"), "The agent timed out");
+        assert_eq!(settings_failure_message(""), "");
     }
 }

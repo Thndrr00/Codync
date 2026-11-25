@@ -451,9 +451,9 @@ impl Actor {
         // triage-15547: a reply that only says it did the work, with no tool behind it, is not a
         // finished turn. It earns the same bounded check as a tool-using turn.
         let tool_calls = self.watchdog.tool_calls() > 0;
-        let narrated = final_text.as_deref().is_some_and(|text| {
-            super::self_check::narrated_actions(text, usize::from(tool_calls))
-        });
+        let narrated = final_text
+            .as_deref()
+            .is_some_and(|text| super::self_check::narrated_actions(text, usize::from(tool_calls)));
         // OpenBot 0.74.0: a finished turn that used tools and answered gets one bounded check that the work
         // covered the whole request. The check runs as the next hidden turn on this session (see `on_turn_done`).
         let has_answer = done.is_ok()
@@ -469,7 +469,7 @@ impl Actor {
             && !self.proactive_turn
             && !self.task_started
             && super::self_check::may_check(
-                self.watchdog.tool_calls() > 0,
+                tool_calls || narrated,
                 promised,
                 has_answer,
                 stopped,
@@ -479,7 +479,7 @@ impl Actor {
         {
             let request = self.turn_text.clone().unwrap_or_default();
             let steps = self.self_check_steps();
-            self.schedule_self_check(request, steps);
+            self.schedule_self_check(request, steps, narrated);
         } else if !grouped && !delegated && !self.proactive_turn && !self.task_started && !stopped && !pending_input {
             // A short "continue" from the person is not a new request: carry on with the same
             // bounded self-check instead of a second agent loop (OpenBot nightly).
@@ -487,7 +487,7 @@ impl Actor {
             if super::self_check::continuation_uses_self_check(&text, self.self_checks) {
                 let request = self.self_check_request.clone().unwrap_or(text);
                 let steps = self.self_check_steps();
-                self.schedule_self_check(request, steps);
+                self.schedule_self_check(request, steps, narrated);
             }
         }
         // A turn that went well and used several kinds of tool may become a proposed skill (it waits in an inbox).
@@ -519,7 +519,10 @@ impl Actor {
                     let text = if std::mem::take(&mut self.no_answer_empty) {
                         super::turn_rules::NO_ANSWER_EMPTY.to_owned()
                     } else {
-                        format!("The agent failed: {e}{detail}")
+                        // OpenBot 0.78.0: a Codex settings read that failed with "invalid data" says
+                        // what the person can do instead of naming a serde detail.
+                        let error = crate::agent::fallback::reason::settings_failure_message(&format!("{e}"));
+                        format!("The agent failed: {error}{detail}")
                     };
                     self.failure_notice(e, &text);
                 }
