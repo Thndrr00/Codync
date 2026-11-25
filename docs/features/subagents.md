@@ -6,11 +6,13 @@ server: `delegate(task, agent?, depth?)`. `task` is a self-contained request; `a
 names a different agent backend (it defaults to the calling bot's own agent); `depth` is
 an internal field a child reports when it is asked to delegate in turn. The child runs in a fresh
 throwaway ACP session on the host, reusing the same turn runner the host uses for background jobs
-(so the model is chosen the way it is for those jobs):
-it has no chat of its own, no saved memory and no MCP tools, so it cannot send messages to the user,
-message the user's other bots, or start a further subagent. Its final reply is returned straight to
-the calling bot as the tool result. Unlike `message_bot`, a subagent is the bot's own private helper,
-not another bot in the user's roster, so it does not post notices into any user chat.
+(so the model is chosen the way it is for those jobs): it has no chat of its own or saved memory, but
+it inherits the parent's browser, chat and own MCP servers so it can browse and work on part of a
+task (OpenBot 15942). The `team` server is left out, so `delegate` and `message_bot` are unavailable:
+the child cannot message the user's other bots or start a further subagent, and its prompt tells it
+not to send messages to the user. Its final reply is returned straight to the calling bot as the tool
+result. Unlike `message_bot`, a subagent is the bot's own private helper, not another bot in the
+user's roster, so it does not post notices into any user chat.
 
 This is off by default. The bot's owner enables the `subagents` setting in the bot's settings
 (`BotConfig.subagents`); until then `delegate` refuses the call. A child spends the bot's own tokens

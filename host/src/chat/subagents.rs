@@ -4,12 +4,12 @@
 //! Ported from OpenBot nightly's subagent delegation: "When you ask an agent to use subagents, it
 //! starts its own subagents and does not send the work to your other agents" (`CHANGELOG.md`).
 //! Adapted to Codync's terms: the child is a throwaway ACP session on the parent's agent backend,
-//! never one of the user's other bots, so it gets no chat of its own and cannot message the user.
-//! It reuses `chat::oneshot::one_shot`, the host's existing throwaway-turn runner, instead of a
-//! second agent loop.
+//! never one of the user's other bots. It reuses `chat::oneshot`, the host's existing throwaway-turn
+//! runner, instead of a second agent loop. The child inherits the parent's browser/chat/own tools
+//! so it can work on part of a task, but not the team tools (`delegate`, `message_bot`).
 
 use crate::analytics::{self, Event};
-use crate::chat::oneshot::one_shot;
+use crate::chat::oneshot::{self, one_shot_with_servers};
 use crate::hub::Hub;
 use crate::store::BotConfig;
 use anyhow::{Result, bail};
@@ -26,6 +26,26 @@ pub const TOOL: &str = "delegate";
 
 /// A task longer than this is refused before a child process starts.
 const MAX_TASK_BYTES: usize = 32_000;
+
+/// The MCP server whose tools are never handed to a child: it carries `delegate` and `message_bot`.
+const TEAM_SERVER: &str = "team";
+
+/// The MCP servers a helper child gets: the parent's browser/chat/own servers plus the child's own,
+/// minus the team server. Names are deduped, and the parent's declaration wins. Pure so the
+/// inheritance and the exclusion are tested without a host or a store (OpenBot 15942).
+pub(crate) fn helper_tools(parent: &Value, child: &Value) -> Value {
+    let mut kept: Vec<Value> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    for server in parent.as_array().into_iter().flatten().chain(child.as_array().into_iter().flatten()) {
+        let Some(name) = server["name"].as_str() else { continue };
+        if name == TEAM_SERVER || names.iter().any(|known| known == name) {
+            continue;
+        }
+        names.push(name.to_owned());
+        kept.push(server.clone());
+    }
+    Value::Array(kept)
+}
 
 /// How one delegation attempt ended. Only these fixed values reach analytics; never the task text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,7 +105,7 @@ impl Budget {
 pub fn tool() -> Value {
     json!({
         "name": TOOL,
-        "description": "Hand one bounded task to a short-lived child turn on your own agent (or a chosen one) and wait for its final reply. The child works in a fresh session with no chat of its own: it cannot message the user, message other bots or start further subagents, and its work spends your tokens. At most 2 levels of children and 4 children per turn. Different from message_bot: this is your own subagent, not one of the user's bots.",
+        "description": "Hand one bounded task to a short-lived child turn on your own agent (or a chosen one) and wait for its final reply. The child works in a fresh session with your browser, chat and own tools, but no team tools: it cannot message the user, message other bots or start further subagents, and its work spends your tokens. At most 2 levels of children and 4 children per turn. Different from message_bot: this is your own subagent, not one of the user's bots.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -107,15 +127,15 @@ fn report(hub: &Hub, outcome: Outcome, agent: &str) {
     analytics::capture(hub, Event::SubagentDelegated, properties);
 }
 
-/// The child's fixed instructions. It has no MCP tools in its throwaway session (see `one_shot`),
-/// so these are a reminder of its shape, not the only thing keeping it from messaging the user.
+/// The child's fixed instructions. It has the parent's browser/chat/own tools (see `helper_tools`)
+/// but no team tools, so these are a reminder of its shape, not the only boundary on delegation.
 fn system_prompt(depth: u8) -> String {
     format!(
         "[Codync: you are a subagent, a short-lived child turn of another bot, at depth {} of {}. \
-         Do the single task below and put the complete result in your final reply. You have no chat \
-         of your own and no tools: do not send messages to the user, do not message other bots, and \
-         do not try to start a further subagent. Your final reply is returned to the bot that asked \
-         you.]",
+         Do the single task below and put the complete result in your final reply. You have your \
+         parent's browser, chat and own tools, but no team tools: do not message the user, do not \
+         message other bots, and do not try to start a further subagent. Your final reply is returned \
+         to the bot that asked you.]",
         depth + 1,
         MAX_DEPTH
     )
@@ -133,6 +153,8 @@ pub async fn call(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Va
     let depth = args["depth"].as_u64().unwrap_or_default().min(u64::from(MAX_DEPTH));
     let depth = u8::try_from(depth).unwrap_or(MAX_DEPTH);
     let agent = args["agent"].as_str().filter(|agent| !agent.trim().is_empty()).unwrap_or(&source.backend).to_owned();
+    let parent_servers = oneshot::bot_servers(hub, source)?;
+    let servers = helper_tools(&parent_servers, &json!([]));
 
     let mut budget = hub.team.delegation(&source.id);
     let admitted = budget.admit(depth);
@@ -146,7 +168,7 @@ pub async fn call(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Va
     child.backend = agent.clone();
     let system = system_prompt(depth);
     let user = format!("Subagent task:\n{task}");
-    match one_shot(hub, &child, &system, &user).await {
+    match one_shot_with_servers(hub, &child, &system, &user, servers).await {
         Ok(reply) => {
             report(hub, Outcome::Ok, &agent);
             Ok(json!({"reply": reply, "agent": agent, "depth": depth + 1}))
@@ -211,5 +233,40 @@ mod tests {
         assert!(text.contains("at most 2 levels") && text.contains("4 children"));
         assert!(text.contains("task") && text.contains("agent") && text.contains("depth"));
         assert_eq!(schema["inputSchema"]["required"][0], "task");
+    }
+
+    #[test]
+    fn a_helper_inherits_the_parents_tools_but_not_the_team_server() {
+        let parent = json!([
+            {"name": "chat", "command": "host"},
+            {"name": "team", "command": "host"},
+            {"name": "my-connector", "command": "npx"}
+        ]);
+        let tools = helper_tools(&parent, &json!([]));
+        let names: Vec<&str> =
+            tools.as_array().expect("an array").iter().map(|s| s["name"].as_str().unwrap_or_default()).collect();
+        assert_eq!(names, ["chat", "my-connector"]);
+        assert_eq!(tools[0]["command"], "chat", "the parent's declaration is kept");
+        assert!(!tools.to_string().contains("team"), "delegate and message_bot stay out");
+    }
+
+    #[test]
+    fn a_server_declared_by_both_sides_is_declared_once() {
+        let parent = json!([{"name": "chat", "command": "parent"}]);
+        let child = json!([{"name": "chat", "command": "child"}, {"name": "memory"}]);
+        let tools = helper_tools(&parent, &child);
+        let names: Vec<&str> =
+            tools.as_array().expect("an array").iter().map(|s| s["name"].as_str().unwrap_or_default()).collect();
+        assert_eq!(names, ["chat", "memory"]);
+        assert_eq!(tools[0]["command"], "parent", "the parent's definition wins");
+    }
+
+    #[test]
+    fn a_child_without_a_parent_stays_tool_free() {
+        assert_eq!(helper_tools(&json!([]), &json!([])), json!([]));
+        assert_eq!(helper_tools(&Value::Null, &Value::Null), json!([]), "bad input never declares tools");
+        let system = system_prompt(0);
+        assert!(system.contains("browser") && system.contains("own tools"));
+        assert!(system.contains("do not message other bots") && system.contains("further subagent"));
     }
 }

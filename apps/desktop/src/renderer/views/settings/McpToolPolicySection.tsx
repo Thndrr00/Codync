@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CardSection, ChoicePicker, ValueRow } from '../../components/Controls'
+import { CardSection, ChoicePicker, RowLabel, ValueRow } from '../../components/Controls'
 import { Text } from '../../components/Text'
+import { limit_note } from '../marketplace/mcp-limit-note'
 import { useModel } from '../../lib/observable'
 import { useTr } from '../../lib/use-language'
 import { useApp } from '../../store/context'
@@ -69,6 +70,7 @@ function ConnectorPolicies({ connector, store }: { connector: ConnectorInfo; sto
       title={connector.name}
       footer="Applies to every bot using this connection. Explicit choices override what the server reports."
     >
+      <RowLabel label={tr('Working directory')} detail={limit_note(connector.name)} />
       {model.loading && !model.policies.length ? <Text size="caption" tone="secondary">{tr('Loading tools…')}</Text> : null}
       {!model.loading && !model.policies.length ? <Text size="caption" tone="secondary">{tr('No tools have been seen yet. Their policies appear after a tool runs.')}</Text> : null}
       {model.policies.map((policy) => (

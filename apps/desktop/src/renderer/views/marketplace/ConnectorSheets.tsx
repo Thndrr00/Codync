@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CardForm, CardSection, ChoiceList, IconButton, SegmentedChoice, Spinner } from '../../components/Controls'
+import { CardForm, CardSection, ChoiceList, IconButton, RowLabel, SegmentedChoice, Spinner } from '../../components/Controls'
 import { Dialog, ModalHeader, SheetPage, useDismiss } from '../../components/Overlay'
 import { useModel } from '../../lib/observable'
 import { VStack } from '../../components/Stack'
@@ -10,6 +10,7 @@ import { ErrorText, Field, WebLink } from './pieces'
 import { HEADER_NAME_MESSAGE, invalidHeaderKey } from './header-names'
 import { usePlugins } from './plugins'
 import { signInCode } from './sign-in-code'
+import { limit_note } from './mcp-limit-note'
 import { useTr } from '../../lib/use-language'
 import { fill } from '../../lib/fill.ts'
 
@@ -202,6 +203,7 @@ export function CustomConnectorSheet() {
           {mode === 'config' ? <Field value={config} onChange={setConfig} placeholder={'{ "mcpServers": { … } }'} lines={[6, 16]} mono /> : null}
           {mode !== 'config' ? <Field value={name} onChange={setName} placeholder="Name" /> : null}
           {mode !== 'config' ? <Field value={target} onChange={setTarget} placeholder={mode === 'url' ? 'https://example.com/mcp' : 'npx -y @scope/server'} mono /> : null}
+          {mode === 'command' ? <RowLabel label={tr('Working directory')} detail={limit_note(name)} /> : null}
         </CardSection>
         {mode === 'url' ? (
           <CardSection title="Headers" footer={onHost('Optional, one Name: value per line. Leave empty if the service has you sign in. Saved on {name} only.')}>

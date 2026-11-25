@@ -4,8 +4,9 @@ use crate::api::devices::Caller;
 use crate::hub::Hub;
 use crate::store::{EntryKind, Lane, mcp_policies::Mode};
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 pub const METHODS: &[&str] = &[
@@ -61,24 +62,82 @@ pub(super) fn field<'a>(body: &'a Value, name: &str) -> Result<&'a str> {
     body[name].as_str().with_context(|| format!("{name} is required"))
 }
 
-/// A Pi/custom endpoint otherwise reports a generic ready state while one of the bot's configured
-/// MCP servers never spawned. Post one plain notice in that bot's chat (OpenBot 0.78.0). The stable
-/// id keeps a repeated tool call from posting it again. Pure decision is in `market::verify`.
+/// One cause of a dropped MCP server: its name and the host's classified failure kind. The pair is
+/// the toast's dedup key, so the same failure seen twice stays quiet while a different cause is named.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub(crate) struct FailureCause {
+    pub server: String,
+    pub kind: String,
+}
+
+impl FailureCause {
+    /// The stable chat entry id for this one cause.
+    pub(crate) fn notice_id(&self, bot: &str) -> String {
+        format!("mcp-start-notice:{bot}:{}:{}", self.server, self.kind)
+    }
+}
+
+/// The plain notice a new cause posts: only the server's name, never error text or tool output.
+/// A cause already in `seen` gets no toast (OpenBot plan 003). Generalizes the old pi/custom-only
+/// notice to every provider; the stable id keeps a repeated tool call from posting it twice. Pure.
+pub(crate) fn failure_notice(cause: &FailureCause, seen: &BTreeSet<FailureCause>) -> Option<String> {
+    if seen.contains(cause) {
+        return None;
+    }
+    crate::market::verify::mcp_start_notice(&cause.server, true)
+}
+
+/// At most this many causes are remembered per bot, so the dedup set cannot grow without bound.
+const MAX_SEEN_CAUSES: usize = 64;
+
+fn seen_key(bot: &str) -> String {
+    format!("mcp-notice-causes:{bot}")
+}
+
+fn seen_causes(hub: &Hub, bot: &str) -> BTreeSet<FailureCause> {
+    hub.store
+        .kv_get(&seen_key(bot))
+        .and_then(|s| serde_json::from_str::<Vec<FailureCause>>(&s).ok())
+        .map(|causes| causes.into_iter().collect())
+        .unwrap_or_default()
+}
+
+/// Post one plain notice in the bot's chat when one of its MCP servers failed to start. Every
+/// provider gets it, not just Pi/custom endpoints, and a cause already announced stays quiet.
 fn notice_failed_server(hub: &Hub, bot: &str, connector: &str) {
-    let backend = hub.store.bot(bot).ok().flatten().map(|row| row.config.backend).unwrap_or_default();
-    if backend != "pi" && backend != "custom" {
-        return;
-    }
-    if crate::market::verify::last_failure(&hub.store, connector).is_none() {
-        return;
-    }
-    let Some(text) = crate::market::verify::mcp_start_notice(connector, true) else {
+    let Some(failure) = crate::market::verify::last_failure(&hub.store, connector) else {
         return;
     };
-    let id = format!("mcp-start-notice:{bot}:{connector}");
+    let cause =
+        FailureCause { server: connector.to_owned(), kind: failure["kind"].as_str().unwrap_or("tool").to_owned() };
+    let seen = seen_causes(hub, bot);
+    let Some(text) = failure_notice(&cause, &seen) else {
+        return;
+    };
     let lane = hub.runtime(bot).lane.unwrap_or_else(|| Lane::main(bot));
-    if let Err(e) = hub.add_entry_once(&id, &lane, EntryKind::Notice, hub.store.max_turn(bot), &json!({"text": text})) {
+    if let Err(e) = hub.add_entry_once(
+        &cause.notice_id(bot),
+        &lane,
+        EntryKind::Notice,
+        hub.store.max_turn(bot),
+        &json!({"text": text}),
+    ) {
         tracing::warn!(error = format!("{e:#}"), "couldn't post the MCP start notice");
+        return;
+    }
+    let mut seen = seen;
+    seen.insert(cause);
+    let mut remembered: Vec<FailureCause> = seen.into_iter().collect();
+    if remembered.len() > MAX_SEEN_CAUSES {
+        remembered.drain(..remembered.len() - MAX_SEEN_CAUSES);
+    }
+    match serde_json::to_string(&remembered) {
+        Ok(encoded) => {
+            if let Err(e) = hub.store.kv_set(&seen_key(bot), &encoded) {
+                tracing::warn!(error = format!("{e:#}"), "couldn't remember the MCP start notice");
+            }
+        }
+        Err(e) => tracing::warn!(error = format!("{e:#}"), "couldn't serialize MCP notice causes"),
     }
 }
 
@@ -387,5 +446,37 @@ mod tests {
     #[test]
     fn a_passing_verify_without_a_prior_failure_changes_nothing() {
         assert_eq!(tools_after_verify(false, true, false), ToolsAfterVerify::Unchanged);
+    }
+
+    #[test]
+    fn a_dropped_server_gets_a_plain_notice_only_once_per_cause() {
+        let cause = FailureCause { server: "filesystem".into(), kind: "unreachable".into() };
+        let none = BTreeSet::new();
+        let text = failure_notice(&cause, &none).expect("a failed server gets a notice");
+        assert!(text.contains("filesystem") && text.contains("could not start"));
+        assert!(text.contains("Marketplace"), "the notice says where to check");
+        assert!(!text.contains("error"), "no server error text reaches the chat");
+
+        let seen = BTreeSet::from([cause.clone()]);
+        assert_eq!(failure_notice(&cause, &seen), None, "the same cause stays quiet");
+    }
+
+    #[test]
+    fn a_different_server_or_cause_still_gets_its_own_notice() {
+        let cause = FailureCause { server: "filesystem".into(), kind: "unreachable".into() };
+        let seen = BTreeSet::from([cause.clone()]);
+        let other_server = FailureCause { server: "linear".into(), kind: "unreachable".into() };
+        let other_kind = FailureCause { server: "filesystem".into(), kind: "auth".into() };
+        assert!(failure_notice(&other_server, &seen).is_some(), "every dropped server is named");
+        assert!(failure_notice(&other_kind, &seen).is_some(), "a changed cause is named again");
+    }
+
+    #[test]
+    fn a_notice_id_is_stable_and_scoped_to_one_bot_and_cause() {
+        let cause = FailureCause { server: "filesystem".into(), kind: "unreachable".into() };
+        assert_eq!(cause.notice_id("alice"), "mcp-start-notice:alice:filesystem:unreachable");
+        assert_eq!(cause.notice_id("alice"), cause.notice_id("alice"));
+        assert_ne!(cause.notice_id("alice"), cause.notice_id("bob"));
+        assert_ne!(cause.notice_id("alice"), FailureCause { kind: "auth".into(), ..cause }.notice_id("alice"));
     }
 }

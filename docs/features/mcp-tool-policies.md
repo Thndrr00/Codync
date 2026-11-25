@@ -45,6 +45,16 @@ The latch only restores tool declarations. It never changes an `allow`, `ask` or
 client label for the success state is "Tools available from the next message"
 (English source).
 
+A server that failed to start also gets one plain notice in the bot's chat, on
+every provider, not just Pi and custom endpoints (plan 003). The notice names the
+server only — no error text or tool output leaves the host — and repeats only
+when its classified cause changes (`auth`, `unreachable`, `tool`): the same cause
+seen twice stays quiet. The host keeps at most 64 causes per bot for this dedup.
+
+A saved local server runs in each bot's working directory, so a relative path in
+its command only resolves where that file exists. The desktop MCP form and the
+tool-policy panel both show that limit (the panel's label is "Working directory").
+
 ## Management and read-only recovery
 
 The sheet contains overrides, an exact-argument request inbox, confirmed bulk
