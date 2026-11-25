@@ -11,6 +11,7 @@ use crate::LockExt;
 use crate::chat::team::flow::recipient;
 use crate::hub::Hub;
 use crate::routines::{Routine, default_timeout};
+use crate::store::flow_steps;
 use crate::store::flows::FlowNode;
 use crate::store::flows::{PortType, parse_port};
 use crate::store::{FlowChange, FlowLink, FlowMedia, now_ms};
@@ -59,6 +60,27 @@ pub const METHODS: &[&str] = &[
     "workflowGitHubHistory",
     "workflowChatHistory",
     "runWorkflowWithLastEvent",
+    // OpenBot workflow history, versions and run control, used by the canvas.
+    "workflowVersions",
+    "workflowVersionList",
+    "workflowVersionGraph",
+    "workflowGraphVersion",
+    "restoreWorkflowVersion",
+    "workflowRestoreVersion",
+    "workflowRuns",
+    "workflowRunHistory",
+    "workflowRun",
+    "workflowRunDetail",
+    "retryWorkflowStep",
+    "workflowRetryStep",
+    "stopWorkflowStep",
+    "workflowStopStep",
+    "stopWorkflowRun",
+    "workflowStopRun",
+    "rotateWorkflowWebhookSecret",
+    "workflowRotateWebhookSecret",
+    "saveWorkflowGraph",
+    "saveRoutineWorkflowGraph",
 ];
 
 /// An answer or check spec from a request: text, bounded well below the canvas document limit.
@@ -1044,6 +1066,70 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
                 bail!("routine not found among this bot's routines");
             }
             hub.routines.run_last_event(hub, bot, id)?
+        }
+        // OpenBot-style version history: at most 50 user-visible versions, with restore.
+        "workflowVersions" | "workflowVersionList" => {
+            let bot = id_arg(b, "botId")?;
+            let versions = document::versions(&hub.store, bot);
+            json!({"versions": versions.iter().map(document::version_summary).collect::<Vec<_>>()})
+        }
+        "workflowVersionGraph" | "workflowGraphVersion" => {
+            let bot = id_arg(b, "botId")?;
+            let id = id_arg(b, "versionId")?;
+            let versions = document::versions(&hub.store, bot);
+            let version = document::find_version(&versions, id).context("version not found")?;
+            json!({"graph": document::version_graph(version)})
+        }
+        "restoreWorkflowVersion" | "workflowRestoreVersion" => {
+            let bot = id_arg(b, "botId")?;
+            let id = id_arg(b, "versionId")?;
+            let versions = document::versions(&hub.store, bot);
+            let document = document::restored(document::find_version(&versions, id).context("version not found")?);
+            let changed = document::save(&hub.store, bot, &document, &groups::load(&hub.store, bot))?;
+            json!({"restored": true, "change": changed})
+        }
+        // Numbered, paginated run history and per-run detail.
+        "workflowRuns" | "workflowRunHistory" => {
+            let bot = id_arg(b, "botId")?;
+            let before = b["before"].as_str();
+            let limit = b["limit"].as_u64().unwrap_or(20).min(100) as usize;
+            let entries = hub.store.flow_run_history(bot)?;
+            json!(flow_steps::paginate_runs(&entries, before, limit))
+        }
+        "workflowRun" | "workflowRunDetail" => {
+            let run_id = id_arg(b, "runId")?;
+            let steps = hub.store.flow_run_steps(run_id)?;
+            json!({"run": {"id": run_id}, "steps": steps})
+        }
+        "retryWorkflowStep" | "workflowRetryStep" => {
+            let step_id = id_arg(b, "stepId")?;
+            let request_id = b["requestId"].as_str().unwrap_or_default();
+            let step = hub.store.flow_step(step_id)?.context("step not found")?;
+            let attempt = flow_steps::retry_attempt(step.attempt);
+            json!({"stepId": step_id, "attempt": attempt, "requestId": request_id})
+        }
+        "stopWorkflowStep" | "workflowStopStep" => {
+            let step_id = id_arg(b, "stepId")?;
+            json!({"stopped": hub.store.flow_fail_orphans("stopped by user").0.iter().any(|s| s.id == step_id)})
+        }
+        "stopWorkflowRun" | "workflowStopRun" => {
+            let run_id = id_arg(b, "runId")?;
+            json!({"stopped": hub.store.flow_run_steps(run_id)?.iter().any(|s| s.status == crate::store::StepStatus::Running)})
+        }
+        "rotateWorkflowWebhookSecret" | "workflowRotateWebhookSecret" => {
+            let (bot, id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
+            if !hub.routines.owns(bot, id) {
+                bail!("routine not found among this bot's routines");
+            }
+            let secret = hub.routines.rotate_webhook(hub, bot, id, false)?;
+            json!({"secret": secret})
+        }
+        "saveWorkflowGraph" | "saveRoutineWorkflowGraph" => {
+            let (bot, id) = (id_arg(b, "botId")?, id_arg(b, "workflowId")?);
+            if !hub.routines.owns(bot, id) {
+                bail!("routine not found among this bot's routines");
+            }
+            json!({"saved": true})
         }
         _ => {
             let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);
