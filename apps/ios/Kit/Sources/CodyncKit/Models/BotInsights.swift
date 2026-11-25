@@ -26,9 +26,36 @@ public struct BotInsights: Decodable, Sendable {
     public let timezone: InsightTimezone
     public let approvals: InsightApprovals
     public let failures: InsightFailures
+    public let conversation: InsightConversation
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of a bot's chat rhythm.
+public struct InsightConversation: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let line: String
+    public let total: String
+    public let entries: Int
+    public let dominant: String
+    public let workHeavy: Bool
+    public let userLed: Bool
+    public let repliesPerMessage: Int
+    public let stepsPerMessage: Int
+    public let summary: [InsightSummaryRow]
+    public let kinds: [InsightConversationKind]
+}
+
+public struct InsightConversationKind: Decodable, Sendable {
+    public let kind: String
+    public let label: String
+    public let count: Int
+    public let icon: String
+    public let tone: String
+    public let percent: Int
+    public let bar: String
 }
 
 /// A host-computed summary of recent tool failures.

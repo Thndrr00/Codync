@@ -66,6 +66,33 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let conversation = &data["conversation"];
+    if conversation.is_object() {
+        line(buf, &mut y, tr("Conversation").into_owned(), t.bold.patch(t.panel));
+        let headline = conversation["headline"].as_str().unwrap_or("");
+        let rhythm = conversation["line"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {rhythm}"), t.text.patch(t.panel));
+        let kinds: Vec<String> = conversation["kinds"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|k| {
+                        format!(
+                            "  {} {} {}",
+                            k["label"].as_str().unwrap_or(""),
+                            k["bar"].as_str().unwrap_or(""),
+                            k["count"].as_u64().unwrap_or(0)
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for kind in kinds {
+            line(buf, &mut y, kind, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let failures = &data["failures"];
     if failures.is_object() && failures["total"].as_str() != Some("0") {
         line(buf, &mut y, tr("Recent failures").into_owned(), t.bold.patch(t.panel));

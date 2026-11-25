@@ -30,6 +30,16 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let conversation = insights.conversation
+                    Text(conversation.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(conversation.line).font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(conversation.kinds, id: \.kind) { kind in
+                        HStack(spacing: 6) {
+                            Text(kind.label).font(.footnote).foregroundStyle(Palette.secondary)
+                            Text(kind.bar).font(.footnote).foregroundStyle(Palette.accent)
+                            Text("\(kind.count)").font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
                     let failures = insights.failures
                     if failures.total != "0" {
                         Text(failures.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)

@@ -29,9 +29,32 @@ data class BotInsights(
     val timezone: InsightTimezone = InsightTimezone(),
     val approvals: InsightApprovals = InsightApprovals(),
     val failures: InsightFailures = InsightFailures(),
+    val conversation: InsightConversation = InsightConversation(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed summary of a bot's chat rhythm. */
+@Serializable
+data class InsightConversation(
+    val headline: String = "",
+    val tone: String = "",
+    val line: String = "",
+    val total: String = "",
+    val entries: Int = 0,
+    val dominant: String = "",
+    val workHeavy: Boolean = false,
+    val userLed: Boolean = false,
+    val repliesPerMessage: Int = 0,
+    val stepsPerMessage: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val kinds: List<InsightConversationKind> = emptyList(),
+)
+
+@Serializable data class InsightConversationKind(
+    val kind: String = "", val label: String = "", val count: Int = 0,
+    val icon: String = "", val tone: String = "", val percent: Int = 0, val bar: String = "",
 )
 
 /** A host-computed summary of recent tool failures. */

@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Ritmo de conversación (23 helpers + UI en 4 clientes)
+
+`bdots_conversation.rs` añade 23 helpers puros sobre la mezcla de entradas de chat (mensajes,
+respuestas, pensamientos, herramientas, planes, aprobaciones, avisos): etiquetas, iconos, tonos,
+conteos, porcentajes, barras, ratios, detector de trabajo vs charla, titulares y resúmenes.
+Reutiliza `bdots_text`, `bdots_activity` y `bdots_desk`. El endpoint `botInsights` añade el campo
+`conversation` desde el `history` que el host ya consulta; la sección «Conversation» se muestra en
+los cuatro clientes.
+
 ## Fallos recientes (23 helpers + UI en 4 clientes)
 
 `bdots_failures.rs` añade 23 helpers puros sobre los errores recientes de herramientas: razones

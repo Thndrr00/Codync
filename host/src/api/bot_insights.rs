@@ -923,6 +923,37 @@ fn failures_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
     })
 }
 
+/// Conversation rhythm: the mix of entry kinds in the recent window.
+fn conversation_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_conversation as c;
+
+    let entries = hub.store.history(bot, i64::MAX, 80).unwrap_or_default();
+    let kinds: Vec<&str> = entries.iter().map(|e| e.kind.as_str()).collect();
+
+    json!({
+        "headline": c::rhythm_headline(&kinds),
+        "tone": c::rhythm_tone(&kinds),
+        "line": c::rhythm_line(&kinds),
+        "total": c::count_label(&kinds),
+        "entries": kinds.len(),
+        "dominant": c::dominant_kind(&kinds),
+        "workHeavy": c::work_heavy(&kinds),
+        "userLed": c::user_led(&kinds),
+        "repliesPerMessage": c::reply_ratio(&kinds),
+        "stepsPerMessage": c::work_ratio(&kinds),
+        "summary": c::summary(&kinds).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "kinds": c::all_lines(&kinds).iter().map(|l| json!({
+            "kind": l.kind,
+            "label": l.label,
+            "count": l.count,
+            "icon": l.icon,
+            "tone": l.tone,
+            "percent": l.percent,
+            "bar": l.bar,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1003,6 +1034,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "timezone": timezone_view(&routines),
         "approvals": approvals_view(hub, bot, now),
         "failures": failures_view(hub, bot, now),
+        "conversation": conversation_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

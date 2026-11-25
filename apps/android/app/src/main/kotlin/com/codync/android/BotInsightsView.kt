@@ -42,6 +42,14 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val conversation = insights.conversation
+            CardSection("Conversation") {
+                row { Text(conversation.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(conversation.line, style = Type.caption, color = Palette.secondary) }
+                for (kind in conversation.kinds) row {
+                    Text("${kind.label}  ${kind.bar}  ${kind.count}", style = Type.caption, color = Palette.tertiary)
+                }
+            }
             val failures = insights.failures
             if (failures.total != "0") CardSection("Recent failures") {
                 row { Text(failures.headline, style = Type.subheadline.semibold, color = Palette.text) }
