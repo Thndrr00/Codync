@@ -171,3 +171,17 @@ export function chatFileHref(path: string): string {
   const escaped = encodeURI(absolute).replaceAll('#', '%23').replaceAll('?', '%3F')
   return `file://${escaped}`
 }
+
+/**
+ * An in-page `#` link (a page's tabs or menu) resolves against the frame that shows the page, not
+ * against the app's own origin (OpenBot 0.70.0). Only a local preview document may carry it, and an
+ * old fragment is replaced rather than doubled. Pure, so the preview decides the target without a
+ * DOM and a link from elsewhere stays untouched.
+ */
+export function hash_target(href: string, base: string): string | null {
+  const target = href.trim()
+  if (target.length < 2 || !target.startsWith('#') || CONTROL.test(target)) return null
+  if (!base || CONTROL.test(base) || !/^(?:file:\/\/|about:srcdoc)/iu.test(base)) return null
+  const document = base.split('#')[0] ?? base
+  return document ? `${document}${target}` : null
+}

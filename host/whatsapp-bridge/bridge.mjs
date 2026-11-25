@@ -134,8 +134,8 @@ async function start() {
                 const chat = message.key.remoteJid
                 const group = chat?.endsWith('@g.us') ?? false
                 const self = me !== '' && chat === me
-                // Your own messages count only in the "message yourself" chat.
-                if (message.key.fromMe && !self) continue
+                // OpenBot 0.70.0: your own posts in an allowed chat are history too. Forward them
+                // with `fromMe` set; the host keeps them but never opens a bot turn for them.
                 const context = message.message?.extendedTextMessage?.contextInfo ?? message.message?.imageMessage?.contextInfo
                     ?? message.message?.videoMessage?.contextInfo ?? message.message?.documentMessage?.contextInfo
                     ?? message.message?.audioMessage?.contextInfo

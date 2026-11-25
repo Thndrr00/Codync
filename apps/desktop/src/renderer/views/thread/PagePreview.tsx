@@ -2,7 +2,7 @@ import { createContext, useMemo } from 'react'
 import { Button } from '../../components/Controls'
 import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { Text } from '../../components/Text'
-import { fileReferenceName, type PreviewKind } from '../../lib/chat-file-link.ts'
+import { fileReferenceName, hash_target, type PreviewKind } from '../../lib/chat-file-link.ts'
 import { useTr } from '../../lib/use-language'
 import { safePageHtml } from '../../lib/page-preview'
 import './page-preview.css'
@@ -64,7 +64,11 @@ export function LocalFilePreviewSheet({ preview, close }: { preview: LocalPrevie
   // hash is the narrow additive hand-off: a viewer that understands it can jump, and the header
   // always says what the agent named (OpenBot 0.78.0).
   const position = preview?.line ? `${preview.line}${preview.column ? `:${preview.column}` : ''}` : ''
-  const src = preview ? `${preview.href}${position ? `#line=${preview.line}` : ''}` : ''
+  // OpenBot 0.70.0: the fragment belongs to this preview document. Joining it through the pure
+  // decision keeps an in-page link inside the frame and replaces any fragment the href already had.
+  const src = preview
+    ? (position ? hash_target(`#line=${preview.line}`, preview.href) ?? preview.href : preview.href)
+    : ''
   return (
     <Sheet open={preview !== null} onClose={close} width={880} maxHeight="82vh" dismissOnDim>
       {preview ? (

@@ -172,6 +172,25 @@ pub(super) async fn say(ep: &Endpoint, bot: &TgBot, chat: i64, text: &str) {
     }
 }
 
+/// OpenBot 0.70.0: a Reply brings the message it answers into the agent's prompt. A manual quote
+/// carries only the part the person selected. Transport text is untrusted, so the context is one
+/// bounded line: no sender id is kept and none of its content goes into analytics. Pure so the
+/// decision is testable without a bot or a socket.
+const REPLY_CHARS: usize = 600;
+
+pub(super) fn reply_context(reply: Option<&str>, quote: Option<&str>) -> Option<String> {
+    let selected = quote
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .or_else(|| reply.map(str::trim).filter(|text| !text.is_empty()))?;
+    let flat: String = selected.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut text: String = flat.chars().take(REPLY_CHARS).collect();
+    if flat.chars().count() > REPLY_CHARS {
+        text.push('…');
+    }
+    Some(format!("Replying to: {text}"))
+}
+
 pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &Shared, update: &Value, expected: &str) {
     let Some(bot) = current(hub, name) else { return };
     if fingerprint(&bot) != expected {
@@ -187,6 +206,11 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
     }
     let (Some(chat), Some(user)) = (message["chat"]["id"].as_i64(), message["from"]["id"].as_i64()) else { return };
     let text = message["text"].as_str().or_else(|| message["caption"].as_str()).unwrap_or_default().trim();
+    // OpenBot 0.70.0: a Reply shows the message answered, or only the selected part when quoted.
+    let reply = reply_context(
+        message["reply_to_message"]["text"].as_str().or_else(|| message["reply_to_message"]["caption"].as_str()),
+        message["quote"]["text"].as_str(),
+    );
     let voice = message.get("voice").or_else(|| message.get("audio"));
     if text.is_empty() && voice.is_none() {
         return;
@@ -273,9 +297,13 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
     } else {
         (text.to_owned(), None)
     };
+    // OpenBot 0.70.0: the same context reaches the kept row and the prompt, so an agent reading the
+    // history after a restart sees what the Reply pointed at. A voice note keeps its file too.
+    let note =
+        reply.as_deref().map_or_else(|| text.to_owned(), |context| format!("{text}\n\n{context}").trim().to_owned());
     // OpenBot 0.75.0: keep what arrived before it becomes a bot event, so an agent can read the
     // conversation back after a restart. A voice note keeps its file with its text.
-    remember(&text, file.as_deref());
+    remember(&note, file.as_deref());
     if current(hub, name).is_none_or(|active| fingerprint(&active) != expected || !active.allowed.contains(&user)) {
         return;
     }
@@ -291,7 +319,7 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
             *route = Some(Route { chat, turn, live: None, cards: HashMap::new() });
         }
     }
-    match super::input::post(hub, name, user, expected, &text, &nonce) {
+    match super::input::post(hub, name, user, expected, &note, &nonce) {
         Ok(entry) => {
             if let Err(error) = hub.store.record_channel_activity(&crate::store::ChannelActivity {
                 id: nonce,
@@ -490,4 +518,35 @@ async fn card(ep: &Endpoint, bot: &TgBot, route: &mut Route, entry: &Value) -> a
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_reply_shows_the_answered_message_and_a_quote_shows_only_the_selection() {
+        assert_eq!(
+            reply_context(Some("  the whole message\nnext line  "), None),
+            Some("Replying to: the whole message next line".into())
+        );
+        assert_eq!(
+            reply_context(Some("the whole message"), Some("  just this part  ")),
+            Some("Replying to: just this part".into()),
+            "a manual quote wins over the whole message"
+        );
+        assert_eq!(reply_context(None, Some("  ")), None, "an empty selection is no context");
+        assert_eq!(reply_context(None, None), None, "no reply is no context");
+    }
+
+    #[test]
+    fn reply_context_is_one_bounded_line_without_a_sender() {
+        let long = "word ".repeat(REPLY_CHARS);
+        let context = reply_context(Some(&long), None).expect("a context");
+        assert!(context.starts_with("Replying to: word"));
+        assert!(context.chars().count() <= "Replying to: ".chars().count() + REPLY_CHARS + 1);
+        assert!(context.ends_with('…'), "the tail is marked as cut");
+        assert!(!context.contains('\n'), "transport newlines are flattened");
+        assert!(!context.contains("from:"), "no sender id is kept");
+    }
 }

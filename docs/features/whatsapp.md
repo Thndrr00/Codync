@@ -34,6 +34,15 @@ on desktop, iPhone and Android, labelled **Message yourself**, and cannot be
 removed with **Remove**. The number's settings say that this chat and the people
 you allow reach the bot; the other chats still get no reply.
 
+## Your own messages in history
+
+Messages you send from your phone to a chat that can reach the bot are now kept in the same 90-day
+history as the messages you receive, photos and files included (OpenBot 0.70.0). The bridge forwards
+them with `fromMe` set; the host keeps a line only when the destination is allowed, and saves any
+attachment through the same media path, so an agent reading the conversation sees both sides. A
+message you sent never opens a bot turn — the "Message yourself" chat is the one exception and keeps
+working as before. A post to a chat that isn't allowed leaves neither a history row nor a reply.
+
 ## Read-only chats
 
 An allowed contact or group can be set to **Read only** on the WhatsApp page in the desktop app

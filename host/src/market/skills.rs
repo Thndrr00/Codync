@@ -29,6 +29,22 @@ pub(super) fn script_mode(path: &std::path::Path, content: &[u8]) -> bool {
     shell || content.starts_with(b"#!")
 }
 
+/// One entry a skill folder's scan sees (OpenBot 0.70.0). An agent's tools can leave an empty
+/// folder behind; it is not content the folder owns, so it must not count as a local change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SkillEntry {
+    File,
+    FilledDir,
+    EmptyDir,
+}
+
+/// Pure decision: whether a scanned skill folder holds a local change that takes its place. Only
+/// files and folders with something in them do; an empty folder is not a change. Tested without a
+/// filesystem, while the caller does the directory reads.
+fn has_local_change(entries: &[SkillEntry]) -> bool {
+    entries.iter().any(|entry| !matches!(entry, SkillEntry::EmptyDir))
+}
+
 /// Adds the execute bits to a file the pure decision marked as a script, keeping the other bits.
 /// Off Unix there is no POSIX mode to set; the decision is still made at every write site.
 pub(super) fn mark_executable(path: &std::path::Path) -> Result<()> {
@@ -437,10 +453,28 @@ pub fn add_custom_skill(
         if let Some(bot) = written_by {
             room_for(all, bot)?;
         }
-        // A folder the list doesn't have yet (a download in progress) is taken too.
+        // A folder the list doesn't have yet (a download in progress) is taken too. OpenBot 0.70.0:
+        // an empty folder left by the agent's tools is not a local change, so it does not take the id.
         let folders = std::fs::read_dir(skills_dir()).into_iter().flatten().flatten();
-        let taken: Vec<String> =
-            all.iter().map(|s| s.id.clone()).chain(folders.filter_map(|f| f.file_name().into_string().ok())).collect();
+        let taken: Vec<String> = all
+            .iter()
+            .map(|s| s.id.clone())
+            .chain(folders.filter_map(|f| {
+                let name = f.file_name().into_string().ok()?;
+                let entry = match f.file_type() {
+                    Ok(kind) if kind.is_dir() => {
+                        if std::fs::read_dir(f.path()).is_ok_and(|mut children| children.next().is_some()) {
+                            SkillEntry::FilledDir
+                        } else {
+                            SkillEntry::EmptyDir
+                        }
+                    }
+                    Ok(_) => SkillEntry::File,
+                    Err(_) => SkillEntry::File,
+                };
+                has_local_change(std::slice::from_ref(&entry)).then_some(name)
+            }))
+            .collect();
         let s = Skill {
             id: unique_id(name, &taken),
             name: one_line(name),
@@ -704,6 +738,29 @@ mod tests {
         store.save_bot(&cfg).expect("save bot");
         turn_on_installed_once(&store).expect("second run");
         assert!(skills_of(&store).is_empty(), "a skill turned off afterwards stays off");
+    }
+
+    #[test]
+    fn an_empty_folder_is_not_a_local_change_that_takes_a_skill_id() {
+        assert!(!has_local_change(&[]));
+        assert!(!has_local_change(&[SkillEntry::EmptyDir]), "an agent's empty folder is not a change");
+        assert!(!has_local_change(&[SkillEntry::EmptyDir, SkillEntry::EmptyDir]));
+        assert!(has_local_change(&[SkillEntry::File]), "a file is a local change");
+        assert!(has_local_change(&[SkillEntry::FilledDir]), "a folder holding something is a change");
+        assert!(has_local_change(&[SkillEntry::EmptyDir, SkillEntry::File]));
+    }
+
+    #[test]
+    fn an_empty_leftover_folder_does_not_take_the_skills_id() {
+        let name = format!("empty-folder-{}", uuid::Uuid::new_v4().simple());
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("memory store");
+        let id = slug(&name);
+        let folder = skills_dir().join(&id);
+        std::fs::create_dir_all(&folder).expect("empty leftover folder");
+        let skill = add_custom_skill(&store, &name, "Test", "Body", None).expect("skill uses the free id");
+        assert_eq!(skill.id, id, "the empty folder did not block the id");
+        remove_skill(&store, &skill.id).expect("remove skill");
+        let _ = std::fs::remove_dir(&folder);
     }
 
     #[test]

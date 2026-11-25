@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chatFileHref, chatFileLink, file_link_target, fileReferenceName, isAbsoluteDocumentPath, isKnownFileReference, isMissingFileCandidate, linkTarget, match_file_link, previewKind } from './chat-file-link.ts'
+import { chatFileHref, chatFileLink, file_link_target, fileReferenceName, hash_target, isAbsoluteDocumentPath, isKnownFileReference, isMissingFileCandidate, linkTarget, match_file_link, previewKind } from './chat-file-link.ts'
 
 test('a full path to any document opens as a file link, including docx, pages and rtf', () => {
   for (const path of ['/Users/e/Documents/Informe.docx', 'C:\\Users\\e\\Notes.pages', '/home/e/notes.rtf', '/Users/e/report.pdf']) {
@@ -53,6 +53,26 @@ test('only local HTML and PDF get an in-app preview, with a safe fallback for th
   for (const path of ['/Users/e/notes.txt', '/Users/e/picture.png', 'https://example.com/page.html', '/a/b/\nfile.pdf', '']) {
     assert.equal(previewKind(path), null, path)
   }
+})
+
+test('a hash link resolves inside the preview document and replaces an old fragment', () => {
+  assert.equal(
+    hash_target('#/project/scope', 'file:///Users/e/page.html'),
+    'file:///Users/e/page.html#/project/scope',
+  )
+  assert.equal(
+    hash_target('#line=26', 'file:///Users/e/page.html#old'),
+    'file:///Users/e/page.html#line=26',
+  )
+  assert.equal(hash_target('#top', 'about:srcdoc'), 'about:srcdoc#top')
+})
+
+test('a hash link cannot pull the preview to another origin or a broken target', () => {
+  assert.equal(hash_target('https://example.com/#x', 'file:///a/page.html'), null)
+  assert.equal(hash_target('#x', ''), null)
+  assert.equal(hash_target('#x', 'https://example.com/page.html'), null)
+  assert.equal(hash_target('#', 'file:///a/page.html'), null)
+  assert.equal(hash_target('#x\nmore', 'file:///a/page.html'), null)
 })
 
 test('a written folder chain only matches a known file whose folders all agree', () => {

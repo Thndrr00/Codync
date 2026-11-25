@@ -146,6 +146,17 @@ impl WhatsApp {
         }
         let sender = event["sender"].as_str().unwrap_or_default();
         let group = event["group"].as_bool().unwrap_or(false);
+        let from_me = event["fromMe"].as_bool().unwrap_or(false);
+        let me = self.state.lock().await.me.clone().unwrap_or_default();
+        let own = settings::is_own_chat(&me, chat, sender);
+        let allowed = settings::read_allowed(&hub.store).unwrap_or_default();
+        let principal = if group { chat } else { sender };
+        let permitted = allowed.is_empty() || own || allowed.iter().any(|entry| entry.jid == principal);
+        // OpenBot 0.70.0: a post you sent from the phone to an allowed chat belongs in the history
+        // an agent reads back. To a chat that isn't allowed it leaves neither a row nor a turn.
+        if from_me && !own && !super::history::is_own_history(from_me, permitted) {
+            return;
+        }
         let media = event["media"].as_object();
         // The file is saved as the message arrives, before the mention and allow checks, because the
         // number keeps its files along with its text (OpenBot 0.72.0).
@@ -177,15 +188,16 @@ impl WhatsApp {
         {
             return;
         }
+        // OpenBot 0.70.0: your own messages stay in history but never start a reply. The owner's
+        // "message yourself" chat (own) still reaches the bot, as it always has.
+        if from_me && !own {
+            return;
+        }
         if group && !event["mentioned"].as_bool().unwrap_or(false) && !event["quoted"].as_bool().unwrap_or(false) {
             return;
         }
         // With a list, only the owner, allowed people and allowed groups get through. A read-only
         // entry still had its message kept above, but opens no bot turn (OpenBot 0.77.0).
-        let allowed = settings::read_allowed(&hub.store).unwrap_or_default();
-        let me = self.state.lock().await.me.clone().unwrap_or_default();
-        let own = settings::is_own_chat(&me, chat, sender);
-        let principal = if group { chat } else { sender };
         if !allowed.is_empty() && !own {
             let Some(entry) = allowed.iter().find(|entry| entry.jid == principal) else { return };
             if !settings::can_reply(Some(entry)) {

@@ -106,6 +106,13 @@ pub(super) fn remember_update(store: &Store, connector: &str, message: &Value) -
         .map(|id| id.to_string())
         .or_else(|| message["message_id"].as_str().map(str::to_owned))
         .unwrap_or_default();
+    let text = message["text"].as_str().or_else(|| message["caption"].as_str()).unwrap_or_default().trim();
+    // OpenBot 0.70.0: a Reply's context is kept with the line even when it never reaches the bot.
+    let context = super::worker::reply_context(
+        message["reply_to_message"]["text"].as_str().or_else(|| message["reply_to_message"]["caption"].as_str()),
+        message["quote"]["text"].as_str(),
+    );
+    let text = context.map_or_else(|| text.to_owned(), |context| format!("{text}\n\n{context}").trim().to_owned());
     remember_with_id(
         store,
         &Incoming {
@@ -114,7 +121,7 @@ pub(super) fn remember_update(store: &Store, connector: &str, message: &Value) -
             group: message["chat"]["type"].as_str() != Some("private"),
             sender: &sender,
             title: message["chat"]["title"].as_str(),
-            text: message["text"].as_str().or_else(|| message["caption"].as_str()).unwrap_or_default().trim(),
+            text: &text,
             file: None,
             at: crate::store::now_ms(),
         },
@@ -277,6 +284,23 @@ mod tests {
         assert!(edit(&store, "home", 42, "99", "edited").unwrap());
         let kept = search(&store, &[], 0, i64::MAX, 10).unwrap();
         assert_eq!(kept[0]["text"], "edited");
+    }
+
+    #[test]
+    fn an_update_keeps_the_reply_context_with_the_line() {
+        let store = crate::store::tests::temp_store();
+        let message = serde_json::json!({
+            "message_id": 12,
+            "chat": {"id": -100, "type": "supergroup"},
+            "from": {"id": 7},
+            "text": "yes",
+            "reply_to_message": {"text": "ship it?"},
+            "quote": {"text": "ship it"},
+        });
+        assert!(remember_update(&store, "home", &message).unwrap());
+        let kept = search(&store, &[], 0, i64::MAX, 10).unwrap();
+        assert!(kept[0]["text"].as_str().unwrap().contains("yes\n\nReplying to: ship it"));
+        assert!(!kept[0]["text"].as_str().unwrap().contains("ship it?"), "only the selected part is kept");
     }
 
     #[test]

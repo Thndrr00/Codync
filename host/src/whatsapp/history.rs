@@ -102,6 +102,14 @@ pub(crate) fn keep_copy(first: Option<(i64, bool)>, at: i64) -> bool {
     }
 }
 
+/// Whether a message the number's owner sent belongs in the kept history (OpenBot 0.70.0). Such a
+/// post is a line of the conversation an agent reads back, but it never opens a bot turn; the
+/// owner's "message yourself" chat keeps its turn through the ordinary live path. Pure so the
+/// history decision is testable without a link or a store.
+pub(crate) fn is_own_history(from_me: bool, allowed: bool) -> bool {
+    from_me && allowed
+}
+
 /// What a bridge's delete-for-everyone or edit report does to a message it kept. A deletion drops
 /// the row; an edit with new text replaces the kept text; an edit with no text changes nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -535,6 +543,14 @@ mod tests {
             !keep_copy(Some((at - RESEND_WINDOW_MS - 1, false)), at),
             "past the window the resend is a duplicate too"
         );
+    }
+
+    #[test]
+    fn only_an_owners_message_to_an_allowed_chat_joins_the_history() {
+        assert!(is_own_history(true, true), "a post to an allowed contact is a history line");
+        assert!(!is_own_history(true, false), "a post to a stranger leaves no row");
+        assert!(!is_own_history(false, true), "a contact's message takes the ordinary path");
+        assert!(!is_own_history(false, false));
     }
 
     #[test]

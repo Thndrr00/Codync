@@ -44,6 +44,10 @@ Files travel in both directions: users attach inputs, and bots explicitly share 
   an empty draft removes the last one); sent files show as `▤ name size` lines. It uploads with the
   same `upload` chunks.
 - A files-only message previews in the roster as its file names.
+- A local HTML page previewed in chat keeps its in-page `#` links (tabs and menu items): the desktop
+  joins the fragment to the preview document instead of the app's own origin, replacing any fragment
+  the link already had, so the link stays inside the sandboxed frame (OpenBot 0.70.0). Links to
+  another origin and malformed targets are left alone.
 
 ## Files from a bot
 
