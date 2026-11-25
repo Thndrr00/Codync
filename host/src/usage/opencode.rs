@@ -17,8 +17,10 @@ use super::Window;
 const USAGE_URL: &str = "https://opencode.ai/zen/go/v1/usage";
 const CONSOLE_URL: &str = "https://opencode.ai/console";
 
-pub(super) async fn collect() -> Option<Vec<Window>> {
+pub(super) async fn collect(store: &crate::store::Store) -> Option<Vec<Window>> {
+    let saved = crate::agent::auth::saved_value(store, "opencode", "OPENCODE_API_KEY").ok().flatten();
     let keys = tokio::task::spawn_blocking(credentials).await.ok()?;
+    let keys = key_sources(keys, saved);
     for key in keys {
         if let Some(windows) = fetch(&key).await {
             return Some(windows);
@@ -27,7 +29,23 @@ pub(super) async fn collect() -> Option<Vec<Window>> {
     None
 }
 
-/// The console key or OAuth token the CLI uses, in its own order.
+/// The console keys in the order the CLI would use them: the process environment, a key saved in
+/// Settings by the sign-in form, then the CLI's own files. Duplicates are dropped, values are
+/// never logged (OpenBot 16230: a sign-in-stored key must still produce the usage ring).
+pub(crate) fn key_sources(mut from_process_and_files: Vec<String>, saved_by_sign_in: Option<String>) -> Vec<String> {
+    if let Some(key) = saved_by_sign_in {
+        let key = key.trim().to_owned();
+        if !key.is_empty() {
+            let at = 1.min(from_process_and_files.len());
+            from_process_and_files.insert(at, key);
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    from_process_and_files.retain(|key| seen.insert(key.clone()));
+    from_process_and_files
+}
+
+/// The console key or OAuth token the CLI uses from its process and own files, in its own order.
 fn credentials() -> Vec<String> {
     let mut keys: Vec<String> = Vec::new();
     if let Some(key) =
@@ -43,8 +61,6 @@ fn credentials() -> Vec<String> {
             keys.push(key);
         }
     }
-    let mut seen = std::collections::HashSet::new();
-    keys.retain(|key| seen.insert(key.clone()));
     keys
 }
 
@@ -143,6 +159,15 @@ fn database_path(dir: &Path) -> PathBuf {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_sign_in_stored_key_joins_the_console_keys_without_a_duplicate() {
+        assert_eq!(key_sources(vec!["env".into(), "file".into()], Some("saved".into())), ["env", "saved", "file"]);
+        assert_eq!(key_sources(vec!["env".into()], Some("env".into())), ["env"]);
+        assert_eq!(key_sources(Vec::new(), Some("saved".into())), ["saved"]);
+        assert_eq!(key_sources(vec!["file".into()], Some("  ".into())), ["file"]);
+        assert_eq!(key_sources(vec!["file".into()], None), ["file"]);
+    }
 
     #[test]
     fn the_console_reading_is_three_windows() {

@@ -55,6 +55,17 @@ export class Plugins extends Observable {
     }
   }
 
+  /** Test connection: the host checks the handshake and records a classified failure if it fails. */
+  async verify(id: string) {
+    const result = await this.after(market.verifyConnector(await this.store.ready(), id))
+    return result.status
+  }
+
+  /** Saves values for the keys a remote connector already declared; it never adds a new key. */
+  async saveFields(id: string, fields: Record<string, string>) {
+    await this.after(market.updateConnectorCredentials(await this.store.ready(), id, fields))
+  }
+
   async removeConnector(id: string) {
     await this.after(market.removeConnector(await this.store.ready(), id))
   }

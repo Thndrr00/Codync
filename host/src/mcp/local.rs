@@ -6,6 +6,22 @@ use std::{process::Stdio, sync::Arc};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{Mutex, mpsc};
 
+/// The ASCII-only folder a Windows `npx`/`node` connector must start in, or `None` when the
+/// inherited folder is already ASCII (or is a different kind of command). `windows` is a parameter
+/// so the decision is testable on every platform.
+fn node_start_dir(
+    command: &str,
+    running_in: &std::path::Path,
+    ascii_base: &std::path::Path,
+    windows: bool,
+) -> Option<std::path::PathBuf> {
+    let launcher = std::path::Path::new(command).file_name().and_then(|name| name.to_str());
+    let is_node = launcher.is_some_and(|name| name.eq_ignore_ascii_case("npx") || name.eq_ignore_ascii_case("node"));
+    let non_ascii = !running_in.to_string_lossy().is_ascii();
+    let usable_base = ascii_base.to_string_lossy().is_ascii();
+    (windows && is_node && non_ascii && usable_base).then(|| ascii_base.join("codync-mcp"))
+}
+
 struct CloseOnDrop(Arc<Cancellation>);
 impl Drop for CloseOnDrop {
     fn drop(&mut self) {
@@ -35,6 +51,16 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
         &connector,
         runtime["fingerprint"].as_str().context("Missing runtime fingerprint.")?.into(),
     ));
+    // Windows' npx/node shims fail to resolve their package when the process starts in a folder
+    // whose name has non-ASCII characters (OpenBot triage-16234). Only those two launchers are
+    // moved, and only when the folder we inherited actually has non-ASCII characters.
+    if let Some(folder) =
+        node_start_dir(command, &std::env::current_dir().unwrap_or_default(), &std::env::temp_dir(), cfg!(windows))
+    {
+        if tokio::fs::create_dir_all(&folder).await.is_ok() {
+            process.current_dir(folder);
+        }
+    }
     let mut process = tokio::process::Command::new(crate::shell::program(command));
     process.args(runtime["args"].as_array().into_iter().flatten().filter_map(Value::as_str));
     for (key, value) in runtime["env"].as_object().into_iter().flatten() {
@@ -58,13 +84,19 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
     let mut tasks = Tasks::default();
     let (reply_tx, mut reply_rx) = mpsc::channel::<Value>(16);
     let seen = observed.clone();
+    let writer_connector = connector.clone();
     let writer_cancel = cancellation.clone();
     let writer = tokio::spawn(async move {
         let mut stdout = tokio::io::stdout();
         while let Some(reply) = reply_rx.recv().await {
             // A tool's boolean fields must reach the agent as JSON Schema `boolean`, or the
             // server test fails with "Invalid input" (OpenBot 0.74.0 fix).
-            let reply = super::schema::normalize_tools_reply(&reply);
+            let (mut reply, dropped) = super::schema::normalize_tools_reply(&reply);
+            if !dropped.is_empty() {
+                // Name the tool we had to drop: a silent removal looks like a server with no tools.
+                tracing::warn!(connector = %writer_connector, tools = %dropped.join(", "), "dropped app tools with untyped list fields");
+            }
+            super::notices::annotate_tool_reply(&mut reply);
             seen.observe(&reply).await;
             writer_cancel.finish(&reply["id"]);
             let mut line = serde_json::to_vec(&reply)?;
@@ -189,4 +221,23 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
         return Err(error);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn only_windows_node_launchers_leave_a_non_ascii_folder() {
+        let base = Path::new("C:/Temp");
+        let folder = node_start_dir("npx", Path::new("C:/Users/José/project"), base, true);
+        assert_eq!(folder.as_deref(), Some(Path::new("C:/Temp/codync-mcp")));
+        assert_eq!(node_start_dir("node", Path::new("C:/Users/José/project"), base, true), folder);
+        assert_eq!(node_start_dir("npx.cmd", Path::new("C:/Users/José/project"), base, true), folder);
+        assert_eq!(node_start_dir("npx", Path::new("C:/Users/Ed/project"), base, true), None, "ASCII is fine");
+        assert_eq!(node_start_dir("python", Path::new("C:/Users/José/project"), base, true), None);
+        assert_eq!(node_start_dir("npx", Path::new("C:/Users/José/project"), base, false), None);
+        assert_eq!(node_start_dir("npx", Path::new("C:/Users/José/project"), Path::new("C:/Témp"), true), None);
+    }
 }

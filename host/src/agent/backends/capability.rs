@@ -8,6 +8,11 @@
 /// Fixed text shown on the row when this computer's processor cannot run the provider.
 pub const UNSUPPORTED_CPU: &str = "The processor of this computer cannot run this provider. Use a different provider.";
 
+/// OpenBot triage-16354: a CLI that could not be downloaded used to show a bare "couldn't start".
+/// The plain advice names the thing that helps, without a vendor name or an error dump.
+pub const DOWNLOAD_FAILURE: &str =
+    "The provider could not be downloaded. Check your internet connection and try again.";
+
 /// The narrow signal that a CLI died before it could run, as opposed to failing to download.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum StartFailure {
@@ -39,9 +44,18 @@ pub(crate) fn provider_capability(provider: &str, sse41: bool) -> bool {
     !sse41 && matches!(provider, "gemini" | "antigravity")
 }
 
-/// The message to show for a failed CLI start, if the failure really was the processor.
-/// A download, a network error or a crash while a bot is running keeps its own error.
+/// The plain message for a CLI that died while downloading itself, if the stderr said so. A
+/// processor problem is a different cause and keeps its own text (OpenBot triage-16354).
+pub(crate) fn download_error(failure: StartFailure) -> Option<&'static str> {
+    (failure == StartFailure::DownloadOrNetwork).then_some(DOWNLOAD_FAILURE)
+}
+
+/// The message to show for a failed CLI start, if the failure really was the processor or a
+/// download. A crash while a bot is running keeps its own error.
 pub(crate) fn capability_failure(provider: &str, sse41: bool, failure: StartFailure) -> Option<&'static str> {
+    if download_error(failure).is_some() {
+        return download_error(failure);
+    }
     (failure == StartFailure::IllegalInstruction && provider_capability(provider, sse41)).then_some(UNSUPPORTED_CPU)
 }
 
@@ -73,11 +87,20 @@ mod tests {
     #[test]
     fn a_download_or_network_failure_is_never_called_a_processor_problem() {
         assert_eq!(capability_failure("gemini", false, StartFailure::IllegalInstruction), Some(UNSUPPORTED_CPU));
-        for failure in [StartFailure::DownloadOrNetwork, StartFailure::Other] {
-            assert_eq!(capability_failure("gemini", false, failure), None, "{failure:?}");
-        }
+        assert_eq!(capability_failure("gemini", false, StartFailure::Other), None);
         assert_eq!(capability_failure("gemini", true, StartFailure::IllegalInstruction), None);
         assert_eq!(capability_failure("claude", false, StartFailure::IllegalInstruction), None);
+    }
+
+    #[test]
+    fn a_download_failure_advises_checking_the_connection() {
+        assert_eq!(download_error(StartFailure::DownloadOrNetwork), Some(DOWNLOAD_FAILURE));
+        assert!(DOWNLOAD_FAILURE.contains("Check your internet connection"));
+        assert_eq!(download_error(StartFailure::IllegalInstruction), None);
+        assert_eq!(download_error(StartFailure::Other), None);
+        assert_eq!(capability_failure("gemini", false, StartFailure::DownloadOrNetwork), Some(DOWNLOAD_FAILURE));
+        assert_eq!(capability_failure("claude", true, StartFailure::DownloadOrNetwork), Some(DOWNLOAD_FAILURE));
+        assert_eq!(capability_failure("gemini", false, StartFailure::IllegalInstruction), Some(UNSUPPORTED_CPU));
     }
 
     #[test]

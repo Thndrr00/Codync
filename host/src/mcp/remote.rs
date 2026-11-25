@@ -47,7 +47,12 @@ pub async fn serve_remote(connector: String, port: u16) -> Result<()> {
         while let Some(reply) = rx.recv().await {
             // Normalize boolean field types in `tools/list`, as for local servers, so an agent
             // doesn't reject the server's tools with "Invalid input" (OpenBot 0.74.0 fix).
-            let reply = super::schema::normalize_tools_reply(&reply);
+            let (mut reply, dropped) = super::schema::normalize_tools_reply(&reply);
+            if !dropped.is_empty() {
+                // Gemini rejects the whole catalog for one untyped list field: name the tool we dropped.
+                tracing::warn!(tools = %dropped.join(", "), "dropped app tools with untyped list fields");
+            }
+            super::notices::annotate_tool_reply(&mut reply);
             seen.observe(&reply).await;
             let mut line = serde_json::to_vec(&reply)?;
             line.push(b'\n');

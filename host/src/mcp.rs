@@ -11,11 +11,13 @@ use tokio::sync::mpsc;
 mod cancellation;
 mod composio;
 mod local;
+mod notices;
 pub(crate) mod policy;
 pub(crate) mod policy_management;
 mod proxy_replies;
 mod remote;
 mod schema;
+mod settings_help;
 mod tasks;
 pub use remote::serve_remote;
 
@@ -122,6 +124,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
             ("codync-network", crate::chat::team::assistant::INSTRUCTIONS, crate::chat::team::assistant::tools())
         }
     };
+    // An agent asked "where is X?" should find the path in the settings it already has tools for.
+    let instructions = settings_help::with_catalog(instructions);
     // Requests still running, by id: a cancelled one stops, and its host call with it (a team change's card expires).
     let mut running = std::collections::HashMap::<String, tokio::task::AbortHandle>::new();
     while let Some(line) = lines.next_line().await? {
@@ -137,8 +141,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         };
         running.retain(|_, request| !request.is_finished());
         let key = id.to_string();
-        let (replies, token, bot, available_tools) =
-            (replies.clone(), token.clone(), bot.clone(), available_tools.clone());
+        let (replies, token, bot, available_tools, instructions) =
+            (replies.clone(), token.clone(), bot.clone(), available_tools.clone(), instructions.clone());
         while requests.try_join_next().is_some() {}
         if requests.len() >= 100 {
             let _ = replies
@@ -153,7 +157,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                     "protocolVersion": params["protocolVersion"].as_str().unwrap_or(PROTOCOL_VERSION),
                     "capabilities": {"tools": {}},
                     "serverInfo": {"name": name, "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": instructions,
+                    "instructions": instructions.as_ref(),
                 })),
                 "ping" => Ok(json!({})),
                 "tools/list" => Ok(match server {
@@ -196,10 +200,30 @@ async fn computer_tools(port: u16, token: &str) -> Value {
         .timeout(Duration::from_secs(30))
         .send()
         .await;
-    match res {
+    let mut tools = match res {
         Ok(r) if r.status().is_success() => r.json::<Value>().await.unwrap_or_else(|_| json!({"tools": []})),
         _ => json!({"tools": []}),
+    };
+    // Computer Use can be on while one grant is still missing. Name that grant and the page it
+    // lives on, so the agent asks for the right permission instead of saying it isn't ready.
+    let status = crate::http()
+        .post(format!("http://127.0.0.1:{port}/api/screenStatus"))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await;
+    if let Ok(status) = status
+        && status.status().is_success()
+        && let Ok(status) = status.json::<Value>().await
+        && let Some(kind) = notices::first_missing(&status)
+    {
+        tools["unready"] = json!({
+            "permission": format!("{kind:?}").to_ascii_lowercase(),
+            "message": notices::unready_permission(kind),
+        });
     }
+    tools
 }
 
 /// One tool call through the host. Failures are tool errors the agent can read, not protocol errors.
@@ -266,6 +290,9 @@ pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, serv
         }
         Err(e) => format!("can't reach the Codync host: {e}"),
     };
+    // A "not found" from a list tool means the agent is holding a stale id. Keep the original
+    // error and say how to get a current one instead of letting it retry the same call forever.
+    let error = notices::missing_item_error(&error).unwrap_or(error);
     json!({"content": [{"type": "text", "text": error}], "isError": true})
 }
 

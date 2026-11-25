@@ -155,7 +155,7 @@ pub(super) const READERS: &[Reader] = &[
         name: "OpenCode",
         source: "opencode usage",
         found_without_cli: None,
-        read: |_| Box::pin(opencode::collect()),
+        read: |hub| Box::pin(opencode::collect(&hub.store)),
     },
 ];
 
