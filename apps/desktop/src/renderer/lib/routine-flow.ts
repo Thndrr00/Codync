@@ -159,6 +159,22 @@ export interface FlowCanvas {
   readOnly?: boolean
   /** The workflow document's format version; a newer one is read-only here. */
   formatVersion?: number
+  // OpenBot-style workflow graph, when the host has the portable node/edge/stroke format. Older
+  // hosts send none of these and the routine/link/media canvas keeps working as before.
+  workflowGraph?: WorkflowGraph
+  workflowTriggers?: WorkflowTriggerState[]
+  needsNewerApp?: boolean
+  workflowFormat?: number
+  hostFormat?: number
+  /** Edge problems the host found (`annotation`, `port`, `branch`, `condition-branch`, `duplicate`). */
+  graphProblems?: Record<string, string>
+  /** The newest history step of each portable node (`approval` steps carry `waiting`). */
+  workflowSteps?: Record<string, WorkflowHistoryStep>
+}
+
+/** The graph a canvas shows, in either wire shape; null on an older host. */
+export function canvasGraph(canvas: FlowCanvas | null): WorkflowGraph | null {
+  return canvas?.workflowGraph ?? null
 }
 
 /** The workflow format this client knows (host/src/routines/flow/format.rs). */
@@ -388,7 +404,7 @@ export function groupMediaResults(steps: readonly FlowStep[], price: number | nu
 
 export interface FlowNode {
   key: string
-  kind: 'routine' | 'bot' | 'media'
+  kind: 'routine' | 'bot' | 'media' | 'workflow'
   /** The routine's, the bot's or the media step's id (`media:` steps keep their prefix). */
   id: string
   x: number
@@ -797,7 +813,8 @@ export interface FlowField {
 export type FieldToken = { kind: 'text'; text: string } | { kind: 'field'; name: string; raw: string }
 
 /** A bare field name, so a `{{...}}` in JSON or code is never mistaken for one. */
-const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/
+// A `step.name` qualifier disambiguates two steps that give the same field (OpenBot 0.70).
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)?$/
 
 /**
  * Splits a saved prompt into plain text and `{{name}}` fields. The raw braces stay in the pieces so
@@ -854,7 +871,7 @@ export function fieldTrigger(text: string, caret: number): FieldTrigger | null {
   // A single brace stuck to a word is part of that word, not a trigger.
   if (single && brace > 0 && /[\p{L}\p{N}_]/u.test(text[brace - 1])) return null
   const query = text.slice(start + (single ? 1 : 2), caret)
-  if (/[^\p{L}\p{N}_-]/u.test(query)) return null
+  if (/[^\p{L}\p{N}_.-]/u.test(query)) return null
   return { start, query, single }
 }
 
@@ -897,19 +914,34 @@ export function matchingFields(fields: readonly FlowField[], query: string): Fie
 }
 
 /** The fields a step can name: the trigger's, then every earlier step's; the nearest step wins on a repeated name. */
-export function fieldsForStep(canvas: FlowCanvas, nodeKey: string): FlowField[] {
+export function fieldsForStep(canvas: FlowCanvas, nodeKey: string, qualify = false): FlowField[] {
   const rows = flowRows(canvas)
   const target = rows.findIndex((row) => (row.kind === 'media' ? mediaKey(row.nodeId) : botKey(row.nodeId)) === nodeKey)
   const earlier = target < 0 ? rows : rows.slice(0, target)
   const list = [...(canvas.triggerFields ?? [])]
   for (const row of earlier) list.push(...(canvas.flowFields?.[row.nodeId] ?? []))
+  const suppliers = new Map<string, Set<string>>()
+  for (const field of list) {
+    const names = suppliers.get(field.name) ?? new Set<string>()
+    names.add(field.step)
+    suppliers.set(field.name, names)
+  }
   const seen = new Set<string>()
-  return list.reverse().filter((field) => {
+  const fields = list.reverse().filter((field) => {
     if (seen.has(field.name)) return false
     seen.add(field.name)
     return true
   }).reverse()
+  return qualify
+    ? fields.map((field) => (suppliers.get(field.name)!.size > 1 && field.step
+      ? { ...field, name: `${field.step}.${field.name}` }
+      : field))
+    : fields
 }
+
+/** The name inserted by the field picker: qualified when two suppliers gave the same field. */
+export const qualifiedFieldName = (field: FlowField): string =>
+  field.step && !field.name.includes('.') ? `${field.step}.${field.name}` : field.name
 
 /** The answer or check text of a spec, whether the host sent a bare string or `{answer, check}`. */
 export function specText(spec: string | { answer?: string; check?: string } | undefined, part: 'answer' | 'check'): string {
@@ -1186,4 +1218,339 @@ export function isFlowReadOnly(canvas: FlowCanvas | null, registry: FlowNodeRegi
     if (isNewerSetting(kind, settings, registry)) return true
   }
   return false
+}
+
+// MARK: portable workflow graph (OpenBot 0.70 contracts, `ipc-workflows.ts`)
+
+// The host owns the graph and its rules. These are the client's read-only mirror of the constants
+// and pure decisions a canvas needs to draw the node kinds, refuse an impossible line and label a
+// run. Nothing here saves: the view sends the person's choice to the host and reloads the canvas.
+
+export const WORKFLOW_NODE_KINDS = [
+  'text', 'prompt', 'asset', 'llm', 'agent', 'image', 'trigger', 'condition', 'approval', 'output', 'note', 'shape',
+] as const
+export type WorkflowNodeKind = (typeof WORKFLOW_NODE_KINDS)[number]
+export const WORKFLOW_ANNOTATION_KINDS = ['text', 'note', 'shape'] as const
+export const WORKFLOW_PORT_TYPES = ['text', 'image', 'file'] as const
+export type WorkflowPortType = (typeof WORKFLOW_PORT_TYPES)[number]
+export const WORKFLOW_BRANCHES = ['yes', 'no'] as const
+export type WorkflowBranch = (typeof WORKFLOW_BRANCHES)[number]
+export const WORKFLOW_TRIGGER_TYPES = [
+  'manual', 'schedule', 'webhook', 'message', 'github', 'discord', 'telegram', 'slack',
+] as const
+export type WorkflowTriggerType = (typeof WORKFLOW_TRIGGER_TYPES)[number]
+export const WORKFLOW_OUTPUT_TARGETS = [
+  'notify', 'channel', 'file', 'github', 'discord', 'telegram', 'slack', 'chat-channel',
+] as const
+export const WORKFLOW_GITHUB_EVENTS = [
+  'issue.opened', 'issue.closed', 'issue.labeled', 'pr.opened', 'pr.updated', 'pr.reviewRequested',
+  'pr.reviewSubmitted', 'pr.checksFailed', 'pr.merged', 'comment', 'mention', 'assigned',
+] as const
+export const WORKFLOW_GITHUB_FILTERS = ['notBot', 'firstTime', 'title', 'branch'] as const
+export const WORKFLOW_GITHUB_ACTIONS = [
+  'comment', 'label.add', 'label.remove', 'assign', 'review.request', 'review.approve',
+  'review.changes', 'close', 'reopen', 'issue.create',
+] as const
+export const WORKFLOW_GITHUB_CLOSE_REASONS = ['completed', 'notPlanned'] as const
+export const WORKFLOW_CHAT_EVENTS = ['message', 'mention', 'reaction', 'join'] as const
+export const WORKFLOW_CHAT_ACTIONS = ['reply', 'post', 'react', 'label', 'assign', 'close'] as const
+export const WORKFLOW_CHAT_EMOJI = ['thumbsup', 'heart', 'fire', 'eyes', 'tada'] as const
+export const WORKFLOW_IMAGE_MODES = ['single', 'frames', 'references', 'videos', 'audios'] as const
+export const WORKFLOW_IMAGE_INPUTS = ['frames', 'references', 'videos', 'audios'] as const
+export const WORKFLOW_RUN_SOURCES = [
+  'manual', 'schedule', 'webhook', 'github', 'discord', 'telegram', 'slack',
+] as const
+export const WORKFLOW_VERSION_KINDS = ['auto', 'restore', 'run'] as const
+export const WORKFLOW_DELIVERY_OUTCOMES = ['started', 'waiting', 'skipped'] as const
+export const WORKFLOW_SKIP_REASONS = ['filter', 'self', 'chain', 'offline', 'refused'] as const
+export const WORKFLOW_MAX_VERSIONS = 50
+
+export type WorkflowFieldValue = string | number | boolean
+export type WorkflowFields = Record<string, WorkflowFieldValue>
+
+export interface WorkflowPoint { x: number; y: number }
+export interface WorkflowNodeSize { width?: number; height?: number; font?: number }
+export interface WorkflowNode {
+  id: string
+  kind: WorkflowNodeKind
+  at: WorkflowPoint
+  size?: WorkflowNodeSize
+  /** A locked or unknown node is shown read-only, never saved by this client. */
+  locked?: boolean
+  fields: WorkflowFields
+  schedule?: unknown
+}
+export interface WorkflowEdge {
+  id: string
+  from: string
+  to: string
+  type: WorkflowPortType
+  branch?: WorkflowBranch
+}
+export interface WorkflowStroke {
+  id: string
+  brush: string
+  color: string
+  width: number
+  points: WorkflowPoint[]
+}
+export interface WorkflowGraph {
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  strokes: WorkflowStroke[]
+}
+export interface WorkflowTriggerState {
+  nodeId: string
+  type: WorkflowTriggerType
+  nextDueAt?: string | null
+  webhookUrl?: string | null
+}
+export interface WorkflowVersion {
+  id: string
+  at: string
+  kind: (typeof WORKFLOW_VERSION_KINDS)[number]
+  revision: number
+}
+export interface WorkflowRun {
+  id: string
+  workflowId: string
+  number: number
+  triggerNodeId: string | null
+  source: (typeof WORKFLOW_RUN_SOURCES)[number]
+  status: string
+  error: string | null
+  startedAt: string
+  endedAt: string | null
+}
+export interface WorkflowHistoryStep {
+  id: string
+  workflowId: string
+  runId: string | null
+  nodeId: string
+  attempt: number
+  agentId: string | null
+  status: string
+  output: string | null
+  branch: WorkflowBranch | null
+  error: string | null
+  startedAt: string | null
+  endedAt: string | null
+  waiting?: boolean
+}
+export interface WorkflowRunDetail { run: WorkflowRun; steps: WorkflowHistoryStep[] }
+export interface WorkflowRunPage {
+  runs: WorkflowRunDetail[]
+  soloSteps: WorkflowHistoryStep[]
+  nextBefore: string | null
+}
+export interface WorkflowStepSource {
+  from: string
+  type: WorkflowPortType
+  stepId: string | null
+  attachmentId: string | null
+}
+export interface WorkflowStepSettingsAnswer {
+  settings: WorkflowFields | null
+  sources: WorkflowStepSource[] | null
+}
+export interface WorkflowDelivery {
+  id: string
+  nodeId: string
+  event: string
+  item: { repository: string; number: number; pullRequest: boolean; title: string } | null
+  receivedAt: string
+  outcome: (typeof WORKFLOW_DELIVERY_OUTCOMES)[number]
+  reason: (typeof WORKFLOW_SKIP_REASONS)[number] | null
+  runId: string | null
+}
+export interface WorkflowGitHubHistory {
+  deliveries: WorkflowDelivery[]
+  runs: { runId: string; item: NonNullable<WorkflowDelivery['item']> }[]
+}
+
+/** Which port types each node kind accepts and gives, from OpenBot's `WORKFLOW_PORTS`. */
+export const WORKFLOW_PORTS: Record<WorkflowNodeKind, { in: readonly WorkflowPortType[]; out: readonly WorkflowPortType[] }> = {
+  trigger: { in: [], out: ['text'] },
+  prompt: { in: [], out: ['text'] },
+  asset: { in: [], out: WORKFLOW_PORT_TYPES },
+  llm: { in: WORKFLOW_PORT_TYPES, out: ['text'] },
+  agent: { in: WORKFLOW_PORT_TYPES, out: ['text'] },
+  image: { in: WORKFLOW_PORT_TYPES, out: ['image', 'file'] },
+  condition: { in: ['text'], out: ['text'] },
+  approval: { in: ['text'], out: ['text'] },
+  output: { in: WORKFLOW_PORT_TYPES, out: [] },
+  text: { in: [], out: [] },
+  note: { in: [], out: [] },
+  shape: { in: [], out: [] },
+}
+
+export const isAnnotationKind = (kind: string): boolean => (WORKFLOW_ANNOTATION_KINDS as readonly string[]).includes(kind)
+export const isWorkflowNodeKind = (kind: string): kind is WorkflowNodeKind =>
+  (WORKFLOW_NODE_KINDS as readonly string[]).includes(kind)
+
+/** Why a line can't be drawn, in the host's words; null when it can (OpenBot `workflowEdgeProblem`). */
+export function graphEdgeProblem(
+  fromKind: string,
+  toKind: string,
+  type: WorkflowPortType,
+  branch?: WorkflowBranch,
+): 'annotation' | 'port' | 'condition-branch' | 'branch' | null {
+  if (!isWorkflowNodeKind(fromKind) || !isWorkflowNodeKind(toKind)) return 'port'
+  if (isAnnotationKind(fromKind) || isAnnotationKind(toKind)) return 'annotation'
+  if (!WORKFLOW_PORTS[fromKind].out.includes(type) || !WORKFLOW_PORTS[toKind].in.includes(type)) return 'port'
+  if (fromKind === 'condition') return branch === undefined ? 'condition-branch' : null
+  return branch === undefined ? null : 'branch'
+}
+
+/** The problem text shown on an edge or in the note before a refused drop. */
+export const GRAPH_PROBLEM_TEXT: Record<string, string> = {
+  annotation: 'Notes and shapes cannot be connected.',
+  port: 'That port cannot carry this kind of file.',
+  branch: 'Only a condition has yes and no outputs.',
+  'condition-branch': 'Choose the yes or no output of this condition.',
+  duplicate: 'These steps are already connected that way.',
+}
+
+/** A node this client may edit: a known kind that isn't locked by the document. */
+export function nodeEditable(node: WorkflowNode, needsNewerApp = false): boolean {
+  return !needsNewerApp && !node.locked && isWorkflowNodeKind(node.kind)
+}
+
+/** The one-line title of a portable node, from its fields (the name the person gave wins). */
+export function nodeTitle(node: WorkflowNode): string {
+  const fields = node.fields
+  const named = (key: string) => {
+    const value = fields[key]
+    return typeof value === 'string' ? value.trim() : ''
+  }
+  const own = named('stepName') || named('question') || named('task') || named('prompt') || named('text')
+  if (own) return own
+  switch (node.kind) {
+    case 'llm': return named('model') ? `Model · ${named('model')}` : 'Model step'
+    case 'condition': return 'Condition'
+    case 'approval': return 'Approval'
+    case 'output': return named('action') ? `Output · ${named('action')}` : 'Output'
+    case 'asset': return 'File'
+    case 'trigger': return named('trigger') ? `Trigger · ${named('trigger')}` : 'Trigger'
+    case 'image': return 'Picture or clip'
+    case 'prompt': return 'Prompt'
+    case 'note': return 'Note'
+    case 'shape': return 'Shape'
+    case 'agent': return named('agentId') || 'Agent'
+    default: return node.kind
+  }
+}
+
+/** The SF Symbol of a portable node kind, so a card reads before its title does. */
+export const NODE_ICON: Record<WorkflowNodeKind, string> = {
+  text: 'text.alignleft', prompt: 'text.bubble', asset: 'doc', llm: 'brain', agent: 'sparkles',
+  image: 'photo', trigger: 'bolt', condition: 'questionmark.circle', approval: 'hand.raised',
+  output: 'square.and.arrow.up', note: 'note.text', shape: 'square.dashed',
+}
+
+/**
+ * The fields a trigger gives to later steps, mirroring the host's `trigger_fields` projection and
+ * OpenBot's `workflowTriggerFields`. Names and types must match what the host freezes on a run, so
+ * a `{{name}}` chip resolves without a model step before it.
+ */
+export function triggerFields(kind: string): FlowField[] {
+  const field = (name: string, type: FlowFieldType = 'text'): FlowField => ({ name, step: '', icon: 'bolt', type, values: [] })
+  if (kind === 'schedule') return ['run_time', 'local_date', 'local_time', 'weekday'].map((name) => field(name))
+  if (kind === 'github') return [
+    'repository', 'actor', 'action', 'number', 'pull_request', 'url', 'title', 'body', 'author', 'state',
+    'labels', 'label', 'assignee', 'reviewer', 'comment_author', 'comment_body', 'comment_url',
+    'review_author', 'review_state', 'review_body', 'review_url', 'check_conclusion', 'check_app', 'head_branch',
+  ].map((name) => field(name, name === 'number' ? 'integer' : name === 'pull_request' ? 'yesNo' : name === 'labels' ? 'list' : 'text'))
+  const message = ['text', 'author', 'author_id', 'message_id'].map((name) => field(name))
+  if (kind === 'discord') return [...message, ...['channel', 'channel_id', 'server'].map((name) => field(name))]
+  if (kind === 'telegram') return [...message, ...['chat', 'chat_id'].map((name) => field(name))]
+  if (kind === 'slack') return [...message, ...['channel', 'channel_id', 'workspace', 'thread_id'].map((name) => field(name))]
+  return []
+}
+
+/** The SVG path of a freehand stroke, in canvas coordinates (OpenBot's drawing tool). */
+export function strokePath(stroke: WorkflowStroke): string {
+  const points = stroke.points
+  if (points.length === 0) return ''
+  if (points.length === 1) {
+    const { x, y } = points[0]
+    return `M ${x} ${y} L ${x + 0.01} ${y}`
+  }
+  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+}
+
+/** The words of a version, a run source, a delivery outcome and a skip reason. */
+export const VERSION_KIND_LABEL: Record<string, string> = { auto: 'Autosaved', restore: 'Restored', run: 'After a run' }
+export const RUN_SOURCE_LABEL: Record<string, string> = {
+  manual: 'Manual', schedule: 'Schedule', webhook: 'Webhook', github: 'GitHub',
+  discord: 'Discord', telegram: 'Telegram', slack: 'Slack',
+}
+export const DELIVERY_OUTCOME_LABEL: Record<string, string> = { started: 'Started a run', waiting: 'Waiting', skipped: 'Skipped' }
+export const SKIP_REASON_LABEL: Record<string, string> = {
+  filter: 'Did not match the filters', self: 'Sent by the bot', chain: 'Part of the same chain',
+  offline: 'This computer was offline', refused: 'The host refused it',
+}
+export const labelOf = (table: Record<string, string>, value: string | null | undefined, tr: (text: string) => string): string =>
+  tr(value ? table[value] ?? value : 'Not recorded')
+
+/** `#12 · Manual · 3 steps`, the one line a paginated run row shows. */
+export function runSummary(run: WorkflowRun, steps: number, tr: (text: string) => string): string {
+  return `#${run.number} · ${labelOf(RUN_SOURCE_LABEL, run.source, tr)} · ${tr('{count} steps').replace('{count}', String(steps))}`
+}
+
+/** The attempt, branch and waiting marks a history step carries beside its result. */
+export function stepMarks(step: WorkflowHistoryStep): { attempt?: string; branch?: WorkflowBranch; waiting: boolean } {
+  return {
+    attempt: step.attempt > 1 ? `#${step.attempt}` : undefined,
+    branch: step.branch ?? undefined,
+    waiting: step.waiting === true,
+  }
+}
+
+/** Which page cursor a "Load older runs" button sends next; null ends the list. */
+export const nextRunCursor = (page: WorkflowRunPage | null): string | null => page?.nextBefore ?? null
+
+/** A portable history status in the words the canvas's status chip already knows. */
+export function historyStatus(status: string): StepStatus {
+  const known: Record<string, StepStatus> = {
+    running: 'running', approval: 'queued', stopping: 'running', done: 'succeeded',
+    failed: 'failed', stopped: 'cancelled', skipped: 'skipped',
+  }
+  return known[status] ?? 'queued'
+}
+
+/** A portable node's canvas key, namespaced so it can't collide with a bot or a media step. */
+export const workflowKey = (id: string) => `workflow:${id}`
+export const workflowIdOf = (key: string) => key.startsWith('workflow:') ? key.slice('workflow:'.length) : key
+
+/** The portable nodes as canvas nodes, at their saved places (or the origin). */
+export function graphFlowNodes(graph: WorkflowGraph | null): FlowNode[] {
+  return (graph?.nodes ?? []).map((node) => ({
+    key: workflowKey(node.id),
+    kind: 'workflow' as const,
+    id: node.id,
+    x: node.at?.x ?? 0,
+    y: node.at?.y ?? 0,
+    saved: true,
+  }))
+}
+
+/** A portable edge drawn on the canvas, with the port, branch and host problem it carries. */
+export interface GraphFlowEdge extends FlowEdge {
+  type?: WorkflowPortType
+  branch?: WorkflowBranch
+  problem?: string | null
+}
+
+/** The portable edges as canvas edges, with the port type and branch the line carries. */
+export function graphFlowEdges(graph: WorkflowGraph | null, problems: Record<string, string> = {}): GraphFlowEdge[] {
+  return (graph?.edges ?? []).map((edge) => ({
+    id: edge.id,
+    from: workflowKey(edge.from),
+    to: workflowKey(edge.to),
+    linkId: edge.id,
+    type: edge.type,
+    branch: edge.branch,
+    problem: problems[edge.id] ?? null,
+  }))
 }

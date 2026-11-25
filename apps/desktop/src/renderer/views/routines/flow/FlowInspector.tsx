@@ -22,6 +22,7 @@ import { MediaModelButton } from './MediaModelButton'
 import { MediaResults } from './MediaResults'
 import { StepResult } from './StepResult'
 import { useFlowMediaCatalog } from './use-media-catalog'
+import { WorkflowNodePanel, type WorkflowPanelProps } from './WorkflowInspectorPanels'
 
 /** A step, bot or media node the selected step may hand work to. */
 export interface FlowTarget {
@@ -94,10 +95,12 @@ interface Props {
   onUngroup: (groupId: string) => void
   /** The steps and bots `from` may hand work to, in some routine of this canvas. */
   targets: (fromBotId: string) => FlowTarget[]
+  /** The portable-graph half of the inspector; absent on an older host. */
+  workflow?: Omit<WorkflowPanelProps, 'node'>
 }
 
 /** The step toolbar's Answer fields and Check buttons; the prompt below stays a single text box. */
-function StepFieldsToolbar({ nodeKey, disabled, answerFor, checkFor, onSaveAnswer, onSaveCheck }: Pick<Props,
+export function StepFieldsToolbar({ nodeKey, disabled, answerFor, checkFor, onSaveAnswer, onSaveCheck }: Pick<Props,
   'answerFor' | 'checkFor' | 'onSaveAnswer' | 'onSaveCheck'> & { nodeKey: string; disabled: boolean }) {
   const tr = useTr()
   const answerButton = useRef<HTMLButtonElement>(null)
@@ -152,6 +155,10 @@ export function FlowInspector(props: Props) {
         <Text size="callout" tone="secondary">{tr('Select a routine, a bot or a link. Drag from a bot\'s dot to another bot to hand its reply on.')}</Text>
       </VStack>
     )
+  }
+  if (selection.kind === 'node' && selection.key.startsWith('workflow:') && props.workflow) {
+    const node = props.workflow.graph.nodes.find((candidate) => `workflow:${candidate.id}` === selection.key)
+    return node ? <WorkflowNodePanel {...props.workflow} node={node} /> : null
   }
   if (selection.kind === 'edge') {
     const link = canvas.links.find((l) => l.id === selection.id)

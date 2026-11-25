@@ -4,7 +4,7 @@
 //! (for a bound person) a direct message. Everything else is dropped without error, so the bot can
 //! sit in a busy server.
 
-use super::{Config, Context, Hub, Result, Value, json};
+use super::{Arc, Config, Context, Hub, Result, Value, json};
 use sha2::{Digest, Sha256};
 
 pub(super) fn stable_id(parts: &[&str]) -> String {
@@ -16,7 +16,7 @@ pub(super) fn stable_id(parts: &[&str]) -> String {
     format!("discord-{}", crate::chat::files::digest_hex(&digest.finalize()))
 }
 
-pub(super) fn accept(hub: &Hub, c: &Config, message: &Value) -> Result<()> {
+pub(super) fn accept(hub: &Arc<Hub>, c: &Config, message: &Value) -> Result<()> {
     if message["author"]["bot"] == true {
         return Ok(());
     }
@@ -59,13 +59,32 @@ pub(super) fn accept(hub: &Hub, c: &Config, message: &Value) -> Result<()> {
     // The server's facts reach every conversation here, but never the bot's own chat.
     let prompt = crate::chat::memory::messaging::with_facts(&hub.store, "discord", &c.guild_id, prompt(message, &text));
     let prompt = if has_audio && audio.is_none() { crate::channels::voice_notes::unavailable(&prompt) } else { prompt };
+    // The roles a workflow trigger matches come from the guild member, never from the message text.
+    let roles = member_roles(message);
     let event = json!({
         "source": "discord", "event": if mention {"message.mention"} else {"message.created"},
-        "channel": channel, "user": author, "text": text, "messageId": id,
+        "connection": c.guild_id, "channel": channel, "channelId": channel,
+        "user": author, "author": author, "text": text, "messageId": id, "roles": roles,
+        "thread": message["thread"].is_object(), "parentChannel": message["thread"]["parent_id"],
         "url": format!("https://discord.com/channels/{}/{channel}/{id}", c.guild_id),
     });
-    // A routine can ask for a mention or for any message: the mention wins, as on Slack and Telegram.
-    hub.routines.receive_event(&hub.store, &event, Some(id.to_owned()));
+    // A mention goes to workflow trigger nodes by connection, channel, roles and text; the chat
+    // receive path also keeps the older generic matcher working. Other messages use that matcher.
+    let all_skipped = if mention {
+        hub.routines.receive_chat_event(&hub.store, &event, Some(id.to_owned())).all_skipped()
+    } else {
+        hub.routines.receive_event(&hub.store, &event, Some(id.to_owned()));
+        false
+    };
+    // Every node that matched skipped the mention: leave the platform's failed reaction on it.
+    if all_skipped {
+        let (hub, channel, message) = (hub.clone(), channel.to_owned(), id.to_owned());
+        tokio::spawn(async move {
+            if let Err(error) = super::react(&hub.store, &channel, &message, "❌").await {
+                tracing::warn!(error = format!("{error:#}"), "couldn't mark a skipped Discord workflow mention");
+            }
+        });
+    }
     let incoming = crate::store::discord::DiscordIncoming {
         event: id.into(),
         generation: c.generation.clone(),
@@ -90,6 +109,19 @@ pub(super) fn accept(hub: &Hub, c: &Config, message: &Value) -> Result<()> {
         at: crate::store::now_ms(),
     })?;
     Ok(())
+}
+
+/// The roles a workflow trigger checks, bounded so a guild member cannot grow the event without
+/// limit. Pure so the event's shape is testable without a gateway.
+fn member_roles(message: &Value) -> Vec<String> {
+    message["member"]["roles"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|role| role.as_str())
+        .take(50)
+        .map(str::to_owned)
+        .collect()
 }
 
 /// The bot's own mention is not part of what was said.
@@ -123,6 +155,15 @@ fn valid_id(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workflow_mentions_carry_the_members_roles() {
+        let message = json!({"member": {"roles": ["admin", "mod", 42]}});
+        assert_eq!(member_roles(&message), ["admin", "mod"]);
+        assert!(member_roles(&json!({})).is_empty());
+        let many = json!({"member": {"roles": (0..60).map(|i| i.to_string()).collect::<Vec<_>>()}});
+        assert_eq!(member_roles(&many).len(), 50, "the event stays bounded");
+    }
 
     #[test]
     fn the_bots_mention_leaves_the_text() {

@@ -140,6 +140,22 @@ pub(crate) async fn post(store: &Store, channel: &str, text: &str, reply_to: &st
     Ok(())
 }
 
+/// Adds a reaction to a message, used when every workflow node skipped a mention. The emoji names
+/// are Slack's (`:white_check_mark:`, `:eyes:`, `:tada:`, `:x:`).
+pub(crate) async fn react(store: &Store, channel: &str, timestamp: &str, emoji: &str) -> Result<()> {
+    let (token, _) = credentials(store)?.context("Slack is not configured.")?;
+    let url = "https://slack.com/api/reactions.add";
+    let client = crate::egress::client(crate::egress::Policy::Only(&["slack.com"]), url).await?;
+    let body = json!({"channel": channel, "timestamp": timestamp, "name": emoji.trim_matches(':')});
+    let response =
+        client.post(url).bearer_auth(token).json(&body).timeout(std::time::Duration::from_secs(20)).send().await?;
+    let answer: Value = response.json().await?;
+    if answer["ok"] != true {
+        bail!("Slack refused the reaction: {}", answer["error"].as_str().unwrap_or("unknown"));
+    }
+    Ok(())
+}
+
 pub(crate) async fn call(hub: &Arc<Hub>, method: &str, body: Value) -> Result<Value> {
     crate::market::vault::unlock(hub.clone()).await?;
     let prepared = if method == "setSlackChannel" {

@@ -2,14 +2,15 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   NODE_WIDTH, answerResultRows, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
-  fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, groupMediaResults, insertFieldToken, isFlowPaused, isFlowReadOnly,
-  problemsForStep,
+  fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, graphEdgeProblem, groupMediaResults, historyStatus, insertFieldToken,
+  isFlowPaused, isFlowReadOnly, isAnnotationKind, nodeEditable, nodeTitle, nextRunCursor, problemsForStep, qualifiedFieldName, runSummary,
+  stepMarks, strokePath, triggerFields,
   isNewerSetting, layoutNodes, matchingFields, mediaBatch, mediaKey, mediaRetryLabel, mediaRunLabel, mediaStepsFor,
   mediaTitle, mediaTotalCredits, mediaUnitPrice, missingMediaModel, nodeAt, parseAnswerSpec, parseWorkflowFile, portCarry,
   routineKey, specKeyOf, specText, statusLabel, stepNameOf, stepProgress, tidyLayout, unknownSettings, unavailableMediaModel,
   availableMediaModels, workflowFileBytes, workflowsInFolder, zoomAt,
   type FieldMatch, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowMediaCatalog, type FlowNode,
-  type FlowNodeRegistry, type FlowStep, type WorkflowFoldersSnapshot,
+  type FlowNodeRegistry, type FlowStep, type WorkflowFoldersSnapshot, type WorkflowNode, type WorkflowRun,
 } from './routine-flow.ts'
 import {
   closeOtherWorkflows, closeWorkflow, closeWorkflowsRight, moveWorkflow, nextActiveTab, openWorkflow,
@@ -537,4 +538,96 @@ test('a portable workflow file gives its names in plain or base64 form', () => {
   assert.equal(new TextDecoder().decode(workflowFileBytes(base64)), json)
   assert.equal(parseWorkflowFile('not a file'), null)
   assert.equal(parseWorkflowFile('{}'), null, 'a file without steps is not a workflow')
+})
+
+// MARK: portable workflow graph
+
+test('a trigger offers the same typed fields the host freezes on a run', () => {
+  const gh = triggerFields('github')
+  assert.equal(gh.length, 24)
+  assert.deepEqual(gh.slice(0, 6).map((field) => field.name), ['repository', 'actor', 'action', 'number', 'pull_request', 'url'])
+  assert.deepEqual(gh.slice(-3).map((field) => field.name), ['check_conclusion', 'check_app', 'head_branch'])
+  assert.equal(gh.find((field) => field.name === 'number')?.type, 'integer')
+  assert.equal(gh.find((field) => field.name === 'pull_request')?.type, 'yesNo')
+  assert.equal(gh.find((field) => field.name === 'labels')?.type, 'list')
+  assert.deepEqual(triggerFields('schedule').map((field) => field.name), ['run_time', 'local_date', 'local_time', 'weekday'])
+  assert.deepEqual(triggerFields('discord').map((field) => field.name),
+    ['text', 'author', 'author_id', 'message_id', 'channel', 'channel_id', 'server'])
+  assert.equal(triggerFields('telegram').length, 6)
+  assert.equal(triggerFields('slack').length, 8)
+  assert.deepEqual(triggerFields('manual'), [])
+})
+
+test('a line follows the ports and a condition needs its yes or no branch', () => {
+  assert.equal(graphEdgeProblem('llm', 'condition', 'text'), null, 'a plain line has no branch')
+  assert.equal(graphEdgeProblem('llm', 'condition', 'text', 'yes'), 'branch', 'only a condition may branch')
+  assert.equal(graphEdgeProblem('condition', 'approval', 'text', 'no'), null)
+  assert.equal(graphEdgeProblem('condition', 'approval', 'text'), 'condition-branch')
+  assert.equal(graphEdgeProblem('llm', 'approval', 'text', 'yes'), 'branch')
+  assert.equal(graphEdgeProblem('asset', 'llm', 'image'), null, 'an asset feeds any port')
+  assert.equal(graphEdgeProblem('image', 'output', 'file'), null)
+  assert.equal(graphEdgeProblem('image', 'condition', 'image'), 'port')
+  assert.equal(graphEdgeProblem('note', 'llm', 'text'), 'annotation')
+  assert.equal(graphEdgeProblem('llm', 'note', 'text'), 'annotation')
+  assert.equal(graphEdgeProblem('nope' as 'llm', 'llm', 'text'), 'port')
+  assert.equal(isAnnotationKind('shape'), true)
+  assert.equal(isAnnotationKind('agent'), false)
+})
+
+test('a locked or unknown node is read-only on its own, not the whole workflow', () => {
+  const node = (kind: string, locked = false): WorkflowNode =>
+    ({ id: 'n', kind: kind as WorkflowNode['kind'], at: { x: 0, y: 0 }, locked, fields: {} })
+  assert.equal(nodeEditable(node('llm')), true)
+  assert.equal(nodeEditable(node('llm', true)), false)
+  assert.equal(nodeEditable(node('future')), false)
+  assert.equal(nodeEditable(node('llm'), true), false, 'a newer-app workflow locks every node')
+  assert.notEqual(nodeTitle(node('llm')), '')
+  assert.equal(nodeTitle({ ...node('condition'), fields: { question: 'Is it urgent?' } }), 'Is it urgent?')
+  assert.equal(nodeTitle(node('approval')), 'Approval')
+})
+
+test('a freehand stroke is a path with one point for each sample', () => {
+  const stroke = { id: 's', brush: 'pen', color: '#f00', width: 3, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }, { x: 5, y: 6 }] }
+  assert.equal(strokePath(stroke), 'M 1 2 L 3 4 L 5 6')
+  assert.equal(strokePath({ ...stroke, points: [{ x: 7, y: 8 }] }), 'M 7 8 L 7.01 8')
+  assert.equal(strokePath({ ...stroke, points: [] }), '')
+})
+
+test('two suppliers of one field get a qualified name, and the chip survives a round trip', () => {
+  const c = canvas([link('a', 'b'), link('b', 'c')], {
+    triggerFields: [field('when')],
+    flowFields: { a: [field('count', 'A')], b: [field('count', 'B'), field('priority', 'B')] },
+  })
+  const qualified = fieldsForStep(c, botKey('c'), true)
+  assert.deepEqual(qualified.map((f) => f.name), ['when', 'B.count', 'priority'])
+  assert.equal(qualifiedFieldName(qualified[1]!), 'B.count')
+  const text = 'Use {{B.count}} now'
+  assert.deepEqual(fieldTokens(text).map((token) => token.kind === 'field' ? token.name : token.text), ['Use ', 'B.count', ' now'])
+  assert.equal(fieldTokens(text).map((token) => token.kind === 'field' ? token.raw : token.text).join(''), text)
+  assert.deepEqual(chipBefore('Sum {{B.count}}', 15), { start: 4, end: 15, name: 'B.count' })
+  assert.deepEqual(fieldTrigger('{{B.co', 6), { start: 0, query: 'B.co', single: false })
+  assert.equal(fieldTokens('{{bad.name.x}}').some((token) => token.kind === 'field'), false, 'one qualifier only')
+})
+
+test('a run row labels its source, number, attempt, branch and waiting state', () => {
+  const tr = (text: string) => text
+  const run: WorkflowRun = {
+    id: 'r1', workflowId: 'w', number: 12, triggerNodeId: null, source: 'github', status: 'done',
+    error: null, startedAt: '1', endedAt: '2',
+  }
+  assert.equal(runSummary(run, 3, tr), '#12 · GitHub · 3 steps')
+  const step: Parameters<typeof stepMarks>[0] = {
+    id: 's', workflowId: 'w', runId: 'r1', nodeId: 'n', attempt: 2, agentId: null, status: 'running',
+    output: null, branch: 'yes', error: null, startedAt: null, endedAt: null, waiting: true,
+  }
+  assert.deepEqual(stepMarks(step), { attempt: '#2', branch: 'yes', waiting: true })
+  assert.deepEqual(stepMarks({ ...step, attempt: 1, branch: null, waiting: false }), { attempt: undefined, branch: undefined, waiting: false })
+  assert.equal(nextRunCursor({ runs: [], soloSteps: [], nextBefore: 'abc' }), 'abc')
+  assert.equal(nextRunCursor({ runs: [], soloSteps: [], nextBefore: null }), null)
+  assert.equal(nextRunCursor(null), null)
+  assert.equal(historyStatus('approval'), 'queued')
+  assert.equal(historyStatus('done'), 'succeeded')
+  assert.equal(historyStatus('stopping'), 'running')
+  assert.equal(historyStatus('stopped'), 'cancelled')
+  assert.equal(historyStatus('unknown'), 'queued')
 })

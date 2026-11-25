@@ -4,7 +4,7 @@ import { IconButton, Spinner } from '../../../components/Controls'
 import { Icon } from '../../../components/Icon'
 import { HStack, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
-import { answerResultRows, statusLabel, type FlowStep } from '../../../lib/routine-flow.ts'
+import { answerResultRows, statusLabel, type FlowStep, type WorkflowStepSource } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 
 /**
@@ -13,7 +13,38 @@ import { useTr } from '../../../lib/use-language'
  * file the person happened to click before. A step still working shows a spinner instead of an
  * empty result, so "making it" never reads as "nothing came back".
  */
-export function StepResult({ step, compact = false }: { step: FlowStep; compact?: boolean }) {
+type StepResultProps = {
+  step: FlowStep
+  compact?: boolean
+  /** The retry number, routed branch and wait state a portable history step carries. */
+  attempt?: number
+  branch?: 'yes' | 'no'
+  waiting?: boolean
+  sources?: readonly WorkflowStepSource[]
+}
+
+export function StepResult(props: StepResultProps) {
+  const tr = useTr()
+  const marks: string[] = []
+  if (props.attempt && props.attempt > 1) marks.push(`#${props.attempt}`)
+  if (props.branch) marks.push(tr(props.branch === 'yes' ? 'Yes' : 'No'))
+  if (props.waiting) marks.push(tr('Waiting'))
+  for (const source of props.sources ?? []) {
+    marks.push(tr('{type} from {name}').replace('{type}', tr(source.type)).replace('{name}', source.stepId ?? source.attachmentId ?? tr('trigger')))
+  }
+  return (
+    <>
+      {marks.length > 0 ? (
+        <HStack gap={4} wrap className="flow-history-marks">
+          {marks.map((mark, index) => <span key={index} className="flow-history-mark">{mark}</span>)}
+        </HStack>
+      ) : null}
+      <StepResultContent {...props} />
+    </>
+  )
+}
+
+function StepResultContent({ step, compact = false }: StepResultProps) {
   const tr = useTr()
   const files = step.files ?? []
   const [index, setIndex] = useState(files.length - 1)

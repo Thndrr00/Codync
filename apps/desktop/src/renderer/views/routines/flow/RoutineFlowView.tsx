@@ -9,17 +9,20 @@ import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
 import { prefs, usePref } from '../../../lib/prefs'
 import {
-  NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasRunning, connectProblem, fieldsForStep, isFlowPaused,
-  isFlowReadOnly, layoutNodes, mediaBatch, mediaEnd, mediaKey, mediaTitle, problemsForStep, specKeyOf, specText, stepNameOf,
+  GRAPH_PROBLEM_TEXT, NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasGraph, canvasRunning,
+  connectProblem, fieldsForStep, graphEdgeProblem, isFlowPaused, isFlowReadOnly, layoutNodes, mediaBatch,
+  mediaEnd, mediaKey, mediaTitle, nextRunCursor, problemsForStep, specKeyOf, specText, stepNameOf,
   tidyLayout, unknownSettings, workflowFileBytes,
   type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard,
-  type FlowStep, type SettingProblem, type WorkflowFolderAction,
+  type FlowStep, type SettingProblem, type WorkflowFolderAction, type WorkflowFields, type WorkflowGitHubHistory,
+  type WorkflowGraph, type WorkflowHistoryStep, type WorkflowNode, type WorkflowNodeSize, type WorkflowRunPage,
+  type WorkflowStepSource, type WorkflowStroke, type WorkflowVersion,
 } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
 import { RoutineFlowStore, type WorkflowImportBody, type WorkflowImportInfo } from '../../../store/routine-flow-store'
 import { AllWorkflowsMenu } from './AllWorkflowsMenu'
-import { FlowCanvasView, type FlowSelection } from './FlowCanvas'
+import { FlowCanvasView, type ConnectOptions, type FlowSelection } from './FlowCanvas'
 import {
   documentFromCanvas, type FlowChoice, type FlowConflict, type FlowDocument, type FlowSaveAnswer,
 } from './flow-merge'
@@ -33,6 +36,11 @@ import { FlowList } from './FlowList'
 import { FlowTabStrip } from './FlowTabStrip'
 import { WorkflowImportDialog } from './WorkflowImportDialog'
 import { clipped, hasMore, leftmostNode, settingsOf, type FlowStepSettings } from './flow-settings'
+import { RunHistorySheet } from './RunHistorySheet'
+import {
+  decide, githubHistory, restoreVersion, retryStep, rotateWebhookSecret, runLastEvent, runs, saveGraph,
+  stepSettings, stopRun, stopStep, versionGraph, versions, type WorkflowCall,
+} from './workflow-host'
 import { RoutineEditorView } from '../RoutineEditorView'
 import './routine-flow.css'
 
@@ -157,6 +165,16 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [importDraft, setImportDraft] = useState<{ info: WorkflowImportInfo; content: string; suggestedName?: string } | null>(null)
   /** Steps that hold a secret, which the host refuses to export until they are changed. */
   const [exportBlocked, setExportBlocked] = useState<string[] | null>(null)
+  // The portable graph is additive: an older host sends none of it and the routine canvas works on.
+  const [workflowVersions, setWorkflowVersions] = useState<WorkflowVersion[]>([])
+  const [versionPreview, setVersionPreview] = useState<{ version: WorkflowVersion; graph: WorkflowGraph } | null>(null)
+  const [showRuns, setShowRuns] = useState(false)
+  const [runPage, setRunPage] = useState<WorkflowRunPage | null>(null)
+  const [runsError, setRunsError] = useState<string | null>(null)
+  const [sourcesByStep, setSourcesByStep] = useState<Record<string, WorkflowStepSource[] | null>>({})
+  const [webhookSecret, setWebhookSecret] = useState<string | null>(null)
+  const [deliveries, setDeliveries] = useState<WorkflowGitHubHistory | null>(null)
+  const [detailSettings, setDetailSettings] = useState<{ stepId: string; value: unknown } | null>(null)
   const offline = store.isOffline
   const rev = store.flowRev(activeId)
 
@@ -240,6 +258,90 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }
   }
   const applyFolderAction = (action: WorkflowFolderAction) => { void flow.folderAction(action) }
+
+  // --- Portable workflow graph: every change goes through the host with the revision we read -----
+
+  const graph = canvasGraph(canvas)
+  const workflowCall: WorkflowCall = (method, body) => store.ready().then((client) => client.call(method, body))
+  const stepsByNode: Record<string, WorkflowHistoryStep | null> = canvas?.workflowSteps ?? {}
+  const graphChange = (change: (current: WorkflowGraph) => WorkflowGraph) => {
+    if (!canvas || !currentWorkflowId || offline || readOnly) return
+    const current = graph ?? { nodes: [], edges: [], strokes: [] }
+    void saveGraph(workflowCall, currentWorkflowId, canvas.rev, change(current)).then((answer) => {
+      if (answer?.ok === false) setNote(tr('This workflow changed on the host. Reload it before drawing again.'))
+      else void flow.load()
+    }).catch((error: unknown) => {
+      setNote(`${tr('Could not save the workflow.')} ${error instanceof Error ? error.message : String(error)}`)
+    })
+  }
+  const saveNode = (node: WorkflowNode, fields: WorkflowFields, size?: WorkflowNodeSize) => {
+    graphChange((current) => ({
+      ...current,
+      nodes: current.nodes.map((item) => item.id === node.id
+        ? { ...item, fields, size: size ?? item.size }
+        : item),
+    }))
+  }
+  const decideStep = (nodeId: string, approved: boolean) => {
+    const step = stepsByNode[nodeId]
+    if (!step) return
+    void decide(workflowCall, step.id, approved).then((ok) => {
+      if (ok) void flow.load()
+      else setNote(tr('This host cannot answer an approval step yet.'))
+    }).catch(() => setNote(tr('Could not save the decision.')))
+  }
+  const loadVersions = () => {
+    if (!currentWorkflowId || offline) return
+    void versions(workflowCall, currentWorkflowId).then((list) => { if (list) setWorkflowVersions(list) }).catch(() => {})
+  }
+  const showVersion = (version: WorkflowVersion) => {
+    if (!currentWorkflowId) return
+    void versionGraph(workflowCall, currentWorkflowId, version.id).then((preview) => {
+      if (preview) setVersionPreview({ version, graph: preview })
+    }).catch(() => setNote(tr('Could not read that version.')))
+  }
+  const restore = (version: WorkflowVersion) => {
+    if (!currentWorkflowId || offline) return
+    void restoreVersion(workflowCall, currentWorkflowId, version.id).then((answer) => {
+      if (answer) {
+        setVersionPreview(null)
+        setNote(tr('Version restored.'))
+        void flow.load()
+      }
+    }).catch(() => setNote(tr('Could not restore that version.')))
+  }
+  const loadRuns = (before: string | null) => {
+    if (!currentWorkflowId || offline) return
+    void runs(workflowCall, currentWorkflowId, before, 20).then((page) => {
+      if (page) {
+        setRunPage((previous) => before ? { ...page, runs: [...(previous?.runs ?? []), ...page.runs] } : page)
+        setRunsError(null)
+        void Promise.all(page.runs.flatMap((detail) => detail.steps.map(async (step) => {
+          const settings = await stepSettings(workflowCall, step.id).catch(() => null)
+          return [step.id, settings?.sources ?? null] as const
+        }))).then((entries) => setSourcesByStep(Object.fromEntries(entries) as Record<string, WorkflowStepSource[] | null>))
+      }
+    }).catch(() => setRunsError(tr('Could not read this page of runs.')))
+  }
+  const loadDeliveries = (nodeId: string) => {
+    void githubHistory(workflowCall, nodeId).then((history) => { if (history) setDeliveries(history) }).catch(() => {})
+  }
+  const rotateSecret = (nodeId: string) => {
+    if (!currentWorkflowId) return
+    void rotateWebhookSecret(workflowCall, currentWorkflowId, nodeId).then((secret) => {
+      if (secret) setWebhookSecret(secret)
+      else setNote(tr('This host cannot rotate webhook secrets yet.'))
+    }).catch(() => setNote(tr('Could not rotate the secret.')))
+  }
+  const replayEvent = (nodeId: string) => {
+    if (!currentWorkflowId) return
+    void runLastEvent(workflowCall, currentWorkflowId, nodeId, crypto.randomUUID()).then((detail) => {
+      if (detail) {
+        setNote(tr('Started a run with the last event.'))
+        void flow.load()
+      } else setNote(tr('This host cannot run the last event yet.'))
+    }).catch(() => setNote(tr('Could not run the last event.')))
+  }
 
   // --- Step fields, imported/exported workflows and pause ---------------------------------------
 
@@ -336,8 +438,25 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     if (link) setSelection({ kind: 'edge', id: link.id })
   }
 
-  const dropped = (from: string, to: string, at: { x: number; y: number }) => {
+  const dropped = (from: string, to: string, at: { x: number; y: number }, options?: ConnectOptions) => {
     if (!canvas || offline) return
+    // A portable edge carries a typed port and, from a condition, a yes or no branch. Both the
+    // client's pre-check and the host's graph validation must agree before a line is saved.
+    const source = graph?.nodes.find((node) => node.id === from) ?? null
+    const target = graph?.nodes.find((node) => node.id === to) ?? null
+    if (source || target || options?.branch) {
+      const type = options?.type ?? (source?.kind === 'asset' ? 'text' : 'text')
+      const problem = graphEdgeProblem(source?.kind ?? 'llm', target?.kind ?? 'llm', type, options?.branch)
+      if (problem) {
+        setNote(tr(GRAPH_PROBLEM_TEXT[problem] ?? 'These steps cannot be connected.'))
+        return
+      }
+      graphChange((current) => ({
+        ...current,
+        edges: [...current.edges, { id: crypto.randomUUID(), from, to, type, ...(options?.branch ? { branch: options.branch } : {}) }],
+      }))
+      return
+    }
     // A line from a group's output port reaches every member of that output kind.
     const port = parsePort(from)
     if (port) {
@@ -390,6 +509,11 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
         onFolderAction={applyFolderAction}
         paused={paused}
         onPause={() => { if (currentWorkflowId) { setNote(null); void flow.setPaused(currentWorkflowId, !paused) } }}
+        versions={workflowVersions}
+        onVersions={loadVersions}
+        onVersionGraph={showVersion}
+        onRestore={restore}
+        onShowRuns={() => { setShowRuns(true); loadRuns(null) }}
         onDuplicate={() => void duplicateWorkflow()}
         onExport={() => void exportWorkflow()}
         onImport={() => void pickImportFile()}
@@ -790,6 +914,18 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                   void flow.test(id)
                 }}
                 onStop={() => void store.stop(activeId)}
+                workflow={graph || canvas.workflowTriggers || canvas.needsNewerApp ? {
+                  graph,
+                  triggers: canvas.workflowTriggers ?? [],
+                  needsNewerApp: canvas.needsNewerApp === true,
+                  steps: stepsByNode,
+                  onDecide: decideStep,
+                  onResize: (nodeId, size) => {
+                    const node = graph?.nodes.find((item) => item.id === nodeId)
+                    if (node) saveNode(node, node.fields, size)
+                  },
+                  onStroke: (stroke: WorkflowStroke) => graphChange((current) => ({ ...current, strokes: [...current.strokes, stroke] })),
+                } : undefined}
               />
               {canvas.routines.length === 0 ? (
                 <div className="flow-empty-overlay">
@@ -809,6 +945,9 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 </div>
               ) : null}
               {readOnly ? <div className="flow-readonly-badge"><Text size="caption" tone="attention">{tr('Read-only')}</Text></div> : null}
+              {canvas.needsNewerApp ? (
+                <div className="flow-readonly-badge"><Text size="caption" tone="attention">{tr('Needs newer app')}</Text></div>
+              ) : null}
             </div>
           ) : (
             <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} query={query} note={note} disabled={offline} onNew={() => setCreating(true)} />
@@ -844,6 +983,17 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
           onRenameGroup={(id, name) => void renameGroup(id, name)}
           onToggleGroup={(id) => void toggleGroup(id)}
           onUngroup={(id) => void ungroup(id)}
+          workflow={{ graph: graph ?? { nodes: [], edges: [], strokes: [] }, triggers: canvas.workflowTriggers ?? [],
+            steps: stepsByNode, readOnly: readOnly || offline || model.busy, fieldsFor, problemsFor,
+            answerFor, checkFor, onSaveAnswer: saveAnswer, onSaveCheck: saveCheck,
+            onSaveFields: (node, fields) => saveNode(node, fields),
+            onDecide: decideStep,
+            onRotateSecret: rotateSecret,
+            onRunLastEvent: replayEvent,
+            onLoadTriggerHistory: loadDeliveries,
+            triggerHistory: deliveries,
+            secret: webhookSecret,
+          }}
         />
       </HStack>
       <AnchoredMenu
@@ -997,6 +1147,60 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
           />
         ) : null}
       </Sheet>
+      <RunHistorySheet
+        open={showRuns}
+        onClose={() => setShowRuns(false)}
+        page={runPage}
+        loading={model.busy}
+        error={runsError}
+        sourcesByStep={sourcesByStep}
+        onLoadMore={() => loadRuns(nextRunCursor(runPage))}
+        onRetry={(stepId) => {
+          void retryStep(workflowCall, stepId, crypto.randomUUID()).then((answer) => {
+            if (answer) void flow.load()
+            else setNote(tr('This host cannot retry that step yet.'))
+          }).catch(() => setNote(tr('Could not retry the step.')))
+        }}
+        onStopStep={(stepId) => {
+          void stopStep(workflowCall, stepId).then((ok) => { if (ok) void flow.load() })
+            .catch(() => setNote(tr('Could not stop the step.')))
+        }}
+        onStopRun={(runId) => {
+          void stopRun(workflowCall, runId).then((ok) => { if (ok) void flow.load() })
+            .catch(() => setNote(tr('Could not stop the run.')))
+        }}
+        onShowSettings={(stepId) => {
+          void stepSettings(workflowCall, stepId).then((settings) => setDetailSettings({ stepId, value: settings }))
+            .catch(() => setNote(tr('Could not read the settings of that step.')))
+        }}
+      />
+      <Dialog
+        open={versionPreview !== null}
+        title={tr('Version graph')}
+        message={versionPreview ? tr('{kind} · {at}').replace('{kind}', versionPreview.version.kind).replace('{at}', new Date(versionPreview.version.at).toLocaleString()) : ''}
+        actions={versionPreview ? [{
+          title: tr('Restore this version'),
+          action: () => restore(versionPreview.version),
+        }] : []}
+        onClose={() => setVersionPreview(null)}
+      >
+        {versionPreview ? (
+          <Text size="callout" className="flow-version-graph">
+            {tr('{count} nodes, {edges} lines').replace('{count}', String(versionPreview.graph.nodes.length)).replace('{edges}', String(versionPreview.graph.edges.length))}
+          </Text>
+        ) : null}
+      </Dialog>
+      <Dialog
+        open={detailSettings !== null}
+        title={tr('Settings used')}
+        message={detailSettings?.stepId ?? ''}
+        actions={[]}
+        onClose={() => setDetailSettings(null)}
+      >
+        {detailSettings ? (
+          <Text size="callout" className="flow-version-graph">{JSON.stringify(detailSettings.value, null, 2)}</Text>
+        ) : null}
+      </Dialog>
     </VStack>
   )
 }

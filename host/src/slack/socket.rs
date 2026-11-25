@@ -115,7 +115,7 @@ async fn open(ep: &Endpoint, app_token: &str) -> Result<String> {
     Ok(socket.to_owned())
 }
 
-pub(super) fn handle(hub: &Hub, generation: &str, text: &str) -> Result<Frame> {
+pub(super) fn handle(hub: &Arc<Hub>, generation: &str, text: &str) -> Result<Frame> {
     let frame: Value = serde_json::from_str(text)?;
     Ok(match frame["type"].as_str() {
         Some("hello") => Frame::Hello,

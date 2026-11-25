@@ -5,7 +5,10 @@ import { AnchoredMenu, type MenuItem } from '../../../components/Menu'
 import { Dialog, DialogField } from '../../../components/Overlay'
 import { HStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
-import { folderOf, workflowsInFolder, type WorkflowFolderAction, type WorkflowFoldersSnapshot } from '../../../lib/routine-flow.ts'
+import {
+  VERSION_KIND_LABEL, folderOf, labelOf, workflowsInFolder,
+  type WorkflowFolderAction, type WorkflowFoldersSnapshot, type WorkflowVersion,
+} from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 
 interface NameDialog {
@@ -24,7 +27,7 @@ interface WorkflowEntry {
   botId: string
 }
 
-export function AllWorkflowsMenu({ workflows, current, folders, loading, error, paused, onOpen, onNew, onRename, onFolderAction, onPause, onDuplicate, onExport, onImport }: {
+export function AllWorkflowsMenu({ workflows, current, folders, loading, error, paused, versions, onVersions, onVersionGraph, onRestore, onOpen, onNew, onRename, onFolderAction, onPause, onDuplicate, onExport, onImport, onShowRuns }: {
   workflows: readonly WorkflowEntry[]
   /** The routine id of the open canvas's workflow, which is what the host files in folders. */
   current: string
@@ -33,6 +36,12 @@ export function AllWorkflowsMenu({ workflows, current, folders, loading, error, 
   error: string | null
   /** A paused workflow skips its triggers but can still be run by hand. */
   paused: boolean
+  /** Autosave, restore and run versions of the current workflow (up to 50). */
+  versions: readonly WorkflowVersion[]
+  onVersions: () => void
+  onVersionGraph: (version: WorkflowVersion) => void
+  onRestore: (version: WorkflowVersion) => void
+  onShowRuns: () => void
   onOpen: (workflow: WorkflowEntry) => void
   onNew: () => void
   onRename: (workflow: WorkflowEntry) => void
@@ -121,6 +130,23 @@ export function AllWorkflowsMenu({ workflows, current, folders, loading, error, 
       { title: 'Move workflow', icon: 'folder', disabled: !current, submenu: placeItems(current) },
       { title: 'Rename workflow', icon: 'pencil', action: () => { const entry = entryOf(current); if (entry) onRename(entry) } },
       { title: paused ? 'Resume' : 'Pause', icon: paused ? 'play.circle' : 'clock', divider: true, disabled: !current, action: onPause },
+      {
+        title: 'Version history',
+        icon: 'clock.arrow.circlepath',
+        disabled: !current,
+        submenu: versions.length === 0
+          ? [{ title: tr('No versions yet'), disabled: true, action: () => {} }]
+          : versions.map((version) => ({
+            title: `${labelOf(VERSION_KIND_LABEL, version.kind, tr)} · ${new Date(version.at).toLocaleString()}`,
+            verbatim: true,
+            detail: `r${version.revision}`,
+            submenu: [
+              { title: tr('View graph'), icon: 'point.3.connected.trianglefill', action: () => onVersionGraph(version) },
+              { title: tr('Restore this version'), icon: 'arrow.uturn.backward', destructive: true, action: () => onRestore(version) },
+            ],
+          })),
+      },
+      { title: 'Run history', icon: 'list.bullet', disabled: !current, action: onShowRuns },
       { title: 'Duplicate', icon: 'doc.on.doc', disabled: !current, action: onDuplicate },
       { title: 'Export', icon: 'doc.on.doc', disabled: !current, action: onExport },
       { title: 'Import workflow', icon: 'doc.badge.plus', action: onImport },
@@ -137,7 +163,7 @@ export function AllWorkflowsMenu({ workflows, current, folders, loading, error, 
         aria-haspopup="menu"
         aria-expanded={open}
         title={tr('All workflows')}
-        onClick={() => setOpen(!open)}
+        onClick={() => { if (!open) onVersions(); setOpen(!open) }}
       >
         <HStack gap={4}>
           <Text weight="semibold">{tr('All workflows')}</Text>

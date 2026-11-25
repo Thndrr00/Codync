@@ -78,7 +78,7 @@ pub(crate) async fn receive(State(hub): State<Arc<Hub>>, headers: HeaderMap, bod
 }
 /// Queues the prompt in one Slack `event_callback`, whether it came signed over HTTP or through Socket Mode. An event
 /// that is not for a bound bot, from an allowed person, in a conversation the bot is in, is dropped without error.
-pub(super) fn accept(hub: &Hub, c: &Config, envelope: &Value) -> Result<()> {
+pub(super) fn accept(hub: &Arc<Hub>, c: &Config, envelope: &Value) -> Result<()> {
     if envelope["type"] != "event_callback" || envelope["team_id"] != c.workspace_id {
         return Ok(());
     }
@@ -119,10 +119,28 @@ pub(super) fn accept(hub: &Hub, c: &Config, envelope: &Value) -> Result<()> {
         crate::chat::memory::messaging::with_facts(&hub.store, "slack", &c.workspace_id, agent_prompt(&message));
     let prompt = if has_audio && audio.is_none() { crate::channels::voice_notes::unavailable(&prompt) } else { prompt };
     if mention {
+        // Slack has no people catalog, so a trigger matches the connection, channel and text only.
+        let trigger_event = json!({
+            "source": "slack", "event": "app_mention", "connection": c.workspace_id,
+            "channel": binding.channel_id, "channelId": binding.channel_id,
+            "channelType": event["channel_type"], "user": event["user"], "author": event["user"],
+            "text": message.text, "messageId": ts, "thread": thread, "url": event["permalink"],
+        });
+        let skipped =
+            hub.routines.receive_chat_event(&hub.store, &trigger_event, Some(event_id.to_owned())).all_skipped();
+        if skipped {
+            let (hub, channel, stamp) = (hub.clone(), binding.channel_id.clone(), ts.to_owned());
+            tokio::spawn(async move {
+                if let Err(error) = super::react(&hub.store, &channel, &stamp, "x").await {
+                    tracing::warn!(error = format!("{error:#}"), "couldn't mark a skipped Slack workflow mention");
+                }
+            });
+        }
+    } else {
         hub.routines.receive_event(
             &hub.store,
             &json!({
-                "source": "slack", "event": "app_mention", "channel": binding.channel_id,
+                "source": "slack", "event": "message", "channel": binding.channel_id,
                 "channelType": event["channel_type"], "user": event["user"], "text": message.text,
                 "thread": thread, "url": event["permalink"],
             }),

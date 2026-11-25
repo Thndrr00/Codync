@@ -6,8 +6,10 @@ import { MenuPanel, type MenuItem } from '../../../components/Menu'
 import { useEscape, usePresence } from '../../../components/Overlay'
 import { useTr } from '../../../lib/use-language'
 import {
-  NODE_HEIGHT, NODE_WIDTH, canvasCenter, edgePath, fitView, isUnconnected, latestStep, linkEndOf, mediaOf, mediaTitle, nodeAt,
-  portCarry, stepNameOf, stepOf, stepProgress, zoomAt, type FlowNode, type View,
+  NODE_HEIGHT, NODE_WIDTH, canvasCenter, canvasGraph, edgePath, fitView, isUnconnected, latestStep, linkEndOf,
+  mediaOf, mediaTitle, nodeAt, nodeEditable, portCarry, stepNameOf, stepOf, stepProgress, strokePath, zoomAt,
+  type FlowNode, type View, type WorkflowBranch, type WorkflowGraph, type WorkflowHistoryStep,
+  type WorkflowNode, type WorkflowNodeSize, type WorkflowStroke, type WorkflowTriggerState,
 } from '../../../lib/routine-flow.ts'
 import {
   CanvasWithGroups, groupKey, groupOf, groupedEdges, groupedNodes, groupsOf, parsePort, portPrefix,
@@ -15,11 +17,29 @@ import {
 } from './flow-groups'
 import { FlowGroupCard, type GroupPreview } from './FlowGroupCard'
 import { FlowNodeCard } from './FlowNodeCard'
-import { flowMenuPoint } from './flow-settings'
+import { clampNodeSize, flowMenuPoint, sampleStroke } from './flow-settings'
 import { MediaComposer } from './MediaComposer'
 import type { FlowTarget } from './FlowInspector'
 
 export type FlowSelection = { kind: 'node'; key: string } | { kind: 'edge'; id: string } | { kind: 'group'; id: string } | null
+
+/** A line dropped from a typed or routed port; the host validates it before saving. */
+export interface ConnectOptions {
+  branch?: WorkflowBranch
+  type?: 'text' | 'image' | 'file'
+}
+
+/** The portable-graph half of the canvas, absent on an older host. */
+export interface WorkflowCanvasProps {
+  graph: WorkflowGraph | null
+  triggers: WorkflowTriggerState[]
+  needsNewerApp: boolean
+  /** The newest history step of each portable node, for an approval's waiting badge. */
+  steps: Record<string, WorkflowHistoryStep | null>
+  onDecide: (nodeId: string, approved: boolean) => void
+  onResize: (nodeId: string, size: WorkflowNodeSize) => void
+  onStroke: (stroke: WorkflowStroke) => void
+}
 
 interface Props {
   canvas: CanvasWithGroups
@@ -38,8 +58,8 @@ interface Props {
   onRun: (routineId: string) => void
   /** Stops the routine run in flight, from its card (OpenBot 0.71.0). */
   onStop: (routineId: string) => void
-  /** A step's connection was dropped on another bot or media step. */
-  onConnect: (fromBotId: string, toBotId: string, at: { x: number; y: number }) => void
+  /** A step's connection was dropped on another bot, media step or portable node. */
+  onConnect: (fromBotId: string, toBotId: string, at: { x: number; y: number }, options?: ConnectOptions) => void
   /** Several selected nodes are being grouped (the view asks for the name). */
   onGroup: (keys: string[]) => void
   onUngroup: (groupId: string) => void
@@ -63,6 +83,7 @@ interface Props {
     onSaveMedia: (media: import('../../../lib/routine-flow.ts').FlowMedia, settings: import('./FlowInspector').MediaSettings) => void
     onRunFromStep: (nodeKey: string) => void
   }
+  workflow?: WorkflowCanvasProps
 }
 
 const NUDGE = 20
@@ -119,14 +140,18 @@ function MiniMap({ nodes, view, box, onCenter }: {
 }
 
 /** The canvas: routine and bot nodes, their edges, groups, pan, zoom (wheel and buttons) and gestures. */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onDelete, onTidy, onUndoTidy, onRun, onStop, menuItems, onRenameStep, query, composer }: Props) {
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onDelete, onTidy, onUndoTidy, onRun, onStop, menuItems, onRenameStep, query, composer, workflow }: Props) {
   const tr = useTr()
   const groups = groupsOf(canvas)
   const nodes = useMemo(() => groupedNodes(canvas), [canvas])
   const edges = useMemo(() => groupedEdges(canvas), [canvas])
+  const graph = workflow?.graph ?? canvasGraph(canvas)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
   const [live, setLive] = useState<{ key: string; x: number; y: number } | null>(null)
-  const [wire, setWire] = useState<{ from: string; x: number; y: number } | null>(null)
+  const [wire, setWire] = useState<{ from: string; x: number; y: number; branch?: WorkflowBranch } | null>(null)
+  /** A freehand stroke in progress; points are in canvas coordinates, like node positions. */
+  const [drawing, setDrawing] = useState<WorkflowStroke | null>(null)
+  const [tool, setTool] = useState<'select' | 'draw'>('select')
   const [multi, setMulti] = useState<Set<string>>(new Set())
   /** A step's menu, anchored to its button but kept inside the canvas (never under the tools). */
   const [menu, setMenu] = useState<{ key: string; x: number; top: number; bottom: number } | null>(null)
@@ -193,6 +218,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
   }
 
   const startPan = (event: PointerEvent) => {
+    if (tool === 'draw') return
     if (event.target !== event.currentTarget && !(event.target as Element).classList.contains('flow-layer')) return
     // After a title-bar tab click the focus is on that button; a canvas click must move it here,
     // or Backspace closes the tab instead of deleting the selected steps.
@@ -255,18 +281,53 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
     )
   }
 
-  const startWire = (from: string, event: PointerEvent) => {
+  const startWire = (from: string, event: PointerEvent, branch?: WorkflowBranch) => {
     const start = toCanvas(event.clientX, event.clientY)
-    setWire({ from, ...start })
+    setWire({ from, ...start, branch })
     track(
-      (e) => setWire({ from, ...toCanvas(e.clientX, e.clientY) }),
+      (e) => setWire({ from, ...toCanvas(e.clientX, e.clientY), branch }),
       (e) => {
         setWire(null)
         const p = toCanvas(e.clientX, e.clientY)
         const target = nodeAt([...byKey.values()], p.x, p.y)
         const valid = target && target.kind !== 'routine' && target.id !== from
           && !target.key.startsWith(portPrefix) && !target.key.startsWith('group:')
-        if (valid) onConnect(from, target.id, { x: e.clientX, y: e.clientY })
+        if (valid) onConnect(from, target.id, { x: e.clientX, y: e.clientY }, { branch })
+      },
+    )
+  }
+
+  /** A resize grip follows the pointer and saves the new width/height on release. */
+  const startResize = (node: WorkflowNode, event: PointerEvent) => {
+    if (event.button !== 0) return
+    const origin = toCanvas(event.clientX, event.clientY)
+    const from = { width: node.size?.width ?? NODE_WIDTH, height: node.size?.height ?? NODE_HEIGHT, font: node.size?.font }
+    let size: WorkflowNodeSize = from
+    track(
+      (e) => {
+        const at = toCanvas(e.clientX, e.clientY)
+        size = clampNodeSize({ width: from.width + at.x - origin.x, height: from.height + at.y - origin.y, font: from.font })
+      },
+      () => { workflow?.onResize(node.id, size) },
+    )
+  }
+
+  /** A freehand stroke: capture the path while the pointer is down, then save it in the graph. */
+  const startDraw = (event: PointerEvent) => {
+    if (tool !== 'draw' || disabled || event.button !== 0) return
+    if (event.target !== event.currentTarget && !(event.target as Element).classList.contains('flow-layer')) return
+    const point = toCanvas(event.clientX, event.clientY)
+    const stroke: WorkflowStroke = {
+      id: crypto.randomUUID(), brush: 'pen', color: 'var(--accent)', width: 2, points: [point],
+    }
+    setDrawing(stroke)
+    track(
+      (e) => setDrawing((current) => current ? { ...current, points: [...current.points, toCanvas(e.clientX, e.clientY)] } : current),
+      () => {
+        setDrawing((current) => {
+          if (current && current.points.length > 1) workflow?.onStroke({ ...current, points: sampleStroke(current.points) })
+          return null
+        })
       },
     )
   }
@@ -374,7 +435,8 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
       role="application"
       aria-label={tr('Routine flow canvas')}
       tabIndex={0}
-      onPointerDown={startPan}
+      data-tool={tool}
+      onPointerDown={(event) => { startDraw(event); startPan(event) }}
       onKeyDown={canvasKeys}
       onPaste={(event) => {
         const files = [...event.clipboardData.files]
@@ -395,6 +457,21 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
       }}
     >
       <div className="flow-layer" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
+        {graph?.strokes?.length || drawing ? (
+          <svg className="flow-strokes" width="1" height="1" aria-hidden="true">
+            {[...(graph?.strokes ?? []), ...(drawing ? [drawing] : [])].map((stroke) => (
+              <path
+                key={stroke.id}
+                d={strokePath(stroke)}
+                fill="none"
+                stroke={stroke.color}
+                strokeWidth={stroke.width}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))}
+          </svg>
+        ) : null}
         <svg className="flow-edges" width="1" height="1" aria-hidden="true">
           {edges.map((edge) => {
             const from = byKey.get(edge.from)
@@ -407,7 +484,15 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
             const isSelected = selection?.kind === 'edge' && selection.id === edge.linkId
             return (
               <g key={edge.id}>
-                <path className="flow-edge" data-kind={edge.linkId ? 'link' : 'start'} data-selected={isSelected} d={d} />
+                <path
+                  className="flow-edge"
+                  data-kind={edge.linkId ? 'link' : 'start'}
+                  data-selected={isSelected}
+                  data-carry={edge.type ?? (edge.linkId ? 'text' : undefined)}
+                  data-branch={edge.branch}
+                  data-problem={edge.problem ?? undefined}
+                  d={d}
+                />
                 {edge.linkId ? (
                   <path className="flow-edge-hit" d={d} onPointerDown={(e) => { e.stopPropagation(); onSelect({ kind: 'edge', id: edge.linkId! }) }} />
                 ) : null}
@@ -480,7 +565,15 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               return { activity: working.activity, previous: p.previous ? titleOf(p.previous.botId) : '', done: p.done, total: p.total }
             })()
             : null
-          const name = stepNameOf(canvas, raw.key) || (raw.kind === 'routine' ? card?.routine.name ?? '' : raw.kind === 'media' ? tr(mediaTitle(media)) : bots.get(raw.id)?.name ?? '')
+          const workflowNode = raw.kind === 'workflow' ? graph?.nodes.find((node) => node.id === raw.id) ?? null : null
+          const ownName = workflowNode?.fields.stepName
+          const name = stepNameOf(canvas, raw.key) || (raw.kind === 'routine' ? card?.routine.name ?? ''
+            : raw.kind === 'media' ? tr(mediaTitle(media))
+              : workflowNode ? (typeof ownName === 'string' ? ownName : '')
+                : bots.get(raw.id)?.name ?? '')
+          const nodeLocked = workflowNode ? !nodeEditable(workflowNode, workflow?.needsNewerApp) : false
+          const trigger = workflowNode?.kind === 'trigger' ? workflow?.triggers.find((item) => item.nodeId === workflowNode.id) ?? null : null
+          const stepDetail = workflowNode ? workflow?.steps[workflowNode.id] ?? null : null
           return (
             <FlowNodeCard
               key={raw.key}
@@ -494,7 +587,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               unconnected={card ? isUnconnected(canvas, card.routine.id) : false}
               selected={multi.has(raw.key) || selection?.kind === 'node' && selection.key === raw.key}
               connectTarget={hovered?.key === raw.key && raw.kind !== 'routine' && raw.id !== wire?.from}
-              disabled={disabled}
+              disabled={disabled || nodeLocked}
               onSelect={(e) => pick(raw.key, e)}
               onDragStart={(e) => startDrag(raw, e)}
               onPortStart={(e) => startWire(raw.id, e)}
@@ -508,6 +601,16 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               carry={portCarry(raw, media)}
               connected={connectedPorts.has(raw.key)}
               matched={matches(raw.key, name)}
+              workflowNode={workflowNode}
+              trigger={trigger}
+              stepDetail={stepDetail}
+              needsNewerApp={workflow?.needsNewerApp}
+              onDecide={workflowNode?.kind === 'approval' && workflow && !nodeLocked
+                ? (approved) => workflow.onDecide(workflowNode.id, approved) : undefined}
+              onBranchStart={workflowNode?.kind === 'condition' && workflow && !nodeLocked
+                ? (branch, e) => startWire(workflowNode.id, e, branch) : undefined}
+              onResizeStart={workflowNode && workflow && !nodeLocked
+                ? (e) => startResize(workflowNode, e) : undefined}
             />
           )
         })}
@@ -570,6 +673,17 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
         <IconButton title={tr('Fit to view')} icon="arrow.up.left.and.arrow.down.right" onClick={() => setView(fitView(nodes, box.width, box.height))} />
         <IconButton title={tr('Tidy up')} icon="square.grid.2x2" onClick={onTidy} />
         {onUndoTidy ? <IconButton title={tr('Undo tidy up')} icon="arrow.uturn.backward" onClick={onUndoTidy} /> : null}
+        {workflow && !disabled ? (
+          <>
+            <span className="flow-toolbar-separator" aria-hidden />
+            <IconButton
+              title={tr(tool === 'draw' ? 'Select steps' : 'Draw on the canvas')}
+              icon={tool === 'draw' ? 'cursor-arrow' : 'pencil'}
+              selected={tool === 'draw'}
+              onClick={() => setTool(tool === 'draw' ? 'select' : 'draw')}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   )

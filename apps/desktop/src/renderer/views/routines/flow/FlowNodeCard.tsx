@@ -5,7 +5,12 @@ import { Icon } from '../../../components/Icon'
 import { HStack, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
-import { routineTint, statusLabel, mediaTitle, type FlowMedia, type FlowNode, type FlowRoutineCard, type FlowStep, type StepStatus } from '../../../lib/routine-flow.ts'
+import {
+  nodeEditable, routineTint, statusLabel, mediaTitle, type FlowMedia, type FlowNode, type FlowRoutineCard,
+  type FlowStep, type StepStatus, type WorkflowBranch, type WorkflowHistoryStep, type WorkflowNode,
+  type WorkflowTriggerState,
+} from '../../../lib/routine-flow.ts'
+import { WorkflowNodeCardBody, WorkflowNodeIcon, workflowCardTitle } from './WorkflowNodeCardBody'
 
 const STATUS_ICON: Record<StepStatus, string> = {
   queued: 'clock',
@@ -110,17 +115,29 @@ interface Props {
   connected: boolean
   /** Dimmed while the canvas search looks for another node. */
   matched: boolean
+  /** A portable workflow node; absent on a routine, a bot or a picture step. */
+  workflowNode?: WorkflowNode | null
+  trigger?: WorkflowTriggerState | null
+  /** The newest history step of this node, for an approval's waiting state. */
+  stepDetail?: WorkflowHistoryStep | null
+  needsNewerApp?: boolean
+  onDecide?: (approved: boolean) => void
+  /** Dragging from a condition's Yes or No dot starts a routed line. */
+  onBranchStart?: (branch: WorkflowBranch, event: PointerEvent) => void
+  /** Dragging the bottom-right grip changes this node's size. */
+  onResizeStart?: (event: PointerEvent) => void
 }
 
 /** One node of the canvas: a routine with its week and last runs, a bot with its latest step, or a step that makes a picture or a clip. */
-export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun, onStop, onMenu, stepName, onRename, progress, carry, connected, matched }: Props) {
+export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun, onStop, onMenu, stepName, onRename, progress, carry, connected, matched, workflowNode, trigger, stepDetail, needsNewerApp, onDecide, onBranchStart, onResizeStart }: Props) {
   const tr = useTr()
-  const title = stepName || (node.kind === 'routine' ? (routine?.routine.name ?? '') : node.kind === 'media' ? tr(mediaTitle(media ?? null)) : (bot?.name ?? tr('Unknown bot')))
-  const kindName = node.kind === 'routine' ? tr('Routine') : node.kind === 'media' ? tr(media?.kind === 'video' ? 'Clip step' : 'Picture step') : tr('Bot')
+  const title = stepName || (node.kind === 'routine' ? (routine?.routine.name ?? '') : node.kind === 'media' ? tr(mediaTitle(media ?? null)) : node.kind === 'workflow' ? tr(workflowNode ? workflowCardTitle(workflowNode) : 'Workflow step') : (bot?.name ?? tr('Unknown bot')))
+  const kindName = node.kind === 'routine' ? tr('Routine') : node.kind === 'media' ? tr(media?.kind === 'video' ? 'Clip step' : 'Picture step') : node.kind === 'workflow' ? tr('Workflow step') : tr('Bot')
+  const cardLocked = node.kind === 'workflow' && !!workflowNode && !nodeEditable(workflowNode, needsNewerApp)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(stepName)
   useEffect(() => setDraft(stepName), [stepName])
-  useEffect(() => { if (!onRename) setEditing(false) }, [onRename])
+  useEffect(() => { if (!onRename || cardLocked) setEditing(false) }, [onRename, cardLocked])
   const commit = () => {
     if (!onRename) return
     const next = draft.trim()
@@ -141,7 +158,7 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
       style={{ transform: `translate(${x}px, ${y}px)`, ...(node.kind === 'routine' ? { '--flow-tint': routineTint(node.id) } as CSSProperties : {}) }}
       onPointerDown={(event) => {
         onSelect(event)
-        if (!disabled) onDragStart(event)
+        if (!disabled && !cardLocked) onDragStart(event)
       }}
       onKeyDown={onKey}
     >
@@ -150,13 +167,15 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
           <Icon name="clock.arrow.circlepath" size={26} />
         ) : node.kind === 'media' ? (
           <Icon name={media?.kind === 'video' ? 'film' : 'sparkles'} size={24} />
+        ) : node.kind === 'workflow' && workflowNode ? (
+          <WorkflowNodeIcon node={workflowNode} />
         ) : bot ? (
           <BotAvatar bot={bot} size={30} animated={false} />
         ) : (
           <Icon name="questionmark.circle" size={26} />
         )}
         <VStack gap={2} shrink>
-          {editing && onRename ? (
+          {editing && onRename && !cardLocked ? (
             <input
               className="routine-input flow-node-name"
               aria-label={tr('Step name')}
@@ -172,7 +191,7 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
               }}
               onBlur={commit}
             />
-          ) : onRename ? (
+          ) : onRename && !cardLocked ? (
             <button
               type="button"
               className="flow-node-title"
@@ -190,6 +209,8 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
             <Text size="caption" tone="secondary" truncate>{bot?.model || bot?.backend || ''}</Text>
           ) : node.kind === 'media' ? (
             <Text size="caption" tone="secondary" truncate>{tr(media?.kind === 'video' ? 'Clip' : 'Picture')}</Text>
+          ) : node.kind === 'workflow' ? (
+            <Text size="caption" tone="secondary" truncate>{kindName}</Text>
           ) : (
             <Text size="caption" tone="secondary" truncate>{routine?.routine.triggerDescriptions.join(' · ')}</Text>
           )}
@@ -256,6 +277,9 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
       ) : (
         <VStack gap={4} className="flow-node-bottom">
           <StatusChip status={step?.status ?? null} />
+          {node.kind === 'workflow' && workflowNode ? (
+            <WorkflowNodeCardBody node={workflowNode} needsNewerApp={needsNewerApp ?? false} step={stepDetail} trigger={trigger} onDecide={onDecide} />
+          ) : null}
           {progress ? (
             <div className="flow-node-progress" aria-live="polite">
               <Text size="caption" tone="secondary" truncate title={progress.activity}>
@@ -285,6 +309,44 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
             onPortStart(event)
           }}
         />
+      ) : null}
+      {node.kind === 'workflow' && workflowNode?.kind === 'condition' && !cardLocked && onBranchStart ? (
+        <>
+          <button
+            type="button"
+            className="flow-branch-port"
+            data-branch="yes"
+            title={tr('Yes output')}
+            aria-label={tr('Yes output')}
+            disabled={disabled}
+            onPointerDown={(event) => { event.stopPropagation(); onBranchStart('yes', event) }}
+          >
+            <Icon name="checkmark" size={9} weight="bold" />
+          </button>
+          <button
+            type="button"
+            className="flow-branch-port"
+            data-branch="no"
+            title={tr('No output')}
+            aria-label={tr('No output')}
+            disabled={disabled}
+            onPointerDown={(event) => { event.stopPropagation(); onBranchStart('no', event) }}
+          >
+            <Icon name="xmark" size={9} weight="bold" />
+          </button>
+        </>
+      ) : null}
+      {node.kind === 'workflow' && workflowNode && !cardLocked && onResizeStart ? (
+        <button
+          type="button"
+          className="flow-node-grip"
+          title={tr('Drag to resize this node')}
+          aria-label={tr('Drag to resize this node')}
+          disabled={disabled}
+          onPointerDown={(event) => { event.stopPropagation(); onResizeStart(event) }}
+        >
+          <Icon name="arrow.down.right" size={10} />
+        </button>
       ) : null}
     </div>
   )

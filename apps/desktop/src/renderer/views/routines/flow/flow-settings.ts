@@ -3,7 +3,7 @@
 // The shape mirrors `engine::StepSettings` in host/src/routines/flow/engine.rs and lives in
 // lib/routine-flow.ts, so the canvas can read a batch's progress beside its steps.
 
-import type { FlowNode, FlowStepInput, FlowStepSettings } from '../../../lib/routine-flow.ts'
+import { NODE_HEIGHT, NODE_WIDTH, type FlowNode, type FlowStepInput, type FlowStepSettings, type WorkflowNodeSize } from '../../../lib/routine-flow.ts'
 
 export type { FlowStepInput, FlowStepSettings }
 
@@ -45,4 +45,31 @@ export function leftmostNode(nodes: readonly FlowNode[]): FlowNode | null {
         if (node.x < best.x - 1 || (Math.abs(node.x - best.x) <= 1 && node.y < best.y)) return node
         return best
     }, null)
+}
+
+const NODE_SIZE_MIN = 120
+const NODE_SIZE_MAX = 900
+const FONT_MIN = 11
+const FONT_MAX = 36
+
+/** Clamps a resized node to a legible box and font, keeping the values the person didn't change. */
+export function clampNodeSize(size: WorkflowNodeSize): WorkflowNodeSize {
+    const bound = (value: number | undefined, low: number, high: number, fallback: number) =>
+        typeof value === 'number' && Number.isFinite(value) ? Math.round(Math.min(high, Math.max(low, value))) : fallback
+    return {
+        width: bound(size.width, NODE_SIZE_MIN, NODE_SIZE_MAX, NODE_WIDTH),
+        height: bound(size.height, NODE_SIZE_MIN, NODE_SIZE_MAX, NODE_HEIGHT),
+        font: size.font === undefined ? undefined : bound(size.font, FONT_MIN, FONT_MAX, 14),
+    }
+}
+
+/** Thins a raw pointer path to points at least `gap` pixels apart, so a saved stroke stays small. */
+export function sampleStroke<T extends { x: number; y: number }>(points: readonly T[], gap = 2): T[] {
+    if (points.length === 0) return []
+    const kept: T[] = [points[0]]
+    for (const point of points.slice(1)) {
+        const last = kept[kept.length - 1]
+        if (Math.hypot(point.x - last.x, point.y - last.y) >= gap) kept.push(point)
+    }
+    return kept
 }

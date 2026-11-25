@@ -159,6 +159,12 @@ pub(crate) async fn post(store: &Store, name: &str, chat: i64, text: &str, reply
     client::post(&Endpoint::telegram(), &token, chat, text, reply_to).await
 }
 
+/// Adds a reaction to a message as `name`'s bot, used when a workflow mention was skipped.
+pub(crate) async fn react(store: &Store, name: &str, chat: i64, message: i64, emoji: &str) -> Result<()> {
+    let token = token(store, name)?.context("Unknown Telegram bot.")?;
+    client::react(&Endpoint::telegram(), &token, chat, message, emoji).await
+}
+
 /// Sends one message to a Telegram chat as `name`'s bot, through the egress policy.
 pub(crate) async fn send_text(store: &Store, name: &str, chat: i64, text: &str) -> Result<()> {
     let token = token(store, name)?.context("Unknown Telegram bot.")?;

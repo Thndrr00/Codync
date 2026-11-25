@@ -46,6 +46,12 @@ const STATE_KEY: &str = "routines.v1";
 const MAX_FINISHED_RUNS: usize = 1000;
 /// How many refused deliveries stay in the history; a full log drops its oldest entries.
 const MAX_IGNORED_DELIVERIES: usize = 50;
+/// Chat and GitHub trigger histories are bounded the same way as OpenBot's 50 deliveries.
+const MAX_CHAT_DELIVERIES: usize = 50;
+/// Webhook receipts are deduplicated for seven days, then pruned (`events.md`).
+const WEBHOOK_RECEIPT_TTL_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+const MAX_WEBHOOK_RECEIPTS: usize = 500;
+const MAX_LAST_EVENTS: usize = 100;
 /// What a routine does with the occurrences that came due while the host was away: record them
 /// and drop them (`skip`), or run the newest one when the host comes back (`runOnce`).
 pub const MISSED_POLICIES: [&str; 2] = ["skip", "runOnce"];
@@ -191,6 +197,57 @@ struct IgnoredDelivery {
     delivery_id: Option<String>,
 }
 
+/// One GitHub delivery in a workflow trigger's bounded history. No body is kept: only the item and
+/// the outcome, as in OpenBot's `workflow_github_deliveries` (docs/architecture/events.md).
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitHubDelivery {
+    id: String,
+    routine_id: String,
+    event: String,
+    item: Option<events::GitHubItem>,
+    at: i64,
+    /// `started`, `waiting` or `skipped`.
+    outcome: String,
+    reason: Option<String>,
+    run_id: Option<String>,
+}
+
+/// A run on a GitHub item, so a third one in ten minutes is recorded as a chain.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitHubRunMark {
+    routine_id: String,
+    repository: String,
+    number: i64,
+    at: i64,
+}
+
+/// A chat mention a workflow trigger considered, with no message text in the row.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatDelivery {
+    routine_id: String,
+    source: String,
+    connection: String,
+    channel: String,
+    message_id: String,
+    at: i64,
+    outcome: String,
+    reason: Option<String>,
+    run_id: Option<String>,
+}
+
+/// A webhook receipt, kept for seven days without its body so a repeated delivery id is a no-op.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebhookReceipt {
+    routine_id: String,
+    delivery_id: String,
+    at: i64,
+    reason: Option<String>,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct State {
     routines: Vec<Routine>,
@@ -203,6 +260,17 @@ struct State {
     sender_secrets: BTreeMap<String, String>,
     #[serde(default)]
     ignored: Vec<IgnoredDelivery>,
+    #[serde(default)]
+    github_deliveries: Vec<GitHubDelivery>,
+    #[serde(default)]
+    github_runs: Vec<GitHubRunMark>,
+    #[serde(default)]
+    chat_deliveries: Vec<ChatDelivery>,
+    #[serde(default)]
+    webhook_receipts: Vec<WebhookReceipt>,
+    /// The last event per workflow, used by "run with last event". Ids and fields only.
+    #[serde(default)]
+    last_events: BTreeMap<String, Value>,
 }
 
 pub struct Routines {
@@ -734,18 +802,34 @@ impl Routines {
     /// trigger matches. Returns the routine ids it queued.
     #[allow(clippy::needless_pass_by_value, reason = "cloned for each queued routine")]
     pub fn receive_event(&self, store: &Store, event: &Value, delivery: Option<String>) -> Vec<String> {
+        let github = event["source"] == "github";
         let matches: Vec<(String, String)> = self
             .state
             .locked()
             .routines
             .iter()
-            .filter(|r| !r.deleted && r.enabled && r.triggers.iter().any(|t| t.matches(event)))
+            .filter(|r| !r.deleted && r.enabled && r.triggers.iter().any(|t| trigger_matches(t, event)))
             .map(|r| (r.id.clone(), r.bot_id.clone()))
             .collect();
         let mut queued = vec![];
         for (id, bot) in matches {
-            if self.enqueue(store, &bot, &id, event.clone(), delivery.clone(), false).is_ok() {
-                queued.push(id);
+            if github && !self.github_deliverable(store, &id, event, delivery.as_deref()) {
+                continue;
+            }
+            match self.enqueue(store, &bot, &id, event.clone(), delivery.clone(), false) {
+                Ok(answer) => {
+                    queued.push(id.clone());
+                    if github {
+                        let run_id = answer["run"]["id"].as_str().map(str::to_owned);
+                        self.note_github_delivery(store, &id, event, delivery.as_deref(), "started", None, run_id);
+                        self.remember_event(store, &id, event);
+                    }
+                }
+                Err(error) if github => {
+                    let reason = error.downcast_ref::<Refused>().map_or("refused", Refused::code);
+                    self.note_github_delivery(store, &id, event, delivery.as_deref(), "skipped", Some(reason), None);
+                }
+                Err(_) => {}
             }
         }
         queued
@@ -772,32 +856,63 @@ impl Routines {
             let r = state.routines.iter().find(|r| r.id == id && !r.deleted).cloned();
             (r, state.sender_secrets.get(id).cloned())
         };
-        // A sender may keep its own secret instead of giving the routine's key to the service; both
-        // proofs are accepted, and neither one puts the secret in a log or a reply.
-        let Some(r) = r.filter(|r| {
-            hooks::authorized(&r.webhook_key, headers, body)
-                || sender_secret
-                    .as_deref()
-                    .is_some_and(|secret| events::sender_secret_ok(headers, secret, body, now_ms()))
-        }) else {
-            return Err(Refused::Unauthorized);
+        let Some(r) = r else { return Err(Refused::Unauthorized) };
+        // One verification path for every workflow webhook. The pure decision reuses the host's
+        // bearer/HMAC proof and Standard Webhooks signature check, then parses the event; a sender
+        // that keeps its own secret is tried only if the routine's key did not verify.
+        let request = events::WebhookBody { headers: headers.clone(), raw: body.to_vec() };
+        let now = now_ms();
+        let mut decision = events::workflow_webhook(&request, &r.webhook_key, now);
+        if decision == events::WebhookDecision::Unauthorized
+            && let Some(secret) = sender_secret.as_deref()
+        {
+            decision = events::workflow_webhook(&request, secret, now);
+        }
+        let event = match decision {
+            events::WebhookDecision::Run(event) => event,
+            events::WebhookDecision::Unauthorized => return Err(Refused::Unauthorized),
+            events::WebhookDecision::TooLarge => return Err(Refused::Invalid("event too large".into())),
+            events::WebhookDecision::Ignored(events::WebhookSkip::Ping) => return Ok(json!({"ping": true})),
+            events::WebhookDecision::Ignored(events::WebhookSkip::Invalid) => {
+                return Err(Refused::Invalid("event is not JSON".into()));
+            }
         };
         let delivery = hooks::delivery_id(headers)?;
-        let Some(event) = hooks::event(headers, body)? else {
-            return Ok(json!({"ping": true}));
-        };
+        if !test && self.duplicate_receipt(id, delivery.as_deref(), now_ms()) {
+            return Ok(json!({"duplicate": true}));
+        }
         if !r.enabled && !test {
             self.note_ignored(&hub.store, id, delivery.as_deref(), "paused");
+            self.note_receipt(&hub.store, id, delivery.as_deref(), Some("paused"));
             return Err(Refused::Paused);
         }
-        if !r.triggers.iter().any(|t| matches!(t, Trigger::Webhook) || t.matches(&event)) {
+        if !r.triggers.iter().any(|t| matches!(t, Trigger::Webhook) || trigger_matches(t, &event)) {
             self.note_ignored(&hub.store, id, delivery.as_deref(), "mismatch");
+            self.note_receipt(&hub.store, id, delivery.as_deref(), Some("mismatch"));
             return Ok(json!({"ignored": "event does not match this routine", "reason": "mismatch"}));
         }
-        self.enqueue(&hub.store, &r.bot_id, id, event, delivery, test).map_err(|e| match e.downcast::<Refused>() {
-            Ok(refused) => refused,
-            Err(e) => Refused::Invalid(format!("{e:#}")),
-        })
+        if !test
+            && event["source"] == "github"
+            && r.triggers.iter().any(|t| matches!(t, Trigger::Event { source, .. } if source == "github"))
+            && !self.github_deliverable(&hub.store, id, &event, delivery.as_deref())
+        {
+            self.note_receipt(&hub.store, id, delivery.as_deref(), Some("filter"));
+            return Ok(json!({"ignored": "event does not match this routine", "reason": "filter"}));
+        }
+        let started =
+            self.enqueue(&hub.store, &r.bot_id, id, event.clone(), delivery.clone(), test).map_err(|e| match e
+                .downcast::<Refused>()
+            {
+                Ok(refused) => refused,
+                Err(e) => Refused::Invalid(format!("{e:#}")),
+            })?;
+        self.note_receipt(&hub.store, id, delivery.as_deref(), None);
+        if event["source"] == "github" {
+            let run_id = started["run"]["id"].as_str().map(str::to_owned);
+            self.note_github_delivery(&hub.store, id, &event, delivery.as_deref(), "started", None, run_id);
+        }
+        self.remember_event(&hub.store, id, &event);
+        Ok(started)
     }
 
     /// Records a signed delivery that didn't run, keeping the log small; a store failure must not
@@ -818,6 +933,344 @@ impl Routines {
         if let Err(error) = saved {
             tracing::warn!(error = format!("{error:#}"), "couldn't record an ignored webhook delivery");
         }
+    }
+
+    /// The bounded GitHub delivery history of one workflow, newest first. No event bodies are kept.
+    pub fn github_history(&self, bot: &str, id: &str) -> Value {
+        let state = self.state.locked();
+        if !state.routines.iter().any(|r| r.id == id && r.bot_id == bot && !r.deleted) {
+            return json!({"deliveries": []});
+        }
+        json!({"deliveries": state.github_deliveries.iter().filter(|d| d.routine_id == id).rev().map(|d| json!({
+            "id": d.id, "event": d.event, "item": d.item, "receivedAt": d.at,
+            "outcome": d.outcome, "reason": d.reason, "runId": d.run_id,
+        })).collect::<Vec<_>>()})
+    }
+
+    /// The chat mention history of one workflow, newest first. Ids only, never message text.
+    pub fn chat_history(&self, bot: &str, id: &str) -> Value {
+        let state = self.state.locked();
+        if !state.routines.iter().any(|r| r.id == id && r.bot_id == bot && !r.deleted) {
+            return json!({"deliveries": []});
+        }
+        json!({"deliveries": state.chat_deliveries.iter().filter(|d| d.routine_id == id).rev().map(|d| json!({
+            "source": d.source, "connection": d.connection, "channel": d.channel,
+            "messageId": d.message_id, "receivedAt": d.at, "outcome": d.outcome,
+            "reason": d.reason, "runId": d.run_id,
+        })).collect::<Vec<_>>()})
+    }
+
+    /// The seven-day receipts of a workflow webhook, newest first, without their bodies.
+    pub fn webhook_receipts(&self, bot: &str, id: &str) -> Value {
+        let state = self.state.locked();
+        if !state.routines.iter().any(|r| r.id == id && r.bot_id == bot && !r.deleted) {
+            return json!({"receipts": []});
+        }
+        json!({"receipts": state.webhook_receipts.iter().filter(|r| r.routine_id == id).rev().map(|r| json!({
+            "deliveryId": r.delivery_id, "receivedAt": r.at, "reason": r.reason,
+        })).collect::<Vec<_>>()})
+    }
+
+    /// The workflow webhook's public URL as the canvas shows it. The signing secret is never part
+    /// of this projection: it is returned once, by [`Self::workflow_webhook_credentials`] on rotation.
+    pub fn webhook_status(&self, hub: &Hub, bot: &str, id: &str) -> Value {
+        let state = self.state.locked();
+        let Some(r) = state.routines.iter().find(|r| r.id == id && r.bot_id == bot && !r.deleted) else {
+            return json!({});
+        };
+        let has_secret = !r.webhook_key.is_empty() || state.sender_secrets.contains_key(id);
+        let uses_sender_secret = state.sender_secrets.contains_key(id);
+        drop(state);
+        let url = crate::remote::cloud::codync_url(hub)
+            .ok()
+            .filter(|_| crate::remote::owner::owner(&hub.store).is_some())
+            .map(|base| format!("{}/v1/hooks/{}/{id}", base.trim_end_matches('/'), hub.identity.computer_id()));
+        json!({
+            "url": url,
+            "localUrl": format!("http://127.0.0.1:{}/hooks/routines/{id}", hub.port),
+            "connected": url.is_some() && hub.cloud.status().connected,
+            "needsAccount": crate::remote::owner::can_join(hub),
+            "hasSecret": has_secret,
+            "usesSenderSecret": uses_sender_secret,
+        })
+    }
+
+    /// The workflow-level webhook credentials. `rotate` makes a new secret and returns it once;
+    /// without rotation only the URL and the fact that a secret exists are shown.
+    pub fn workflow_webhook_credentials(&self, hub: &Hub, bot: &str, id: &str, rotate: bool) -> Result<Value> {
+        if rotate {
+            self.rotate_webhook(hub, bot, id, false)?;
+        }
+        let mut value = self.webhook_status(hub, bot, id);
+        if let Some(object) = value.as_object_mut() {
+            object.insert(
+                "key".into(),
+                if rotate { self.credentials(hub, bot, id, false)?["key"].clone() } else { Value::Null },
+            );
+        }
+        Ok(value)
+    }
+
+    /// Replays the newest event a workflow trigger saw, into a fresh run. Paused workflows can be
+    /// replayed for a test, just as a person's manual run can; a busy one is refused as usual.
+    pub fn run_last_event(&self, hub: &Hub, bot: &str, id: &str) -> Result<Value> {
+        if !self.owns(bot, id) {
+            bail!("routine not found among this bot's routines");
+        }
+        let event =
+            self.state.locked().last_events.get(id).cloned().context("this workflow has no event to run again")?;
+        self.enqueue(&hub.store, bot, id, event, None, true)
+    }
+
+    /// A mention that matched chat trigger nodes, and the routines that actually started. When
+    /// `matched` is non-zero and `queued` is empty the caller adds the platform's failed reaction.
+    pub fn receive_chat_event(&self, store: &Store, event: &Value, delivery: Option<String>) -> ChatReceive {
+        let source = event["source"].as_str().unwrap_or_default().to_owned();
+        let matches: Vec<(String, String)> = self
+            .state
+            .locked()
+            .routines
+            .iter()
+            .filter(|r| {
+                !r.deleted
+                    && r.enabled
+                    && r.triggers.iter().any(|t| {
+                        trigger_matches(t, event)
+                            || matches!(t, Trigger::Event { source: s, filters, .. } if s == &source
+                                && events::chat_trigger_match(event, &events::chat_node(s, filters)))
+                    })
+            })
+            .map(|r| (r.id.clone(), r.bot_id.clone()))
+            .collect();
+        let matched = matches.len();
+        let mut queued = Vec::new();
+        for (id, bot) in matches {
+            let message =
+                event["messageId"].as_str().or_else(|| event["message_id"].as_str()).unwrap_or_default().to_owned();
+            match self.enqueue(store, &bot, &id, event.clone(), delivery.clone(), false) {
+                Ok(answer) => {
+                    let run_id = answer["run"]["id"].as_str().map(str::to_owned);
+                    queued.push(id.clone());
+                    self.note_chat_delivery(store, &id, &source, event, "started", None, run_id, &message);
+                }
+                Err(error) => {
+                    let reason = error.downcast_ref::<Refused>().map_or("refused", Refused::code);
+                    self.note_chat_delivery(store, &id, &source, event, "skipped", Some(reason), None, &message);
+                }
+            }
+            self.remember_event(store, &id, event);
+        }
+        ChatReceive { matched, queued }
+    }
+
+    /// Keeps the newest event of a workflow so "run with last event" can replay it. Only the
+    /// normalized event (ids and fields) is kept, never the raw request body.
+    fn remember_event(&self, store: &Store, id: &str, event: &Value) {
+        let saved = self.change(store, |s| {
+            s.last_events.insert(id.to_owned(), event.clone());
+            while s.last_events.len() > MAX_LAST_EVENTS {
+                let oldest = s.last_events.keys().next().cloned();
+                match oldest {
+                    Some(key) => {
+                        s.last_events.remove(&key);
+                    }
+                    None => break,
+                }
+            }
+            Ok(())
+        });
+        if let Err(error) = saved {
+            tracing::warn!(error = format!("{error:#}"), "couldn't keep the workflow's last event");
+        }
+    }
+
+    /// Records one GitHub delivery. Bounded to 50; a run mark is added for chain detection.
+    #[allow(clippy::too_many_arguments, reason = "one row of the delivery history")]
+    fn note_github_delivery(
+        &self,
+        store: &Store,
+        id: &str,
+        event: &Value,
+        delivery: Option<&str>,
+        outcome: &str,
+        reason: Option<&str>,
+        run_id: Option<String>,
+    ) {
+        let saved = self.change(store, |s| {
+            let key = delivery.map(str::to_owned).unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
+            if s.github_deliveries.iter().any(|d| d.routine_id == id && d.id == key) {
+                return Ok(false);
+            }
+            let item = events::github_item(event);
+            if outcome == "started" {
+                if let Some(item) = &item {
+                    s.github_runs.push(GitHubRunMark {
+                        routine_id: id.to_owned(),
+                        repository: item.repository.clone(),
+                        number: item.number,
+                        at: now_ms(),
+                    });
+                    let cutoff = now_ms().saturating_sub(events::GITHUB_CHAIN_WINDOW_MS);
+                    s.github_runs.retain(|mark| mark.at >= cutoff);
+                }
+            }
+            s.github_deliveries.push(GitHubDelivery {
+                id: key,
+                routine_id: id.to_owned(),
+                event: event["event"].as_str().unwrap_or_default().to_owned(),
+                item,
+                at: now_ms(),
+                outcome: outcome.to_owned(),
+                reason: reason.map(str::to_owned),
+                run_id,
+            });
+            if s.github_deliveries.len() > events::GITHUB_DELIVERY_LIMIT {
+                s.github_deliveries.drain(..s.github_deliveries.len() - events::GITHUB_DELIVERY_LIMIT);
+            }
+            Ok(true)
+        });
+        if let Err(error) = saved {
+            tracing::warn!(error = format!("{error:#}"), "couldn't record a GitHub delivery");
+        }
+    }
+
+    /// Applies the pure skip decision to a GitHub delivery, recording a skipped row when it does
+    /// not start. A repeated delivery id is ignored as in OpenBot's history.
+    fn github_deliverable(&self, store: &Store, id: &str, event: &Value, delivery: Option<&str>) -> bool {
+        let reason = {
+            let s = self.state.locked();
+            let Some(r) = s.routines.iter().find(|r| r.id == id && !r.deleted) else { return false };
+            let Some(filters) = r.triggers.iter().find_map(|t| match t {
+                Trigger::Event { source, filters, .. } if source == "github" && trigger_matches(t, event) => {
+                    Some(filters.clone())
+                }
+                _ => None,
+            }) else {
+                return false;
+            };
+            if delivery.is_some_and(|key| s.github_deliveries.iter().any(|d| d.routine_id == id && d.id == key)) {
+                return false;
+            }
+            let item = events::github_item(event);
+            let now = now_ms();
+            let recent = item.as_ref().map_or(0, |item| {
+                s.github_runs
+                    .iter()
+                    .filter(|mark| {
+                        mark.routine_id == id
+                            && mark.repository == item.repository
+                            && mark.number == item.number
+                            && now.saturating_sub(mark.at) <= events::GITHUB_CHAIN_WINDOW_MS
+                    })
+                    .count()
+            });
+            // Codync receives GitHub events on the same signed webhook path as every other event;
+            // there is no relay route to go offline, so the decision gets `online: true`. The
+            // `offline` reason stays part of the pure decision and the history contract.
+            events::delivery_reason(
+                event,
+                &filters,
+                &events::DeliveryContext {
+                    changed_object: None,
+                    recent_runs: recent,
+                    online: true,
+                    can_run: r.enabled && !busy(&s, id),
+                },
+            )
+        };
+        if let Some(reason) = reason {
+            self.note_github_delivery(store, id, event, delivery, "skipped", Some(reason.as_str()), None);
+            false
+        } else {
+            true
+        }
+    }
+
+    /// Records one chat mention that a workflow trigger considered. Ids only, never message text.
+    #[allow(clippy::too_many_arguments, reason = "one row of the chat history")]
+    fn note_chat_delivery(
+        &self,
+        store: &Store,
+        id: &str,
+        source: &str,
+        event: &Value,
+        outcome: &str,
+        reason: Option<&str>,
+        run_id: Option<String>,
+        message: &str,
+    ) {
+        let saved = self.change(store, |s| {
+            s.chat_deliveries.push(ChatDelivery {
+                routine_id: id.to_owned(),
+                source: source.to_owned(),
+                connection: event["connection"].as_str().unwrap_or_default().to_owned(),
+                channel: event["channel"].as_str().or_else(|| event["chat"].as_str()).unwrap_or_default().to_owned(),
+                message_id: message.to_owned(),
+                at: now_ms(),
+                outcome: outcome.to_owned(),
+                reason: reason.map(str::to_owned),
+                run_id,
+            });
+            if s.chat_deliveries.len() > MAX_CHAT_DELIVERIES {
+                s.chat_deliveries.drain(..s.chat_deliveries.len() - MAX_CHAT_DELIVERIES);
+            }
+            Ok(())
+        });
+        if let Err(error) = saved {
+            tracing::warn!(error = format!("{error:#}"), "couldn't record a chat delivery");
+        }
+    }
+
+    /// Writes a webhook receipt in the same state change as nothing else: a repeat of the same id
+    /// within seven days is a no-op, and old receipts are pruned on write.
+    fn note_receipt(&self, store: &Store, id: &str, delivery: Option<&str>, reason: Option<&str>) {
+        let Some(key) = delivery else { return };
+        let saved = self.change(store, |s| {
+            if s.webhook_receipts
+                .iter()
+                .any(|r| r.routine_id == id && r.delivery_id == key && now_ms() - r.at <= WEBHOOK_RECEIPT_TTL_MS)
+            {
+                return Ok(false);
+            }
+            s.webhook_receipts.push(WebhookReceipt {
+                routine_id: id.to_owned(),
+                delivery_id: key.to_owned(),
+                at: now_ms(),
+                reason: reason.map(str::to_owned),
+            });
+            let cutoff = now_ms() - WEBHOOK_RECEIPT_TTL_MS;
+            s.webhook_receipts.retain(|r| r.at >= cutoff);
+            if s.webhook_receipts.len() > MAX_WEBHOOK_RECEIPTS {
+                s.webhook_receipts.drain(..s.webhook_receipts.len() - MAX_WEBHOOK_RECEIPTS);
+            }
+            Ok(true)
+        });
+        if let Err(error) = saved {
+            tracing::warn!(error = format!("{error:#}"), "couldn't record a webhook receipt");
+        }
+    }
+
+    fn duplicate_receipt(&self, id: &str, delivery: Option<&str>, now: i64) -> bool {
+        let Some(key) = delivery else { return false };
+        self.state
+            .locked()
+            .webhook_receipts
+            .iter()
+            .any(|r| r.routine_id == id && r.delivery_id == key && now.saturating_sub(r.at) <= WEBHOOK_RECEIPT_TTL_MS)
+    }
+}
+
+/// The outcome of a chat mention handed to workflow trigger nodes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatReceive {
+    pub matched: usize,
+    pub queued: Vec<String>,
+}
+
+impl ChatReceive {
+    /// Every node that matched skipped a run: the caller adds the platform's failed reaction.
+    pub fn all_skipped(&self) -> bool {
+        self.matched > 0 && self.queued.is_empty()
     }
 }
 
@@ -850,6 +1303,23 @@ pub(crate) fn public(r: &Routine) -> Value {
         "thread":r.thread,"quiet":r.quiet,
         "triggerDescriptions":r.triggers.iter().map(Trigger::description).collect::<Vec<_>>(),"nextRunAt": if r.enabled {r.next_runs.iter().flatten().min().copied()} else {None}})
 }
+
+/// Whether a trigger accepts `event`. The generic match keeps old raw GitHub spellings working;
+/// OpenBot's canonical names are checked through [`events::github_aliases`] so a workflow saved with
+/// `issue.opened` fires on the same `issues.opened` delivery. Pure, with tests in `events.rs`.
+pub(crate) fn trigger_matches(trigger: &Trigger, event: &Value) -> bool {
+    if trigger.matches(event) {
+        return true;
+    }
+    if let Trigger::Event { source, event: wanted, filters } = trigger
+        && source == "github"
+        && events::github_trigger(event, filters).is_run()
+    {
+        return wanted == "*" || events::github_aliases(event).iter().any(|name| name == wanted);
+    }
+    false
+}
+
 fn new_run(r: &Routine, event: Value, delivery_id: Option<String>) -> Run {
     Run {
         id: uuid::Uuid::new_v4().to_string(),
@@ -1022,5 +1492,97 @@ mod webhook_tests {
         }
         let kept = hub.routines.ignored("bot", "routine")["ignored"].as_array().unwrap().len();
         assert_eq!(kept, MAX_IGNORED_DELIVERIES, "the history stays bounded");
+    }
+
+    #[test]
+    fn a_github_trigger_records_deliveries_and_replays_the_last_event() {
+        let mut routine = tests::routine();
+        routine.triggers =
+            vec![Trigger::Event { source: "github".into(), event: "issue.opened".into(), filters: BTreeMap::new() }];
+        let hub = hub_with(routine);
+        let event = json!({"source":"github","event":"issues.opened","repo":"o/r","payload":{
+            "action":"opened","issue":{"id":1,"number":7,"title":"Hi"},
+            "sender":{"login":"ana","type":"User"}}});
+        let queued = hub.routines.receive_event(&hub.store, &event, Some("g-1".into()));
+        assert_eq!(queued, vec!["routine".to_owned()]);
+        let history = hub.routines.github_history("bot", "routine");
+        assert_eq!(history["deliveries"][0]["outcome"], "started");
+        assert_eq!(history["deliveries"][0]["item"]["number"], 7);
+        assert!(history["deliveries"][0]["reason"].is_null());
+        assert!(hub.routines.github_history("other", "routine")["deliveries"].as_array().unwrap().is_empty());
+
+        // The same delivery id is a no-op; a filter miss is recorded with its skip reason.
+        assert!(hub.routines.receive_event(&hub.store, &event, Some("g-1".into())).is_empty());
+        hub.routines
+            .change(&hub.store, |s| {
+                let r = s.routines.iter_mut().find(|r| r.id == "routine").unwrap();
+                r.triggers = vec![Trigger::Event {
+                    source: "github".into(),
+                    event: "issue.opened".into(),
+                    filters: BTreeMap::from([("title".into(), "absent".into())]),
+                }];
+                for run in &mut s.runs {
+                    run.status = Status::Succeeded;
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert!(hub.routines.receive_event(&hub.store, &event, Some("g-2".into())).is_empty());
+        let history = hub.routines.github_history("bot", "routine");
+        assert_eq!(history["deliveries"][0]["reason"], "filter");
+
+        // The last event is kept for a replay even after the filters changed.
+        let replay = hub.routines.run_last_event(&hub, "bot", "routine").unwrap();
+        assert!(replay["run"]["id"].is_string());
+        assert!(hub.routines.run_last_event(&hub, "other", "routine").is_err());
+    }
+
+    #[test]
+    fn chat_triggers_queue_a_run_and_report_when_every_node_skips() {
+        let mut routine = tests::routine();
+        routine.triggers = vec![Trigger::Event {
+            source: "discord".into(),
+            event: "message.mention".into(),
+            filters: BTreeMap::from([("connection".into(), "G1".into()), ("roles".into(), "admin".into())]),
+        }];
+        let hub = hub_with(routine);
+        let event = json!({"source":"discord","event":"message.mention","connection":"G1","channel":"C1",
+            "roles":["admin"],"text":"Deploy the fix","messageId":"m1"});
+        let first = hub.routines.receive_chat_event(&hub.store, &event, Some("m1".into()));
+        assert_eq!(first.matched, 1);
+        assert_eq!(first.queued, vec!["routine".to_owned()]);
+        assert!(!first.all_skipped());
+
+        let history = hub.routines.chat_history("bot", "routine");
+        assert_eq!(history["deliveries"][0]["messageId"], "m1");
+        assert_eq!(history["deliveries"][0]["outcome"], "started");
+        assert!(!serde_json::to_string(&history).unwrap().contains("Deploy the fix"), "no message text is kept");
+
+        // The queued run holds the workflow, so the next matching mention is skipped by every node.
+        let second = hub.routines.receive_chat_event(&hub.store, &event, Some("m2".into()));
+        assert_eq!(second.matched, 1);
+        assert!(second.all_skipped(), "the caller adds the failed reaction");
+        assert_eq!(hub.routines.chat_history("bot", "routine")["deliveries"][0]["reason"], "busy");
+
+        let wrong = json!({"source":"discord","event":"message.mention","connection":"G2","channel":"C1","text":"x"});
+        assert_eq!(hub.routines.receive_chat_event(&hub.store, &wrong, None).matched, 0);
+    }
+
+    #[test]
+    fn webhook_receipts_deduplicate_a_delivery_id() {
+        let mut routine = tests::routine();
+        routine.triggers = vec![Trigger::Webhook];
+        let hub = hub_with(routine);
+        let mut headers = bearer();
+        headers.insert("x-delivery-id".into(), "delivery-1".into());
+        let body = br#"{"source":"test","text":"hello"}"#;
+        let first = hub.routines.receive(&hub, "routine", &headers, body).unwrap();
+        assert!(first["run"]["id"].is_string());
+        let second = hub.routines.receive(&hub, "routine", &headers, body).unwrap();
+        assert_eq!(second["duplicate"], true);
+        let receipts = hub.routines.webhook_receipts("bot", "routine");
+        assert_eq!(receipts["receipts"].as_array().unwrap().len(), 1);
+        assert!(receipts["receipts"][0]["reason"].is_null());
+        assert!(hub.routines.webhook_receipts("other", "routine")["receipts"].as_array().unwrap().is_empty());
     }
 }

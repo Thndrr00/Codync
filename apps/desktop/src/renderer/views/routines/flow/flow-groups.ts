@@ -4,8 +4,8 @@
 // The group list is saved in the canvas from the host, so an older host/canvas simply has none.
 
 import {
-  flowEdges, layoutNodes, mediaOf, NODE_WIDTH,
-  type FlowCanvas, type FlowEdge, type FlowNode,
+  canvasGraph, flowEdges, graphFlowEdges, graphFlowNodes, layoutNodes, mediaOf, NODE_WIDTH,
+  type FlowCanvas, type FlowNode, type GraphFlowEdge,
 } from '../../../lib/routine-flow.ts'
 export interface FlowGroup {
   id: string
@@ -77,7 +77,7 @@ export function groupedNodes(canvas: CanvasWithGroups): FlowNode[] {
       nodes.push({ key, kind: 'bot', id: key, x: at.x, y: at.y, saved: true })
     })
   }
-  return [...base.filter((node) => !hidden.has(node.key)), ...nodes]
+  return [...base.filter((node) => !hidden.has(node.key)), ...graphFlowNodes(canvasGraph(canvas)), ...nodes]
 }
 
 /** The group whose stack card stands in for a hidden member. */
@@ -86,7 +86,7 @@ function hiddenGroup(groups: readonly FlowGroup[], key: string): FlowGroup | nul
   return group?.collapsed ? group : null
 }
 
-export interface GroupedEdge extends FlowEdge {
+export interface GroupedEdge extends GraphFlowEdge {
   /** How many member lines this one stands for (1 for an ordinary edge). */
   count: number
 }
@@ -98,7 +98,7 @@ export interface GroupedEdge extends FlowEdge {
  */
 export function groupedEdges(canvas: CanvasWithGroups): GroupedEdge[] {
   const groups = groupsOf(canvas)
-  const out: GroupedEdge[] = []
+  const out: GroupedEdge[] = graphFlowEdges(canvasGraph(canvas), canvas.graphProblems).map((edge) => ({ ...edge, count: 1 }))
   const counted = new Map<string, GroupedEdge>()
   for (const edge of flowEdges(canvas)) {
     if (edge.linkId === null) {
