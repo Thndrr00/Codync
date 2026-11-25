@@ -6,10 +6,11 @@ use crate::chat::team::ModelOverride;
 use crate::chat::team::flow::{FlowCancelled, Handoff, handoff, recipient};
 use crate::hub::Hub;
 use crate::routines::{Routine, Run, Status, Trigger, local_zone};
-use crate::store::{BotConfig, FlowLink, FlowStep, NewStep, StepStatus, Store, flow_steps};
+use crate::store::{BotConfig, EntryKind, FlowLink, FlowStep, Lane, NewStep, StepStatus, Store, flow_steps};
 use answers::ValueProblem;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -161,6 +162,9 @@ pub struct StepSettings {
     pub voice: Option<String>,
     #[serde(default)]
     pub inputs: Vec<StepInput>,
+    /// The card an approval step waits on, so `decideWorkflowStep` can settle it.
+    #[serde(default)]
+    pub entry_id: Option<String>,
 }
 
 /// One stored step of the run a "run from this step" branches from: its answer and its settings.
@@ -286,19 +290,56 @@ struct MediaPending {
     settings: StepSettings,
 }
 
+/// An approval step paused on its card. The waiter is registered before the card is posted so a
+/// quick decision can never be lost; `approve` settles the step and continues the taken branch.
+struct ApprovalPending {
+    step: FlowStep,
+    handoff: String,
+    rx: oneshot::Receiver<nodes::ApprovalOutcome>,
+}
+
 enum Begin {
     Send(Box<Pending>),
     Make(Box<MediaPending>),
+    Approve(Box<ApprovalPending>),
     Done(Outcome),
 }
 
+/// The branch a source step took, as saved on its row. Only routing nodes have one; every other
+/// node continues along its unbranched links.
+fn step_branch(branch: Option<&str>) -> Option<nodes::Branch> {
+    match branch {
+        Some("yes") => Some(nodes::Branch::Yes),
+        Some("no") => Some(nodes::Branch::No),
+        _ => None,
+    }
+}
+
+/// An approval settles its step with the decision, which is the branch the flow continues on.
+fn approval_branch(output: Option<&str>) -> Option<nodes::Branch> {
+    match output {
+        Some("approved") => Some(nodes::Branch::Yes),
+        Some("rejected") => Some(nodes::Branch::No),
+        _ => None,
+    }
+}
+
+/// Whether a link leaves its source on the branch that source actually took.
+fn link_follows_step(link: &FlowLink, branches: &BTreeMap<String, Option<nodes::Branch>>) -> bool {
+    nodes::follows_branch(link.branch.as_deref(), branches.get(&link.from_bot_id).copied().flatten())
+}
+
 pub async fn execute(hub: Arc<Hub>, mut start: Start) {
-    let (run, routine) = (start.run_id.clone(), start.routine_id.clone());
+    let (run, routine, owner) = (start.run_id.clone(), start.routine_id.clone(), start.owner.clone());
     start.prepare(&hub.store);
     match run_flow(&hub, Arc::new(start)).await {
         Ok(()) => {
             if let Err(error) = hub.routines.ack_flow(&hub.store, &run) {
                 tracing::error!(run, %error, "could not acknowledge routine flow; recovery will replay it idempotently");
+            }
+            // Freeze the graph this run used, so a person can go back to it later.
+            if let Err(error) = super::document::record_run_version(&hub.store, &owner) {
+                tracing::warn!(run, %error, "could not record the flow version used by a run");
             }
         }
         Err(error) => tracing::error!(run, routine, error = format!("{error:#}"), "routine flow failed"),
@@ -496,6 +537,11 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
                     let (hub, start, cancel) = (hub.clone(), start.clone(), running.cancel.clone());
                     tasks.spawn(async move { (node, make(&hub, &start, *pending, cancel).await) });
                 }
+                Begin::Approve(pending) => {
+                    let node = pending.step.bot_id.clone();
+                    let (hub, cancel) = (hub.clone(), running.cancel.clone());
+                    tasks.spawn(async move { (node, approve(&hub, *pending, cancel).await) });
+                }
             }
         }
         while let Some(joined) = tasks.join_next().await {
@@ -557,9 +603,36 @@ fn begin(
         }
         return Ok(Begin::Done(step_outcome(step)));
     }
+    // Fail closed when a field this step uses has no supplier that finished, or when a name or
+    // check does not match the steps before it. A flow with no typed steps stays literal.
+    let graph = answer_graph(
+        &hub.store,
+        &start.routine_id,
+        &start.owner,
+        &start.instruction,
+        &start.answer_specs,
+        &start.run_fields,
+        links,
+    );
+    // A condition records the branch it took on its step; an approval settles it as its output.
+    // Both are read here so a downstream step only sees the link of the branch that was taken.
+    let branches: BTreeMap<String, Option<nodes::Branch>> = steps
+        .iter()
+        .map(|step| {
+            let taken = step_branch(step.branch.as_deref()).or_else(|| {
+                if graph.nodes.get(&step.bot_id).is_some_and(|node| node.kind == answer_paths::NodeKind::Approval) {
+                    approval_branch(step.output.as_deref())
+                } else {
+                    None
+                }
+            });
+            (step.bot_id.clone(), taken)
+        })
+        .collect();
     let inputs: Vec<(&FlowLink, &str)> = links
         .iter()
         .filter(|l| l.to_bot_id == bot)
+        .filter(|l| link_follows_step(l, &branches))
         .filter_map(|l| match results.get(&l.from_bot_id)? {
             Outcome::Replied(text) => Some((l, text.as_str())),
             Outcome::Nothing => None,
@@ -585,23 +658,7 @@ fn begin(
     if cancelled {
         return end(StepStatus::Cancelled, CANCELLED_BEFORE);
     }
-    if let Err(error) = recipient(hub, bot) {
-        return end(StepStatus::Failed, &format!("{error:#}"));
-    }
-    let Some(from) = hub.store.bot(from_id(&first.from_bot_id, &start.owner))?.filter(|b| !b.deleted) else {
-        return end(StepStatus::Failed, "The bot that handed work on is gone");
-    };
-    // Fail closed when a field this step uses has no supplier that finished, or when a name or
-    // check does not match the steps before it. A flow with no typed steps stays literal.
-    let graph = answer_graph(
-        &hub.store,
-        &start.routine_id,
-        &start.owner,
-        &start.instruction,
-        &start.answer_specs,
-        &start.run_fields,
-        links,
-    );
+    // Routing nodes are decided below, before a bot is asked to take the step.
     let statuses: BTreeMap<String, StepStatus> = steps.iter().map(|step| (step.bot_id.clone(), step.status)).collect();
     if let Some(gap) = answer_paths::step_answer_gap(&graph, bot, &statuses) {
         return end(StepStatus::Failed, &gap.text());
@@ -622,11 +679,38 @@ fn begin(
     // Trigger fields are fixed answer values, so a check such as `author = ana` works in a step
     // with no model before it. A step's own answer wins if it gave the same field a value.
     super::trigger_fields::merged_answer(&mut answer, &start.trigger_fields);
+    let node_kind = graph.nodes.get(bot).map(|node| node.kind);
+    // A condition has no bot to ask: it routes the answer it just read to one of its two edges. The
+    // branch is saved on the step, so the links of the other side carry nothing downstream.
+    if node_kind == Some(answer_paths::NodeKind::Condition) {
+        let check = graph.nodes.get(bot).map(|node| node.spec.check.as_str()).unwrap_or_default();
+        let taken = nodes::branch_for(check, &answer);
+        let handoff = handoff_of(inputs);
+        let mut fresh = new_step(start, bot, &handoff, StepStatus::Succeeded);
+        fresh.branch = Some(taken.as_str().to_owned());
+        if let Some(step) = record(hub, &fresh)? {
+            record_settings(hub, &step.id, &StepSettings { kind: "condition".to_owned(), ..StepSettings::default() });
+        }
+        return Ok(Begin::Done(if handoff.is_empty() { Outcome::Nothing } else { Outcome::Replied(handoff) }));
+    }
+    // An approval shows one card and pauses. `decideWorkflowStep` settles the card and wakes the
+    // waiter; the decision is saved as the step's output so the right branch continues the graph.
+    if node_kind == Some(answer_paths::NodeKind::Approval) {
+        return begin_approval(hub, start, bot, &inputs);
+    }
+    // A check on an ordinary step still skips it when it does not match; only a routing condition
+    // uses the branch edges.
     if let Some(check) = graph.nodes.get(bot).and_then(answer_paths::node_check)
         && !answers::check_passes(&check, &answer)
     {
         return end(StepStatus::Skipped, "Skipped: the condition did not match");
     }
+    if let Err(error) = recipient(hub, bot) {
+        return end(StepStatus::Failed, &format!("{error:#}"));
+    }
+    let Some(from) = hub.store.bot(from_id(&first.from_bot_id, &start.owner))?.filter(|b| !b.deleted) else {
+        return end(StepStatus::Failed, "The bot that handed work on is gone");
+    };
     let mut values = answer_paths::template_values(&by_name, false);
     super::trigger_fields::merged_values(&mut values, &start.trigger_fields);
     let mut names: Vec<StepInput> = inputs
@@ -692,6 +776,67 @@ fn begin(
         // A retry of the run finds the step the first attempt made, and doesn't send it twice.
         None => Ok(Begin::Done(earlier_outcome(hub, &start.run_id, bot)?)),
     }
+}
+
+/// The answer a routing node passes to the step on the branch it took.
+fn handoff_of(inputs: &[(&FlowLink, &str)]) -> String {
+    inputs
+        .iter()
+        .map(|(_, text)| (*text).trim())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n---\n\n")
+}
+
+/// Starts an approval step: one permission card in the owner's chat, its entry id saved on the step
+/// for `decideWorkflowStep`, and the waiter that decision will wake.
+fn begin_approval(hub: &Hub, start: &Start, bot: &str, inputs: &[(&FlowLink, &str)]) -> Result<Begin> {
+    let handoff = handoff_of(inputs);
+    let question = bot
+        .strip_prefix("approval:")
+        .and_then(|id| hub.store.flow_node(&start.routine_id, id).ok().flatten())
+        .and_then(|node| {
+            node.fields
+                .get("question")
+                .or_else(|| node.fields.get("prompt"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_default();
+    let mut fresh = new_step(start, bot, &handoff, StepStatus::Queued);
+    fresh.branch = inputs.first().and_then(|(link, _)| link.branch.as_deref());
+    let Some(step) = record(hub, &fresh)? else {
+        return Ok(Begin::Done(earlier_outcome(hub, &start.run_id, bot)?));
+    };
+    // Register before the card is visible: a decision can arrive as soon as clients see it.
+    let rx = wait_approval(&step.id);
+    let mut card = nodes::approval_card(&question, &step.id, &start.owner);
+    let cwd = hub.store.bot(&start.owner).ok().flatten().map(|bot| bot.config.cwd).unwrap_or_default();
+    card["cwd"] = serde_json::Value::String(cwd);
+    let entry = hub.add_entry(&Lane::main(&start.owner), EntryKind::Permission, 0, &card);
+    let settings = StepSettings {
+        kind: "approval".to_owned(),
+        entry_id: entry.as_ref().map(|entry| entry.id.clone()),
+        ..StepSettings::default()
+    };
+    record_settings(hub, &step.id, &settings);
+    Ok(Begin::Approve(Box::new(ApprovalPending { step, handoff, rx })))
+}
+
+/// Waits for the person's decision, settles the card's step and hands the answer to the branch they
+/// chose. A cancellation settles the step as cancelled and leaves the card answered by the API.
+async fn approve(hub: &Arc<Hub>, pending: ApprovalPending, mut cancel: watch::Receiver<bool>) -> Outcome {
+    let step = pending.step.id.clone();
+    let decision = tokio::select! {
+        decision = pending.rx => decision.ok(),
+        () = cancel.wait_for(|stopped| *stopped) => None,
+    };
+    let Some(decision) = decision else {
+        settle(hub, &step, StepStatus::Cancelled, None, Some(CANCELLED_BEFORE));
+        return Outcome::Nothing;
+    };
+    settle(hub, &step, StepStatus::Succeeded, Some(decision.as_str()), None);
+    if pending.handoff.is_empty() { Outcome::Nothing } else { Outcome::Replied(pending.handoff) }
 }
 
 /// The graph of answer fields a run started with. The routine's own bot is the trigger that gives
@@ -1584,6 +1729,53 @@ mod tests {
         let answered = media_failure_text("image", "the Image model made no file: I can only write text");
         assert!(answered.contains("the model answered \"I can only write text\""), "{answered}");
         assert!(media_failure_text("image", "a new error").contains("a new error"));
+    }
+
+    fn routed_link(branch: Option<&str>) -> FlowLink {
+        FlowLink {
+            id: "l".to_owned(),
+            routine_id: "r".to_owned(),
+            owner_bot_id: "a".to_owned(),
+            from_bot_id: "c".to_owned(),
+            to_bot_id: "b".to_owned(),
+            name: String::new(),
+            instruction: String::new(),
+            model: None,
+            model_options: BTreeMap::new(),
+            branch: branch.map(str::to_owned),
+            port: crate::store::flows::PortType::Text,
+            created_at: 0,
+        }
+    }
+
+    #[test]
+    fn a_routing_node_only_follows_the_edge_of_the_branch_it_took() {
+        let (yes, no, plain) = (routed_link(Some("yes")), routed_link(Some("no")), routed_link(None));
+        let took_yes = BTreeMap::from([("c".to_owned(), Some(nodes::Branch::Yes))]);
+        assert!(link_follows_step(&yes, &took_yes));
+        assert!(!link_follows_step(&no, &took_yes), "the other branch carries nothing onward");
+        assert!(!link_follows_step(&plain, &took_yes), "a routed node has no plain hand-off");
+        let took_no = BTreeMap::from([("c".to_owned(), Some(nodes::Branch::No))]);
+        assert!(link_follows_step(&no, &took_no));
+        assert!(!link_follows_step(&yes, &took_no));
+        let plain_node = BTreeMap::from([("c".to_owned(), None)]);
+        assert!(link_follows_step(&plain, &plain_node));
+        assert!(!link_follows_step(&yes, &plain_node));
+        assert_eq!(step_branch(Some("yes")), Some(nodes::Branch::Yes));
+        assert_eq!(step_branch(Some("no")), Some(nodes::Branch::No));
+        assert_eq!(step_branch(Some("maybe")), None);
+    }
+
+    #[test]
+    fn an_approval_decision_continues_on_the_branch_it_chose() {
+        assert_eq!(approval_branch(Some(nodes::ApprovalOutcome::Approved.as_str())), Some(nodes::Branch::Yes));
+        assert_eq!(approval_branch(Some(nodes::ApprovalOutcome::Rejected.as_str())), Some(nodes::Branch::No));
+        assert_eq!(approval_branch(None), None);
+        assert_eq!(nodes::approval_outcome(true).as_str(), "approved");
+        assert_eq!(nodes::approval_outcome(false).as_str(), "rejected");
+        let took_no = BTreeMap::from([("c".to_owned(), approval_branch(Some("rejected")))]);
+        assert!(link_follows_step(&routed_link(Some("no")), &took_no));
+        assert!(!link_follows_step(&routed_link(Some("yes")), &took_no));
     }
 
     fn answer_start() -> Start {
