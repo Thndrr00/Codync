@@ -46,7 +46,7 @@ fn navigate() -> Value {
 fn snapshot() -> Value {
     json!({
         "name": "snapshot",
-        "description": format!(r#"Read the page as a compact tree: one line per element with its ref, role, "name", <tag>, value and state, in page order and indented by depth, then the page's visible text. Use the refs with click, type, press, hover, scroll, select_option and set_checked. Refs stay valid until the next snapshot or a navigation. The output is bounded: 400 elements and about 40000 characters, with a note when something was left out, so scroll or wait_for to read more.{CRASH_NOTE}"#),
+        "description": format!(r#"Read the page as a compact tree: one line per element with its ref, role, "name", <tag>, value and state, in page order and indented by depth, then the page's visible text. Use the refs with click, type, press, hover, scroll, select_option and set_checked. Refs stay valid until the next snapshot or a navigation. The output is bounded: 400 elements and about 40000 characters, with a note when something was left out, so scroll or wait_for to read more. A bot check adds a `challenge` field with a status and one next step: click the checkbox once when told to, otherwise ask the person to take over. Saved preferences for this site appear as up to five `siteMemories`, once per host per turn.{CRASH_NOTE}"#),
         "inputSchema": {"type": "object", "properties": {}},
         "annotations": {"readOnlyHint": true},
     })

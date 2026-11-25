@@ -66,6 +66,24 @@ pub(super) fn format(page: &Value, max: usize) -> String {
         text.push_str(&body);
         text.push('\n');
     }
+    // Site memories are hints the user saved for this host; they read as data, not instructions.
+    if let Some(memories) = page["siteMemories"].as_array() {
+        for memory in memories.iter().take(5) {
+            text.push_str("siteMemory: ");
+            text.push_str(&one_line(&crate::chat::memory::site::line(memory), MAX_NAME * 3));
+            text.push('\n');
+        }
+    }
+    if let Some(challenge) = page["challenge"].as_object() {
+        text.push_str("challenge: ");
+        text.push_str(challenge["status"].as_str().unwrap_or("none"));
+        let next = one_line(challenge["next"].as_str().unwrap_or_default(), MAX_TEXT);
+        if !next.is_empty() {
+            text.push_str(" — ");
+            text.push_str(&next);
+        }
+        text.push('\n');
+    }
     if page["truncated"] == true {
         text.push_str("(more elements were left out; scroll, or open less of the page)\n");
     }
@@ -149,6 +167,41 @@ mod tests {
         let text = format(&long, 120);
         assert!(text.len() <= 160, "the snapshot stays inside its limit: {text}");
         assert!(text.contains("cut at 120 characters"), "a cut snapshot says where it stopped: {text}");
+    }
+
+    #[test]
+    fn saved_site_hints_read_as_bounded_data_after_the_page() {
+        let page = json!({
+            "url": "https://shop.example.com",
+            "elements": [],
+            "siteMemories": [
+                {"site": "example.com", "text": "Prefers concise answers"},
+                {"site": "shop.example.com", "text": "The invoice page is slow"}
+            ],
+            "truncated": false
+        });
+        let text = format(&page, MAX_CHARS);
+        assert!(text.contains("siteMemory: site: example.com — Prefers concise answers"), "{text}");
+        assert!(text.contains("siteMemory: site: shop.example.com — The invoice page is slow"), "{text}");
+        let long = json!({"url": "https://example.com", "elements": [],
+            "siteMemories": (0..20).map(|n| json!({"site": "example.com", "text": format!("hint {n}")})).collect::<Vec<_>>()});
+        let capped = format(&long, MAX_CHARS);
+        assert_eq!(capped.matches("siteMemory:").count(), 5, "at most five hints are printed");
+    }
+
+    #[test]
+    fn a_bot_check_adds_one_bounded_line_with_its_next_step() {
+        let page = json!({
+            "url": "https://example.com",
+            "elements": [],
+            "challenge": {"status": "checkbox", "next": "Click the checkbox once, then take a new snapshot."},
+            "truncated": false
+        });
+        let text = format(&page, MAX_CHARS);
+        assert!(text.contains("challenge: checkbox — Click the checkbox once"), "{text}");
+        assert!(text.ends_with('\n'), "{text}");
+        let no_check = json!({"url": "https://example.com", "elements": [], "truncated": false});
+        assert!(!format(&no_check, MAX_CHARS).contains("challenge:"));
     }
 
     #[test]

@@ -1,26 +1,92 @@
-import { createContext, useMemo } from 'react'
+import { createContext, useMemo, useRef, useState } from 'react'
 import { Button } from '../../components/Controls'
 import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { Text } from '../../components/Text'
 import { fileReferenceName, hash_target, type PreviewKind } from '../../lib/chat-file-link.ts'
 import { useTr } from '../../lib/use-language'
 import { safePageHtml } from '../../lib/page-preview'
+import { QUOTE_LIMIT, VISUAL_REPLY_LIMIT, quote_text, visual_reply } from '../../lib/visual-reply'
 import './page-preview.css'
+
+/**
+ * An HTML artifact published above its agent's reply (OpenBot `html_render`). It reuses the inert
+ * preview: the frame keeps an empty `sandbox` and the same sanitizer, so a visual reply cannot run a
+ * script or fetch anything. `order: -1` places it ahead of the reply inside the message's column;
+ * no new window, service or IPC is involved. Selecting text on the page (or its caption) makes a
+ * bounded quote chip, mirroring `quote_text` in `lib/visual-reply.ts`.
+ */
+export function VisualReply({ html, title, height = 360, onQuote }: {
+  html: string | null
+  title: string
+  height?: number
+  onQuote?: (text: string) => void
+}) {
+  const tr = useTr()
+  const frame = useRef<HTMLIFrameElement>(null)
+  const [quote, setQuote] = useState('')
+  const reply = useMemo(() => visual_reply(html, VISUAL_REPLY_LIMIT), [html])
+  const srcDoc = useMemo(() => (reply ? safePageHtml(reply.html) : ''), [reply])
+  const reducedMotion = useMemo(
+    () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    [],
+  )
+  if (!reply) return null
+  const takeQuote = () => {
+    // An inert frame with an opaque origin keeps its selection to itself; fall back to the page's
+    // own selection (the caption and chip), so quoting always works from this surface.
+    let selected = ''
+    try {
+      selected = frame.current?.contentWindow?.getSelection()?.toString() ?? ''
+    } catch {
+      selected = ''
+    }
+    if (!selected) selected = window.getSelection()?.toString() ?? ''
+    const quoted = quote_text(selected, QUOTE_LIMIT)
+    if (quoted) {
+      setQuote(quoted)
+      onQuote?.(quoted)
+    }
+  }
+  return (
+    <div style={{ order: -1, display: 'flex', flexDirection: 'column', gap: 4, maxWidth: '100%' }} onMouseUp={takeQuote} onKeyUp={takeQuote}>
+      <div className="page-preview-stage" style={{ height }}>
+        <iframe ref={frame} className="page-preview-frame" sandbox="" srcDoc={srcDoc} title={title} loading="lazy" tabIndex={-1} />
+      </div>
+      {reply.truncated ? <Text size="caption" tone="secondary">{tr('This page was shortened to fit the reply.')}</Text> : null}
+      {quote ? (
+        <button
+          type="button"
+          className="page-preview-open press"
+          title={tr('Copy quote')}
+          style={{ alignSelf: 'flex-start', transition: reducedMotion ? undefined : 'opacity 160ms ease' }}
+          onClick={() => { void window.codync.app.copy(quote) }}
+        >
+          ❝ {quote}
+        </button>
+      ) : null}
+    </div>
+  )
+}
 
 /**
  * A reply that carries a visual page gets an inert preview: the iframe has an empty `sandbox` (no
  * `allow-scripts`), and the HTML is sanitized so it cannot fetch anything either. The Open action
  * hands the page to the app's real artifact viewer; the preview itself does nothing.
  */
-export function PagePreviewSheet({ html, title, open, close }: {
+export function PagePreviewSheet({ html, title, open, close, published = false, onQuote }: {
   html: string | null
   title: string
   open: () => void
   close: () => void
+  /** Set when this artifact is the visual reply published above the agent's words. */
+  published?: boolean
+  onQuote?: (text: string) => void
 }) {
   const tr = useTr()
   const srcDoc = useMemo(() => (html ? safePageHtml(html) : ''), [html])
   return (
+    <>
+    {published ? <VisualReply html={html} title={title} onQuote={onQuote} /> : null}
     <Sheet open={html !== null} onClose={close} width={880} maxHeight="82vh" dismissOnDim>
       {html !== null ? (
         <SheetPage>
@@ -35,6 +101,7 @@ export function PagePreviewSheet({ html, title, open, close }: {
         </SheetPage>
       ) : null}
     </Sheet>
+    </>
   )
 }
 

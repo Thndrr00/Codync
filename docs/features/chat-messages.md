@@ -42,6 +42,24 @@ it has no pointer tooltip or link-opening action.
   still has content (OpenBot 0.72.0). The arrows follow the scroll position; narrow blocks show
   neither. Wrapped code stays wrapped and needs no arrow.
 
+## Visual replies and quote chips
+
+An HTML artifact a bot publishes can be shown above its words as a visual reply (OpenBot `html_render`,
+`agents.md`). It uses the chat's existing sandboxed preview (`views/thread/PagePreview.tsx` and
+`lib/page-preview.ts`): an empty `sandbox`, no `allow-scripts`, and scripts, handlers, frames and
+outside resources stripped, so the page cannot touch the app's storage or the network. The pure
+`visual_reply(html, limit)` decision in `lib/visual-reply.ts` says whether an artifact is a page and
+bounds it without leaving a half-written tag; the surface is client-side only and backed by the
+artifact/file the chat already carries, with no new service, tool or artifact type. The frame keeps a
+stable height so the messages below it do not jump, and a shortened page says so.
+
+Text selected on that surface can become a quote chip. `quote_text(selection, limit)` collapses
+whitespace, bounds the passage and never makes an empty chip; the chip copies the quote when tapped.
+An inert frame with an opaque origin keeps its own selection private, so where the browser does not
+share it the chip falls back to text selected in the renderer-owned parts of the visual reply.
+Reduced motion turns off the chip's fade. Other clients keep their existing artifact cards: this is
+the desktop preview only, and nothing about the page or the quote is added to analytics.
+
 ## Messages are sent, not streamed
 
 - Every bot gets the built-in `chat` MCP server (`codync-host mcp chat`,

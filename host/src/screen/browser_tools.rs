@@ -198,10 +198,10 @@ fn now_secs() -> u64 {
         .unwrap_or_default()
 }
 
-async fn perform(_hub: &std::sync::Arc<Hub>, bot: &str, action: &Action) -> Result<Value> {
+async fn perform(hub: &std::sync::Arc<Hub>, bot: &str, action: &Action) -> Result<Value> {
     #[cfg(windows)]
     {
-        cdp::perform(bot, action).await
+        cdp::perform(hub, bot, action).await
     }
     #[cfg(not(windows))]
     {

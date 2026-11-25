@@ -149,6 +149,39 @@ the user to close tabs it cannot see, and then to reload the page with `navigate
 before retrying. Codync's browser tools have no saved-logins or card-fill surface; the note is the
 guidance that a secure fill would need, and a secret would go only to the page, never to the agent.
 
+## Cookie banners, bot checks and site memories
+
+The bot's tab refuses cookie banners on its own (OpenBot `browser.md`). An isolated-world script
+installed only on that tab (`worldName: "codync-consent"`, via
+`Page.addScriptToEvaluateOnNewDocument`) looks for about 15 seconds for a visible **Reject all** or
+**Only necessary** control, including one inside a shadow root, and clicks it once. The pure
+`consent_button(node, text)` decision in `browser_tools/decisions.rs` is mirrored in `page.js`: a
+hidden, disabled or non-interactive control never counts, an "accept", "allow all" or "agree" choice
+is never a refusal even when the banner has one, and only a fixed refusal label leaves the page. The
+host it refused is remembered in that browser profile, so the next visit keeps the refusal. A person
+watching or taking over the tab keeps their banner: the script is removed while they are there and
+put back when they leave. The person's protected browser and sign-in cards use other pipes and are
+never touched.
+
+A page that puts up a bot check is reported in the snapshot (OpenBot `browser.md`). The page-side
+`challenge()` op gathers only bounded markers — visible words plus the class, id and site key of
+elements named for a check — and the pure `challenge_status(html, clicked)` decision turns them into
+one fixed `challenge` field (`status` and `next`): `none` for an ordinary page, `checkbox` with the
+one allowed ordinary click for Cloudflare/DataDome/Turnstile/reCAPTCHA/hCaptcha checkbox checks, and
+`takeover` for a puzzle or for a check still standing after that click. The next step tells the agent
+to click the checkbox once and re-snapshot, or to ask a person to take over; no puzzle is solved and
+no page text from this decision reaches analytics. A navigation starts a fresh allowance for the
+click. The field is also printed as one bounded line at the end of the snapshot text, so every path
+that ends in a snapshot (including `navigate`, `wait_for` and `run`) shows it.
+
+A lasting preference the user states for one site can be saved as a `MEMORY.md` line beginning
+`@site example.com ` (OpenBot `browser.md`). A snapshot shows up to five matching site memories for
+the page's host and its parent domains as `siteMemories`, once per host per turn. The pure
+`site_memory_match(site, host)` decision in `chat/memory/site.rs` requires a dot boundary, so a hint
+for `example.com` also applies to `shop.example.com` but not to `notexample.com`. They reuse the
+memory files and store the bot already has, are shown as data (not instructions), and cannot be
+created by a page or a tool result — only by the user's own request.
+
 ## Sign-in and takeover cards (OpenBot 0.77.0)
 
 A saved password that lands on a slow page no longer hands the browser to the user (OpenBot nightly). After

@@ -92,6 +92,10 @@ The tools come from [cua-driver](https://github.com/trycua/cua) (MIT), which wor
 | Linux X11, Sway | The host, from beside `codync-host` (`DISPLAY` filled in when the service has none; Sway gets `CUA_DRIVER_RS_ENABLE_WAYLAND=1`) | None |
 | Linux GNOME, KDE, other Wayland | Not used: bots get Codync Screen's portal tools instead (`helper_tools.rs`: screenshot, click, type… on screenshot pixels) | The Remote screen portal grant |
 
+### Where the agent acted
+
+A small desktop overlay can mark each agent move and click so the user sees where a background action landed without the agent moving their cursor or taking focus (OpenBot `computer-use.md`). The pure `cursor_point(event, display)` decision in `renderer/lib/cursor-point.ts` bounds the event and places it on the display that owns it; the same point drives the main-process overlay (`main/agent-cursor.ts`, a transparent, focusable:false, click-through window) and the renderer marker (`views/computer-access/AgentCursor.tsx`). The dot fades after a move and stays a little longer on a click; `@media (prefers-reduced-motion: reduce)` turns the fade off. No new dependency or IPC channel is added, no point is logged or sent to analytics, and the person's own pointer and front app stay theirs. The overlay is a desktop-only surface; iOS, Android and the terminal have no desktop to draw on and are unchanged. It is not yet driven by the computer-use call path: no event carrying agent pointer coordinates exists in the desktop IPC today, so the overlay stays idle until one is added.
+
 On macOS, windows on another Space have no accessibility tree, so background actions there are refused; the driver says so and suggests `delivery_mode: "foreground"`.
 
 Computer use needs Remote screen on where Codync Screen takes part (macOS, Linux); on Windows it is always available. The host's screen state says which (`computerUse`), and the bot editor's toggle explains it.

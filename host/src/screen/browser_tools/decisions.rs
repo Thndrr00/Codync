@@ -43,6 +43,103 @@ pub(crate) fn dialog_notice(kind: &str, text: &str, limit: usize) -> DialogNotic
     DialogNotice { label, text, truncated }
 }
 
+/// A visible control a cookie banner offers, as the page-side scan sees it (OpenBot browser.md).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ConsentNode {
+    pub(crate) visible: bool,
+    pub(crate) interactive: bool,
+    pub(crate) disabled: bool,
+}
+
+/// Which refusal a control is, if any. Only "reject all" and "only necessary" count: an accept,
+/// allow or agree choice is never a refusal, even when the same banner also has one. The rule is
+/// mirrored in `page.js`; the banner's own text never leaves the page or reaches analytics.
+pub(crate) fn consent_button(node: ConsentNode, text: &str) -> Option<&'static str> {
+    if !node.visible || !node.interactive || node.disabled {
+        return None;
+    }
+    let clean = text.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase();
+    let clean: String = clean.chars().take(200).collect();
+    if ["accept", "allow all", "agree", "opt in"].iter().any(|word| clean.contains(word)) {
+        return None;
+    }
+    if ["reject all", "reject optional", "reject non-essential", "decline all", "decline optional"]
+        .iter()
+        .any(|phrase| clean.contains(phrase))
+    {
+        return Some("reject_all");
+    }
+    if ["only necessary", "necessary only", "essential only", "necessary cookies only", "use necessary"]
+        .iter()
+        .any(|phrase| clean.contains(phrase))
+    {
+        return Some("only_necessary");
+    }
+    None
+}
+
+/// The most bot-check markup the page-side scan hands to the decision (OpenBot browser.md).
+pub(crate) const CHALLENGE_HTML_LIMIT: usize = 8_000;
+
+/// What a bot-check means to the agent: a fixed status and one next step. Page text is only read to
+/// classify the check; it never reaches analytics or the fixed sentences (OpenBot browser.md).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ChallengeNotice {
+    pub(crate) status: &'static str,
+    pub(crate) next: &'static str,
+}
+
+impl ChallengeNotice {
+    /// The same shape the snapshot result carries.
+    pub(crate) fn value(self) -> Value {
+        json!({"status": self.status, "next": self.next})
+    }
+}
+
+/// Turns bounded page markup into a bot-check status. One ordinary checkbox click is allowed; every
+/// other check (and a check still standing after that click) asks for takeover, never puzzle solving.
+pub(crate) fn challenge_status(html: &str, clicked: bool) -> ChallengeNotice {
+    let lower = html.to_ascii_lowercase();
+    let has = |words: &[&str]| words.iter().any(|word| lower.contains(word));
+    let none = ChallengeNotice { status: "none", next: "Continue with the snapshot as usual." };
+    let puzzle = has(&[
+        "select all images",
+        "select all the images",
+        "select all traffic lights",
+        "crosswalk",
+        "slide the puzzle",
+        "draw the line",
+        "cf-challenge-running",
+        "checking your browser",
+    ]);
+    let checkbox = has(&[
+        "cf-turnstile",
+        "turnstile",
+        "g-recaptcha",
+        "recaptcha",
+        "h-captcha",
+        "hcaptcha",
+        "datadome-captcha",
+        "captcha",
+        "verify you are human",
+        "i'm not a robot",
+        "im not a robot",
+    ]);
+    if !puzzle && !checkbox {
+        return none;
+    }
+    if puzzle || clicked {
+        return ChallengeNotice {
+            status: "takeover",
+            next: "Ask the person to take over this page; do not solve the check or click it again.",
+        };
+    }
+    ChallengeNotice {
+        status: "checkbox",
+        next: "Click the checkbox in the snapshot once with the click tool, then take a new snapshot. If the check remains, ask the person to take over.",
+    }
+}
+
 /// One end of a drag, in viewport pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Point {
@@ -223,6 +320,67 @@ mod tests {
             assert!(!notice.label.contains("password") && !notice.label.contains("example"));
         }
         assert_eq!(dialog_notice("alert", "", 10).text, "");
+    }
+
+    #[test]
+    fn a_bot_check_offers_one_checkbox_click_and_then_takeover() {
+        let plain = challenge_status("<h1>Welcome</h1>", false);
+        assert_eq!(plain.status, "none");
+        assert_eq!(plain.next, "Continue with the snapshot as usual.");
+
+        for marker in
+            ["cf-turnstile", "g-recaptcha", "h-captcha", "datadome-captcha", "captcha", "verify you are human"]
+        {
+            let notice = challenge_status(marker, false);
+            assert_eq!(notice.status, "checkbox", "{marker}");
+            assert!(notice.next.contains("Click the checkbox"), "{notice.next}");
+            assert!(notice.next.contains("take a new snapshot"), "{notice.next}");
+            assert!(notice.next.contains("take over"), "{notice.next}");
+            let again = challenge_status(marker, true);
+            assert_eq!(again.status, "takeover", "only one ordinary click is allowed: {marker}");
+            assert!(again.next.contains("take over"), "{again.next}");
+            assert!(!again.next.contains("click it again"), "{again.next}");
+        }
+        for marker in [
+            "Select all images with a bus",
+            "Please complete the traffic lights check",
+            "Checking your browser before accessing",
+        ] {
+            let notice = challenge_status(marker, false);
+            assert_eq!(notice.status, "takeover", "{marker}");
+            assert!(notice.next.contains("do not solve"), "{notice.next}");
+        }
+        assert_eq!(challenge_status("RECAPTCHA", false).status, "checkbox", "case does not hide a check");
+        assert_eq!(challenge_status(&"captcha ".repeat(CHALLENGE_HTML_LIMIT), false).status, "checkbox");
+        // The fixed words carry no page content, however much the page tries to smuggle in.
+        let smuggled = challenge_status("recaptcha your password is hunter2 at secret.example", true);
+        assert!(!smuggled.next.contains("hunter2") && !smuggled.next.contains("secret.example"));
+        assert_eq!(plain.value(), json!({"status": "none", "next": plain.next}));
+    }
+
+    #[test]
+    fn only_a_visible_refusal_button_is_clicked_and_an_accept_one_never_is() {
+        let shown = ConsentNode { visible: true, interactive: true, disabled: false };
+        assert_eq!(consent_button(shown, "Reject all"), Some("reject_all"));
+        assert_eq!(consent_button(shown, "Only necessary cookies"), Some("only_necessary"));
+        assert_eq!(consent_button(shown, "  REJECT\n OPTIONAL  "), Some("reject_all"));
+        assert_eq!(consent_button(shown, "Necessary only"), Some("only_necessary"));
+        assert_eq!(consent_button(shown, "Decline all"), Some("reject_all"));
+        assert_eq!(consent_button(shown, "Accept all"), None, "accept is never a refusal");
+        assert_eq!(consent_button(shown, "Reject all, accept the rest"), None, "accept wins");
+        assert_eq!(consent_button(shown, "Allow all"), None);
+        assert_eq!(consent_button(shown, "I agree"), None);
+        assert_eq!(consent_button(shown, "Manage preferences"), None);
+        assert_eq!(consent_button(shown, "necessary"), None, "a lone word is not a button label");
+        assert_eq!(consent_button(shown, ""), None);
+        let hidden = ConsentNode { visible: false, ..shown };
+        let disabled = ConsentNode { disabled: true, ..shown };
+        let static_ = ConsentNode { interactive: false, ..shown };
+        for node in [hidden, disabled, static_] {
+            assert_eq!(consent_button(node, "Reject all"), None, "only a clickable control counts");
+        }
+        let long = format!("Reject all {}", "x".repeat(500));
+        assert_eq!(consent_button(shown, &long), Some("reject_all"), "a long banner cannot change the rule");
     }
 
     #[test]

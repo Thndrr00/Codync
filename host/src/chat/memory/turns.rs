@@ -50,6 +50,11 @@ pub fn drop_turn(bot: &str) {
     TURNS.locked().retain(|t| t.bot != bot || t.ended.is_some());
 }
 
+/// The id (start) of the bot's running turn, for once-per-turn bookkeeping such as site memories.
+pub(crate) fn current_turn(bot: &str) -> Option<i64> {
+    TURNS.locked().iter().find(|t| t.bot == bot && t.ended.is_none()).map(|t| t.start)
+}
+
 /// Notes that the bot's running turn ran a tool that can write files; the turn's start.
 fn wrote(bot: &str) -> Option<i64> {
     let mut turns = TURNS.locked();

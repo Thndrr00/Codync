@@ -116,6 +116,8 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   layer take turns, so one run tidies it and the others find it tidied. It waits while the plan's usage is above 75%. It writes the files
   compare-and-swap; when one changed meanwhile, the rest waits for the next run. Every run is logged (the lines it
   added and took out, the notes it wrote).
+- **Site-scoped hints** (OpenBot `browser.md`): a `MEMORY.md` line beginning `@site example.com ` carries a lower-case host and is a hint for that site and its subdomains. The pure `site_memory_match(site, host)` decision in `chat/memory/site.rs` requires a dot boundary, so `example.com` matches `shop.example.com` but not `notexample.com`. A browser snapshot adds up to five matching lines for the page's host and parent domains as `siteMemories`, once per host per turn, as data the agent reads beside the page. They live in the same Markdown files and store as every other fact — no second store, no new tool — and a page, file or tool result cannot create one: only the user's own request can. The bot's memory instructions say how to write them; see [browser tools](browser-tools.md#cookie-banners-bot-checks-and-site-memories).
+
 - **The harness's own memory** is off for every bot and for background jobs (`agent/own_memory.rs`): Claude Code
   (`autoMemoryEnabled` and `autoDreamEnabled` false, `CLAUDE_CODE_DISABLE_AUTO_MEMORY`), Copilot (its memory tools
   excluded), CodeBuddy, WorkBuddy (the same switch as CodeBuddy), and Qwen Code (workspace settings, so only in a bot's own workspace: a project folder's

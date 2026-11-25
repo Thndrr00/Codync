@@ -12,6 +12,23 @@
   var MAX_NAME = 160;
   var MAX_VALUE = 120;
   var MAX_OPTIONS = 20;
+  // OpenBot browser.md: a bot tab refuses a cookie banner instead of letting it cover the page.
+  var CONSENT_WAIT_MS = 15000;
+  var CONSENT_KEY = 'codync-consent-refused';
+
+  // Mirrors `decisions.rs::consent_button`; only a fixed refusal label ever leaves the page.
+  function consentButton(node, text) {
+    if (!node.visible || !node.interactive || node.disabled) return null;
+    var clean = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 200);
+    if (['accept', 'allow all', 'agree', 'opt in'].some(function (word) { return clean.indexOf(word) >= 0; })) return null;
+    if (['reject all', 'reject optional', 'reject non-essential', 'decline all', 'decline optional'].some(function (phrase) {
+      return clean.indexOf(phrase) >= 0;
+    })) return 'reject_all';
+    if (['only necessary', 'necessary only', 'essential only', 'necessary cookies only', 'use necessary'].some(function (phrase) {
+      return clean.indexOf(phrase) >= 0;
+    })) return 'only_necessary';
+    return null;
+  }
 
   // OpenBot 0.69: a form control named `hidden` or `inert` shadows the element's own property, so
   // `el.hidden` would hide a visible form. Read attributes from the prototype instead.
@@ -400,6 +417,50 @@
     return false;
   }
 
+  // One scan for a refusal in the light DOM and in every shadow root. The isolated-world script in
+  // `cdp.rs` calls this until the banner appears or its 15 s window ends; it clicks once at most and
+  // remembers the host in this profile so the next visit keeps the refusal (OpenBot browser.md).
+  function consent() {
+    var key = CONSENT_KEY + '.' + location.hostname;
+    var remembered = null;
+    try { remembered = localStorage.getItem(key); } catch (error) { remembered = null; }
+    if (remembered) return { ok: true, clicked: null, remembered: true };
+    var queue = [document.documentElement];
+    var seen = 0;
+    while (queue.length && seen < MAX_VISITED) {
+      var el = queue.shift();
+      seen += 1;
+      if (!el) continue;
+      var disabled = el.disabled === true || (el.getAttribute && el.getAttribute('aria-disabled') === 'true');
+      var node = { visible: shown(el, false), interactive: roleOf(el) === 'button', disabled: disabled };
+      var label = consentButton(node, labelOf(el) + ' ' + textOf(el));
+      if (label) {
+        try { localStorage.setItem(key, label); } catch (error) { /* a profile without storage just doesn't remember */ }
+        el.click();
+        return { ok: true, clicked: label };
+      }
+      var children = el.shadowRoot ? el.shadowRoot.children : el.children;
+      for (var index = 0; children && index < children.length; index += 1) queue.push(children[index]);
+    }
+    return { ok: true, clicked: null, remembered: false };
+  }
+
+  // OpenBot browser.md: only the markers a bot-check is made of are handed to the host, bounded. The
+  // decision there turns them into a fixed status and next step; no page text reaches analytics.
+  function challenge() {
+    var parts = [];
+    var body = document.body || document.documentElement;
+    if (body) parts.push(body.innerText || body.textContent || '');
+    var marked = document.querySelectorAll
+      ? document.querySelectorAll('[class*="captcha"], [class*="turnstile"], [id*="captcha"], [id*="turnstile"], [data-sitekey]')
+      : [];
+    for (var index = 0; index < marked.length && parts.join(' ').length < 8000; index += 1) {
+      var el = marked[index];
+      parts.push(el.className || '', el.id || '', el.getAttribute('data-sitekey') || '');
+    }
+    return { ok: true, html: cut(parts.join(' '), 8000) };
+  }
+
   function probe(request) {
     var now = Date.now();
     var watched = window.__codyncMutations || { at: now, count: 0 };
@@ -455,6 +516,8 @@
     focus: focus,
     select: select,
     check: check,
+    consent: consent,
+    challenge: challenge,
     probe: probe,
     evaluate: evaluate
   };

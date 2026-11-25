@@ -20,8 +20,8 @@
 
 use super::action::{Action, Button, Direction, Key, Kind, Load, Target};
 use super::decisions::{
-    DIALOG_TEXT_LIMIT, Point, SnapshotPass, TARGET_CRASHED, crash_notice, dialog_notice, drag_points, needs_visual,
-    snapshot_pass,
+    CHALLENGE_HTML_LIMIT, DIALOG_TEXT_LIMIT, Point, SnapshotPass, TARGET_CRASHED, challenge_status, crash_notice,
+    dialog_notice, drag_points, needs_visual, snapshot_pass,
 };
 use super::idle;
 use super::snapshot::{self, format as format_snapshot};
@@ -69,12 +69,33 @@ const AGENT_SCRIPTED_TABS_NOTE: &str = "A script you ran with evaluate can still
 /// The page-side helpers, evaluated with each call: an expression that builds the page's API.
 const PAGE: &str = include_str!("page.js");
 
+/// OpenBot browser.md: a bot tab silently refuses a cookie banner. The script runs in an isolated
+/// world of this tab only, for about 15 seconds from dom-ready, and never clicks an accept choice.
+/// The `{PAGE}` placeholder is filled from `page.js`, so the page-side rule has one source.
+const CONSENT_SCRIPT: &str = r#"(() => {
+  const api = ({PAGE})(new Map());
+  const end = Date.now() + 15000;
+  const tick = () => {
+    // A person watching or taking over this tab keeps their own banner.
+    if (window.__codyncConsentPaused) return;
+    try {
+      const answer = api.consent();
+      if (answer && answer.clicked) return;
+    } catch (error) { /* a page that refuses the scan keeps its banner */ }
+    if (Date.now() < end) setTimeout(tick, 300);
+  };
+  tick();
+})()"#;
+/// The isolated world the refusal script runs in, away from the page's own scripts.
+const CONSENT_WORLD: &str = "codync-consent";
+
 /// One bot's browser, or `None` while it has none. The live tab shares this slot with the tools:
 /// there is still one browser per bot, and each CDP call briefly borrows the pipe.
 pub(super) type Slot = Arc<AsyncMutex<Option<Session>>>;
 static SESSIONS: LazyLock<Mutex<HashMap<String, Slot>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 struct Session {
+    bot: String,
     process: Process,
     folder: PathBuf,
     pipe: Pipe,
@@ -92,6 +113,11 @@ struct Session {
     crash: Option<&'static str>,
     /// Whether `Page.setWebLifecycleState('frozen')` is in effect and has not been undone.
     frozen: bool,
+    /// The id of the cookie-banner refusal script on this tab, when the browser accepted it.
+    consent_script: Option<String>,
+    /// The bot-check the last snapshot saw, and whether the one allowed checkbox click was used.
+    challenge: Option<&'static str>,
+    challenge_clicked: bool,
 }
 
 impl Session {
@@ -101,7 +127,7 @@ impl Session {
 }
 
 /// Runs one action against `bot`'s browser, opening the browser for a `navigate` when it has none.
-pub(super) async fn perform(bot: &str, action: &Action) -> Result<Value> {
+pub(super) async fn perform(hub: &Arc<Hub>, bot: &str, action: &Action) -> Result<Value> {
     let slot = match &action.kind {
         Kind::Navigate { .. } => open(bot).await?,
         _ => existing(bot)
@@ -116,7 +142,7 @@ pub(super) async fn perform(bot: &str, action: &Action) -> Result<Value> {
         ensure!(!session.process.exited()?, "The browser closed. Open the page again with navigate.");
         // Any tool use is activity: it pushes the freeze deadline out and wakes a frozen tab.
         session.touch();
-        timeout(action.timeout.saturating_add(HUNG), run(session, action)).await
+        timeout(action.timeout.saturating_add(HUNG), run(hub, session, action)).await
     };
     match answered {
         Ok(answer) => {
@@ -251,9 +277,12 @@ async fn spawn(bot: &str) -> Result<Session> {
     .await?;
     let target = target["targetId"].as_str().context("The browser did not open a tab")?.to_owned();
     // Only the bot's browser accepts page dialogs (triage-15938); the person's protected browser and
-    // its sign-in cards use other pipes, which leave this off.
+    // its sign-in cards use other pipes, which leave this off. The cookie-banner refusal is installed
+    // on this tab only, not on a person's or a sign-in tab (OpenBot browser.md).
     socket.auto_dialog = true;
+    let consent_script = install_consent(&mut socket, &target).await;
     Ok(Session {
+        bot: bot.to_owned(),
         process,
         folder,
         pipe: socket,
@@ -263,7 +292,56 @@ async fn spawn(bot: &str) -> Result<Session> {
         last_response: Instant::now(),
         crash: None,
         frozen: false,
+        consent_script,
+        challenge: None,
+        challenge_clicked: false,
     })
+}
+
+/// Installs the isolated-world refusal script on the bot's own tab. A browser that does not support
+/// `worldName` or `runImmediately` simply keeps its banners; nothing else in the tool path changes.
+async fn install_consent(pipe: &mut Pipe, target: &str) -> Option<String> {
+    let attached = rpc(pipe, "Target.attachToTarget", json!({"targetId": target, "flatten": true}), None).await.ok()?;
+    let session = attached["sessionId"].as_str()?.to_owned();
+    let source = CONSENT_SCRIPT.replace("{PAGE}", PAGE);
+    let added = rpc(
+        pipe,
+        "Page.addScriptToEvaluateOnNewDocument",
+        json!({"source": source, "worldName": CONSENT_WORLD, "runImmediately": true}),
+        Some(session.as_str()),
+    )
+    .await
+    .ok()?;
+    rpc(pipe, "Target.detachFromTarget", json!({"sessionId": session.as_str()}), None).await.ok();
+    added["identifier"].as_str().map(str::to_owned)
+}
+
+/// While a person watches or takes control of the bot's tab, their banner is theirs: the refusal
+/// script is removed, and put back when they leave. No refusal is undone — the profile still remembers
+/// the one a click already made (OpenBot browser.md).
+async fn pause_consent(session: &mut Session, tab: &str, paused: bool) {
+    // The flag also stops a poll that already started on a document the removal cannot reach.
+    let flag = if paused { "true" } else { "false" };
+    let _ = rpc(
+        &mut session.pipe,
+        "Runtime.evaluate",
+        json!({"expression": format!("window.__codyncConsentPaused = {flag}"), "returnByValue": true}),
+        Some(tab),
+    )
+    .await;
+    if paused {
+        if let Some(identifier) = session.consent_script.take() {
+            let _ = rpc(
+                &mut session.pipe,
+                "Page.removeScriptToEvaluateOnNewDocument",
+                json!({"identifier": identifier}),
+                Some(tab),
+            )
+            .await;
+        }
+    } else if session.consent_script.is_none() {
+        session.consent_script = install_consent(&mut session.pipe, &session.target).await;
+    }
 }
 
 /// Stops a browser and removes its profile, retrying a profile Chrome still holds. The terminate
@@ -394,7 +472,7 @@ async fn watch(hub: &Hub) {
 }
 
 /// One action on the bot's tab, with a session attached and detached around it.
-async fn run(session: &mut Session, action: &Action) -> Result<Value> {
+async fn run(hub: &Arc<Hub>, session: &mut Session, action: &Action) -> Result<Value> {
     // A run's earlier steps discard their answers, so carry any dialog they saw into this call's
     // result (the final snapshot of a run is one more call on this same pipe).
     let mut pending = dialog_values(session.pipe.take_dialogs());
@@ -407,7 +485,7 @@ async fn run(session: &mut Session, action: &Action) -> Result<Value> {
     // pipe accepts an ordinary one as soon as its event arrives, so the page script cannot hold the
     // action (or the window) waiting for somebody to click OK.
     let _ = rpc(&mut session.pipe, "Page.enable", json!({}), Some(tab.as_str())).await;
-    let answer = act(session, &tab, action).await;
+    let answer = act(hub, session, &tab, action).await;
     // OpenBot 0.78.0: a crashed page is reported as such, with the reload the agent can do, instead
     // of a generic refusal or a snapshot from before the crash. Check while the session is still
     // attached; a cancelled check poisons the pipe, which `perform` then closes rather than reuses.
@@ -517,10 +595,12 @@ async fn crash_reason(session: &mut Session, tab: &str) -> Option<&'static str> 
     listed.then_some(TARGET_CRASHED)
 }
 
-async fn act(session: &mut Session, tab: &str, action: &Action) -> Result<Value> {
+async fn act(hub: &Arc<Hub>, session: &mut Session, tab: &str, action: &Action) -> Result<Value> {
     match &action.kind {
-        Kind::Navigate { url, direction } => navigate(session, tab, url.as_deref(), *direction, action.timeout).await,
-        Kind::Snapshot => snapshot(session, tab).await,
+        Kind::Navigate { url, direction } => {
+            navigate(hub, session, tab, url.as_deref(), *direction, action.timeout).await
+        }
+        Kind::Snapshot => snapshot(hub, session, tab).await,
         Kind::Click { target, button, count, modifiers } => {
             click(session, tab, *target, *button, *count, *modifiers).await
         }
@@ -533,7 +613,7 @@ async fn act(session: &mut Session, tab: &str, action: &Action) -> Result<Value>
         Kind::Select { target, values } => select(session, tab, *target, values).await,
         Kind::Check { target, checked } => check(session, tab, *target, *checked).await,
         Kind::Wait { text, url, state } => {
-            wait(session, tab, text.as_deref(), url.as_deref(), *state, action.timeout).await
+            wait(hub, session, tab, text.as_deref(), url.as_deref(), *state, action.timeout).await
         }
         Kind::Evaluate { expression, await_promise } => evaluate(session, tab, expression, *await_promise).await,
         Kind::Run { .. } | Kind::Sleep { .. } => bail!("`{}` runs in the host, not in the page.", action.kind.name()),
@@ -541,6 +621,7 @@ async fn act(session: &mut Session, tab: &str, action: &Action) -> Result<Value>
 }
 
 async fn navigate(
+    hub: &Arc<Hub>,
     session: &mut Session,
     tab: &str,
     url: Option<&str>,
@@ -550,6 +631,8 @@ async fn navigate(
     // 0.77.0: "Reload, Back, Forward and a new address also failed" on a page whose script never
     // ends. Stop that script first, so every navigation control can load the new page.
     stop_loading(session, tab).await;
+    // A new page gets a fresh allowance for the one checkbox click (OpenBot browser.md).
+    session.challenge_clicked = false;
     let before = page(session, tab, "probe", &json!({})).await?["url"].as_str().unwrap_or_default().to_owned();
     match (url, direction) {
         (Some(url), None) => {
@@ -585,7 +668,7 @@ async fn navigate(
         (None, None) => bail!("Name a url, or a direction: back, forward or reload."),
     }
     let settled = settle(session, tab, &before, limit).await?;
-    let mut answer = snapshot(session, tab).await?;
+    let mut answer = snapshot(hub, session, tab).await?;
     answer["settled"] = json!(settled);
     if !settled {
         answer["note"] = json!("The page was still loading when the wait ended; take a snapshot to see where it is.");
@@ -622,11 +705,10 @@ async fn settle(session: &mut Session, tab: &str, before: &str, limit: Duration)
     }
 }
 
-async fn snapshot(session: &mut Session, tab: &str) -> Result<Value> {
-    let read = call_page(session, tab, "snapshot", &snapshot_pass(SnapshotPass::Accessible)).await?;
-    let mut text = format_snapshot(&read, snapshot::MAX_CHARS);
+async fn snapshot(hub: &Arc<Hub>, session: &mut Session, tab: &str) -> Result<Value> {
+    let mut read = call_page(session, tab, "snapshot", &snapshot_pass(SnapshotPass::Accessible)).await?;
     let controls = read["elements"].as_array().map_or(0, Vec::len);
-    let body = read["text"].as_str().unwrap_or_default();
+    let body = read["text"].as_str().unwrap_or_default().to_owned();
     let mut needs_image = false;
     if controls == 0 {
         // 0.70: a page can paint controls it hides from screen readers or makes transparent. `innerText`
@@ -634,17 +716,37 @@ async fn snapshot(session: &mut Session, tab: &str) -> Result<Value> {
         // pass. A page with nothing in either pass becomes a picture (see `needs_visual`).
         let drawn = call_page(session, tab, "snapshot", &snapshot_pass(SnapshotPass::Drawn)).await?;
         let drawn_controls = drawn["elements"].as_array().map_or(0, Vec::len);
-        let drawn_body = drawn["text"].as_str().unwrap_or_default();
+        let drawn_body = drawn["text"].as_str().unwrap_or_default().to_owned();
         if drawn_controls > 0 || (body.trim().is_empty() && !drawn_body.trim().is_empty()) {
-            text = format_snapshot(&drawn, snapshot::MAX_CHARS);
-        } else if needs_visual(drawn_body, drawn_controls) {
+            read = drawn;
+        } else if needs_visual(&drawn_body, drawn_controls) {
             needs_image = true;
         }
     }
+    // OpenBot browser.md: classify any bot-check from bounded markers, then tell the agent one fixed
+    // next step. The page's own words are never copied into the result beyond the snapshot already
+    // shown, and never logged or sent to analytics.
+    let marked = call_page(session, tab, "challenge", &json!({})).await?;
+    let (html, _) = cut_at(marked["html"].as_str().unwrap_or_default(), CHALLENGE_HTML_LIMIT);
+    let notice = challenge_status(&html, session.challenge_clicked);
+    session.challenge = Some(notice.status);
+    if notice.status == "none" {
+        session.challenge_clicked = false;
+    }
+    let challenge = notice.value();
+    read["challenge"] = challenge.clone();
+    // OpenBot browser.md: a site hint the user saved once is shown in the first snapshot for this
+    // host in this turn, alongside the page, and never repeated on later snapshots.
+    let url = read["url"].as_str().unwrap_or_default().to_owned();
+    let site_memories = crate::chat::memory::site::for_snapshot(hub, &session.bot, &url);
+    read["siteMemories"] = json!(site_memories);
+    let text = format_snapshot(&read, snapshot::MAX_CHARS);
     Ok(json!({
         "url": read["url"],
         "title": read["title"],
         "snapshot": text,
+        "challenge": challenge,
+        "siteMemories": site_memories,
         "needsImage": needs_image,
     }))
 }
@@ -691,6 +793,11 @@ async fn click(
         json!({"type":"mouseReleased","x":x,"y":y,"button":button.name(),"buttons":0,"clickCount":count,"modifiers":modifiers}),
     )
     .await?;
+    // Only one ordinary click on a checkbox-style bot-check is allowed (OpenBot browser.md); the
+    // next snapshot says to take over if the check is still there. Other clicks do not spend it.
+    if session.challenge == Some("checkbox") {
+        session.challenge_clicked = true;
+    }
     Ok(json!({"clicked": label, "x": x, "y": y}))
 }
 
@@ -850,6 +957,7 @@ async fn check(session: &mut Session, tab: &str, target: Target, checked: bool) 
 }
 
 async fn wait(
+    hub: &Arc<Hub>,
     session: &mut Session,
     tab: &str,
     text: Option<&str>,
@@ -870,7 +978,7 @@ async fn wait(
         let at_url = url.is_none()
             || probe["url"].as_str().is_some_and(|current| url.is_some_and(|wanted| current.contains(wanted)));
         if ready && has_text && at_url {
-            return snapshot(session, tab).await;
+            return snapshot(hub, session, tab).await;
         }
         if started.elapsed() >= limit {
             bail!("{}", missing_wait(text, url, state, limit));
@@ -1065,6 +1173,8 @@ pub(super) async fn live_attach(bot: &str) -> Result<(Slot, String)> {
     resume(session).await?;
     ensure_target(session).await?;
     let tab = attach(session).await?;
+    // A person is now looking at this tab: leave any cookie banner to them (OpenBot browser.md).
+    pause_consent(session, &tab, true).await;
     Ok((slot.clone(), tab))
 }
 
@@ -1136,6 +1246,8 @@ pub(super) async fn live_input(slot: &Slot, session: &str, event: Input) -> Resu
 pub(super) async fn live_detach(slot: &Slot, session: String) {
     let mut guard = slot.lock().await;
     if let Some(state) = guard.as_mut() {
+        // Resume before the live session goes away, so the page flag is set on a live session.
+        pause_consent(state, &session, false).await;
         rpc(&mut state.pipe, "Target.detachFromTarget", json!({"sessionId": session}), None).await.ok();
     }
 }
@@ -1150,6 +1262,29 @@ mod tests {
         assert!(text.contains("api.box({\"ref\":7})"), "{text}");
         assert!(text.contains("window.__codyncRefs || (window.__codyncRefs = new Map())"));
         assert!(text.contains("((refs) =>"), "the helpers are bound to the document's refs: {text}");
+    }
+
+    #[test]
+    fn a_snapshot_reads_bounded_bot_check_markers_from_the_page() {
+        assert!(PAGE.contains("function challenge()"), "page.js gathers bot-check markers");
+        assert!(PAGE.contains("8000"), "the markers are bounded before they reach the host");
+        assert_eq!(CHALLENGE_HTML_LIMIT, 8_000);
+        let text = expression("challenge", &json!({}));
+        assert!(text.contains("api.challenge({})"), "{text}");
+    }
+
+    #[test]
+    fn a_cookie_refusal_runs_in_an_isolated_world_for_a_bounded_time() {
+        let source = CONSENT_SCRIPT.replace("{PAGE}", PAGE);
+        assert!(!source.contains("{PAGE}"), "the page-side rule is filled in: {source}");
+        assert!(source.contains("15000"), "it looks for about 15 seconds: {source}");
+        assert!(source.contains("setTimeout(tick, 300)"), "it polls, not blocks: {source}");
+        assert!(source.contains("api.consent()"), "it uses the page's mirrored rule: {source}");
+        assert!(source.contains("__codyncConsentPaused"), "a person's takeover pauses it: {source}");
+        assert!(source.contains("function consent()"), "page.js does the scan and one click");
+        assert!(source.contains("CONSENT_KEY + '.' + location.hostname"), "the refusal is remembered per host");
+        assert_eq!(CONSENT_WORLD, "codync-consent");
+        assert!(!PAGE.contains("api.consent();"), "the page itself never auto-clicks on every snapshot");
     }
 
     #[test]
