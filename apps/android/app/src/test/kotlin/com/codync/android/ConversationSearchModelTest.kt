@@ -42,6 +42,45 @@ class ConversationSearchModelTest {
         }
     }
 
+    @Test fun `a fast answer never turns on the searching spinner`() = runBlocking {
+        val host = SearchHost()
+        host.search = { SearchPage(listOf(hit("fast")), null) }
+        val model = ConversationSearchModel(host, "bot", this)
+        try {
+            model.updateQuery("release")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+            assertFalse(model.state.showSpinner)
+            assertEquals(null, model.state.searchStartedAt)
+        } finally { model.dispose() }
+    }
+
+    @Test fun `editing a query keeps the last hits but a cleared field starts empty`() = runBlocking {
+        val host = SearchHost()
+        var page = 0
+        host.search = { request ->
+            page++
+            SearchPage(listOf(hit("hit-$page-${request.query}")), null)
+        }
+        val model = ConversationSearchModel(host, "bot", this)
+        try {
+            model.updateQuery("first")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+            val first = model.state.hits
+            assertEquals(1, first.size)
+
+            model.updateQuery("first again")
+            assertEquals(first, model.state.hits, "the last page stays while the edit loads")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+
+            model.updateQuery("")
+            assertEquals(emptyList<SearchHit>(), model.state.hits)
+            model.updateQuery("brand new")
+            assertEquals(emptyList<SearchHit>(), model.state.hits, "a cleared field's first word starts empty")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+            assertEquals(1, model.state.hits.size)
+        } finally { model.dispose() }
+    }
+
     @Test fun `a reply from a retired account or computer is ignored`() = runBlocking {
         rejectLateReply(this) { host, _ -> host.current = false }
     }

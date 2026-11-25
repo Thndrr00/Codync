@@ -50,6 +50,12 @@ export function statusLabel(status: TaskStatus): string {
   return STATUS_LABEL[status]
 }
 
+/** OpenBot 010: branch only from a finished task, never while its turn is queued or running. */
+export function canBranch(task: AgentTask): boolean {
+  const status = statusOf(task)
+  return task.state !== 'archived' && status !== 'queued' && status !== 'running'
+}
+
 /** What the rows offer. A stopped task can be followed up but never restarted on its own. */
 export function actionsFor(task: AgentTask): TaskActions {
   const status = statusOf(task)
@@ -90,6 +96,11 @@ export const STATUS_FILTERS = [
 ] as const
 
 export type StatusFilter = (typeof STATUS_FILTERS)[number]['id']
+
+/** OpenBot 010: one id per branch click, so a double-click replays the first branch on the host. */
+export function branchRequestId(): string {
+  return `branch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
 
 export function statusFilterValue(filter: StatusFilter): AgentTask['state'] | undefined {
   return filter === 'all' ? undefined : filter

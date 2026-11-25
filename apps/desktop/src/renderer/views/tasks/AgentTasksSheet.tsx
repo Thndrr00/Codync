@@ -8,6 +8,8 @@ import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
 import {
   actionsFor,
+  branchRequestId,
+  canBranch,
   countTasks,
   inFilter,
   statusFilterValue,
@@ -75,6 +77,14 @@ export function AgentTasksSheet({ bot, store, onClose }: { bot: Bot; store: BotS
     setBusy(false)
   }
 
+  // The request id makes a repeated click answer with the branch the first click made.
+  const branch = (task: AgentTask) => act('taskBranch', {
+    botId: bot.id,
+    taskId: task.id,
+    name: `${task.name} (branch)`,
+    requestId: branchRequestId(),
+  })
+
   const open = async (task: AgentTask) => {
     setSelected(task.id)
     setFollowUp('')
@@ -138,6 +148,7 @@ export function AgentTasksSheet({ bot, store, onClose }: { bot: Bot; store: BotS
                         {statusLabel(statusOf(task))}
                       </Text>
                     </button>
+                    <IconButton title={tr('Branch')} icon="arrow.triangle.branch" disabled={busy || !canBranch(task)} onClick={() => void branch(task)} />
                     {actions.stop ? (
                       <IconButton title={tr('Stop')} icon="stop.circle" disabled={busy} onClick={() => void act('taskStop', { taskId: task.id })} />
                     ) : null}

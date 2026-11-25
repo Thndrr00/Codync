@@ -30,6 +30,26 @@ import com.codync.android.core.ThreadInfo
 import com.codync.android.core.ThreadStatus
 import com.codync.android.design.*
 
+/** Branches of one source message sit together, under a row that names the message. */
+internal data class ThreadGroup(val source: String?, val sourceText: String?, val children: List<ThreadInfo>)
+
+/** Pure: group branches that share a source; a source with one branch stays a flat row. */
+internal fun nestThreads(threads: List<ThreadInfo>): List<ThreadGroup> {
+    val branched = threads.filter { it.fromEntry != null }.groupBy { it.fromEntry }
+    val placed = mutableSetOf<String>()
+    return buildList {
+        for (thread in threads) {
+            val source = thread.fromEntry
+            if (source == null || source in placed || (branched[source]?.size ?: 0) < 2) {
+                add(ThreadGroup(null, null, listOf(thread)))
+            } else {
+                add(ThreadGroup(source, thread.branchText, branched[source].orEmpty()))
+            }
+            if (source != null) placed += source
+        }
+    }
+}
+
 /**
  * Every thread of a chat, open ones or the archive, with the newest line of each. A thread is a
  * side conversation: opening one puts it over the chat, and long-pressing a row renames, archives
@@ -70,12 +90,23 @@ import com.codync.android.design.*
             modifier = Modifier.padding(horizontal = 20.dp, bottom = 4.dp))
         Hairline()
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            items(threads, key = { it.id }) { thread ->
-                ThreadRow(thread, state, archived,
-                    open = { store.openBot(bot.id, thread.id); close() },
-                    rename = { renaming = thread; draftTitle = thread.title },
-                    archive = { store.archiveThread(thread.id, !archived) },
-                    delete = { deleting = thread })
+            for (group in nestThreads(threads)) {
+                if (group.source != null) item("source:" + group.source) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(top = 8.dp)) {
+                        Symbol("arrow.triangle.branch", size = 13.dp, tint = Palette.secondary)
+                        Text(tr("Branched from") + " " + group.sourceText?.replace('\n', ' ')?.take(140).orEmpty(),
+                            style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                items(group.children, key = { it.id }) { thread ->
+                    ThreadRow(thread, state, archived,
+                        modifier = if (group.source != null) Modifier.padding(start = 20.dp) else Modifier,
+                        open = { store.openBot(bot.id, thread.id); close() },
+                        rename = { renaming = thread; draftTitle = thread.title },
+                        archive = { store.archiveThread(thread.id, !archived) },
+                        delete = { deleting = thread })
+                }
             }
             if (threads.isEmpty() && ("threads:" + bot.id + ":" + archived) !in state.busy) item("empty") {
                 val message = if (words.isNotEmpty()) tr("No threads match your search.")
@@ -102,13 +133,14 @@ import com.codync.android.design.*
 }
 
 @Composable private fun ThreadRow(thread: ThreadInfo, state: AppState, archived: Boolean,
+    modifier: Modifier = Modifier,
     open: () -> Unit, rename: () -> Unit, archive: () -> Unit, delete: () -> Unit) {
     val lastAuthor = thread.lastAuthor?.let { author ->
         if (author == "user") tr("You") else state.bots.firstOrNull { it.id == author }?.name
     }
     val branch = thread.branchText?.replace('\n', ' ')?.take(140)
     Row(
-        Modifier.fillMaxWidth()
+        modifier.fillMaxWidth()
             .contextActions(onClick = open, items = {
                 buildList {
                     add(MenuItem("Open", icon = "arrow.up.right") { open() })

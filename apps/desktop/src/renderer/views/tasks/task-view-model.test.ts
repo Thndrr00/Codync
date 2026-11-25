@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   actionsFor,
+  branchRequestId,
+  canBranch,
   countTasks,
   inFilter,
   statusFilterValue,
@@ -44,6 +46,20 @@ test('a stopped task can be followed up but never restarted on its own', () => {
     archive: false,
     reopen: true,
   })
+})
+
+test('a branch is offered only on a finished, non-archived task', () => {
+  assert.equal(canBranch(task()), true)
+  assert.equal(canBranch(task({ run: 'running' })), false)
+  assert.equal(canBranch(task({ run: 'queued' })), false)
+  assert.equal(canBranch(task({ state: 'archived' })), false)
+  assert.equal(canBranch(task({ run: 'stopped' })), true)
+})
+
+test('each branch click carries its own request id', () => {
+  const first = branchRequestId()
+  assert.match(first, /^branch-/)
+  assert.notEqual(first, branchRequestId())
 })
 
 test('counts cover only work still in the chat and the status filter is exact', () => {

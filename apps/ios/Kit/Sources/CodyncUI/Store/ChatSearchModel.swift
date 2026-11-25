@@ -49,6 +49,8 @@ public enum ChatSearchRange: String, CaseIterable, Sendable {
 
     public private(set) var hits: [Hit] = []
     public private(set) var loading = false
+    /// The spinner follows the host call, not the keystroke, so a fast answer never flashes it.
+    public private(set) var spinnerVisible = false
     public private(set) var error: String?
     /// The span around the open hit, with the matching message highlighted.
     public private(set) var context: [Entry]?
@@ -56,6 +58,8 @@ public enum ChatSearchRange: String, CaseIterable, Sendable {
 
     private let botId: String
     private var sequence = 0
+    private var lastQuery = ""
+    private var spinnerTask: Task<Void, Never>?
     /// Loaded contexts by hit id, reused as filters change.
     private var details: [String: Entry] = [:]
 
@@ -73,12 +77,27 @@ public enum ChatSearchRange: String, CaseIterable, Sendable {
         sequence += 1
         let request = sequence
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { hits = []; loading = false; error = nil; return }
+        let cleared = lastQuery.isEmpty && !text.isEmpty
+        let changed = lastQuery != text
+        lastQuery = text
+        guard !text.isEmpty else {
+            hits = []; loading = false; spinnerVisible = false; error = nil
+            return
+        }
+        if !hitsAfter(queryChanged: changed, cleared: cleared) { hits = [] }
         loading = true
+        spinnerVisible = false
         error = nil
-        defer { if request == sequence { loading = false } }
+        defer { if request == sequence { loading = false; spinnerVisible = false; spinnerTask?.cancel() } }
         do {
             try await Task.sleep(for: .milliseconds(300))
+            // The debounce isn't Searching: the spinner clock starts with the host call.
+            let startedAt = Date()
+            spinnerTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(200))
+                guard let self, request == self.sequence, !Task.isCancelled else { return }
+                self.spinnerVisible = showSpinner(startedAt: startedAt, now: Date())
+            }
             let client = try await store.ready()
             struct Request: Encodable { var query: String; var botIds: [String]; var limit: Int }
             struct Response: Decodable { var results: [Result] }

@@ -4,6 +4,11 @@ import UIKit
 
 /// The rows a conversation is made of.
 
+/// OpenBot 010: branch only from the newest final answer, and never while the bot is still working.
+public func branchAllowed(entry: Entry, last: Entry?, status: String) -> Bool {
+    entry.kind == "agent" && entry.data.final == true && last?.id == entry.id && status != "working"
+}
+
 /// One chat-visible entry in a chat, with what can be done to it.
 struct ChatRow: View {
     let entry: Entry
@@ -26,12 +31,19 @@ struct ChatRow: View {
     @Environment(BotStore.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The branch menu follows the last finished turn, not every replyable message (OpenBot 010).
+    private var canBranch: Bool {
+        let last = entry.threadId == nil ? model.entries[entry.botId]?.last { $0.threadId == nil }
+                                        : model.threadEntries[entry.threadId ?? ""]?.last
+        return branchAllowed(entry: entry, last: last, status: model.bots[entry.botId]?.status ?? "")
+    }
+
     var body: some View {
         switch entry.kind {
         case "user":
             VStack(alignment: .trailing, spacing: 4) {
                 if let person = entry.data.person, person.key != model.myKey, groupStart { PersonLabel(person: person) }
-                UserBubble(entry: entry, chat: chat, reply: reply, branch: branch)
+                UserBubble(entry: entry, chat: chat, reply: reply, branch: canBranch ? branch : nil)
                 ReactionsRow(entry: entry)
                 if let summary = entry.data.thread, let openThread {
                     ThreadChip(summary: summary, open: openThread)
@@ -43,7 +55,7 @@ struct ChatRow: View {
         case "agent":
             VStack(alignment: .leading, spacing: 4) {
                 if chat?.isGroup == true, groupStart { AuthorLabel(botId: entry.data.author) }
-                AgentBubble(entry: entry, openTrace: openTrace, reply: reply, openArtifact: openArtifact, branch: branch)
+                AgentBubble(entry: entry, openTrace: openTrace, reply: reply, openArtifact: openArtifact, branch: canBranch ? branch : nil)
                 ReactionsRow(entry: entry)
                     .padding(.leading, chat?.isGroup == true ? 34 : 0)
                 if let summary = entry.data.thread, let openThread {

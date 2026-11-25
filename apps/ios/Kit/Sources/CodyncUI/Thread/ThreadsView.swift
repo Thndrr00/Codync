@@ -1,6 +1,33 @@
 import CodyncKit
 import SwiftUI
 
+/// Branches of one source message sit together, under a row that names the message.
+struct ThreadGroup: Sendable {
+    let source: String?
+    let sourceText: String?
+    let children: [ThreadInfo]
+}
+
+/// Pure: group branches that share a source; a source with one branch stays a flat row.
+func nestThreads(_ threads: [ThreadInfo]) -> [ThreadGroup] {
+    let branched = Dictionary(grouping: threads.filter { $0.fromEntry != nil }) { $0.fromEntry ?? "" }
+    var placed = Set<String>()
+    var groups: [ThreadGroup] = []
+    for thread in threads {
+        guard let source = thread.fromEntry else {
+            groups.append(ThreadGroup(source: nil, sourceText: nil, children: [thread]))
+            continue
+        }
+        if placed.contains(source) || (branched[source]?.count ?? 0) < 2 {
+            groups.append(ThreadGroup(source: nil, sourceText: nil, children: [thread]))
+        } else {
+            groups.append(ThreadGroup(source: source, sourceText: thread.branchText, children: branched[source] ?? []))
+        }
+        placed.insert(source)
+    }
+    return groups
+}
+
 /// Every thread of a chat, open ones or the archive, newest first with the last line of each.
 /// A thread is a side conversation: opening one puts it over the chat, and a row's menu
 /// renames, archives or deletes it.
@@ -88,13 +115,29 @@ struct ThreadsView: View {
             }
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(threads) { thread in
-                        ThreadRow(thread: thread, archived: archived,
-                                  lastAuthor: authorName(thread.lastAuthor),
-                                  open: { show(thread.id) },
-                                  rename: { renaming = thread; draftTitle = thread.title },
-                                  archive: { model.setThreadArchived(thread.id, botId: botId, archived: !archived) },
-                                  delete: { deleting = thread })
+                    ForEach(nestThreads(threads), id: \.children.first?.id) { group in
+                        if let source = group.source {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.triangle.branch")
+                                Text(L10n.tr("Branched from") + " "
+                                     + (group.sourceText?.replacingOccurrences(of: "\n", with: "") ?? ""))
+                                    .lineLimit(1)
+                            }
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 8)
+                            .accessibilityLabel(L10n.tr("Branched from") + " \(source)")
+                        }
+                        ForEach(group.children) { thread in
+                            ThreadRow(thread: thread, archived: archived,
+                                      lastAuthor: authorName(thread.lastAuthor),
+                                      open: { show(thread.id) },
+                                      rename: { renaming = thread; draftTitle = thread.title },
+                                      archive: { model.setThreadArchived(thread.id, botId: botId, archived: !archived) },
+                                      delete: { deleting = thread })
+                                .padding(.leading, group.source == nil ? 0 : 20)
+                        }
                     }
                     if threads.isEmpty {
                         Text(emptyMessage)

@@ -21,13 +21,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -47,6 +51,8 @@ import com.kyant.shapes.RoundedRectangle
 @Composable internal fun ConversationSearch(bot: Bot, store: AppStore, close: () -> Unit) {
     val appState by store.state.collectAsStateWithLifecycle()
     val reduced = reduceMotion()
+    val context = LocalContext.current
+    val motion = remember(context, reduced) { searchMotion(SearchMotionPreference.read(context.applicationContext), reduced) }
     val parentScope = rememberCoroutineScope()
     val model = remember(store, bot.id, appState.contextId, appState.generation, appState.computer?.id, appState.loading) {
         ConversationSearchModel(AppStoreConversationSearchHost(store), bot.id, parentScope)
@@ -70,7 +76,7 @@ import com.kyant.shapes.RoundedRectangle
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Column(Modifier.animateContentSize(if (reduced) snap() else Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.animateContentSize(if (motion == SearchMotion.None) snap() else Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (state.shortcutPhase == ShortcutPhase.Ready) {
                         SegmentedChoice(state.location, MessageSearchScope.entries.map { it to it.title }, model::updateScope)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -123,16 +129,28 @@ import com.kyant.shapes.RoundedRectangle
                 }
             }
             when {
-                state.phase == SearchPhase.Searching && state.hits.isEmpty() -> item { Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) } }
                 state.query.isBlank() -> item { Text("Search this conversation.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
+                state.hits.isEmpty() && state.showSpinner -> item { Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) } }
+                state.hits.isEmpty() && state.phase == SearchPhase.Searching -> item { Box(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {} }
                 state.phase != SearchPhase.Failed && state.hits.isEmpty() -> item { Text("No matches.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
                 else -> {
                     items(state.hits, key = { it.id }) { hit ->
-                        SearchHitRow(hit, state.query.trim()) {
-                            contextHit = hit
-                            context = MessageContextRequest(hit.botId, hit.id, hit.threadId)
+                        val entered = remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) { entered.value = true }
+                        AnimatedVisibility(entered.value,
+                            enter = fadeIn(if (motion == SearchMotion.None) snap() else Motion.fade()),
+                            exit = fadeOut(if (motion == SearchMotion.None) snap() else Motion.fade()),
+                            modifier = Modifier.animateItem(
+                                if (motion == SearchMotion.None) null else Motion.fade(),
+                                if (motion == SearchMotion.None) null else Motion.layoutOffset,
+                                if (motion == SearchMotion.None) null else Motion.fade())) {
+                            SearchHitRow(hit, state.query.trim()) {
+                                contextHit = hit
+                                context = MessageContextRequest(hit.botId, hit.id, hit.threadId)
+                            }
                         }
                     }
+                    if (state.showSpinner) item { Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) } }
                     if (state.opening != null) item { Text("Opening result…", style = Type.caption, color = Palette.secondary) }
                     if (state.next != null) item {
                         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {

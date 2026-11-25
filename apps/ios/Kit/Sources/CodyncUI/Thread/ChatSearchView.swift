@@ -1,6 +1,40 @@
 import CodyncKit
 import SwiftUI
 
+/// The device's "Animate search results" choice (OpenBot 004). Settings writes the same key.
+public enum SearchMotionStyle: String, CaseIterable, Sendable {
+    case blur, fade, none
+
+    public static let title = "Animate search results"
+    public static let storageKey = "codync.animateSearchResults"
+
+    public var label: String {
+        switch self {
+        case .blur: "Blur"
+        case .fade: "Fade"
+        case .none: "None"
+        }
+    }
+}
+
+/// What a search row animates with after the device setting and Reduce Motion meet.
+public enum SearchMotion: Sendable, Equatable { case fade, blur, none }
+
+/// Pure: Reduce Motion and "None" switch animation off.
+public func searchMotion(_ style: SearchMotionStyle, reduce: Bool) -> SearchMotion {
+    if reduce || style == .none { return .none }
+    return style == .blur ? .blur : .fade
+}
+
+/// Pure: the Searching spinner appears only after the host has had `delayMs` to answer.
+public func showSpinner(startedAt: Date?, now: Date = .now, delayMs: TimeInterval = 0.2) -> Bool {
+    guard let startedAt else { return false }
+    return now.timeIntervalSince(startedAt) >= delayMs
+}
+
+/// Pure: prior hits stay while an edited query loads; a cleared field's first word starts empty.
+public func hitsAfter(queryChanged: Bool, cleared: Bool) -> Bool { !(queryChanged && cleared) }
+
 /// Search one chat's messages with date, author and "has file" filters. Every result reuses the
 /// host's chat-history search and the same context rows the roster uses to jump to a message.
 struct ChatSearchView: View {
@@ -10,8 +44,11 @@ struct ChatSearchView: View {
     @Environment(BotStore.self) private var model
     @Environment(\.dismissModal) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(SearchMotionStyle.storageKey) private var motionStyle: SearchMotionStyle = .fade
     @State private var search: ChatSearchModel
     @State private var opening: Task<Void, Never>?
+
+    private var motion: SearchMotion { searchMotion(motionStyle, reduce: reduceMotion) }
 
     init(botId: String, openThread: @escaping (String) -> Void) {
         self.botId = botId
@@ -53,7 +90,7 @@ struct ChatSearchView: View {
                 Text(error).font(.caption).foregroundStyle(Palette.danger).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
             }
-            if search.loading { Text(L10n.tr("Searching…")).font(.caption).foregroundStyle(Palette.secondary) }
+            if search.spinnerVisible { Text(L10n.tr("Searching…")).font(.caption).foregroundStyle(Palette.secondary) }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     if !search.loading && search.error == nil && search.hits.isEmpty {
@@ -66,10 +103,21 @@ struct ChatSearchView: View {
                         Button { open(hit) } label: { SearchHitRow(hit: hit, query: search.query) }
                             .buttonStyle(.secondary)
                             .disabled(search.loading)
+                            .transition(resultTransition)
                     }
                 }
                 .padding(16)
+                .animation(Motion.reduced(Motion.layout, reduceMotion), value: search.hits.map(\.id))
             }
+        }
+    }
+
+    /// Rows fade in and out, or rise out of an iOS-only blur veil, on the configured style.
+    private var resultTransition: AnyTransition {
+        switch motion {
+        case .none: .identity
+        case .fade: .opacity
+        case .blur: .modifier(active: SearchBlurVeil(active: true), identity: SearchBlurVeil(active: false))
         }
     }
 
@@ -126,6 +174,15 @@ struct ChatSearchView: View {
             try? await Task.sleep(for: .milliseconds(250))
             openThread(threadId)
         }
+    }
+}
+
+/// The blur veil is the one iOS-only part of OpenBot 004's search motion (Android just fades).
+private struct SearchBlurVeil: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        content.opacity(active ? 0 : 1).blur(radius: active ? 6 : 0)
     }
 }
 

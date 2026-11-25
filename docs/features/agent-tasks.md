@@ -76,7 +76,7 @@ without starting it.
 | `taskMarkRead` | `taskId`, `throughMessageId?` | `{ task }` |
 | `taskReadPage` | `taskId`, `limit?`, `before?`, `after?` | `{ entries, hasMore }` |
 | `taskReadAround` | `taskId`, `messageId`, `limit?` | `{ entries }` |
-| `taskBranch` | `botId`, `taskId` (source), `name`, `before?` | `{ task, seeded }` |
+| `taskBranch` | `botId`, `taskId` (source), `name`, `before?`, `requestId?` | `{ task, seeded }` |
 | `taskDeleteMessage` | `taskId`, `messageId` | `{ deleted }` |
 | `taskSend` | `botId`, `taskId`, `text`, `clientNonce?`, `replyToMessageId?` | `{ entry }` |
 | `taskSplit` | `botId`, `tasks: [{ name, text }]`, `parentChat?`, `parentThread?` | `{ tasks, scheduled, maxConcurrent }` |
@@ -87,7 +87,15 @@ without starting it.
 `limit` is clamped to 1–100 (default 50). `before` and `after` are entry `seq` cursors: `before`
 pages older, `after` pages newer, neither gives the newest page. `taskReadAround` centres on a
 message id. `taskBranch` copies the newest 50 user/final messages before `before` into a new task;
-the copy is a snapshot with a `branchedFrom` marker, not a live link.
+the copy is a snapshot with a `branchedFrom` marker, not a live link. It only branches from the
+newest final answer of a task whose turn is idle or stopped, never while it is queued or running
+(OpenBot 010): the pure host decision is `branch_allowed` and the phone menus use the same rule.
+
+A client may send `requestId` with `taskBranch`. The host stores the resulting task id and seed
+count under `task-branch.v1:<requestId>`, so a repeated click returns the original answer instead
+of creating a second branch. Without an id the call always creates a task; ids are opaque to the
+host and never reach analytics. The pure decision is `branch_dedupe`. Desktop and Android generate
+one id per click and pass it on the request.
 
 `taskStart`, `taskStop`, `taskSend`, `taskBranch`, `taskDeleteMessage`, `taskDelete`, `taskSplit`,
 `taskFollowUp`, `taskCollectResults` and `taskAwaitEvent` are local-only because they drive this
@@ -131,9 +139,12 @@ and a 500 ms poll, and wakes the wait's own thread with a "continue the request"
 matching run reaches a terminal state. A stop wins over an event at the same instant; expiry and
 cancellation return a result instead of an error.
 
-The desktop Tasks surface (`views/tasks`) lists status, opens a task's messages and sends
-follow-up, stop, archive and reopen. It is reachable from an agent's context menu, beside the
-existing Tasks sheet for approvals and routine runs.
+The desktop Tasks surface (`views/tasks`) lists status, opens a task's messages, branches a task
+with a request id, and sends follow-up, stop, archive and reopen. It is reachable from an agent's
+context menu, beside the existing Tasks sheet for approvals and routine runs. The host auto-names
+a branch opened without a title from its source (pure decision `branch_title` in the thread store);
+an explicit title is left alone. Both phone thread lists nest branches of the same source message
+together under that message's row.
 
 ## Busy steps, steering and recovery
 

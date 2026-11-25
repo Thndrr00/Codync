@@ -52,6 +52,9 @@ internal data class ConversationSearchState(
     val shortcutBusy: Boolean = false,
     val showShortcuts: Boolean = true,
     val opening: String? = null,
+    /** The host call's start, not the keystroke: the debounce is not "Searching". */
+    val searchStartedAt: Long? = null,
+    val showSpinner: Boolean = false,
 )
 
 /** The host owns saved searches and filtering. This model owns request and screen lifetimes. */
@@ -64,6 +67,7 @@ internal class ConversationSearchModel(
     private val lifetime = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + lifetime)
     private var searchJob: Job? = null
+    private var spinnerJob: Job? = null
     private var shortcutsJob: Job? = null
     private var openingJob: Job? = null
     private var sequence = 0
@@ -82,8 +86,9 @@ internal class ConversationSearchModel(
 
     fun updateQuery(query: String) {
         if (!active() || query == state.query) return
+        val cleared = state.query.isBlank() && query.isNotBlank()
         state = state.copy(query = query, showShortcuts = query.isBlank())
-        search()
+        search(queryChanged = true, cleared = cleared)
     }
 
     fun updateScope(location: MessageSearchScope) {
@@ -117,8 +122,9 @@ internal class ConversationSearchModel(
             state = state.copy(shortcutError = "This saved search uses a scope this app does not support.")
             return
         }
+        val cleared = state.query.isBlank()
         state = state.copy(query = shortcut.query, location = location, shortcutError = null, showShortcuts = false)
-        search()
+        search(queryChanged = true, cleared = cleared)
     }
 
     /** A failed capability probe disables only saving and scoped search, never ordinary All search. */
@@ -179,15 +185,19 @@ internal class ConversationSearchModel(
     fun retry() { search(more = state.hits.isNotEmpty() && state.next != null) }
     fun more() { if (state.next != null && state.phase !in listOf(SearchPhase.Searching, SearchPhase.LoadingMore)) search(more = true) }
 
-    private fun search(more: Boolean = false) {
+    private fun search(more: Boolean = false, queryChanged: Boolean = false, cleared: Boolean = false) {
         searchJob?.cancel()
+        spinnerJob?.cancel()
         openingJob?.cancel()
         val request = ++sequence
         val query = state.query.trim()
         val location = state.location
         val before = if (more) state.next else null
-        val previous = if (more) state.hits else emptyList()
+        val previous = if (more) state.hits
+        else if (query.isEmpty() || !hitsAfter(queryChanged, cleared)) emptyList()
+        else state.hits
         state = state.copy(hits = previous, next = before, error = null, opening = null,
+            searchStartedAt = null, showSpinner = false,
             phase = if (query.isEmpty()) SearchPhase.Idle else if (more) SearchPhase.LoadingMore else SearchPhase.Searching)
         if (query.isEmpty() || !active()) return
         // Main/Threads are offered only after the host has answered the feature probe.
@@ -196,9 +206,18 @@ internal class ConversationSearchModel(
             return
         }
         searchJob = scope.launch {
+            var spinner: Job? = null
             try {
                 if (!more) delay(300)
                 if (!current(request)) return@launch
+                // The debounce isn't Searching: the spinner clock starts with the host call.
+                val startedAt = System.currentTimeMillis()
+                state = state.copy(searchStartedAt = startedAt)
+                spinner = scope.launch {
+                    delay(200)
+                    if (current(request)) state = state.copy(showSpinner = showSpinner(startedAt, System.currentTimeMillis()))
+                }
+                spinnerJob = spinner
                 val page = host.searchMessages(botId, query, before, location.wire)
                 // Date is in the hit the host already returned; author and "has file" need the
                 // message itself, read from the same host context the jump uses.
@@ -209,10 +228,14 @@ internal class ConversationSearchModel(
                     val hasFile = state.hasFile
                     matched = matched.filter { hit -> host.matchesFilters(botId, hit.id, author, hasFile) }
                 }
-                if (current(request)) state = state.copy(hits = previous + matched, next = page.next, phase = SearchPhase.Ready)
+                if (current(request)) state = state.copy(hits = previous + matched, next = page.next, phase = SearchPhase.Ready,
+                    showSpinner = false, searchStartedAt = null)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                if (current(request)) state = state.copy(phase = SearchPhase.Failed, error = error.message ?: "Search failed.")
+                if (current(request)) state = state.copy(phase = SearchPhase.Failed, error = error.message ?: "Search failed.",
+                    showSpinner = false, searchStartedAt = null)
+            } finally {
+                spinner?.cancel()
             }
         }
     }

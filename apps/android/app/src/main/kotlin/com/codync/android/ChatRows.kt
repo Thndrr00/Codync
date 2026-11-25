@@ -81,6 +81,12 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
+/** OpenBot 010: branch only from the newest final answer, and never while the bot is still working. */
+internal fun branchAllowed(entry: Entry, last: Entry?, status: String): Boolean =
+    entry.kind == "agent" && entry.isReplyable &&
+        entry.data["final"]?.jsonPrimitive?.booleanOrNull == true &&
+        last?.id == entry.id && status != "working"
+
 /** One row of a conversation, as iOS `ChatItem` builds them. */
 internal sealed interface ChatItem {
     val id: String
@@ -175,8 +181,12 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
     val forward: (() -> Unit)? = if (entry.text.isNotBlank() || entry.files.isNotEmpty() || entry.data["attachments"]?.jsonArray?.isNotEmpty() == true) {
         { forwardEntry = entry }
     } else null
-    // In the chat itself a reply can start a thread branched from it.
-    val branch: (() -> Unit)? = if (thread == null && entry.isReplyable) ({ store.startThread(entry.botId, fromEntryId = entry.id) }) else null
+    // In the chat itself a reply can start a thread branched from the last finished turn (OpenBot 010).
+    val last = state.entries.lastOrNull { it.botId == entry.botId && it.threadId == entry.threadId }
+    val status = state.bots.firstOrNull { it.id == entry.botId }?.status.orEmpty()
+    val branch: (() -> Unit)? = if (thread == null && branchAllowed(entry, last, status)) {
+        { store.startThread(entry.botId, fromEntryId = entry.id) }
+    } else null
     // Tapping a quote opens the quoted message in its context (OpenBot 0.70.0's message jump).
     var quoteContext by remember { mutableStateOf<MessageContextRequest?>(null) }
     val openQuote: (ReplyQuote) -> Unit = { quote -> quoteContext = MessageContextRequest(entry.botId, quote.id, entry.threadId) }

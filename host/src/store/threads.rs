@@ -14,6 +14,28 @@ use serde_json::{Value, json};
 /// Longest thread title a person can set.
 pub const MAX_TITLE: usize = 120;
 
+/// OpenBot 010: a branch opened without a title inherits its source thread's name and the words
+/// that started it, numbered when one source has several branches.
+pub fn branch_title(source_title: &str, user_text: &str, n: usize) -> String {
+    let clean = |value: &str| value.trim().replace('\n', " ");
+    let source = clean(source_title);
+    let words = clean(user_text);
+    let snippet: String = words.chars().take(40).collect();
+    let mut title = match (source.is_empty(), snippet.is_empty()) {
+        (false, false) => format!("{source} › {snippet}"),
+        (false, true) => source,
+        (true, false) => format!("Branch: {snippet}"),
+        (true, true) => "Branch".to_owned(),
+    };
+    if n > 0 {
+        title.push_str(&format!(" ({})", n + 1));
+    }
+    if title.chars().count() > MAX_TITLE {
+        title = title.chars().take(MAX_TITLE).collect();
+    }
+    title
+}
+
 pub(super) fn open(c: &Connection) -> Result<()> {
     c.execute_batch(
         "CREATE TABLE IF NOT EXISTS threads (
@@ -192,7 +214,32 @@ impl Store {
     /// it, as Slack does); opening it again answers the one it already has. A thread opened from the drawer has a
     /// root of its own.
     pub fn create_thread(&self, bot_id: &str, title: &str, from_entry: Option<&str>) -> Result<String> {
-        let title = title.trim();
+        let title = match (title.trim(), from_entry) {
+            ("", Some(source)) => {
+                let c = self.db.locked();
+                let source_title: String = c
+                    .query_row(
+                        "SELECT t.title FROM threads t JOIN entries e ON e.thread_id = t.id WHERE e.id = ?1",
+                        [source],
+                        |r| r.get(0),
+                    )
+                    .optional()?
+                    .unwrap_or_default();
+                let user_text: String = c
+                    .query_row(
+                        "SELECT COALESCE(json_extract(data, '$.text'), '') FROM entries WHERE id = ?1",
+                        [source],
+                        |r| r.get(0),
+                    )
+                    .optional()?
+                    .unwrap_or_default();
+                let branches: i64 =
+                    c.query_row("SELECT COUNT(*) FROM threads WHERE from_entry = ?1", [source], |r| r.get(0))?;
+                drop(c);
+                branch_title(&source_title, &user_text, branches as usize)
+            }
+            (given, _) => given.to_owned(),
+        };
         if title.chars().count() > MAX_TITLE {
             bail!("A thread title is at most {MAX_TITLE} characters");
         }
@@ -261,6 +308,30 @@ mod tests {
     use crate::store::model::{EntryKind, Lane};
     use crate::store::tests::temp_store;
     use serde_json::json;
+
+    #[test]
+    fn a_branch_title_uses_the_source_and_the_words_that_started_it() {
+        assert_eq!(branch_title("", "Why does it do that?", 0), "Branch: Why does it do that?");
+        assert_eq!(branch_title("Release plan", "Try the other way", 1), "Release plan › Try the other way (2)");
+        assert_eq!(branch_title("Release plan", "", 0), "Release plan");
+        assert_eq!(branch_title("", "", 0), "Branch");
+        assert!(branch_title("", &"x".repeat(200), 0).chars().count() <= MAX_TITLE);
+    }
+
+    #[test]
+    fn creating_a_thread_without_a_title_names_the_branch_after_its_source() {
+        let s = temp_store();
+        let root = s.insert_entry(&Lane::main("b"), EntryKind::User, 1, &json!({"text": "Plan the launch"})).unwrap();
+        let thread = s.create_thread("b", "", Some(&root.id)).unwrap();
+        assert_eq!(s.threads("b", false).unwrap()[0].title, "Branch: Plan the launch");
+        assert_eq!(thread, root.id);
+        // A second branch from the same message is numbered, and an explicit title is left alone.
+        let other = s.insert_entry(&Lane::main("b"), EntryKind::User, 2, &json!({"text": "other"})).unwrap();
+        s.create_thread("b", "", Some(&other.id)).unwrap();
+        assert!(s.threads("b", false).unwrap().iter().any(|t| t.title == "Branch: other"));
+        s.create_thread("b", "My name", Some(&other.id)).unwrap();
+        assert!(s.threads("b", false).unwrap().iter().any(|t| t.title == "My name"));
+    }
 
     #[test]
     fn a_branched_thread_lists_what_it_came_from() {

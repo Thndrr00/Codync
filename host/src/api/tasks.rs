@@ -88,7 +88,15 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "taskBranch" => {
             let source = b["taskId"].as_str().or_else(|| b["sourceTaskId"].as_str());
             let source = source.context("`taskId` is required")?;
-            tasks::task_branch(hub, str_arg(&b, "botId")?, source, str_arg(&b, "name")?, seq(&b, "before")?)?
+            let request_id = b["requestId"].as_str();
+            tasks::task_branch(
+                hub,
+                str_arg(&b, "botId")?,
+                source,
+                str_arg(&b, "name")?,
+                seq(&b, "before")?,
+                request_id,
+            )?
         }
         "taskDeleteMessage" => tasks::task_delete_message(hub, str_arg(&b, "taskId")?, str_arg(&b, "messageId")?)?,
         "taskSend" => {

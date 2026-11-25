@@ -40,6 +40,27 @@ fn accepts_messages(state: TaskState) -> bool {
     state == TaskState::Open
 }
 
+/// OpenBot 010: a branch starts at the newest final answer of a task whose turn has finished.
+/// Pure so both the host gate and the clients' menu can apply the same rule.
+fn branch_allowed(entry: &Entry, last: Option<&Entry>, status: TaskRun) -> bool {
+    message_kind(&entry.kind, &entry.data) == Some(EntryKind::Agent)
+        && last.is_none_or(|newest| newest.id == entry.id)
+        && !matches!(status, TaskRun::Running | TaskRun::Queued)
+}
+
+/// OpenBot 010: a client request id makes a repeated branch click answer with the first branch.
+/// Without an id there is nothing to dedupe; with one, a stored task id is a replay.
+fn branch_dedupe<'a>(seen: Option<&'a str>, id: Option<&str>) -> Option<&'a str> {
+    match (id, seen) {
+        (Some(_), Some(task_id)) => Some(task_id),
+        _ => None,
+    }
+}
+
+fn branch_dedupe_key(id: &str) -> String {
+    format!("task-branch.v1:{id}")
+}
+
 /// Which entry kinds a branch copies: the user's words and the agent's final answers, never the
 /// thinking, tool trace, notices or drafts that led to them.
 fn message_kind(kind: &str, data: &Value) -> Option<EntryKind> {
@@ -446,20 +467,41 @@ pub(crate) fn task_read_around(hub: &Hub, id: &str, message_id: &str, limit: Opt
     Ok(json!({"entries": rows}))
 }
 
+/// The durable receipt a client request id points at, so a replay returns the original answer.
+#[derive(serde::Deserialize)]
+struct BranchReceipt {
+    #[serde(rename = "taskId")]
+    task_id: String,
+    seeded: usize,
+}
+
 pub(crate) fn task_branch(
     hub: &Arc<Hub>,
     bot: &str,
     source_id: &str,
     name: &str,
     before: Option<i64>,
+    request_id: Option<&str>,
 ) -> Result<Value> {
     let source = require(hub, source_id)?;
     ensure!(source.bot_id == bot, "the task belongs to another bot");
     let row = hub.store.bot(bot)?.filter(|r| !r.deleted).context("unknown bot")?;
     ensure!(!row.config.is_group(), "tasks belong to an agent bot");
     let name = validate_name(name)?;
+    // A replay is checked before the cap and the seed: the branch already exists, so neither applies.
+    let seen = request_id
+        .and_then(|id| hub.store.kv_read(&branch_dedupe_key(id)).ok().flatten())
+        .and_then(|raw| serde_json::from_str::<BranchReceipt>(&raw).ok());
+    let seeded = seen.as_ref().map_or(0, |receipt| receipt.seeded);
+    if let Some(task_id) = branch_dedupe(seen.as_ref().map(|r| r.task_id.as_str()), request_id) {
+        let task = require(hub, task_id)?;
+        return Ok(json!({"task": task, "seeded": seeded}));
+    }
     ensure!(hub.store.task_count(bot)? < MAX_PER_BOT, "this bot already has {MAX_PER_BOT} tasks; delete one first");
+    let newest = hub.store.task_messages(&source.root, 1, None, None)?;
     let prior = hub.store.task_messages(&source.root, MAX_SEED as i64, None, before)?;
+    let Some(anchor) = prior.first() else { bail!("there is no message to branch from") };
+    ensure!(branch_allowed(anchor, newest.first(), source.run), "branch from the last message of a finished turn only");
     let seed = seed_entries(&prior, before);
 
     let created = task_create(hub, bot, &name)?;
@@ -479,6 +521,10 @@ pub(crate) fn task_branch(
         copied += 1;
     }
     emit_notice(hub, json!({"type": "task", "rev": new_task.rev, "taskId": new_task.id.clone(), "seeded": copied}))?;
+    if let Some(id) = request_id {
+        let receipt = json!({"taskId": new_id, "seeded": copied}).to_string();
+        hub.store.kv_set(&branch_dedupe_key(id), &receipt)?;
+    }
     Ok(json!({"task": new_task, "seeded": copied}))
 }
 
@@ -560,6 +606,39 @@ mod tests {
         assert!(accepts_messages(TaskState::Open));
         assert!(!accepts_messages(TaskState::Closed));
         assert!(!accepts_messages(TaskState::Archived));
+    }
+
+    #[test]
+    fn a_branch_is_offered_only_on_the_last_final_message_of_an_idle_task() {
+        let final_answer = entry(4, "agent", true);
+        assert!(branch_allowed(&final_answer, Some(&final_answer), TaskRun::Idle));
+        assert!(branch_allowed(&final_answer, Some(&final_answer), TaskRun::Stopped));
+        assert!(
+            !branch_allowed(&final_answer, Some(&final_answer), TaskRun::Running),
+            "a running turn cannot be branched"
+        );
+        assert!(
+            !branch_allowed(&final_answer, Some(&final_answer), TaskRun::Queued),
+            "a queued turn cannot be branched"
+        );
+        let thinking = entry(3, "agent", false);
+        assert!(!branch_allowed(&thinking, Some(&thinking), TaskRun::Idle));
+        let user = entry(2, "user", false);
+        assert!(!branch_allowed(&user, Some(&user), TaskRun::Idle));
+        let newer = entry(5, "agent", true);
+        assert!(
+            !branch_allowed(&final_answer, Some(&newer), TaskRun::Idle),
+            "only the newest message may be a branch point"
+        );
+    }
+
+    #[test]
+    fn a_branch_request_id_replays_the_first_branch() {
+        assert_eq!(branch_dedupe(None, None), None, "no id is never a replay");
+        assert_eq!(branch_dedupe(Some("task:first"), None), None, "a stored id alone is not a replay");
+        assert_eq!(branch_dedupe(None, Some("click-1")), None, "a fresh id creates a branch");
+        assert_eq!(branch_dedupe(Some("task:first"), Some("click-1")), Some("task:first"));
+        assert_eq!(branch_dedupe_key("click-1"), "task-branch.v1:click-1");
     }
 
     #[test]

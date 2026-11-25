@@ -47,6 +47,18 @@ scope filters show as unavailable with retry, rather than claim to filter an uns
 A scoped Windows search also checks each computer's support, so an old computer cannot silently
 return unfiltered results labelled as a narrower scope.
 
+Both phones animate search results with a device-only **Animate search results** preference:
+Blur, Fade (the default) or None (OpenBot 004). The pure `search_motion` decision turns that
+choice plus the OS Reduce Motion setting into the animation a row gets: Reduce Motion and None
+switch it off, Fade fades and moves rows, and Blur adds an iOS-only blur veil (Android only fades).
+The preference is stored on the device, never in the host.
+
+The **Searching…** spinner appears only after the host has had 200 ms to answer; the pure
+`show_spinner` decision is measured from the host call, not the keystroke or the local debounce,
+so a fast answer never flashes it. While a new query loads, the previous hits stay on screen
+(pure `hits_after`); only the first word typed into a cleared field starts from an empty list.
+Both phones apply the same three decisions through their shared search models.
+
 ## Quick navigation actions
 
 Windows Search has an **Actions** mode with searchable entries for Search history, New bot,
