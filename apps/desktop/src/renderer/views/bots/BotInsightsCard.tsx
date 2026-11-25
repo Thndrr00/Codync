@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,16 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Directory')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(directory.tone)}>{directory.headline}</Text>
+        <Text size="footnote" tone="accent">{directory.bar}</Text>
+        <ValueRow label={tr('Directory')}>{directory.directory}</ValueRow>
+        <ValueRow label={tr('Integrations')}>{String(directory.integrations.length)}</ValueRow>
+        {directory.integrations.map((item) => (
+          <Text key={item.id} size="footnote" tone="secondary">{`${item.name} · ${item.header}`}</Text>
+        ))}
+      </CardSection>
+
       <CardSection title={tr('Prompt style')}>
         <Text size="subheadline" weight="semibold">{prompts.model}</Text>
         <Text size="footnote" tone="secondary">{prompts.price}</Text>

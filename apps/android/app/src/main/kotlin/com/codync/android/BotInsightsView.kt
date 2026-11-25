@@ -42,6 +42,15 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val directory = insights.directory
+            CardSection("Directory") {
+                row { Text(directory.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(directory.bar, style = Type.caption, color = Palette.accent) }
+                row { ValueRow("Integrations", directory.integrations.size.toString()) }
+                for (item in directory.integrations) row {
+                    Text("${item.name} · ${item.header}", style = Type.caption, color = Palette.secondary)
+                }
+            }
             val prompts = insights.prompts
             CardSection("Prompt style") {
                 row { Text(prompts.model, style = Type.subheadline.semibold, color = Palette.text) }

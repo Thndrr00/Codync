@@ -33,9 +33,26 @@ data class BotInsights(
     val agent: InsightAgentProfile = InsightAgentProfile(),
     val fresh: InsightFresh = InsightFresh(),
     val prompts: InsightPrompts = InsightPrompts(),
+    val directory: InsightDirectory = InsightDirectory(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed directory summary for one bot. */
+@Serializable
+data class InsightDirectory(
+    val headline: String = "", val tone: String = "", val total: String = "",
+    val ready: Int = 0, val unread: Int = 0, val busy: Int = 0,
+    val percent: Int = 0, val bar: String = "", val directory: String = "",
+    val email: String = "", val routable: Boolean = false,
+    val routeIcon: String = "", val routeTone: String = "", val reason: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val integrations: List<InsightDirectoryIntegration> = emptyList(),
+)
+
+@Serializable data class InsightDirectoryIntegration(
+    val id: String = "", val name: String = "", val endpoint: Boolean = false, val header: String = "",
 )
 
 /** A host-computed prompt style summary for one bot. */

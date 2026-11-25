@@ -30,6 +30,12 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let directory = insights.directory
+                    Text(directory.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(directory.bar).font(.footnote).foregroundStyle(Palette.accent)
+                    ForEach(directory.integrations, id: \.id) { item in
+                        Text("\(item.name) · \(item.header)").font(.footnote).foregroundStyle(Palette.secondary)
+                    }
                     let prompts = insights.prompts
                     Text(prompts.model).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(prompts.price).font(.footnote).foregroundStyle(Palette.secondary)

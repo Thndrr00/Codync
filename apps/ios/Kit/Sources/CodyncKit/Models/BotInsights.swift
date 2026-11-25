@@ -30,9 +30,37 @@ public struct BotInsights: Decodable, Sendable {
     public let agent: InsightAgentProfile
     public let fresh: InsightFresh
     public let prompts: InsightPrompts
+    public let directory: InsightDirectory
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed directory summary for one bot.
+public struct InsightDirectory: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let total: String
+    public let ready: Int
+    public let unread: Int
+    public let busy: Int
+    public let percent: Int
+    public let bar: String
+    public let directory: String
+    public let email: String
+    public let routable: Bool
+    public let routeIcon: String
+    public let routeTone: String
+    public let reason: String
+    public let summary: [InsightSummaryRow]
+    public let integrations: [InsightDirectoryIntegration]
+}
+
+public struct InsightDirectoryIntegration: Decodable, Sendable {
+    public let id: String
+    public let name: String
+    public let endpoint: Bool
+    public let header: String
 }
 
 /// A host-computed prompt style summary for one bot.

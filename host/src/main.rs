@@ -19,6 +19,7 @@ mod bdots_conversation;
 mod bdots_cron;
 mod bdots_desk;
 mod bdots_digest;
+mod bdots_directory;
 mod bdots_extra;
 mod bdots_failures;
 mod bdots_fallbacks;

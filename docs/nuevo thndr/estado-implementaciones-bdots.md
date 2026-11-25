@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Directorio (23 helpers + UI en 4 clientes)
+
+`bdots_directory.rs` añade 23 helpers puros portados de `bot-cache.ts`, `email-directory.ts` e
+`integrations.ts` del bdots actualizado: estados de caché de bots, conteos listos/sin leer/ocupados,
+normalización de directorio, validación y partes de email, nombres y headers de integraciones,
+razones de búsqueda, titulares y líneas. Reutiliza `bdots_more`, `bdots_text`, `bdots_desk`,
+`bdots_extra` y `bdots_activity`. El endpoint `botInsights` añade el campo `directory`; la sección
+«Directory» se muestra en los cuatro clientes.
+
 ## Estilo de prompt (23 helpers + UI en 4 clientes)
 
 `bdots_prompts.rs` añade 23 helpers puros portados de `models.ts` y `prompt.ts` del bdots

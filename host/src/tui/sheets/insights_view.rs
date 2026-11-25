@@ -66,6 +66,27 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let directory = &data["directory"];
+    if directory.is_object() {
+        line(buf, &mut y, tr("Directory").into_owned(), t.bold.patch(t.panel));
+        let headline = directory["headline"].as_str().unwrap_or("");
+        let bar = directory["bar"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{bar} {headline}"), t.text.patch(t.panel));
+        let items: Vec<String> = directory["integrations"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(8)
+                    .map(|i| format!("  {} · {}", i["name"].as_str().unwrap_or(""), i["header"].as_str().unwrap_or("")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let prompts = &data["prompts"];
     if prompts.is_object() {
         line(buf, &mut y, tr("Prompt style").into_owned(), t.bold.patch(t.panel));

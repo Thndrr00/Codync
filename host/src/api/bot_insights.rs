@@ -1051,6 +1051,37 @@ fn prompts_view(row: &crate::store::BotRow, routines: usize) -> Value {
     })
 }
 
+/// Directory: the local bot summaries and email/integration helpers from latest bdots.
+fn directory_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_directory as d;
+
+    let summaries: Vec<Value> = Vec::new(); // the host knows this bot; roster-wide summaries stay in the client
+    let email = d::email_label(&row.config.description);
+    json!({
+        "headline": d::directory_headline(&summaries),
+        "tone": d::directory_tone(&summaries),
+        "total": d::count_label(d::total(&summaries)),
+        "ready": d::ready_count(&summaries),
+        "unread": d::unread_count(&summaries),
+        "busy": d::busy_count(&summaries),
+        "percent": d::ready_percent(&summaries),
+        "bar": d::ready_bar(&summaries, 12),
+        "directory": d::directory_name(&row.id),
+        "email": email,
+        "routable": d::is_routable(&email),
+        "routeIcon": d::route_icon(d::is_routable(&email)),
+        "routeTone": d::route_tone(d::is_routable(&email)),
+        "reason": d::directory_reason(true, d::is_routable(&email)),
+        "summary": d::build_lines(&summaries).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "integrations": row.config.connectors.iter().map(|c| json!({
+            "id": c,
+            "name": d::integration_name(c),
+            "endpoint": d::is_endpoint(c),
+            "header": d::integration_header(c),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1135,6 +1166,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "agent": agent_view(&row),
         "fresh": fresh_view(&row, routines.len()),
         "prompts": prompts_view(&row, routines.len()),
+        "directory": directory_view(&row),
         "description": description,
         "model": model,
         "provider": provider,
