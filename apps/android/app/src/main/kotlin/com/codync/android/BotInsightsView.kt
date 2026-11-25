@@ -42,6 +42,14 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val zones = insights.timezone
+            CardSection("Time zones") {
+                row { Text(zones.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text("This computer: ${zones.local}", style = Type.caption, color = Palette.secondary) }
+                for (zone in zones.all) row {
+                    Text("${zone.label}  ${zone.bar}  ${zone.count}", style = Type.caption, color = Palette.tertiary)
+                }
+            }
             val digest = insights.digest
             CardSection("At a glance") {
                 row { Text(digest.label, style = Type.subheadline.semibold, color = Palette.text) }

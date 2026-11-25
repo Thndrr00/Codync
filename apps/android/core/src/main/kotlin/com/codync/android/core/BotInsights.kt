@@ -26,10 +26,34 @@ data class BotInsights(
     val session: InsightSession = InsightSession(),
     val advice: InsightAdvice = InsightAdvice(),
     val digest: InsightDigest = InsightDigest(),
+    val timezone: InsightTimezone = InsightTimezone(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
 )
+
+/** A host-computed summary of the time zones a bot's routines use. */
+@Serializable
+data class InsightTimezone(
+    val headline: String = "",
+    val tone: String = "",
+    val local: String = "",
+    val primary: String = "",
+    val zones: Int = 0,
+    val schedules: String = "",
+    val multi: Boolean = false,
+    val remote: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val all: List<InsightZoneLine> = emptyList(),
+    val remoteList: List<InsightRemoteZone> = emptyList(),
+)
+
+@Serializable data class InsightZoneLine(
+    val name: String = "", val label: String = "", val icon: String = "",
+    val tone: String = "", val count: Int = 0, val local: Boolean = false,
+    val percent: Int = 0, val bar: String = "",
+)
+@Serializable data class InsightRemoteZone(val label: String = "", val count: Int = 0)
 
 /** A host-computed executive digest for one bot. */
 @Serializable

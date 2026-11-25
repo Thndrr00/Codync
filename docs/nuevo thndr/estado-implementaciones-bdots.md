@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Zonas horarias (23 helpers + UI en 4 clientes)
+
+`bdots_timezone.rs` añade 23 helpers puros sobre las zonas horarias de las rutinas: etiquetas,
+iconos, tonos, detección de zona local vs remota, conteos, porcentajes, barras, ordenación,
+titulares y resúmenes. Reutiliza `bdots_cron`, `bdots_text`, `bdots_activity` y `bdots_desk`. El
+endpoint `botInsights` añade el campo `timezone`, derivado de los `schedules` que el host ya
+calcula; la sección «Time zones» se muestra en los cuatro clientes.
+
 ## Resumen ejecutivo (23 helpers + UI en 4 clientes)
 
 `bdots_digest.rs` añade 23 helpers puros que condensan el estado del bot en siete cifras (salud,

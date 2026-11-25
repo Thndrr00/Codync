@@ -30,6 +30,16 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let zones = insights.timezone
+                    Text(zones.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("This computer")): \(zones.local)").font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(zones.all, id: \.name) { zone in
+                        HStack(spacing: 6) {
+                            Text(zone.label).font(.footnote).foregroundStyle(Palette.secondary)
+                            Text(zone.bar).font(.footnote).foregroundStyle(Palette.accent)
+                            Text("\(zone.count)").font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
                     let digest = insights.digest
                     Text(digest.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(digest.headline).font(.footnote).foregroundStyle(Palette.secondary)

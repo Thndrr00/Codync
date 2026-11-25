@@ -66,6 +66,33 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let zones = &data["timezone"];
+    if zones.is_object() {
+        line(buf, &mut y, tr("Time zones").into_owned(), t.bold.patch(t.panel));
+        let headline = zones["headline"].as_str().unwrap_or("");
+        let local = zones["local"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {}", tr("This computer"), local), t.text.patch(t.panel));
+        let all: Vec<String> = zones["all"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|z| {
+                        format!(
+                            "  {} {} {}",
+                            z["label"].as_str().unwrap_or(""),
+                            z["bar"].as_str().unwrap_or(""),
+                            z["count"].as_u64().unwrap_or(0)
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for zone in all {
+            line(buf, &mut y, zone, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let digest = &data["digest"];
     if digest.is_object() {
         line(buf, &mut y, tr("At a glance").into_owned(), t.bold.patch(t.panel));

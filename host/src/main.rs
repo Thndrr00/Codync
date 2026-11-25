@@ -30,6 +30,7 @@ mod bdots_routines;
 mod bdots_session;
 mod bdots_spend;
 mod bdots_text;
+mod bdots_timezone;
 mod bdots_trust;
 mod bdots_tuning;
 mod bdots_week;

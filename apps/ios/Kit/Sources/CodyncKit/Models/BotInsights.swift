@@ -23,9 +23,41 @@ public struct BotInsights: Decodable, Sendable {
     public let session: InsightSession
     public let advice: InsightAdvice
     public let digest: InsightDigest
+    public let timezone: InsightTimezone
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of the time zones a bot's routines use.
+public struct InsightTimezone: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let local: String
+    public let primary: String
+    public let zones: Int
+    public let schedules: String
+    public let multi: Bool
+    public let remote: Bool
+    public let summary: [InsightSummaryRow]
+    public let all: [InsightZoneLine]
+    public let remoteList: [InsightRemoteZone]
+}
+
+public struct InsightZoneLine: Decodable, Sendable {
+    public let name: String
+    public let label: String
+    public let icon: String
+    public let tone: String
+    public let count: Int
+    public let local: Bool
+    public let percent: Int
+    public let bar: String
+}
+
+public struct InsightRemoteZone: Decodable, Sendable {
+    public let label: String
+    public let count: Int
 }
 
 /// A host-computed executive digest for one bot.

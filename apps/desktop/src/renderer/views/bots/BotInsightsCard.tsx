@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,18 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Time zones')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(timezone.tone)}>{timezone.headline}</Text>
+        <ValueRow label={tr('This computer')}>{timezone.local}</ValueRow>
+        {timezone.all.map((zone) => (
+          <HStack key={zone.name} gap={6}>
+            <Text size="footnote" tone={toneOf(zone.tone)}>{zone.label}</Text>
+            <Text size="footnote" tone="accent">{zone.bar}</Text>
+            <Text size="footnote" tone="secondary">{String(zone.count)}</Text>
+          </HStack>
+        ))}
+      </CardSection>
+
       <CardSection title={tr('At a glance')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(digest.tone)}>{digest.label}</Text>
         <Text size="footnote" tone="secondary">{digest.headline}</Text>

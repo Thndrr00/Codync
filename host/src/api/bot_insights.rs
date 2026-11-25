@@ -801,6 +801,46 @@ fn digest_view(
     })
 }
 
+/// Time zones: the zones the bot's cron routines run in, relative to this computer.
+fn timezone_view(routines: &[Value]) -> Value {
+    use crate::bdots_timezone as z;
+
+    let local_zone = crate::store::local_time_zone().to_owned();
+    let zones: Vec<String> = routines
+        .iter()
+        .flat_map(|r| {
+            r["schedules"]
+                .as_array()
+                .map_or(Vec::new(), |a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect::<Vec<_>>())
+        })
+        .filter(|s| s.contains(" · "))
+        .map(|s| s.split(" · ").nth(1).unwrap_or("").trim().to_owned())
+        .collect();
+
+    json!({
+        "headline": z::zone_headline(&zones, &local_zone),
+        "tone": z::zone_tone_headline(&zones),
+        "local": z::local_label(&zones, &local_zone),
+        "primary": z::zone_label(&z::primary_zone(&zones)),
+        "zones": z::distinct_count(&zones),
+        "schedules": z::count_label(&zones),
+        "multi": z::is_multi_zone(&zones),
+        "remote": z::has_remote(&zones, &local_zone),
+        "summary": z::summary(&zones, &local_zone).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "all": z::sorted_lines(&zones, &local_zone).iter().map(|l| json!({
+            "name": l.name,
+            "label": l.label,
+            "icon": l.icon,
+            "tone": l.tone,
+            "count": l.count,
+            "local": l.local,
+            "percent": z::zone_percent(&zones, &l.name),
+            "bar": z::zone_bar(&zones, &l.name, 8),
+        })).collect::<Vec<_>>(),
+        "remoteList": z::remote_zones(&zones, &local_zone).iter().map(|l| json!({"label": l.label, "count": l.count})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -878,6 +918,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
     Ok(json!({
         "botId": bot,
         "digest": digest,
+        "timezone": timezone_view(&routines),
         "description": description,
         "model": model,
         "provider": provider,
