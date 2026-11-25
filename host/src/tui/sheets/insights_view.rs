@@ -66,6 +66,29 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let blocks = &data["blocks"];
+    if blocks.is_object() {
+        line(buf, &mut y, tr("Last message").into_owned(), t.bold.patch(t.panel));
+        let headline = blocks["headline"].as_str().unwrap_or("");
+        let origin = blocks["origin"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {origin}"), t.text.patch(t.panel));
+        let items: Vec<String> = blocks["blocks"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(8)
+                    .map(|b| {
+                        format!("  {} {}", if b["says"] == true { "●" } else { "○" }, b["text"].as_str().unwrap_or(""))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let directory = &data["directory"];
     if directory.is_object() {
         line(buf, &mut y, tr("Directory").into_owned(), t.bold.patch(t.panel));

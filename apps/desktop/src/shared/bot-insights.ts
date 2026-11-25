@@ -1,6 +1,19 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightBlocks {
+  headline: string
+  count: string
+  said: number
+  work: number
+  workOnly: boolean
+  quiet: boolean
+  origin: string
+  originIcon: string
+  summary: { key: string; value: string }[]
+  blocks: { kind: string; text: string; icon: string; tone: string; says: boolean }[]
+}
+
 export interface InsightDirectory {
   headline: string
   tone: string
@@ -415,6 +428,7 @@ export interface BotInsights {
   fresh: InsightFresh
   prompts: InsightPrompts
   directory: InsightDirectory
+  blocks: InsightBlocks
   routines: InsightRoutine[]
   usage: {
     used: number

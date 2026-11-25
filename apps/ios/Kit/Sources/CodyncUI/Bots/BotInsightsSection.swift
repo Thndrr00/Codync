@@ -30,6 +30,12 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let blocks = insights.blocks
+                    Text(blocks.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(blocks.origin).font(.footnote).foregroundStyle(Palette.tertiary)
+                    ForEach(blocks.blocks, id: \.kind) { item in
+                        Text("\(item.says ? "●" : "○") \(item.text)").font(.footnote).foregroundStyle(Palette.secondary)
+                    }
                     let directory = insights.directory
                     Text(directory.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(directory.bar).font(.footnote).foregroundStyle(Palette.accent)

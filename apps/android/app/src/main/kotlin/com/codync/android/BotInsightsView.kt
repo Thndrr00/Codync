@@ -42,6 +42,14 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val blocks = insights.blocks
+            CardSection("Last message") {
+                row { Text(blocks.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(blocks.origin, style = Type.caption, color = Palette.tertiary) }
+                for (item in blocks.blocks) row {
+                    Text("${if (item.says) "●" else "○"} ${item.text}", style = Type.caption, color = Palette.secondary)
+                }
+            }
             val directory = insights.directory
             CardSection("Directory") {
                 row { Text(directory.headline, style = Type.subheadline.semibold, color = Palette.text) }

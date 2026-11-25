@@ -1082,6 +1082,35 @@ fn directory_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Transcript blocks: the last message's parts, shaped into display blocks.
+fn blocks_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_blocks as b;
+
+    let entry = hub.store.history(bot, i64::MAX, 1).ok().and_then(|v| v.into_iter().next());
+    let value = entry.as_ref().map_or_else(|| serde_json::json!({"parts":[]}), |e| e.data.clone());
+    let blocks = b::message_blocks(&value);
+    let origin = b::origin_of(&value);
+
+    json!({
+        "headline": b::transcript_line(&blocks),
+        "count": b::count_label(&blocks),
+        "said": b::said_count(&blocks),
+        "work": b::work_count(&blocks),
+        "workOnly": b::work_only(&blocks),
+        "quiet": b::is_quiet_message(&value),
+        "origin": b::origin_label(&origin),
+        "originIcon": b::origin_icon(&origin),
+        "summary": b::summary(&blocks, &origin).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "blocks": blocks.iter().map(|x| json!({
+            "kind": x.kind,
+            "text": x.text,
+            "icon": x.icon,
+            "tone": x.tone,
+            "says": x.says,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1167,6 +1196,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "fresh": fresh_view(&row, routines.len()),
         "prompts": prompts_view(&row, routines.len()),
         "directory": directory_view(&row),
+        "blocks": blocks_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

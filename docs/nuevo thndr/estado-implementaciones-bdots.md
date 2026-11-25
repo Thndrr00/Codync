@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Bloques de mensaje (23 helpers + UI en 4 clientes)
+
+`bdots_blocks.rs` añade 23 helpers puros portados de `message-parts.ts` y `guards.ts`: bloques de
+texto/show/steps/event/approval, iconos, tonos, detección de lo que el bot dijo, origen del
+mensaje, respuestas silenciosas, conteos y titular de transcript. Reutiliza `bdots_text`,
+`bdots_more`, `bdots_activity`, `bdots_desk`. El endpoint `botInsights` añade el campo `blocks`
+desde la última entrada del historial; la sección «Last message» se muestra en los cuatro clientes.
+
 ## Directorio (23 helpers + UI en 4 clientes)
 
 `bdots_directory.rs` añade 23 helpers puros portados de `bot-cache.ts`, `email-directory.ts` e

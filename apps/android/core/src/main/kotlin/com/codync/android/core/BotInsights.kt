@@ -34,9 +34,25 @@ data class BotInsights(
     val fresh: InsightFresh = InsightFresh(),
     val prompts: InsightPrompts = InsightPrompts(),
     val directory: InsightDirectory = InsightDirectory(),
+    val blocks: InsightBlocks = InsightBlocks(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed transcript view of the last message. */
+@Serializable
+data class InsightBlocks(
+    val headline: String = "", val count: String = "", val said: Int = 0,
+    val work: Int = 0, val workOnly: Boolean = false, val quiet: Boolean = false,
+    val origin: String = "", val originIcon: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val blocks: List<InsightMessageBlock> = emptyList(),
+)
+
+@Serializable data class InsightMessageBlock(
+    val kind: String = "", val text: String = "", val icon: String = "",
+    val tone: String = "", val says: Boolean = false,
 )
 
 /** A host-computed directory summary for one bot. */

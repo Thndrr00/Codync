@@ -31,9 +31,32 @@ public struct BotInsights: Decodable, Sendable {
     public let fresh: InsightFresh
     public let prompts: InsightPrompts
     public let directory: InsightDirectory
+    public let blocks: InsightBlocks
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed transcript view of the last message.
+public struct InsightBlocks: Decodable, Sendable {
+    public let headline: String
+    public let count: String
+    public let said: Int
+    public let work: Int
+    public let workOnly: Bool
+    public let quiet: Bool
+    public let origin: String
+    public let originIcon: String
+    public let summary: [InsightSummaryRow]
+    public let blocks: [InsightMessageBlock]
+}
+
+public struct InsightMessageBlock: Decodable, Sendable {
+    public let kind: String
+    public let text: String
+    public let icon: String
+    public let tone: String
+    public let says: Bool
 }
 
 /// A host-computed directory summary for one bot.
