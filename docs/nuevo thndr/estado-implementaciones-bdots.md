@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Memoria (23 helpers + UI en 4 clientes)
+
+`bdots_memory.rs` añade 23 helpers puros sobre la memoria del bot: switches de notas
+compartidas y memoria de ejecución, detección de skills de memoria, puntuación, etiquetas,
+titular, líneas de display y estados. Reutiliza `bdots_library`, `bdots_profile` y `bdots_text`.
+El endpoint `botInsights` añade el campo `memory` desde `config.shared_memory`,
+`config.harness_memory` y `config.skills`; la sección «Memory» se muestra en los cuatro clientes.
+
 ## Ajustes del modelo (21 helpers + UI en 4 clientes)
 
 `bdots_tuning.rs` añade 21 helpers puros para las opciones de configuración ACP del modelo

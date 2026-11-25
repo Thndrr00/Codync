@@ -21,9 +21,37 @@ data class BotInsights(
     val identity: InsightIdentity = InsightIdentity(),
     val connectors: InsightConnectors = InsightConnectors(),
     val tuning: InsightTuning = InsightTuning(),
+    val memory: InsightMemory = InsightMemory(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed memory posture for one bot. */
+@Serializable
+data class InsightMemory(
+    val headline: String = "",
+    val label: String = "",
+    val tone: String = "",
+    val score: Int = 0,
+    val shared: String = "",
+    val sharedIcon: String = "",
+    val sharedTone: String = "",
+    val sharedDetail: String = "",
+    val harness: Boolean = false,
+    val harnessIcon: String = "",
+    val harnessTone: String = "",
+    val skills: Int = 0,
+    val on: Int = 0,
+    val hasAny: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val lines: List<InsightMemoryLine> = emptyList(),
+)
+
+@Serializable data class InsightMemoryLine(
+    val id: String = "", val title: String = "", val detail: String = "",
+    val icon: String = "", val tone: String = "", val on: Boolean = false,
+    val stateIcon: String = "", val stateTone: String = "",
 )
 
 /** A host-computed summary of one bot's model tuning. */

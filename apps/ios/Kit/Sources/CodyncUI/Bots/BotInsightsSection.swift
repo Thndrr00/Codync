@@ -30,6 +30,15 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let memory = insights.memory
+                    Text(memory.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(memory.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Shared notes")): \(memory.shared)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text(memory.sharedDetail).font(.footnote).foregroundStyle(Palette.tertiary)
+                    ForEach(memory.lines, id: \.id) { item in
+                        Text("\(item.on ? "●" : "○") \(item.title): \(item.detail)")
+                            .font(.footnote).foregroundStyle(item.on ? Palette.text : Palette.secondary)
+                    }
                     let tuning = insights.tuning
                     Text(tuning.effort).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(tuning.headline).font(.footnote).foregroundStyle(Palette.secondary)

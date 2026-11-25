@@ -586,6 +586,46 @@ fn tuning_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Memory posture: the shared/harness switches and any memory skills.
+fn memory_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_memory as m;
+
+    let c = &row.config;
+    let shared = c.shared_memory;
+    let harness = c.harness_memory;
+    let skills = &c.skills;
+    let lines = m::build_lines(shared, harness, skills);
+    let score = m::memory_score(shared, harness, skills);
+
+    json!({
+        "headline": m::memory_headline(shared, harness, skills),
+        "label": m::memory_label(score),
+        "tone": m::memory_tone(score),
+        "score": score,
+        "shared": m::shared_label(shared),
+        "sharedIcon": m::shared_icon(shared),
+        "sharedTone": m::shared_tone(shared),
+        "sharedDetail": m::shared_detail(shared),
+        "harness": harness,
+        "harnessIcon": m::harness_icon(harness),
+        "harnessTone": m::harness_tone(harness),
+        "skills": m::memory_skill_count(skills),
+        "on": m::on_count(shared, harness, skills),
+        "hasAny": m::has_any(shared, harness, skills),
+        "summary": m::summary(shared, harness, skills).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "lines": lines.iter().map(|l| json!({
+            "id": l.id,
+            "title": l.title,
+            "detail": l.detail,
+            "icon": l.icon,
+            "tone": l.tone,
+            "on": l.on,
+            "stateIcon": m::state_icon(l.on),
+            "stateTone": m::state_tone(l.on),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -649,6 +689,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "identity": identity_view(&row),
         "connectors": connectors_view(&row),
         "tuning": tuning_view(&row),
+        "memory": memory_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

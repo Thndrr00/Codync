@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,19 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Memory')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(memory.tone)}>{memory.label}</Text>
+        <Text size="footnote" tone="secondary">{memory.headline}</Text>
+        <ValueRow label={tr('Shared notes')}>{memory.shared}</ValueRow>
+        <Text size="footnote" tone="tertiary">{memory.sharedDetail}</Text>
+        {memory.lines.map((item) => (
+          <HStack key={item.id + item.title} gap={6}>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{item.on ? '●' : '○'}</Text>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{`${item.title}: ${item.detail}`}</Text>
+          </HStack>
+        ))}
       </CardSection>
 
       <CardSection title={tr('Model tuning')}>

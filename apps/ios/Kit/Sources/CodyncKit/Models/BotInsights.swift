@@ -18,9 +18,41 @@ public struct BotInsights: Decodable, Sendable {
     public let identity: InsightIdentity
     public let connectors: InsightConnectors
     public let tuning: InsightTuning
+    public let memory: InsightMemory
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed memory posture for one bot.
+public struct InsightMemory: Decodable, Sendable {
+    public let headline: String
+    public let label: String
+    public let tone: String
+    public let score: Int
+    public let shared: String
+    public let sharedIcon: String
+    public let sharedTone: String
+    public let sharedDetail: String
+    public let harness: Bool
+    public let harnessIcon: String
+    public let harnessTone: String
+    public let skills: Int
+    public let on: Int
+    public let hasAny: Bool
+    public let summary: [InsightSummaryRow]
+    public let lines: [InsightMemoryLine]
+}
+
+public struct InsightMemoryLine: Decodable, Sendable {
+    public let id: String
+    public let title: String
+    public let detail: String
+    public let icon: String
+    public let tone: String
+    public let on: Bool
+    public let stateIcon: String
+    public let stateTone: String
 }
 
 /// A host-computed summary of one bot's model tuning.

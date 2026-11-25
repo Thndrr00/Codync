@@ -66,6 +66,35 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let memory = &data["memory"];
+    if memory.is_object() {
+        line(buf, &mut y, tr("Memory").into_owned(), t.bold.patch(t.panel));
+        let label = memory["label"].as_str().unwrap_or("");
+        let headline = memory["headline"].as_str().unwrap_or("");
+        let shared = memory["shared"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("  {}: {}", tr("Shared notes"), shared), t.secondary.patch(t.panel));
+        let items: Vec<String> = memory["lines"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|l| {
+                        format!(
+                            "  {} {}: {}",
+                            if l["on"] == true { "●" } else { "○" },
+                            l["title"].as_str().unwrap_or(""),
+                            l["detail"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.tertiary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let tuning = &data["tuning"];
     if tuning.is_object() {
         line(buf, &mut y, tr("Model tuning").into_owned(), t.bold.patch(t.panel));

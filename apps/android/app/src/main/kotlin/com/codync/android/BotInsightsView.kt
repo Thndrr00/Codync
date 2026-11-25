@@ -42,6 +42,17 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val memory = insights.memory
+            CardSection("Memory") {
+                row { Text(memory.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(memory.headline, style = Type.caption, color = Palette.secondary) }
+                row { Text("Shared notes: ${memory.shared}", style = Type.caption, color = Palette.secondary) }
+                row { Text(memory.sharedDetail, style = Type.caption, color = Palette.tertiary) }
+                for (item in memory.lines) row {
+                    Text("${if (item.on) "●" else "○"} ${item.title}: ${item.detail}",
+                        style = Type.caption, color = if (item.on) Palette.text else Palette.secondary)
+                }
+            }
             val tuning = insights.tuning
             CardSection("Model tuning") {
                 row { Text(tuning.effort, style = Type.subheadline.semibold, color = Palette.text) }

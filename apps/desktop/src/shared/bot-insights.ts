@@ -1,6 +1,25 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightMemory {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  shared: string
+  sharedIcon: string
+  sharedTone: string
+  sharedDetail: string
+  harness: boolean
+  harnessIcon: string
+  harnessTone: string
+  skills: number
+  on: number
+  hasAny: boolean
+  summary: { key: string; value: string }[]
+  lines: { id: string; title: string; detail: string; icon: string; tone: string; on: boolean; stateIcon: string; stateTone: string }[]
+}
+
 export interface InsightTuning {
   headline: string
   tone: string
@@ -209,6 +228,7 @@ export interface BotInsights {
   identity: InsightIdentity
   connectors: InsightConnectors
   tuning: InsightTuning
+  memory: InsightMemory
   routines: InsightRoutine[]
   usage: {
     used: number
