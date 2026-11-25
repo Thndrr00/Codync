@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Aprobaciones pendientes (23 helpers + UI en 4 clientes)
+
+`bdots_approvals.rs` añade 23 helpers puros sobre las tarjetas de aprobación en espera: urgencia
+por antigüedad, títulos y detalles (reutilizando `bdots_pure` y `bdots_text`), conteos, barras,
+ordenación, titulares y resúmenes. El endpoint `botInsights` añade el campo `approvals` desde
+`store.pending_approvals`; la sección «Approvals» se muestra en los cuatro clientes.
+
 ## Zonas horarias (23 helpers + UI en 4 clientes)
 
 `bdots_timezone.rs` añade 23 helpers puros sobre las zonas horarias de las rutinas: etiquetas,

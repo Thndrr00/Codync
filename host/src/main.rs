@@ -12,6 +12,7 @@ mod audit;
 mod background;
 mod bdots_activity;
 mod bdots_advice;
+mod bdots_approvals;
 mod bdots_connectors;
 mod bdots_cron;
 mod bdots_desk;

@@ -24,9 +24,33 @@ public struct BotInsights: Decodable, Sendable {
     public let advice: InsightAdvice
     public let digest: InsightDigest
     public let timezone: InsightTimezone
+    public let approvals: InsightApprovals
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of approval cards waiting on the user.
+public struct InsightApprovals: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let total: String
+    public let waiting: Int
+    public let urgent: Int
+    public let oldest: String
+    public let bar: String
+    public let summary: [InsightSummaryRow]
+    public let items: [InsightApprovalItem]
+}
+
+public struct InsightApprovalItem: Decodable, Sendable {
+    public let id: String
+    public let title: String
+    public let detail: String
+    public let age: String
+    public let icon: String
+    public let tone: String
+    public let urgent: Bool
 }
 
 /// A host-computed summary of the time zones a bot's routines use.

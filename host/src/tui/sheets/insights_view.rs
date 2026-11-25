@@ -66,6 +66,27 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let approvals = &data["approvals"];
+    if approvals.is_object() {
+        line(buf, &mut y, tr("Approvals").into_owned(), t.bold.patch(t.panel));
+        let headline = approvals["headline"].as_str().unwrap_or("");
+        let bar = approvals["bar"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{bar} {headline}"), t.text.patch(t.panel));
+        let items: Vec<String> = approvals["items"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(8)
+                    .map(|i| format!("  {} · {}", i["title"].as_str().unwrap_or(""), i["age"].as_str().unwrap_or("")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let zones = &data["timezone"];
     if zones.is_object() {
         line(buf, &mut y, tr("Time zones").into_owned(), t.bold.patch(t.panel));

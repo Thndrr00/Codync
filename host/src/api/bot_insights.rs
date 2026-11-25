@@ -841,6 +841,38 @@ fn timezone_view(routines: &[Value]) -> Value {
     })
 }
 
+/// Pending approvals: cards waiting on this bot's user, shaped from host data.
+fn approvals_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
+    use crate::bdots_approvals as a;
+
+    let entries = hub.store.pending_approvals(bot).unwrap_or_default();
+    let lines: Vec<a::ApprovalLine> = entries
+        .iter()
+        .map(|e| a::approval_line(&e.id, &crate::store::message_text(&e.data), &e.data, now - e.created_at))
+        .collect();
+    let ages: Vec<i64> = entries.iter().map(|e| now - e.created_at).collect();
+
+    json!({
+        "headline": a::approval_headline(&lines),
+        "tone": a::approval_tone(&lines),
+        "total": a::count_label(&lines),
+        "waiting": a::waiting_count(&lines),
+        "urgent": a::urgent_count(&lines),
+        "oldest": a::age_label(a::oldest_age(&lines, &ages)),
+        "bar": a::urgency_bar(&lines, 12),
+        "summary": a::summary(&lines).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "items": a::top_lines(&lines, 8).iter().map(|l| json!({
+            "id": l.id,
+            "title": l.title,
+            "detail": l.detail,
+            "age": l.age,
+            "icon": l.icon,
+            "tone": l.tone,
+            "urgent": l.urgent,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -919,6 +951,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "botId": bot,
         "digest": digest,
         "timezone": timezone_view(&routines),
+        "approvals": approvals_view(hub, bot, now),
         "description": description,
         "model": model,
         "provider": provider,

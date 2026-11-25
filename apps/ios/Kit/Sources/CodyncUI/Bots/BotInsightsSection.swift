@@ -30,6 +30,15 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let approvals = insights.approvals
+                    Text(approvals.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(approvals.bar).font(.footnote).foregroundStyle(Palette.accent)
+                    ForEach(approvals.items, id: \.id) { item in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.title).font(.footnote).foregroundStyle(Palette.text)
+                            Text("\(item.detail) · \(item.age)").font(.footnote).foregroundStyle(Palette.tertiary)
+                        }
+                    }
                     let zones = insights.timezone
                     Text(zones.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("This computer")): \(zones.local)").font(.footnote).foregroundStyle(Palette.secondary)

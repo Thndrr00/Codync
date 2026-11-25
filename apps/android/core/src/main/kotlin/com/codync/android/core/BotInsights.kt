@@ -27,9 +27,29 @@ data class BotInsights(
     val advice: InsightAdvice = InsightAdvice(),
     val digest: InsightDigest = InsightDigest(),
     val timezone: InsightTimezone = InsightTimezone(),
+    val approvals: InsightApprovals = InsightApprovals(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed summary of approval cards waiting on the user. */
+@Serializable
+data class InsightApprovals(
+    val headline: String = "",
+    val tone: String = "",
+    val total: String = "",
+    val waiting: Int = 0,
+    val urgent: Int = 0,
+    val oldest: String = "",
+    val bar: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val items: List<InsightApprovalItem> = emptyList(),
+)
+
+@Serializable data class InsightApprovalItem(
+    val id: String = "", val title: String = "", val detail: String = "",
+    val age: String = "", val icon: String = "", val tone: String = "", val urgent: Boolean = false,
 )
 
 /** A host-computed summary of the time zones a bot's routines use. */
