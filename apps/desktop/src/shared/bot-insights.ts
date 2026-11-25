@@ -1,6 +1,18 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightFailures {
+  headline: string
+  tone: string
+  total: string
+  refusals: number
+  rate: number
+  network: number
+  summary: { key: string; value: string }[]
+  categories: { kind: string; count: number; icon: string; tone: string; percent: number; bar: string }[]
+  items: { name: string; kind: string; reason: string; age: string; icon: string; tone: string }[]
+}
+
 export interface InsightApprovals {
   headline: string
   tone: string
@@ -318,6 +330,7 @@ export interface BotInsights {
   digest: InsightDigest
   timezone: InsightTimezone
   approvals: InsightApprovals
+  failures: InsightFailures
   routines: InsightRoutine[]
   usage: {
     used: number

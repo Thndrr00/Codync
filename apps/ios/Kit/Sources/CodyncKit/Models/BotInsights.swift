@@ -25,9 +25,41 @@ public struct BotInsights: Decodable, Sendable {
     public let digest: InsightDigest
     public let timezone: InsightTimezone
     public let approvals: InsightApprovals
+    public let failures: InsightFailures
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of recent tool failures.
+public struct InsightFailures: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let total: String
+    public let refusals: Int
+    public let rate: Int
+    public let network: Int
+    public let summary: [InsightSummaryRow]
+    public let categories: [InsightFailureCategory]
+    public let items: [InsightFailureItem]
+}
+
+public struct InsightFailureCategory: Decodable, Sendable {
+    public let kind: String
+    public let count: Int
+    public let icon: String
+    public let tone: String
+    public let percent: Int
+    public let bar: String
+}
+
+public struct InsightFailureItem: Decodable, Sendable {
+    public let name: String
+    public let kind: String
+    public let reason: String
+    public let age: String
+    public let icon: String
+    public let tone: String
 }
 
 /// A host-computed summary of approval cards waiting on the user.

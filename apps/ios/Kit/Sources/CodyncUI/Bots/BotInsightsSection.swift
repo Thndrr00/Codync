@@ -30,6 +30,23 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let failures = insights.failures
+                    if failures.total != "0" {
+                        Text(failures.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                        ForEach(failures.categories, id: \.kind) { cat in
+                            HStack(spacing: 6) {
+                                Text(cat.kind).font(.footnote).foregroundStyle(Palette.secondary)
+                                Text(cat.bar).font(.footnote).foregroundStyle(Palette.accent)
+                                Text("\(cat.count)").font(.footnote).foregroundStyle(Palette.tertiary)
+                            }
+                        }
+                        ForEach(failures.items, id: \.reason) { item in
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.name).font(.footnote).foregroundStyle(Palette.text)
+                                Text("\(item.reason) · \(item.age)").font(.footnote).foregroundStyle(Palette.tertiary)
+                            }
+                        }
+                    }
                     let approvals = insights.approvals
                     Text(approvals.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(approvals.bar).font(.footnote).foregroundStyle(Palette.accent)

@@ -18,6 +18,7 @@ mod bdots_cron;
 mod bdots_desk;
 mod bdots_digest;
 mod bdots_extra;
+mod bdots_failures;
 mod bdots_fallbacks;
 mod bdots_health;
 mod bdots_identity;

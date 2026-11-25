@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Fallos recientes (23 helpers + UI en 4 clientes)
+
+`bdots_failures.rs` añade 23 helpers puros sobre los errores recientes de herramientas: razones
+legibles (reutilizando `bdots_extra::tool_result_error`), categorías (permiso, límite de tasa,
+red, otro), iconos, tonos, conteos, porcentajes, barras, titulares y resúmenes. El endpoint
+`botInsights` añade el campo `failures`, derivado del mismo `history` que usa `activity`; la
+sección «Recent failures» se muestra en los cuatro clientes.
+
 ## Aprobaciones pendientes (23 helpers + UI en 4 clientes)
 
 `bdots_approvals.rs` añade 23 helpers puros sobre las tarjetas de aprobación en espera: urgencia

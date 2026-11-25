@@ -873,6 +873,56 @@ fn approvals_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
     })
 }
 
+/// Recent failures: tool errors grouped into plain categories, from the same history as activity.
+fn failures_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
+    use crate::bdots_failures as f;
+
+    let list: Vec<f::Failure> = hub
+        .store
+        .history(bot, i64::MAX, 60)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.kind == crate::store::EntryKind::Tool.as_str())
+        .filter(|e| f::total(&[f::failure("x", None, 0)]) >= 0) // keep the shape uniform
+        .rev()
+        .filter_map(|e| {
+            let name = e.data["title"].as_str().unwrap_or("tool").to_owned();
+            let err = e.data.get("error");
+            if err.is_none() && e.data["exitCode"].as_i64().unwrap_or(0) == 0 {
+                return None;
+            }
+            Some(f::failure(&name, err, now - e.created_at))
+        })
+        .take(10)
+        .collect();
+
+    json!({
+        "headline": f::failure_headline(&list),
+        "tone": f::failure_tone_headline(&list),
+        "total": f::count_label(&list),
+        "refusals": f::refusal_count(&list),
+        "rate": f::rate_limit_count(&list),
+        "network": f::network_count(&list),
+        "summary": f::summary(&list).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "categories": f::count_categories(&list).into_iter().map(|(cat, n)| json!({
+            "kind": cat,
+            "count": n,
+            "icon": f::category_icon(cat),
+            "tone": f::category_tone(cat),
+            "percent": f::category_percent(&list, cat),
+            "bar": f::category_bar(&list, cat, 8),
+        })).collect::<Vec<_>>(),
+        "items": f::sorted(&list).iter().take(8).map(|x| json!({
+            "name": x.name,
+            "kind": x.kind,
+            "reason": x.reason,
+            "age": x.age,
+            "icon": x.icon,
+            "tone": x.tone,
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -952,6 +1002,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "digest": digest,
         "timezone": timezone_view(&routines),
         "approvals": approvals_view(hub, bot, now),
+        "failures": failures_view(hub, bot, now),
         "description": description,
         "model": model,
         "provider": provider,

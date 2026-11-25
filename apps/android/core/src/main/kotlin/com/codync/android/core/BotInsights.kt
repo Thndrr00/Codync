@@ -28,9 +28,33 @@ data class BotInsights(
     val digest: InsightDigest = InsightDigest(),
     val timezone: InsightTimezone = InsightTimezone(),
     val approvals: InsightApprovals = InsightApprovals(),
+    val failures: InsightFailures = InsightFailures(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed summary of recent tool failures. */
+@Serializable
+data class InsightFailures(
+    val headline: String = "",
+    val tone: String = "",
+    val total: String = "",
+    val refusals: Int = 0,
+    val rate: Int = 0,
+    val network: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val categories: List<InsightFailureCategory> = emptyList(),
+    val items: List<InsightFailureItem> = emptyList(),
+)
+
+@Serializable data class InsightFailureCategory(
+    val kind: String = "", val count: Int = 0, val icon: String = "",
+    val tone: String = "", val percent: Int = 0, val bar: String = "",
+)
+@Serializable data class InsightFailureItem(
+    val name: String = "", val kind: String = "", val reason: String = "",
+    val age: String = "", val icon: String = "", val tone: String = "",
 )
 
 /** A host-computed summary of approval cards waiting on the user. */

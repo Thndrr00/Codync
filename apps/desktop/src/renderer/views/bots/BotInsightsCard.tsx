@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,25 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      {failures.total !== '0' ? (
+        <CardSection title={tr('Recent failures')}>
+          <Text size="subheadline" weight="semibold" tone={toneOf(failures.tone)}>{failures.headline}</Text>
+          {failures.categories.map((cat) => (
+            <HStack key={cat.kind} gap={6}>
+              <Text size="footnote" tone={toneOf(cat.tone)}>{cat.kind}</Text>
+              <Text size="footnote" tone="accent">{cat.bar}</Text>
+              <Text size="footnote" tone="secondary">{String(cat.count)}</Text>
+            </HStack>
+          ))}
+          {failures.items.map((item, i) => (
+            <VStack key={`${item.name}-${i}`} gap={0}>
+              <Text size="footnote" tone={toneOf(item.tone)}>{item.name}</Text>
+              <Text size="footnote" tone="tertiary">{`${item.reason} · ${item.age}`}</Text>
+            </VStack>
+          ))}
+        </CardSection>
+      ) : null}
+
       <CardSection title={tr('Approvals')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(approvals.tone)}>{approvals.headline}</Text>
         <Text size="footnote" tone="accent">{approvals.bar}</Text>

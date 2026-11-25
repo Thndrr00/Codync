@@ -42,6 +42,19 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val failures = insights.failures
+            if (failures.total != "0") CardSection("Recent failures") {
+                row { Text(failures.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                for (cat in failures.categories) row {
+                    Text("${cat.kind}  ${cat.bar}  ${cat.count}", style = Type.caption, color = Palette.tertiary)
+                }
+                for (item in failures.items) row {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(item.name, style = Type.caption, color = Palette.text)
+                        Text("${item.reason} · ${item.age}", style = Type.caption, color = Palette.tertiary)
+                    }
+                }
+            }
             val approvals = insights.approvals
             CardSection("Approvals") {
                 row { Text(approvals.headline, style = Type.subheadline.semibold, color = Palette.text) }

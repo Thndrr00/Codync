@@ -66,6 +66,26 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let failures = &data["failures"];
+    if failures.is_object() && failures["total"].as_str() != Some("0") {
+        line(buf, &mut y, tr("Recent failures").into_owned(), t.bold.patch(t.panel));
+        let headline = failures["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, headline.to_owned(), t.text.patch(t.panel));
+        let items: Vec<String> = failures["items"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(8)
+                    .map(|i| format!("  {} · {}", i["name"].as_str().unwrap_or(""), i["reason"].as_str().unwrap_or("")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for item in items {
+            line(buf, &mut y, item, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let approvals = &data["approvals"];
     if approvals.is_object() {
         line(buf, &mut y, tr("Approvals").into_owned(), t.bold.patch(t.panel));
