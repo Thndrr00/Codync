@@ -29,9 +29,26 @@ public struct BotInsights: Decodable, Sendable {
     public let conversation: InsightConversation
     public let agent: InsightAgentProfile
     public let fresh: InsightFresh
+    public let prompts: InsightPrompts
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed prompt style summary for one bot.
+public struct InsightPrompts: Decodable, Sendable {
+    public let model: String
+    public let context: String
+    public let price: String
+    public let valid: Bool
+    public let checkIn: String
+    public let zone: String
+    public let clock: String
+    public let watch: String
+    public let length: String
+    public let instruction: String
+    public let summary: [InsightSummaryRow]
+    public let lines: [String]
 }
 
 /// Helpers ported from the latest bdots source, shaped for display.

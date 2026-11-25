@@ -42,6 +42,15 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val prompts = insights.prompts
+            CardSection("Prompt style") {
+                row { Text(prompts.model, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(prompts.price, style = Type.caption, color = Palette.secondary) }
+                row { Text("${prompts.context} · ${prompts.zone} · ${prompts.length}", style = Type.caption, color = Palette.tertiary) }
+                for (line in prompts.lines) row {
+                    Text(line, style = Type.caption, color = Palette.secondary)
+                }
+            }
             val fresh = insights.fresh
             CardSection("Latest from bdots") {
                 row { Text(fresh.agent, style = Type.subheadline.semibold, color = Palette.text) }

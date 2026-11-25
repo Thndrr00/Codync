@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Estilo de prompt (23 helpers + UI en 4 clientes)
+
+`bdots_prompts.rs` añade 23 helpers puros portados de `models.ts` y `prompt.ts` del bdots
+actualizado: nombres de modelo, contexto, precios, líneas de check-in y rutina, conteo de
+entradas reportadas, zona horaria, tipos de prompt (clock/watch), iconos, tonos, longitud,
+instrucciones y ensamblaje. Reutiliza `bdots_desk`, `bdots_text`, `bdots_cron`, `bdots_more`,
+`bdots_extra` y `bdots_fresh`. El endpoint `botInsights` añade el campo `prompts`; la sección
+«Prompt style» se muestra en los cuatro clientes.
+
 ## Último bdots (35 helpers + UI en 4 clientes)
 
 Tras actualizar el repo de referencia `fayazara/bdots` (commits `8cc548b..af2ecfb`), se portaron

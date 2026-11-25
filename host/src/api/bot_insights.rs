@@ -1028,6 +1028,29 @@ fn fresh_view(row: &crate::store::BotRow, routines: usize) -> Value {
     })
 }
 
+/// Prompt style: model naming and routine prompt composition from bdots' prompt source.
+fn prompts_view(row: &crate::store::BotRow, routines: usize) -> Value {
+    use crate::bdots_prompts as p;
+
+    let model = row.config.model.as_deref().unwrap_or("");
+    let zone = crate::store::local_time_zone();
+    let lines = p::routine_lines(&row.config.name, &row.id, true, routines, zone);
+    json!({
+        "model": p::model_display(model),
+        "context": p::context_label(1_000_000),
+        "price": p::price_line(2.0, 10.0),
+        "valid": p::is_valid_model(model),
+        "checkIn": p::check_in_line(None),
+        "zone": p::zone_text(zone),
+        "clock": p::schedule_icon(true),
+        "watch": p::schedule_icon(false),
+        "length": p::length_hint(lines.len()),
+        "instruction": p::instruction_prefix(),
+        "summary": p::summary(model, routines, zone).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "lines": lines.iter().map(|l| serde_json::json!(l)).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1111,6 +1134,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "conversation": conversation_view(hub, bot),
         "agent": agent_view(&row),
         "fresh": fresh_view(&row, routines.len()),
+        "prompts": prompts_view(&row, routines.len()),
         "description": description,
         "model": model,
         "provider": provider,

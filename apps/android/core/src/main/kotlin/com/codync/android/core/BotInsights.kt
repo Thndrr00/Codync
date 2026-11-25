@@ -32,9 +32,21 @@ data class BotInsights(
     val conversation: InsightConversation = InsightConversation(),
     val agent: InsightAgentProfile = InsightAgentProfile(),
     val fresh: InsightFresh = InsightFresh(),
+    val prompts: InsightPrompts = InsightPrompts(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed prompt style summary for one bot. */
+@Serializable
+data class InsightPrompts(
+    val model: String = "", val context: String = "", val price: String = "",
+    val valid: Boolean = false, val checkIn: String = "", val zone: String = "",
+    val clock: String = "", val watch: String = "", val length: String = "",
+    val instruction: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val lines: List<String> = emptyList(),
 )
 
 /** Helpers ported from the latest bdots source, shaped for display. */

@@ -66,6 +66,22 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let prompts = &data["prompts"];
+    if prompts.is_object() {
+        line(buf, &mut y, tr("Prompt style").into_owned(), t.bold.patch(t.panel));
+        let model = prompts["model"].as_str().unwrap_or("");
+        let price = prompts["price"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{model} · {price}"), t.text.patch(t.panel));
+        let lines: Vec<String> = prompts["lines"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+            .unwrap_or_default();
+        for prompt_line in lines {
+            line(buf, &mut y, format!("  {prompt_line}"), t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let fresh = &data["fresh"];
     if fresh.is_object() {
         line(buf, &mut y, tr("Latest from bdots").into_owned(), t.bold.patch(t.panel));

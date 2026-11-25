@@ -30,6 +30,13 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let prompts = insights.prompts
+                    Text(prompts.model).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(prompts.price).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(prompts.context) · \(prompts.zone) · \(prompts.length)").font(.footnote).foregroundStyle(Palette.tertiary)
+                    ForEach(prompts.lines, id: \.self) { line in
+                        Text(line).font(.footnote).foregroundStyle(Palette.secondary)
+                    }
                     let fresh = insights.fresh
                     Text(fresh.agent).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     ForEach(fresh.summary, id: \.key) { row in
