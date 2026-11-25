@@ -2908,5 +2908,11 @@
   "Workspace folder": "Workspace folder",
   "Reveal workspace folder": "Reveal workspace folder",
   "This is not a bot workspace folder": "This is not a bot workspace folder",
-  "This bot workspace folder is missing": "This bot workspace folder is missing"
+  "This bot workspace folder is missing": "This bot workspace folder is missing",
+  "File not found": "File not found",
+  "Line {line}": "Line {line}",
+  "{name} could not start, so its tools are not available. Check it in Marketplace, Apps, then start a new chat.": "{name} could not start, so its tools are not available. Check it in Marketplace, Apps, then start a new chat.",
+  "The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot.": "The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot.",
+  "The page ran out of memory and crashed. Reload it with navigate direction=reload, then take a new snapshot.": "The page ran out of memory and crashed. Reload it with navigate direction=reload, then take a new snapshot.",
+  "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again.": "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again."
 }

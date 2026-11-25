@@ -2908,5 +2908,11 @@
   "Workspace folder": "Carpeta del espacio de trabajo",
   "Reveal workspace folder": "Mostrar carpeta del espacio de trabajo",
   "This is not a bot workspace folder": "Esta no es la carpeta del espacio de trabajo del bot",
-  "This bot workspace folder is missing": "Falta la carpeta del espacio de trabajo de este bot"
+  "This bot workspace folder is missing": "Falta la carpeta del espacio de trabajo de este bot",
+  "File not found": "Archivo no encontrado",
+  "Line {line}": "Línea {line}",
+  "{name} could not start, so its tools are not available. Check it in Marketplace, Apps, then start a new chat.": "{name} no pudo iniciarse, así que sus herramientas no están disponibles. Compruébalo en Marketplace, Apps, y abre un chat nuevo.",
+  "The page crashed (Inspector.targetCrashed). Reload it with navigate direction=reload, then take a new snapshot.": "La página se bloqueó (Inspector.targetCrashed). Recárgala con navigate direction=reload y toma una nueva instantánea.",
+  "The page ran out of memory and crashed. Reload it with navigate direction=reload, then take a new snapshot.": "La página se quedó sin memoria y se bloqueó. Recárgala con navigate direction=reload y toma una nueva instantánea.",
+  "No image came from this display. In System Settings › Screen & System Audio Recording, turn on Codync, then reopen Codync and try again.": "No llegó ninguna imagen de esta pantalla. En Ajustes del sistema › Grabación de pantalla y audio, activa Codync, vuelve a abrirlo e inténtalo de nuevo."
 }
