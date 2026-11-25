@@ -1,6 +1,17 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightFresh {
+  agent: string
+  deployment: string
+  language: string
+  receipt: string
+  profile: string
+  summary: { key: string; value: string }[]
+  titles: { exec: string; write: string }
+  resources: { path: string; kind: string; script: boolean; reference: boolean; asset: boolean }[]
+}
+
 export interface InsightAgentProfile {
   headline: string
   label: string
@@ -367,6 +378,7 @@ export interface BotInsights {
   failures: InsightFailures
   conversation: InsightConversation
   agent: InsightAgentProfile
+  fresh: InsightFresh
   routines: InsightRoutine[]
   usage: {
     used: number

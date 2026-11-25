@@ -995,6 +995,39 @@ fn agent_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Fresh batch: use the latest bdots helpers to describe the bot's agent and tools in plain words.
+fn fresh_view(row: &crate::store::BotRow, routines: usize) -> Value {
+    use crate::bdots_fresh as f;
+
+    let c = &row.config;
+    let model = c.model.as_deref().unwrap_or("");
+    let kinds: Vec<(&str, String)> = vec![
+        ("agent", f::model_with_provider(model)),
+        ("model", f::deployment_label(c.model.as_deref())),
+        ("language", f::language_model(c.model.as_deref())),
+        ("routines", f::turn_context_len(routines)),
+    ];
+    json!({
+        "agent": f::model_with_provider(model),
+        "deployment": f::deployment_label(c.model.as_deref()),
+        "language": f::language_model(c.model.as_deref()),
+        "receipt": f::receipt_id("r", &row.id),
+        "profile": f::demo_profile_of(c.account.as_deref()),
+        "summary": f::summary(&kinds).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "titles": serde_json::json!({
+            "exec": f::ask_title("exec", &serde_json::json!({"command":"npm test"})),
+            "write": f::ask_title("write", &serde_json::json!({"path":"/workspace/a.rs"})),
+        }),
+        "resources": ["scripts/", "references/", "assets/"].iter().map(|p| json!({
+            "path": p,
+            "kind": f::resource_kind(p),
+            "script": f::is_script_path(p),
+            "reference": f::is_reference_path(p),
+            "asset": f::is_asset_path(p),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1077,6 +1110,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "failures": failures_view(hub, bot, now),
         "conversation": conversation_view(hub, bot),
         "agent": agent_view(&row),
+        "fresh": fresh_view(&row, routines.len()),
         "description": description,
         "model": model,
         "provider": provider,

@@ -124,6 +124,16 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Último bdots (35 helpers + UI en 4 clientes)
+
+Tras actualizar el repo de referencia `fayazara/bdots` (commits `8cc548b..af2ecfb`), se portaron
+35 helpers nuevos de sus fuentes recientes en `host/src/bdots_fresh.rs`: razones de error,
+títulos de aprobación, rutas de skills aprendidas, notas de producto, perfiles demo, IDs de
+receipt, nombres de apps, hints de navegador, clasificación de recursos, digest de bundles,
+etiquetas de prompts, modelos de deployment, búsquedas y estados de checkout. Reutilizan los
+validadores ya portados. El endpoint `botInsights` añade el campo `fresh`; la sección «Latest from
+bdots» se muestra en los cuatro clientes.
+
 ## Perfil del agente (23 helpers + UI en 4 clientes)
 
 `bdots_agent.rs` añade 23 helpers puros sobre el agente del bot: cuenta backend, modo, fast mode y

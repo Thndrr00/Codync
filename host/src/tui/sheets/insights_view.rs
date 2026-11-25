@@ -66,6 +66,25 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let fresh = &data["fresh"];
+    if fresh.is_object() {
+        line(buf, &mut y, tr("Latest from bdots").into_owned(), t.bold.patch(t.panel));
+        let agent = fresh["agent"].as_str().unwrap_or("");
+        line(buf, &mut y, agent.to_owned(), t.text.patch(t.panel));
+        let rows: Vec<String> = fresh["summary"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|r| format!("  {}: {}", r["key"].as_str().unwrap_or(""), r["value"].as_str().unwrap_or("")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for row in rows {
+            line(buf, &mut y, row, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let agent = &data["agent"];
     if agent.is_object() {
         line(buf, &mut y, tr("Agent profile").into_owned(), t.bold.patch(t.panel));

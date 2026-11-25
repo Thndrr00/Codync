@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,17 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Latest from bdots')}>
+        <Text size="subheadline" weight="semibold">{fresh.agent}</Text>
+        {fresh.summary.map((row) => (
+          <HStack key={row.key} gap={6}>
+            <Text size="footnote" tone="tertiary">{row.key}</Text>
+            <Text size="footnote" tone="secondary">{row.value}</Text>
+          </HStack>
+        ))}
+        <Text size="footnote" tone="tertiary">{`${fresh.titles.exec} · ${fresh.titles.write}`}</Text>
+      </CardSection>
+
       <CardSection title={tr('Agent profile')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(agent.tone)}>{agent.label}</Text>
         <Text size="footnote" tone="secondary">{agent.headline}</Text>

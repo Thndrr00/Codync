@@ -28,9 +28,35 @@ public struct BotInsights: Decodable, Sendable {
     public let failures: InsightFailures
     public let conversation: InsightConversation
     public let agent: InsightAgentProfile
+    public let fresh: InsightFresh
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// Helpers ported from the latest bdots source, shaped for display.
+public struct InsightFresh: Decodable, Sendable {
+    public let agent: String
+    public let deployment: String
+    public let language: String
+    public let receipt: String
+    public let profile: String
+    public let summary: [InsightSummaryRow]
+    public let titles: InsightFreshTitles
+    public let resources: [InsightFreshResource]
+}
+
+public struct InsightFreshTitles: Decodable, Sendable {
+    public let exec: String
+    public let write: String
+}
+
+public struct InsightFreshResource: Decodable, Sendable {
+    public let path: String
+    public let kind: String
+    public let script: Bool
+    public let reference: Bool
+    public let asset: Bool
 }
 
 /// A host-computed agent profile for one bot.

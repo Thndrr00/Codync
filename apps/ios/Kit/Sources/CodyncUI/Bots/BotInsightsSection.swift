@@ -30,6 +30,12 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let fresh = insights.fresh
+                    Text(fresh.agent).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    ForEach(fresh.summary, id: \.key) { row in
+                        Text("\(row.key): \(row.value)").font(.footnote).foregroundStyle(Palette.secondary)
+                    }
+                    Text("\(fresh.titles.exec) · \(fresh.titles.write)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let agent = insights.agent
                     Text(agent.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(agent.headline).font(.footnote).foregroundStyle(Palette.secondary)

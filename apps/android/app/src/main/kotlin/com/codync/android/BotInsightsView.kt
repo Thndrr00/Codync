@@ -42,6 +42,14 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val fresh = insights.fresh
+            CardSection("Latest from bdots") {
+                row { Text(fresh.agent, style = Type.subheadline.semibold, color = Palette.text) }
+                for (row in fresh.summary) row {
+                    Text("${row.key}: ${row.value}", style = Type.caption, color = Palette.secondary)
+                }
+                row { Text("${fresh.titles.exec} · ${fresh.titles.write}", style = Type.caption, color = Palette.tertiary) }
+            }
             val agent = insights.agent
             CardSection("Agent profile") {
                 row { Text(agent.label, style = Type.subheadline.semibold, color = Palette.text) }

@@ -31,9 +31,29 @@ data class BotInsights(
     val failures: InsightFailures = InsightFailures(),
     val conversation: InsightConversation = InsightConversation(),
     val agent: InsightAgentProfile = InsightAgentProfile(),
+    val fresh: InsightFresh = InsightFresh(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** Helpers ported from the latest bdots source, shaped for display. */
+@Serializable
+data class InsightFresh(
+    val agent: String = "",
+    val deployment: String = "",
+    val language: String = "",
+    val receipt: String = "",
+    val profile: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val titles: InsightFreshTitles = InsightFreshTitles(),
+    val resources: List<InsightFreshResource> = emptyList(),
+)
+
+@Serializable data class InsightFreshTitles(val exec: String = "", val write: String = "")
+@Serializable data class InsightFreshResource(
+    val path: String = "", val kind: String = "",
+    val script: Boolean = false, val reference: Boolean = false, val asset: Boolean = false,
 )
 
 /** A host-computed agent profile for one bot. */
