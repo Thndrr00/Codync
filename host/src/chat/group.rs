@@ -174,7 +174,8 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, turn: &Turn, asked: &m
         let group = group(hub, group_id)?;
         let members = members(hub, &group);
         let since_user = since_last_user_message(hub, lane)?;
-        let requester = requester_of(&since_user);
+        let origin = request_origin(&since_user);
+        let archived = origin.as_ref().is_some_and(|(requester, lane)| thread_archived(hub, requester, lane));
         let since_late = turn.late.map(|seq| hub.store.messages_after(lane, seq - 1, HISTORY_LINES)).transpose()?;
         let mut speakers = speakers(&members, &since_user, since_late.as_deref(), round, asked);
         if since_late.is_none() && round == 0 && speakers.len() == members.len() && members.len() > 1 {
@@ -252,7 +253,7 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, turn: &Turn, asked: &m
             let mut answer = answer;
             match tokio::time::timeout(hub.groups.member_timeout(), &mut answer).await {
                 Ok(Ok(Ok(Some(text)))) => {
-                    route_channel_result(hub, &group, member, requester.as_deref(), "completed", Some(&text), "");
+                    route_channel_result(hub, &group, member, origin.as_ref(), archived, "completed", Some(&text), "");
                     spoke += 1;
                     replies += 1;
                     last_reply = Some((member.id.clone(), member.name.clone(), text));
@@ -263,14 +264,15 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, turn: &Turn, asked: &m
                         hub,
                         &group,
                         member,
-                        requester.as_deref(),
+                        origin.as_ref(),
+                        archived,
                         "failed",
                         None,
                         &format!("{error:#}"),
                     );
                 }
                 Ok(Err(_)) => {
-                    route_channel_result(hub, &group, member, requester.as_deref(), "cancelled", None, "");
+                    route_channel_result(hub, &group, member, origin.as_ref(), archived, "cancelled", None, "");
                 }
                 // Overdue: the room stops waiting, but the member's answer still lands in the lane.
                 Err(_) => {
@@ -313,8 +315,9 @@ async fn answered_late(
         tracing::warn!(group = lane.chat, error = format!("{error:#}"), "late room reply not pushed");
     }
     let Ok(group) = group(&hub, &lane.chat) else { return };
-    let requester = since_last_user_message(&hub, &lane).ok().and_then(|recent| requester_of(&recent));
-    route_channel_result(&hub, &group, &member, requester.as_deref(), "completed", Some(&text), "");
+    let origin = since_last_user_message(&hub, &lane).ok().and_then(|recent| request_origin(&recent));
+    let archived = origin.as_ref().is_some_and(|(requester, lane)| thread_archived(&hub, requester, lane));
+    route_channel_result(&hub, &group, &member, origin.as_ref(), archived, "completed", Some(&text), "");
     let named = named_by(&members(&hub, &group), &member.id, &text).next().is_some();
     // ponytail: the answer is placed by its `seq`, taken when it began streaming; a teammate that spoke while it
     // streamed counts as having seen it. Rare (an overdue answer's last few seconds); place by `rev` if it bites.
@@ -324,22 +327,34 @@ async fn answered_late(
 }
 
 /// Routes a member's finished room task back to the agent that posted the channel request, as a
-/// teammate reply in that agent's own chat (OpenBot nightly `t3-cross-agent-channel-messages`).
-/// `requester` comes from the room message that started the turn; ordinary user turns have none.
+/// teammate reply (OpenBot nightly `t3-cross-agent-channel-messages`). The result returns to the lane
+/// the request was posted from — a side thread stays there — and only to the main chat when that
+/// thread is gone or was posted from a chat (OpenBot 0.78.0).
 fn route_channel_result(
     hub: &Hub,
     group: &BotConfig,
     member: &BotConfig,
-    requester: Option<&str>,
+    origin: Option<&(String, Lane)>,
+    archived: bool,
     state: &str,
     answer: Option<&str>,
     reason: &str,
 ) {
     use crate::chat::team::channel_returns;
     let Some(task_state) = channel_returns::returned(state) else { return };
-    if !channel_returns::should_return(task_state, true, requester, &member.id)
+    let Some((requester, asking_lane)) = origin else { return };
+    if !channel_returns::should_return(task_state, true, Some(requester.as_str()), &member.id)
         || channel_returns::moved_to_open_task(task_state, false, None)
     {
+        return;
+    }
+    let lane = channel_returns::return_lane(Some(requester.as_str()), asking_lane, archived);
+    if lane.thread.is_some() {
+        // One lane only: posting into the thread wakes the agent there, so no second main turn starts.
+        let text = channel_returns::return_text(&group.name, &group.id, task_state, answer, reason);
+        if let Err(error) = crate::chat::tasks::route_teammate_result(hub, requester, lane, &text) {
+            tracing::warn!(%error, requester, "channel result not returned to its side thread");
+        }
         return;
     }
     let Some(reply) =
@@ -347,15 +362,28 @@ fn route_channel_result(
     else {
         return;
     };
-    if let Some(requester) = requester {
-        let _ = hub.send_cmd(requester, Cmd::BotReply(reply));
-    }
+    let _ = hub.send_cmd(requester, Cmd::BotReply(reply));
 }
 
-/// The agent that posted the channel request the room is answering, if any. A plain user message
-/// carries no `requesterBotId`, so no result is routed back.
-fn requester_of(since_user: &[Entry]) -> Option<String> {
-    since_user.iter().rev().find_map(|e| e.data["requesterBotId"].as_str()).map(str::to_owned)
+/// The agent that posted the channel request the room is answering, and the lane it posted from. A
+/// plain user message carries no `requesterBotId`, so no result is routed back. A request made in a
+/// side thread carries that thread's root, so its result can return to the same thread.
+fn request_origin(since_user: &[Entry]) -> Option<(String, Lane)> {
+    let entry = since_user.iter().rev().find(|e| e.data["requesterBotId"].as_str().is_some())?;
+    let requester = entry.data["requesterBotId"].as_str()?.to_owned();
+    let lane = match entry.data["requesterThread"].as_str().filter(|root| !root.is_empty()) {
+        Some(root) => Lane::in_thread(&requester, root),
+        None => Lane::main(&requester),
+    };
+    Some((requester, lane))
+}
+
+/// Whether the side thread a request came from is closed or archived, in which case its result
+/// falls back to the main chat.
+fn thread_archived(hub: &Hub, requester: &str, lane: &Lane) -> bool {
+    lane.thread
+        .as_deref()
+        .is_some_and(|root| crate::chat::tasks::thread_archived(&hub.store, requester, root).unwrap_or(false))
 }
 
 /// Whether a member's channel reply may notify the user (OpenBot nightly `triage-13696`).

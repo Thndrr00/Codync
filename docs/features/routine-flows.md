@@ -108,7 +108,11 @@ in a step's instruction. An output step can send its own message in place of its
 in the message, `title`, `labels` and `person` takes a field from an earlier step or the trigger,
 and the rendered title is what a notification shows (`output_template.rs`, `setRoutineFlowOutput`,
 `workflowOutputNotification`). These fields are optional on the wire and in storage, so an older
-host or client keeps working unchanged.
+host or client keeps working unchanged. When a run reaches such a Notification output — or waits on
+the user before a retry — the host sends a phone alert through the same push path as any other
+result: the pure `workflow_push(text, kind)` decision trims and bounds the card text into the sealed
+alert body (`host/src/routines/flow/output_template.rs`, `host/src/routines/runner.rs`, OpenBot
+0.78.0). Analytics only ever sees the alert kind, never the card text.
 
 ## Running a flow
 
@@ -282,7 +286,10 @@ The built-in `routines` MCP server has three more tools, scoped to the bot's own
 `link_routine_bots` (`routineId`, `toBotId`, optional `fromBotId` and `instruction`), `unlink_routine_bots` (`linkId`,
 or `routineId` + `toBotId`) and `list_routine_flow` (optional `routineId`), whose links and media steps carry each
 step's `name` so an agent reading the flow sees the names. The server's instructions tell the bot when to use them
-(see [Routines](routines.md#conversational-setup-and-tools)).
+(see [Routines](routines.md#conversational-setup-and-tools)). An agent with its own automation tool (OpenCode) is
+told to call `automation_intent` with a timed or repeated request and, when it is a schedule, save a Codync routine
+so the work is visible in Routines; listing, pausing or deleting old automations still goes through the automation
+tools (`host/src/routines/mcp.rs`, OpenBot 0.78.0).
 
 ## Storage
 

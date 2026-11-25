@@ -39,6 +39,7 @@ pub use canvas::catch_up;
 pub(super) use engine::Start;
 pub use engine::{spawn, start_for};
 pub use groups::FlowGroup;
+pub(crate) use output_template::{WorkflowPush, workflow_push};
 pub use recover::recover;
 pub use registry::Registry;
 pub use tools::{TOOLS, call as tool_call, tools as tool_list};

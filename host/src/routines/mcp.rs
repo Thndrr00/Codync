@@ -12,6 +12,58 @@ fn event_names(source: &str) -> Option<Vec<&'static str>> {
     crate::routines::events::source(source).map(|s| s.events.iter().map(|e| e.id).collect())
 }
 
+/// Whether a request asks for work at a set time or on a repeat, so it belongs in a Codync routine
+/// the user can see in Routines rather than an OpenCode automation nobody can find (OpenBot 0.78.0).
+/// Managing an old automation is not a new schedule: those requests stay with the automation tools.
+pub fn automation_request(text: &str) -> bool {
+    let lower = format!(" {} ", text.trim().to_lowercase());
+    let managing = ["list", "show", "pause", "resume", "delete", "remove", "stop", "cancel", "edit"]
+        .iter()
+        .any(|verb| lower.contains(verb))
+        && lower.contains("automation");
+    if managing {
+        return false;
+    }
+    let repeating = [
+        "every ",
+        "each day",
+        "each week",
+        "each month",
+        "daily",
+        "weekly",
+        "monthly",
+        "hourly",
+        "nightly",
+        "annually",
+    ]
+    .iter()
+    .any(|cue| lower.contains(cue));
+    let dated = [
+        "schedule",
+        "cron",
+        "remind me",
+        "tomorrow",
+        "tonight",
+        "at 8",
+        "at 9",
+        "at 10",
+        "at 11",
+        "at 12",
+        "at noon",
+        "at midnight",
+        "next monday",
+        "on friday",
+    ]
+    .iter()
+    .any(|cue| lower.contains(cue));
+    repeating || dated
+}
+
+/// The tool answer for `automation_intent`, kept beside the decision so the tool and its test agree.
+pub fn automation_intent(args: &Value) -> Value {
+    json!({"routine": automation_request(args["text"].as_str().unwrap_or_default())})
+}
+
 /// Checks every event trigger of a save against the catalog. Sources outside the catalog keep their event as
 /// they are (bot-set and older triggers); a known source must name one of the events it can actually send.
 pub fn check_event_triggers(args: &Value) -> Result<()> {
@@ -40,6 +92,7 @@ pub fn check_event_triggers(args: &Value) -> Result<()> {
 
 pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
+        "automation_intent" => Ok(automation_intent(args)),
         "list_routine_templates" => Ok(super::blueprints::list()),
         "routine_template_draft" => super::blueprints::draft(args),
         "list_routines" => Ok(hub.routines.list(bot, |_| false)),
@@ -81,11 +134,12 @@ pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value
     }
 }
 
-pub const INSTRUCTIONS: &str = "Create and manage persistent Codync routines when the user asks for scheduled or event-driven work. Use the built-in routines tools (save_routine, list_routines, set_routine_enabled, delete_routine, run_routine, routine_webhook, give_webhook_secret), not operating-system cron or an improvised background process. For recurring clock schedules, always use a five-field cron trigger with an explicit IANA timezone, including minute/hour frequencies; do not create interval triggers for those requests. Preserve existing intervals when editing unrelated fields. Cron steps reset within their field: */7 minutes is not an exact seven-minute duration across hours. Use once for a single dated execution; never approximate a one-time task with an annually repeating cron expression. For requests like when this file, folder or page changes, use a watch trigger rather than a frequent schedule that checks itself: it costs nothing until something changes. Before saving, resolve the task, trigger and intended timezone for calendar/one-time schedules from the conversation; ask only for missing or ambiguous details. If the request is already clear, create it without another confirmation. Check that tools, connector sign-ins and files needed by the task are available; describe any missing setup rather than promising the task will work. Use list_routines before creating or editing to avoid duplicates; preserve unrelated triggers, enabled state and instructions. Save returns the actual routine ID, trigger descriptions and nextRunAt: use these to report what was really saved, including timezone, next occurrence and enabled/paused state. Do not claim success if the tool failed. run_routine executes the real task immediately, including its side effects; use it when the user, or another bot, asks for a test or immediate run of one of your routines, not merely to validate a schedule. You run only your own routines: for another bot's, ask that bot with message_bot to run it with its own run_routine. A routine runs locally in a session of its own; the host must be running and awake, its result appears in your chat with the user, and (pass) stays silent. A run that fails before using a tool that changes anything is retried automatically 1, 5 and 15 minutes later; one that already acted is left for the user to retry from its failure notice. Webhook triggers: routine_webhook explains how senders deliver; never claim a third-party integration is connected until a real delivery has been verified. Keep secrets out of routine instructions and ordinary status summaries. To have a routine pass its result on to other bots (a routine flow), use link_routine_bots with the routine, the bot to receive the reply (an id from list_bots) and what that bot should do with it; chain a third bot with fromBotId. A flow cannot loop or reach more than a few bots deep, and only a bot with an agent of its own can take part, not a group or a terminal session. A link applies from the routine's next run. unlink_routine_bots removes a link and list_routine_flow shows links and the latest steps; tell the user what you linked, not that the downstream bots finished before a run has shown it.";
+pub const INSTRUCTIONS: &str = "Create and manage persistent Codync routines when the user asks for scheduled or event-driven work. Use the built-in routines tools (save_routine, list_routines, set_routine_enabled, delete_routine, run_routine, routine_webhook, give_webhook_secret), not operating-system cron or an improvised background process. For recurring clock schedules, always use a five-field cron trigger with an explicit IANA timezone, including minute/hour frequencies; do not create interval triggers for those requests. Preserve existing intervals when editing unrelated fields. Cron steps reset within their field: */7 minutes is not an exact seven-minute duration across hours. Use once for a single dated execution; never approximate a one-time task with an annually repeating cron expression. For requests like when this file, folder or page changes, use a watch trigger rather than a frequent schedule that checks itself: it costs nothing until something changes. Before saving, resolve the task, trigger and intended timezone for calendar/one-time schedules from the conversation; ask only for missing or ambiguous details. If the request is already clear, create it without another confirmation. Check that tools, connector sign-ins and files needed by the task are available; describe any missing setup rather than promising the task will work. Use list_routines before creating or editing to avoid duplicates; preserve unrelated triggers, enabled state and instructions. Save returns the actual routine ID, trigger descriptions and nextRunAt: use these to report what was really saved, including timezone, next occurrence and enabled/paused state. Do not claim success if the tool failed. run_routine executes the real task immediately, including its side effects; use it when the user, or another bot, asks for a test or immediate run of one of your routines, not merely to validate a schedule. You run only your own routines: for another bot's, ask that bot with message_bot to run it with its own run_routine. A routine runs locally in a session of its own; the host must be running and awake, its result appears in your chat with the user, and (pass) stays silent. A run that fails before using a tool that changes anything is retried automatically 1, 5 and 15 minutes later; one that already acted is left for the user to retry from its failure notice. Webhook triggers: routine_webhook explains how senders deliver; never claim a third-party integration is connected until a real delivery has been verified. Keep secrets out of routine instructions and ordinary status summaries. To have a routine pass its result on to other bots (a routine flow), use link_routine_bots with the routine, the bot to receive the reply (an id from list_bots) and what that bot should do with it; chain a third bot with fromBotId. A flow cannot loop or reach more than a few bots deep, and only a bot with an agent of its own can take part, not a group or a terminal session. A link applies from the routine's next run. unlink_routine_bots removes a link and list_routine_flow shows links and the latest steps; tell the user what you linked, not that the downstream bots finished before a run has shown it. OpenCode has its own automation tool, but an automation it creates is invisible in Codync Routines: for work at a set time or on a repeat, call automation_intent with the user's request and, when it says routine is true, save a routine here instead. You can still use the automation tools to list, pause or delete old automations; that is not a new schedule.";
 
 pub fn tools() -> Value {
     let id = json!({"type":"string"});
     let mut tools = vec![
+        json!({"name":"automation_intent","description":"Check whether a request for work at a set time or on a repeat belongs in Codync Routines instead of an automation the user can't see. Returns {routine: true} for a timed or repeated task; listing, pausing or deleting an old automation returns false.","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]},"annotations":{"readOnlyHint":true}}),
         json!({"name":"list_routines","description":"List this bot's routines and run history.","inputSchema":{"type":"object","properties":{}}}),
     ];
     tools.push(json!({"name":"save_routine","description":"Create or replace a routine. Omit id to create; include id to update. triggers is an OR list. Use cron for recurring clock schedules; interval is for explicitly requested elapsed-duration semantics or existing schedules: interval {type:interval,seconds}; once {type:once,at:Unix milliseconds}; cron {type:cron,expression:five cron fields,timeZone:IANA zone}; webhook {type:webhook}; event {type:event,source:slack/telegram/whatsapp/discord/github/origin/microsoftTeams/linear/sentry/pagerduty/email,event:event name or *,filters:field-to-value map}; watch {type:watch,kind:files or url,target:a file or folder path (relative to your working folder) or an https URL,everyMinutes:1-10080}: checked without you, it runs only when the target changed since the last check (the first check only records it; folders up to 2000 entries, .git and node_modules skipped). Events require a configured webhook sender. Minimum interval is one second.","inputSchema":{"type":"object","properties":{"id":id,"name":{"type":"string"},"instruction":{"type":"string"},"enabled":{"type":"boolean"},"timeoutSeconds":{"type":"integer","minimum":1,"maximum":86400},"triggers":{"type":"array","items":{"type":"object"}}},"required":["name","instruction","triggers"]}}));
@@ -150,6 +204,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_timed_or_repeated_request_becomes_a_routine_but_managing_automations_does_not() {
+        for request in [
+            "remind me to take a pill every day at 9am",
+            "make a weekly digest of the team's issues",
+            "run a cron job that checks prices hourly",
+            "schedule a scan for tomorrow at noon",
+        ] {
+            assert!(automation_request(request), "{request}");
+        }
+        for request in [
+            "list my automations",
+            "pause the daily automation",
+            "delete that automation",
+            "summarize this file for me",
+            "run the task now",
+        ] {
+            assert!(!automation_request(request), "{request}");
+        }
+        assert_eq!(
+            automation_intent(&json!({"text":"save a daily report"}))["routine"],
+            serde_json::Value::Bool(true),
+            "the tool reports the decision"
+        );
+    }
+
+    #[test]
     fn an_event_trigger_must_name_an_event_its_source_can_send() {
         let valid = json!({"triggers": [
             {"type":"event", "source":"github", "event":"pull_request.opened"},
@@ -170,6 +250,17 @@ mod tests {
         assert!(check_event_triggers(&external).is_ok());
         let non_event = json!({"triggers": [{"type":"cron", "expression":"* * * * *"}]});
         assert!(check_event_triggers(&non_event).is_ok());
+    }
+
+    #[test]
+    fn the_routines_instructions_point_a_timed_task_at_a_visible_routine() {
+        assert!(INSTRUCTIONS.contains("automation_intent"), "the agent is told to check first");
+        assert!(INSTRUCTIONS.contains("invisible in Codync Routines"));
+        assert!(INSTRUCTIONS.contains("list, pause or delete old automations"));
+        assert!(
+            tools().as_array().expect("tools").iter().any(|tool| tool["name"] == "automation_intent"),
+            "the decision has a tool the agent can call"
+        );
     }
 
     #[test]

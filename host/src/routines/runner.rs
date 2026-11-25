@@ -2,6 +2,7 @@
 //! the bot's chat from a session of its own (`session_slot`); the durable outbox
 //! reports its outcome separately, so restarting never needs to rerun a task merely
 //! to tell the user how it went.
+use super::flow::WorkflowPush;
 use super::{
     Arc, Context, EntryKind, Hub, Lane, LockExt, Result, Routines, Run, Status, Store, Value, bail, cancel_run,
     default_timeout, json, may_run, new_run, now_ms, retry,
@@ -329,8 +330,10 @@ impl Routines {
                 let failure = format!("Routine could not finish: {detail}");
                 let (text, style, kind) = match run.retry_at {
                     Some(at) => {
+                        // OpenBot 0.78.0: a run waiting to retry is a waiting step, so the phone gets
+                        // the same alert as any other workflow step that pauses for the user.
                         let note = retry::retry_note(at - run.finished_at.unwrap_or(at));
-                        (format!("{failure}. {note}"), "info", None)
+                        (format!("{failure}. {note}"), "info", Some(AlertKind::Paused))
                     }
                     None => (failure, "error", Some(AlertKind::Failed)),
                 };
@@ -351,11 +354,16 @@ impl Routines {
                 }
                 Ok(())
             })?;
+            // OpenBot 0.78.0: the workflow's output step pushes through the same decision as any
+            // other code result. The card text goes only into the sealed alert body; analytics gets
+            // the kind, never the text.
+            let alert = kind.and_then(|kind| super::flow::workflow_push(&text, kind));
             if added
-                && let Some(kind) = kind
+                && let Some(alert) = alert
                 && let Some(bot) = hub.store.bot(&run.bot_id)?.filter(|b| !b.deleted)
             {
-                crate::remote::push::notify(hub, &bot.config, None, &bot.config.name, &text, kind);
+                let WorkflowPush { body, kind } = alert;
+                crate::remote::push::notify(hub, &bot.config, None, &bot.config.name, &body, kind);
             }
         }
         Ok(())

@@ -10,6 +10,12 @@ fn epoch(bot: &TgBot) -> String {
     crate::chat::files::digest_hex(&Sha256::digest(worker::fingerprint(bot).as_bytes()))
 }
 
+/// The agent-facing prompt for one Telegram message: the person's words plus the shared rule that
+/// the agent answering here is the one posting the reply (OpenBot 0.78.0). Pure so the rule has a test.
+fn prompt(text: &str) -> String {
+    format!("{text}\n\n{}", crate::chat::team::channel_returns::external_reply_rule("Telegram"))
+}
+
 pub(super) fn post(hub: &Arc<Hub>, name: &str, user: i64, expected: &str, text: &str, nonce: &str) -> Result<Entry> {
     let _guard = crate::LockExt::locked(&hub.store.connector_lock);
     let bot = load(&hub.store)?
@@ -32,7 +38,7 @@ pub(super) fn post(hub: &Arc<Hub>, name: &str, user: i64, expected: &str, text: 
         hub,
         &row.config,
         json!({
-            "text":crate::channels::with_notes(&bot.memory, &crate::channels::notes(&hub.store, "telegram", &bot.name), text),"attachments":[],"clientNonce":nonce,
+            "text":crate::channels::with_notes(&bot.memory, &crate::channels::notes(&hub.store, "telegram", &bot.name), &prompt(text)),"attachments":[],"clientNonce":nonce,
             "source":"telegram","telegramFence":{"name":name,"user":user,"epoch":epoch(&bot)}
         }),
     )
@@ -54,4 +60,18 @@ pub(crate) fn claim_prompt(hub: &Hub, entry: &str) -> Result<bool> {
         !row.deleted && !row.config.hidden && !row.config.is_group() && !crate::external::is_external(&row.config)
     });
     Ok(visible && bot.bot_id == entry.bot_id && bot.allowed.contains(&user) && epoch(&bot) == expected)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chat::team::channel_returns::EXTERNAL_REPLY_RULE;
+
+    #[test]
+    fn a_telegram_prompt_carries_the_external_reply_rule() {
+        let text = prompt("Please review this");
+        assert!(text.starts_with("Please review this\n\n"));
+        assert!(text.contains(EXTERNAL_REPLY_RULE));
+        assert!(text.contains("Telegram reply rule:"));
+    }
 }

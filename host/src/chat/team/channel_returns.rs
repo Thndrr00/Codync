@@ -6,6 +6,8 @@
 //! result, so the agent can decide whether to retry rather than telling the user to follow the
 //! channel. The decisions here are pure: what comes back, when, and with what text.
 
+use crate::store::Lane;
+
 /// A channel task's terminal state, after the task's own bookkeeping has settled it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskState {
@@ -40,6 +42,27 @@ pub fn should_return(state: TaskState, is_root: bool, requester: Option<&str>, m
 
 fn returned_for(state: TaskState) -> bool {
     matches!(state, TaskState::Completed | TaskState::Failed | TaskState::Cancelled | TaskState::Paused)
+}
+
+/// The lane a channel task's result returns to (OpenBot 0.78.0). Work posted from a side thread
+/// returns there, so the agent reads the answer where it asked; a plain chat ask, or a thread that
+/// was closed or archived, returns to the main chat instead of a lane that can no longer take it.
+/// Naming one lane is also what keeps a main turn and a thread turn from both starting for a result.
+pub fn return_lane(requester: Option<&str>, asking_lane: &Lane, thread_archived: bool) -> Lane {
+    if !thread_archived && asking_lane.thread.is_some() {
+        return asking_lane.clone();
+    }
+    Lane::main(requester.unwrap_or(&asking_lane.chat))
+}
+
+/// The fixed rule appended to a prompt from a person on an external channel. The agent answering
+/// there is the one posting to that person, so it must not offer to pass the message on later.
+pub const EXTERNAL_REPLY_RULE: &str = "You are the one answering here; do not promise to pass the message on unless you actually post it to the user this turn";
+
+/// The rule line for `channel`'s prompt builder. Pure so each channel can test that its prompt
+/// carries the same instruction (OpenBot 0.78.0).
+pub fn external_reply_rule(channel: &str) -> String {
+    format!("{channel} reply rule: {EXTERNAL_REPLY_RULE}")
 }
 
 /// The header a channel result carries into the asking agent's chat.
@@ -143,5 +166,28 @@ mod tests {
     fn a_non_terminal_state_has_no_reply_at_all() {
         assert_eq!(returned("working"), None);
         assert_eq!(returned("queued"), None);
+    }
+
+    #[test]
+    fn a_side_thread_result_returns_to_its_thread_and_an_archived_one_to_main() {
+        let thread = Lane::in_thread("ada", "task:abc");
+        assert_eq!(return_lane(Some("ada"), &thread, false), thread, "the answer goes where it was asked");
+        assert_eq!(
+            return_lane(Some("ada"), &thread, true),
+            Lane::main("ada"),
+            "a closed or archived thread can't take a result"
+        );
+        assert_eq!(return_lane(Some("ada"), &Lane::main("ada"), false), Lane::main("ada"));
+        assert_eq!(return_lane(None, &thread, false), Lane::main("ada"), "no requester still names its chat");
+    }
+
+    #[test]
+    fn every_external_channel_carries_the_same_reply_rule() {
+        for channel in ["WhatsApp", "Telegram", "Slack", "Discord"] {
+            let rule = external_reply_rule(channel);
+            assert!(rule.contains(EXTERNAL_REPLY_RULE), "{channel}");
+            assert!(rule.starts_with(channel), "{channel}");
+        }
+        assert!(external_reply_rule("WhatsApp").contains("do not promise to pass the message on"));
     }
 }

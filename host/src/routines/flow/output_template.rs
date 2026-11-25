@@ -7,6 +7,7 @@
 //! sends the workflow result as before; every decision here is pure and tested.
 
 use super::answers;
+use crate::remote::push::AlertKind;
 use crate::store::Store;
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
@@ -137,6 +138,25 @@ pub fn notification(template: &OutputTemplate, input: &str, values: &BTreeMap<St
     }
 }
 
+/// The most card text a workflow alert carries in its sealed body (OpenBot 0.78.0).
+pub const PUSH_BODY_CHARS: usize = 400;
+
+/// The phone alert of a workflow's Notification output or a step waiting on the user. Only `kind`
+/// is ever attached to analytics; the card text lives in `body`, which the push layer seals to the
+/// phone, never in an event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkflowPush {
+    pub body: String,
+    pub kind: AlertKind,
+}
+
+/// Pure decision for the push a workflow step sends: blank card text carries nothing to show, so
+/// no alert goes out; other text is clipped to the alert body limit instead of growing with a card.
+pub fn workflow_push(text: &str, kind: AlertKind) -> Option<WorkflowPush> {
+    let body = text.trim();
+    (!body.is_empty()).then(|| WorkflowPush { body: crate::agent::acp::truncate(body, PUSH_BODY_CHARS), kind })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,6 +222,24 @@ mod tests {
         let template = OutputTemplate { title: Some("x".repeat(MAX_FIELD_CHARS + 1)), ..OutputTemplate::default() };
         let error = check(&template).expect_err("a long title is refused");
         assert!(error.to_string().contains("title"));
+    }
+
+    #[test]
+    fn a_blank_card_sends_no_push_and_a_real_card_keeps_its_kind() {
+        assert_eq!(workflow_push("", AlertKind::Done), None);
+        assert_eq!(workflow_push("  \n ", AlertKind::NeedsInput), None);
+        assert_eq!(
+            workflow_push("  New issue opened  ", AlertKind::Done),
+            Some(WorkflowPush { body: "New issue opened".into(), kind: AlertKind::Done })
+        );
+        assert_eq!(workflow_push("step paused", AlertKind::Paused).map(|push| push.kind), Some(AlertKind::Paused));
+    }
+
+    #[test]
+    fn a_long_card_is_clipped_to_the_alert_body() {
+        let push = workflow_push(&"x".repeat(PUSH_BODY_CHARS + 40), AlertKind::Failed).expect("a push");
+        assert_eq!(push.body.chars().count(), PUSH_BODY_CHARS);
+        assert_eq!(push.kind, AlertKind::Failed);
     }
 
     #[test]

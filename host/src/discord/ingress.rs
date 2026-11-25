@@ -105,11 +105,14 @@ fn prompt(message: &Value, text: &str) -> String {
         .filter_map(|a| a["filename"].as_str().filter(|n| !n.is_empty() && n.len() <= 255))
         .take(10)
         .collect();
-    if names.is_empty() {
+    // The agent answering a Discord contact is the one posting here, so it must not promise to pass
+    // the message on (OpenBot 0.78.0).
+    let body = if names.is_empty() {
         text.to_owned()
     } else {
         format!("{text}\n\n[Attached, not downloaded: {}]", names.join(", "))
-    }
+    };
+    format!("{body}\n\n{}", crate::chat::team::channel_returns::external_reply_rule("Discord"))
 }
 
 fn valid_id(value: &str) -> bool {
@@ -131,7 +134,9 @@ mod tests {
     #[test]
     fn attachments_are_named_in_the_prompt() {
         let message = json!({"attachments": [{"filename": "a.png"}, {"filename": ""}]});
-        assert_eq!(prompt(&message, "look"), "look\n\n[Attached, not downloaded: a.png]");
-        assert_eq!(prompt(&json!({}), "look"), "look");
+        let rule = crate::chat::team::channel_returns::external_reply_rule("Discord");
+        assert_eq!(prompt(&message, "look"), format!("look\n\n[Attached, not downloaded: a.png]\n\n{rule}"));
+        assert_eq!(prompt(&json!({}), "look"), format!("look\n\n{rule}"));
+        assert!(prompt(&json!({}), "look").contains(crate::chat::team::channel_returns::EXTERNAL_REPLY_RULE));
     }
 }

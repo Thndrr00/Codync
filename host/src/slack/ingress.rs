@@ -42,6 +42,12 @@ pub(super) fn stable_id(parts: &[&str]) -> String {
     let hash = digest.finalize();
     format!("slack-{}", crate::chat::files::digest_hex(&hash))
 }
+/// The agent-facing prompt for one Slack message: the person's words plus the shared rule that the
+/// agent answering here is the one posting the reply (OpenBot 0.78.0). Pure so the rule has a test.
+fn agent_prompt(message: &crate::channels::Incoming) -> String {
+    format!("{}\n\n{}", message.prompt(), crate::chat::team::channel_returns::external_reply_rule("Slack"))
+}
+
 pub(crate) async fn receive(State(hub): State<Arc<Hub>>, headers: HeaderMap, body: Bytes) -> Response {
     if body.len() > 256 * 1024 {
         return StatusCode::PAYLOAD_TOO_LARGE.into_response();
@@ -108,7 +114,7 @@ pub(super) fn accept(hub: &Hub, c: &Config, envelope: &Value) -> Result<()> {
     if (message.text.is_empty() && !has_audio) || message.text.len() > 32 * 1024 {
         return Ok(());
     }
-    let prompt = message.prompt();
+    let prompt = agent_prompt(&message);
     let prompt = if has_audio && audio.is_none() { crate::channels::voice_notes::unavailable(&prompt) } else { prompt };
     if mention {
         hub.routines.receive_event(
@@ -197,5 +203,20 @@ mod tests {
         assert!(!authorized("secret", &headers, body, 1301));
         headers.append("x-slack-request-timestamp", "1000".parse().unwrap());
         assert!(!authorized("secret", &headers, body, 1000));
+    }
+
+    #[test]
+    fn a_slack_prompt_carries_the_external_reply_rule() {
+        let message = crate::channels::Incoming {
+            channel: "C1".into(),
+            person: "ann".into(),
+            thread: "1".into(),
+            text: "Please review this".into(),
+            files: vec![],
+        };
+        let prompt = agent_prompt(&message);
+        assert!(prompt.starts_with("Please review this\n\n"));
+        assert!(prompt.contains(crate::chat::team::channel_returns::EXTERNAL_REPLY_RULE));
+        assert!(prompt.contains("Slack reply rule:"));
     }
 }

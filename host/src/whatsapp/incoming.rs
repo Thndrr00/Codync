@@ -25,7 +25,10 @@ fn working_line_allowed(internal_result: bool, owner: bool) -> bool {
 /// [`super::place_name`], so a group whose name is missing still reads as "WhatsApp group" here.
 /// Pure so the fallback reaching the prompt is testable without a link or a bot actor.
 fn prompt(place: &str, note: &str) -> String {
-    format!("WhatsApp message from {place}:\n\n{note}")
+    format!(
+        "WhatsApp message from {place}:\n\n{note}\n\n{}",
+        crate::chat::team::channel_returns::external_reply_rule("WhatsApp")
+    )
 }
 
 /// OpenBot 0.72.0: the message you reply to brings its text and file into the agent's prompt. Pure
@@ -438,24 +441,15 @@ mod tests {
     #[test]
     fn a_group_with_no_name_is_named_in_the_agent_prompt() {
         // The prompt takes the same fallback as the chat list and history, so an agent never sees
-        // an empty group name (OpenBot 0.74.0).
+        // an empty group name (OpenBot 0.74.0). The external reply rule rides on the same prompt.
         let note = "Please review the PR";
-        assert_eq!(
-            prompt(super::super::place_name(None, true, "sender"), note),
-            "WhatsApp message from WhatsApp group:\n\nPlease review the PR"
-        );
-        assert_eq!(
-            prompt(super::super::place_name(Some("   "), true, "sender"), note),
-            "WhatsApp message from WhatsApp group:\n\nPlease review the PR"
-        );
-        assert_eq!(
-            prompt(super::super::place_name(Some("Family"), true, "sender"), note),
-            "WhatsApp message from Family:\n\nPlease review the PR"
-        );
-        assert_eq!(
-            prompt(super::super::place_name(None, false, "sender"), note),
-            "WhatsApp message from sender:\n\nPlease review the PR"
-        );
+        let rule = crate::chat::team::channel_returns::external_reply_rule("WhatsApp");
+        let with_rule = |place: &str| format!("WhatsApp message from {place}:\n\n{note}\n\n{rule}");
+        assert_eq!(prompt(super::super::place_name(None, true, "sender"), note), with_rule("WhatsApp group"));
+        assert_eq!(prompt(super::super::place_name(Some("   "), true, "sender"), note), with_rule("WhatsApp group"));
+        assert_eq!(prompt(super::super::place_name(Some("Family"), true, "sender"), note), with_rule("Family"));
+        assert_eq!(prompt(super::super::place_name(None, false, "sender"), note), with_rule("sender"));
+        assert!(with_rule("sender").contains(crate::chat::team::channel_returns::EXTERNAL_REPLY_RULE));
     }
 
     #[test]

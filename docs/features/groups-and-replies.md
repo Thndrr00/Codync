@@ -126,6 +126,14 @@ Four host decisions, all pure and tested beside the code that calls them, tighte
   failed, stopped or cancelled task sends a note instead of a result, so the agent can retry rather
   than telling the user to follow the channel. A routing task the lead cancelled and moved to an open
   task sends no result of its own. The receiving agent should end its turn, not poll for the result.
+  A request posted from a side thread returns to that thread — one lane, so no second main-chat turn
+  starts — and falls back to the main chat when the thread was closed or archived (OpenBot 0.78.0,
+  pure `return_lane` in `channel_returns.rs`, wired in `chat::group` with the task check in
+  `chat::tasks`).
+- **The agent posts the answer itself** (OpenBot 0.78.0). Every WhatsApp, Telegram, Slack and Discord
+  prompt carries the same fixed rule from `channel_returns::external_reply_rule`: the agent answering
+  there is the one posting to the person, so it must not promise to pass the message on unless it
+  actually posts it this turn. The pure decision and all four prompt builders are tested.
 - **Lead answers when routing times out** (`host/src/chat/decider.rs`, `t3-fix-coordinator-errors`).
   A lead that takes too long to choose a speaker, or answers with nothing usable, takes the message
   itself; no "lead did not answer in time" card waits for the user to pick a member.

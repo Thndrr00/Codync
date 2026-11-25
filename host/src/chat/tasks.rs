@@ -207,6 +207,21 @@ fn route(hub: &Arc<Hub>, chat: &str, thread: Option<&str>, task: &TaskInfo, text
     Ok(())
 }
 
+/// Whether `root` names a task thread of `bot` that is closed or archived. A channel result cannot
+/// return into a read-only lane, so it falls back to the agent's main chat (OpenBot 0.78.0).
+pub(crate) fn thread_archived(store: &crate::store::Store, bot: &str, root: &str) -> Result<bool> {
+    Ok(store.tasks(bot, None)?.iter().any(|task| task.root == root && task.state != TaskState::Open))
+}
+
+/// Posts a teammate-style result into `lane`, framed so the agent treats it as a result rather than
+/// a new user instruction. Used when channel work returns to the side thread that asked for it.
+pub(crate) fn route_teammate_result(hub: &Arc<Hub>, chat: &str, lane: Lane, text: &str) -> Result<()> {
+    let cfg = hub.store.bot(chat)?.filter(|r| !r.deleted).context("unknown chat")?.config;
+    let data = json!({"text": text, "source": "task", "teamReply": true});
+    crate::chat::messages::post_in_lane(hub, &cfg, lane, data)?;
+    Ok(())
+}
+
 /// Routes newly finished task turns back to their parents, once each. Called by `taskList` and by
 /// the explicit `taskCollectResults` method.
 pub(crate) fn task_collect_results(hub: &Arc<Hub>, bot: &str) -> Result<usize> {
@@ -586,5 +601,19 @@ mod tests {
         assert!(validate_name("   ").is_err());
         assert!(validate_name(&"x".repeat(121)).is_err());
         assert_eq!(validate_name("  Ship it  ").unwrap(), "Ship it");
+    }
+
+    #[test]
+    fn a_closed_or_archived_task_thread_cannot_take_a_channel_result() {
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let open = store.task_insert("b", "open", "task:open").expect("an open task");
+        let closed = store.task_insert("b", "closed", "task:closed").expect("a closed task");
+        let archived = store.task_insert("b", "archived", "task:archived").expect("an archived task");
+        store.task_set_state(&closed.id, TaskState::Closed, false).expect("a close");
+        store.task_set_state(&archived.id, TaskState::Archived, false).expect("an archive");
+        assert!(!thread_archived(&store, "b", &open.root).expect("a check"));
+        assert!(thread_archived(&store, "b", &closed.root).expect("a check"));
+        assert!(thread_archived(&store, "b", &archived.root).expect("a check"));
+        assert!(!thread_archived(&store, "b", "task:missing").expect("a check"));
     }
 }
