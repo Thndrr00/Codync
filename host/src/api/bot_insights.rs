@@ -556,6 +556,36 @@ fn connectors_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Model tuning: the ACP config options and the fast-mode switch.
+fn tuning_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_tuning as t;
+
+    let lines: Vec<t::OptionLine> = row.config.model_options.iter().map(|(k, v)| t::option_line(k, v)).collect();
+    let fast = row.config.fast_mode;
+
+    json!({
+        "headline": t::tuning_headline(&lines, fast),
+        "tone": t::tuning_tone(&lines, fast),
+        "count": t::count_label(&lines),
+        "total": lines.len(),
+        "on": t::on_count(&lines),
+        "off": t::off_count(&lines),
+        "fast": fast,
+        "effort": t::effort_label(&lines),
+        "effortIcon": t::effort_icon(&lines),
+        "reasoning": t::reasoning_on(&lines),
+        "summary": t::summary(&lines, fast).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "options": t::sorted(&lines).iter().map(|l| json!({
+            "key": l.key,
+            "title": l.title,
+            "value": l.value,
+            "icon": l.icon,
+            "tone": l.tone,
+        })).collect::<Vec<_>>(),
+        "enabled": t::enabled_first(&lines, 6).iter().map(|l| json!({"title": l.title, "value": l.value, "icon": l.icon})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -618,6 +648,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "resilience": resilience_view(&row),
         "identity": identity_view(&row),
         "connectors": connectors_view(&row),
+        "tuning": tuning_view(&row),
         "routines": routines,
         "usage": {
             "used": used,

@@ -17,9 +17,41 @@ public struct BotInsights: Decodable, Sendable {
     public let resilience: InsightResilience
     public let identity: InsightIdentity
     public let connectors: InsightConnectors
+    public let tuning: InsightTuning
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of one bot's model tuning.
+public struct InsightTuning: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let count: String
+    public let total: Int
+    public let on: Int
+    public let off: Int
+    public let fast: Bool
+    public let effort: String
+    public let effortIcon: String
+    public let reasoning: Bool
+    public let summary: [InsightSummaryRow]
+    public let options: [InsightTuningOption]
+    public let enabled: [InsightTuningEnabled]
+}
+
+public struct InsightTuningOption: Decodable, Sendable {
+    public let key: String
+    public let title: String
+    public let value: String
+    public let icon: String
+    public let tone: String
+}
+
+public struct InsightTuningEnabled: Decodable, Sendable {
+    public let title: String
+    public let value: String
+    public let icon: String
 }
 
 /// A host-computed summary of one bot's connected accounts.

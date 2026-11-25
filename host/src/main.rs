@@ -27,6 +27,7 @@ mod bdots_routines;
 mod bdots_spend;
 mod bdots_text;
 mod bdots_trust;
+mod bdots_tuning;
 mod bdots_week;
 mod browser;
 mod budget;

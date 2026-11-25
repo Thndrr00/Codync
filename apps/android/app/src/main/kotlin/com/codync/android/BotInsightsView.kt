@@ -27,7 +27,7 @@ import com.codync.android.design.*
         if (error != null) CardSection("Insights") {
             row { Text("Could not load insights.", style = Type.body, color = Palette.secondary) }
         } else if (data == null) CardSection("Insights") {
-            row { Text("Loading…", style = Type.body, color = Palette.secondary) }
+            row { Text("Loadingâ€¦", style = Type.body, color = Palette.secondary) }
         } else {
             val insights = data!!
             if (insights.description.isNotBlank()) CardSection("About") {
@@ -41,6 +41,15 @@ import com.codync.android.design.*
                     ValueRow("Tokens", if (insights.usage.limit != null) "${insights.usage.usedText} / ${insights.usage.limit}" else insights.usage.usedText)
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
+            }
+            val tuning = insights.tuning
+            CardSection("Model tuning") {
+                row { Text(tuning.effort, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(tuning.headline, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Options", tuning.count) }
+                for (opt in tuning.options) row {
+                    Text("${opt.title}: ${opt.value}", style = Type.caption, color = Palette.secondary)
+                }
             }
             val accounts = insights.connectors
             CardSection("Connected accounts") {
@@ -60,9 +69,9 @@ import com.codync.android.design.*
                 row { Text(identity.headline, style = Type.subheadline.semibold, color = Palette.text) }
                 row { Text("Roster: ${identity.band}   Section: ${identity.section}   Rank: ${identity.rank}",
                     style = Type.caption, color = Palette.secondary) }
-                row { Text("${identity.color} · ${identity.shape} · ${identity.look}", style = Type.caption, color = Palette.tertiary) }
+                row { Text("${identity.color} Â· ${identity.shape} Â· ${identity.look}", style = Type.caption, color = Palette.tertiary) }
                 for (trait in identity.traits) row {
-                    Text("${if (trait.on) "●" else "○"} ${trait.label}: ${trait.detail}",
+                    Text("${if (trait.on) "â—" else "â—‹"} ${trait.label}: ${trait.detail}",
                         style = Type.caption, color = if (trait.on) Palette.text else Palette.secondary)
                 }
             }
@@ -72,7 +81,7 @@ import com.codync.android.design.*
                 row { Text(resilience.bar, style = Type.caption, color = Palette.accent) }
                 row { Text(resilience.headline, style = Type.caption, color = Palette.secondary) }
                 if (resilience.switches.isNotEmpty()) row {
-                    Text(resilience.switches.joinToString("  ") { "${if (it.on) "●" else "○"} ${it.label}" },
+                    Text(resilience.switches.joinToString("  ") { "${if (it.on) "â—" else "â—‹"} ${it.label}" },
                         style = Type.caption, color = Palette.tertiary)
                 }
                 for (fb in resilience.fallbacks) row {
@@ -112,7 +121,7 @@ import com.codync.android.design.*
                 row { Text("Active: ${schedule.active}   Paused: ${schedule.paused}   ${schedule.mix}",
                     style = Type.caption, color = Palette.secondary) }
                 for (item in schedule.soonest) row {
-                    Text("${if (item.enabled) "●" else "○"} ${item.name} · ${item.trigger}${if (item.nextIn.isNotBlank()) " · ${item.nextIn}" else ""}",
+                    Text("${if (item.enabled) "â—" else "â—‹"} ${item.name} Â· ${item.trigger}${if (item.nextIn.isNotBlank()) " Â· ${item.nextIn}" else ""}",
                         style = Type.caption, color = Palette.secondary)
                 }
             }
@@ -122,7 +131,7 @@ import com.codync.android.design.*
                 row { Text(week.headline, style = Type.caption, color = Palette.secondary) }
                 row { ValueRow("Steps", week.totalLabel) }
                 row { ValueRow("Trend", week.trend.label) }
-                week.peak?.let { row { Text("Busiest: ${it.label} · ${it.count}", style = Type.caption, color = Palette.secondary) } }
+                week.peak?.let { row { Text("Busiest: ${it.label} Â· ${it.count}", style = Type.caption, color = Palette.secondary) } }
                 for (day in week.top) row {
                     Text("${day.label}  ${day.bar}  ${day.count}", style = Type.caption, color = Palette.tertiary)
                 }
@@ -132,11 +141,11 @@ import com.codync.android.design.*
                 row { Text(profile.bar, style = Type.caption, color = Palette.accent) }
                 row { Text(profile.headline, style = Type.subheadline.semibold, color = Palette.text) }
                 if (profile.nextUp.isNotEmpty()) row {
-                    Text("Next up: ${profile.nextUp.joinToString(" · ") { it.title }}",
+                    Text("Next up: ${profile.nextUp.joinToString(" Â· ") { it.title }}",
                         style = Type.caption, color = Palette.secondary)
                 }
                 for (cap in profile.caps) row {
-                    Text("${if (cap.enabled) "●" else "○"} ${cap.title}: ${cap.detail}",
+                    Text("${if (cap.enabled) "â—" else "â—‹"} ${cap.title}: ${cap.detail}",
                         style = Type.caption, color = if (cap.enabled) Palette.text else Palette.secondary)
                 }
             }
@@ -157,11 +166,11 @@ import com.codync.android.design.*
                     Text("$activity.errors failed", style = Type.caption, color = Palette.danger)
                 }
                 if (activity.groups.isNotEmpty()) row {
-                    Text(activity.groups.take(6).joinToString(" · ") { "${it.count} ${it.label}" },
+                    Text(activity.groups.take(6).joinToString(" Â· ") { "${it.count} ${it.label}" },
                         style = Type.caption, color = Palette.secondary)
                 }
                 for (day in activity.days.takeLast(5)) row {
-                    Text("${day.label}  ${"▮".repeat(day.width.coerceAtLeast(1))}  ${day.count}",
+                    Text("${day.label}  ${"â–®".repeat(day.width.coerceAtLeast(1))}  ${day.count}",
                         style = Type.caption, color = Palette.tertiary)
                 }
                 for (step in activity.items.take(6)) row {
@@ -186,7 +195,7 @@ import com.codync.android.design.*
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(routine.name, style = Type.subheadline.semibold, color = Palette.text)
                             if (!routine.enabled) Text("Paused", style = Type.caption, color = Palette.secondary)
-                            if (routine.schedules.isNotEmpty()) Text(routine.schedules.joinToString(" · "), style = Type.caption, color = Palette.secondary)
+                            if (routine.schedules.isNotEmpty()) Text(routine.schedules.joinToString(" Â· "), style = Type.caption, color = Palette.secondary)
                             routine.nextIn?.let { Text("Next in $it", style = Type.caption, color = Palette.tertiary) }
                         }
                     }

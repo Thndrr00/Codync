@@ -66,6 +66,27 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let tuning = &data["tuning"];
+    if tuning.is_object() {
+        line(buf, &mut y, tr("Model tuning").into_owned(), t.bold.patch(t.panel));
+        let effort = tuning["effort"].as_str().unwrap_or("");
+        let headline = tuning["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{effort} · {headline}"), t.text.patch(t.panel));
+        let options: Vec<String> = tuning["options"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .take(8)
+                    .map(|o| format!("  {}: {}", o["title"].as_str().unwrap_or(""), o["value"].as_str().unwrap_or("")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for option in options {
+            line(buf, &mut y, option, t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let accounts = &data["connectors"];
     if accounts.is_object() {
         line(buf, &mut y, tr("Connected accounts").into_owned(), t.bold.patch(t.panel));

@@ -20,10 +20,35 @@ data class BotInsights(
     val resilience: InsightResilience = InsightResilience(),
     val identity: InsightIdentity = InsightIdentity(),
     val connectors: InsightConnectors = InsightConnectors(),
+    val tuning: InsightTuning = InsightTuning(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
 )
+
+/** A host-computed summary of one bot's model tuning. */
+@Serializable
+data class InsightTuning(
+    val headline: String = "",
+    val tone: String = "",
+    val count: String = "",
+    val total: Int = 0,
+    val on: Int = 0,
+    val off: Int = 0,
+    val fast: Boolean = false,
+    val effort: String = "",
+    val effortIcon: String = "",
+    val reasoning: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val options: List<InsightTuningOption> = emptyList(),
+    val enabled: List<InsightTuningEnabled> = emptyList(),
+)
+
+@Serializable data class InsightTuningOption(
+    val key: String = "", val title: String = "", val value: String = "",
+    val icon: String = "", val tone: String = "",
+)
+@Serializable data class InsightTuningEnabled(val title: String = "", val value: String = "", val icon: String = "")
 
 /** A host-computed summary of one bot's connected accounts. */
 @Serializable

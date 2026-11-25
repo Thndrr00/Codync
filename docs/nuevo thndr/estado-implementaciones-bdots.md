@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Ajustes del modelo (21 helpers + UI en 4 clientes)
+
+`bdots_tuning.rs` añade 21 helpers puros para las opciones de configuración ACP del modelo
+(effort, reasoning, fast, verbosity): títulos, iconos, tonos, detectores on/off, conteos,
+etiquetas de esfuerzo, titular, ordenación y ensamblaje. Reutiliza `bdots_desk`, `bdots_text` y
+`bdots_more`. El endpoint `botInsights` añade el campo `tuning` desde `config.model_options` y
+`config.fast_mode`, y la sección «Model tuning» se muestra en los cuatro clientes.
+
 ## Cuentas conectadas (23 helpers + UI en 4 clientes)
 
 `bdots_connectors.rs` añade 23 helpers puros que clasifican los conectores del bot (chat, correo,

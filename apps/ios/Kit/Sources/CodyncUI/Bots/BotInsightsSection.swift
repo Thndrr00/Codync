@@ -30,6 +30,12 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let tuning = insights.tuning
+                    Text(tuning.effort).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(tuning.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(tuning.options, id: \.key) { opt in
+                        Text("\(opt.title): \(opt.value)").font(.footnote).foregroundStyle(Palette.secondary)
+                    }
                     let accounts = insights.connectors
                     Text(accounts.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     ForEach(accounts.categories, id: \.kind) { cat in

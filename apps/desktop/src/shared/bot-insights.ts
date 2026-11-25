@@ -1,6 +1,22 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightTuning {
+  headline: string
+  tone: string
+  count: string
+  total: number
+  on: number
+  off: number
+  fast: boolean
+  effort: string
+  effortIcon: string
+  reasoning: boolean
+  summary: { key: string; value: string }[]
+  options: { key: string; title: string; value: string; icon: string; tone: string }[]
+  enabled: { title: string; value: string; icon: string }[]
+}
+
 export interface InsightConnectors {
   headline: string
   tone: string
@@ -192,6 +208,7 @@ export interface BotInsights {
   resilience: InsightResilience
   identity: InsightIdentity
   connectors: InsightConnectors
+  tuning: InsightTuning
   routines: InsightRoutine[]
   usage: {
     used: number

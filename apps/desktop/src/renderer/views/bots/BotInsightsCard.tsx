@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,31 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Model tuning')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(tuning.tone)}>{tuning.effort}</Text>
+        <Text size="footnote" tone="secondary">{tuning.headline}</Text>
+        <ValueRow label={tr('Options')}>{tuning.count}</ValueRow>
+        {tuning.enabled.length ? (
+          <VStack gap={2}>
+            {tuning.enabled.map((opt) => (
+              <HStack key={opt.title} gap={6}>
+                <Text size="footnote" tone="tertiary">{opt.title}</Text>
+                <Text size="footnote" tone="accent">{opt.value}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
+        {tuning.options.length ? (
+          <VStack gap={2}>
+            {tuning.options.map((opt) => (
+              <VStack key={opt.key} gap={0}>
+                <Text size="footnote" tone={toneOf(opt.tone)}>{`${opt.title}: ${opt.value}`}</Text>
+              </VStack>
+            ))}
+          </VStack>
+        ) : null}
       </CardSection>
 
       <CardSection title={tr('Connected accounts')}>
