@@ -229,6 +229,23 @@ mod tests {
     }
 
     #[test]
+    fn a_linked_number_offers_only_its_writable_chats_and_its_own_chat_as_places() {
+        let (hub, dir) = hub();
+        assert!(crate::whatsapp::delivery::places(&hub.store).unwrap().is_empty(), "no link, no place");
+        hub.store.kv_set("whatsapp.link.account", "5215@s.whatsapp.net").unwrap();
+        hub.store.kv_set("whatsapp.bot", "b1").unwrap();
+        hub.store
+            .kv_set("whatsapp.allowed", &json!(["5216@s.whatsapp.net", {"jid":"g@g.us","readOnly":true}]).to_string())
+            .unwrap();
+        let rows = crate::whatsapp::delivery::places(&hub.store).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "5215@s.whatsapp.net");
+        assert_eq!(rows[0].1, ["5216@s.whatsapp.net", "5215@s.whatsapp.net"], "read-only chats are not destinations");
+        assert_eq!(rows[0].2, ["b1"]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn only_a_read_only_entry_stops_a_bot_reply() {
         let writable = AllowedChat { jid: "a@s.whatsapp.net".into(), read_only: false };
         let read_only = AllowedChat { jid: "g@g.us".into(), read_only: true };

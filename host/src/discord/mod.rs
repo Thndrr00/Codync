@@ -164,6 +164,25 @@ pub(crate) fn credentials(store: &Store) -> Result<Option<String>> {
     Ok(load(store)?.filter(|c| !c.bot_token.is_empty()).map(|c| c.bot_token))
 }
 
+/// Discord servers as messaging places: only bound channels and their bots are destinations. The
+/// token stays in the vault, never in this list.
+pub(crate) fn places(store: &Store) -> Result<Vec<(String, Vec<String>, Vec<String>)>> {
+    Ok(load(store)?
+        .filter(|c| !c.guild_id.is_empty() && !c.bindings.is_empty())
+        .map(|c| {
+            let targets = c.bindings.iter().map(|b| b.channel_id.clone()).collect();
+            let bots = c.bindings.iter().map(|b| b.bot_id.clone()).collect();
+            vec![(c.guild_id, targets, bots)]
+        })
+        .unwrap_or_default())
+}
+
+/// Posts Markdown text in a bound channel, answering a message when `reply_to` names one.
+pub(crate) async fn post(store: &Store, channel: &str, text: &str, reply_to: &str) -> Result<()> {
+    let token = credentials(store)?.context("Discord is not configured.")?;
+    client::message(&Endpoint::discord(), &token, channel, reply_to, text, &[]).await
+}
+
 /// Reacts to one message with `emoji` (a character, or `name:id` for a custom one).
 pub(crate) async fn react(store: &Store, channel: &str, message: &str, emoji: &str) -> Result<()> {
     let token = credentials(store)?.context("Discord is not configured.")?;

@@ -114,7 +114,9 @@ pub(super) fn accept(hub: &Hub, c: &Config, envelope: &Value) -> Result<()> {
     if (message.text.is_empty() && !has_audio) || message.text.len() > 32 * 1024 {
         return Ok(());
     }
-    let prompt = agent_prompt(&message);
+    // The workspace's facts reach every conversation here, but never the bot's own chat.
+    let prompt =
+        crate::chat::memory::messaging::with_facts(&hub.store, "slack", &c.workspace_id, agent_prompt(&message));
     let prompt = if has_audio && audio.is_none() { crate::channels::voice_notes::unavailable(&prompt) } else { prompt };
     if mention {
         hub.routines.receive_event(

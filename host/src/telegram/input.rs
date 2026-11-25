@@ -38,7 +38,9 @@ pub(super) fn post(hub: &Arc<Hub>, name: &str, user: i64, expected: &str, text: 
         hub,
         &row.config,
         json!({
-            "text":crate::channels::with_notes(&bot.memory, &crate::channels::notes(&hub.store, "telegram", &bot.name), &prompt(text)),"attachments":[],"clientNonce":nonce,
+            "text":crate::channels::with_notes(&bot.memory, &crate::channels::notes(&hub.store, "telegram", &bot.name),
+                &crate::chat::memory::messaging::with_facts(&hub.store, "telegram", name, prompt(text))),
+            "attachments":[],"clientNonce":nonce,
             "source":"telegram","telegramFence":{"name":name,"user":user,"epoch":epoch(&bot)}
         }),
     )

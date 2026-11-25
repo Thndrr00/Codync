@@ -145,6 +145,31 @@ Four host decisions, all pure and tested beside the code that calls them, tighte
   "Notify me" now also stops the "done" notification for that member's channel reply; the room's own
   mute is still checked by the push layer.
 
+### Posting to a connected place
+
+`messaging_list_places` shows the WhatsApp number, Telegram bots, Slack workspaces and Discord
+servers set up on this computer, with the destinations each allows; no token is ever in that list.
+`messaging_post` then posts Markdown to one of those destinations from the agent's own chat, a
+channel conversation or a routine (OpenBot messaging.md). The pure `post_target(place, args)` checks
+the place, the destination's shape, the bounded text, `replyTo` and up to ten mentions before any
+I/O; `allowed_target` refuses a destination that is not on that connection's allowlist (WhatsApp's
+writable chats and its owner's own chat, Telegram's paired users, Slack's and Discord's bound
+channels). A connection bound to another bot is refused too.
+
+- `replyTo` answers a message id on that place: a native Slack `thread_ts`, Telegram
+  `reply_parameters` or Discord `message_reference`. The WhatsApp bridge takes plain text, so the
+  marker is written into the message instead, as are `@` mentions there.
+- Mentions are rendered for each platform (`@user`, `<@U…>`, `<@…>`); the same text goes out through
+  the connection's existing send path, never a new HTTP client in the tool.
+- Secrets are redacted before sending: inline credentials like `api_key = …` and PEM blocks are
+  marked, and values from the bot's own vault (including a website's 2FA seed) are replaced by a
+  length marker. A failed post is reported to the agent; an ambiguous network outcome is never
+  retried automatically.
+- Routines get the same tool through the `routines` MCP bridge (`host/src/routines/mcp.rs`), with the
+  same pure decision and allowlist guard. The bridge checks and queues the post on the host runtime,
+  so a run can finish while a slow channel call is still going. Connection memories are not exposed
+  to routines, which run in the bot's own chat.
+
 Scheduled runs with nothing to report end quietly (`triage-13537`): the silence markers are already
 settled by `agent/bot/proactive.rs`, and `host/src/chat/routine_quiet.rs` adds OpenCode-only guidance
 for calling the quiet tool inside `execute` and answering only `[[no-update]]` when OpenCode refuses

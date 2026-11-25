@@ -56,7 +56,8 @@ pub(super) fn accept(hub: &Hub, c: &Config, message: &Value) -> Result<()> {
     if (text.is_empty() && !has_audio) || text.len() > 32 * 1024 {
         return Ok(());
     }
-    let prompt = prompt(message, &text);
+    // The server's facts reach every conversation here, but never the bot's own chat.
+    let prompt = crate::chat::memory::messaging::with_facts(&hub.store, "discord", &c.guild_id, prompt(message, &text));
     let prompt = if has_audio && audio.is_none() { crate::channels::voice_notes::unavailable(&prompt) } else { prompt };
     let event = json!({
         "source": "discord", "event": if mention {"message.mention"} else {"message.created"},

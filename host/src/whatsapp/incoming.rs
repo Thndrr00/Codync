@@ -326,7 +326,13 @@ impl WhatsApp {
             return;
         }
         let id = entry_id(&["message", chat, event["id"].as_str().unwrap_or_default()]);
-        let prompt = prompt(super::place_name(event["name"].as_str(), group, sender), &note);
+        // Connection facts go into every conversation on this number, never into the bot's own chat.
+        let prompt = crate::chat::memory::messaging::with_facts(
+            &hub.store,
+            "whatsapp",
+            &me,
+            prompt(super::place_name(event["name"].as_str(), group, sender), &note),
+        );
         let lane = crate::store::Lane::in_thread(&bot, &root);
         let Ok((entry, _)) = hub.add_entry_once(
             &id,

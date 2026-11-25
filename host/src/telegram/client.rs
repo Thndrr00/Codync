@@ -210,6 +210,17 @@ pub(super) async fn reply(ep: &Endpoint, token: &str, chat: i64, text: &str) -> 
     sent["message_id"].as_i64().context("Telegram sent no message id")
 }
 
+/// Posts a Markdown message from an agent or routine, answering `reply_to` when given. The text is
+/// clipped the same way a bot's reply is, and no token reaches the caller.
+pub(crate) async fn post(ep: &Endpoint, token: &str, chat: i64, text: &str, reply_to: &str) -> Result<()> {
+    let mut body = text_body(chat, text, true);
+    if let Ok(message) = reply_to.parse::<i64>() {
+        body["reply_parameters"] = json!({"message_id": message});
+    }
+    call(ep, token, "sendMessage", &body).await?;
+    Ok(())
+}
+
 /// Replaces a message's text (and drops its buttons).
 pub(super) async fn edit(ep: &Endpoint, token: &str, chat: i64, message: i64, text: &str) -> Result<()> {
     edit_text(ep, token, chat, message, text, false).await

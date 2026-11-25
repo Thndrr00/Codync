@@ -154,6 +154,26 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   - each bot's Engram database (or the Markdown memory before it), the same way. Then the old files (deleted bots'
     too) and the Engram download go, and dreaming starts from that point in the chat.
 
+## Messaging connection memories (`host/src/chat/memory/messaging.rs`)
+
+Following OpenBot's messaging docs, a connected place keeps its own short facts, not a copy of its
+transcript: at most **32 facts of at most 500 characters** per connection. A connection is the
+linked WhatsApp number, a named Telegram bot, a Slack workspace or a Discord server; every
+conversation on that connection sees the facts, and none of them go into the agent's own chat, its
+routines, `MEMORY.md`, dreaming or the apps. The host keeps them in its existing `kv` store beside
+channel notes, under `messaging.facts.<provider>.<connection>`; there is no second memory store.
+
+- The built-in `memory` MCP server adds `messaging_list_places`, `messaging_remember` and
+  `messaging_forget_memory`. A fact is trimmed, kept to one line, redacted like memory notes, and
+  refused when it repeats one already there or when the connection is full (forget one first). Each
+  answer lists the facts so the next call can name an index. The pure `messaging_fact(text,
+  existing, cap)` decides all of that before any write.
+- A tool call names a place from `messaging_list_places`, and only a connection bound to this bot
+  accepts facts. The four channel ingress builders (WhatsApp, Telegram, Slack, Discord) prepend the
+  connection's facts to the message they queue; a chat or routine message never gets that block.
+- The same module owns the outgoing `messaging_post` tool: see
+  [groups and replies](groups-and-replies.md#posting-to-a-connected-place).
+
 ## Compaction and rollover (`host/src/agent/bot/compaction.rs`, rules in `codync_mem::compaction`)
 
 - **What the host records**, per session in `kv` (`compaction.<bot>.<session>`): context use and window size

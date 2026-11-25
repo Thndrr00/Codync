@@ -140,6 +140,25 @@ pub(crate) fn first_name(store: &Store) -> Result<Option<String>> {
     Ok(load(store)?.bots.into_iter().next().map(|b| b.name))
 }
 
+/// Telegram bots as messaging places: the people paired with each bot are the only destinations
+/// the agent may post to. Tokens, usernames and pairing codes are never part of this list.
+pub(crate) fn places(store: &Store) -> Result<Vec<(String, Vec<String>, Vec<String>)>> {
+    Ok(load(store)?
+        .bots
+        .into_iter()
+        .map(|bot| {
+            let allowed = bot.allowed.iter().map(i64::to_string).collect();
+            (bot.name, allowed, vec![bot.bot_id])
+        })
+        .collect())
+}
+
+/// Posts a Markdown message as the named bot, answering a message when `reply_to` is an id.
+pub(crate) async fn post(store: &Store, name: &str, chat: i64, text: &str, reply_to: &str) -> Result<()> {
+    let token = token(store, name)?.context("Unknown Telegram bot.")?;
+    client::post(&Endpoint::telegram(), &token, chat, text, reply_to).await
+}
+
 /// Sends one message to a Telegram chat as `name`'s bot, through the egress policy.
 pub(crate) async fn send_text(store: &Store, name: &str, chat: i64, text: &str) -> Result<()> {
     let token = token(store, name)?.context("Unknown Telegram bot.")?;

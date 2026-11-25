@@ -110,6 +110,36 @@ pub(crate) fn credentials(store: &Store) -> Result<Option<(String, String)>> {
     Ok(load(store)?.map(|c| (c.bot_token, c.generation)))
 }
 
+/// Slack workspaces as messaging places: only bound channels are destinations and only the bots
+/// bound to them may post. The bot token and signing secret never appear in this list.
+pub(crate) fn places(store: &Store) -> Result<Vec<(String, Vec<String>, Vec<String>)>> {
+    Ok(load(store)?
+        .map(|c| {
+            let targets = c.bindings.iter().map(|b| b.channel_id.clone()).collect();
+            let bots = c.bindings.iter().map(|b| b.bot_id.clone()).collect();
+            vec![(c.workspace_id, targets, bots)]
+        })
+        .unwrap_or_default())
+}
+
+/// Posts Markdown text in a bound channel, answering `thread_ts` when one is given.
+pub(crate) async fn post(store: &Store, channel: &str, text: &str, reply_to: &str) -> Result<()> {
+    let (token, _) = credentials(store)?.context("Slack is not configured.")?;
+    let url = "https://slack.com/api/chat.postMessage";
+    let client = crate::egress::client(crate::egress::Policy::Only(&["slack.com"]), url).await?;
+    let mut body = json!({"channel": channel, "text": text, "unfurl_links": false, "unfurl_media": false});
+    if !reply_to.is_empty() {
+        body["thread_ts"] = json!(reply_to);
+    }
+    let response =
+        client.post(url).bearer_auth(token).json(&body).timeout(std::time::Duration::from_secs(20)).send().await?;
+    let answer: Value = response.json().await?;
+    if answer["ok"] != true {
+        bail!("Slack refused the post: {}", answer["error"].as_str().unwrap_or("unknown"));
+    }
+    Ok(())
+}
+
 pub(crate) async fn call(hub: &Arc<Hub>, method: &str, body: Value) -> Result<Value> {
     crate::market::vault::unlock(hub.clone()).await?;
     let prepared = if method == "setSlackChannel" {
