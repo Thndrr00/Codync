@@ -42,6 +42,16 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val workspace = insights.workspace
+            CardSection("Workspace") {
+                row { Text(workspace.label, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(workspace.headline, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Folder", workspace.folder) }
+                for (item in workspace.lines) row {
+                    Text("${if (item.set) "●" else "○"} ${item.label}: ${item.detail}",
+                        style = Type.caption, color = if (item.set) Palette.text else Palette.secondary)
+                }
+            }
             val memory = insights.memory
             CardSection("Memory") {
                 row { Text(memory.label, style = Type.subheadline.semibold, color = Palette.text) }

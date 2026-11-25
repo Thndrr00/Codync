@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Espacio de trabajo (23 helpers + UI en 4 clientes)
+
+`bdots_workspace.rs` añade 23 helpers puros sobre el entorno de trabajo del bot: carpeta, comando
+del agente, comando de verificación y perfil de navegador, con normalización de rutas y comandos,
+puntuación de completitud, etiquetas, titular, líneas de display y estados. Reutiliza `bdots_text`,
+`bdots_more` y `bdots_desk`. El endpoint `botInsights` añade el campo `workspace` desde
+`config.cwd`, `config.command`, `config.verify_command` y `config.browser_profile`; la sección
+«Workspace» se muestra en los cuatro clientes.
+
 ## Memoria (23 helpers + UI en 4 clientes)
 
 `bdots_memory.rs` añade 23 helpers puros sobre la memoria del bot: switches de notas

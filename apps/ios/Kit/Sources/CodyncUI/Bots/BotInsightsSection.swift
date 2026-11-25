@@ -30,6 +30,13 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let workspace = insights.workspace
+                    Text(workspace.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(workspace.headline).font(.footnote).foregroundStyle(Palette.secondary)
+                    ForEach(workspace.lines, id: \.id) { item in
+                        Text("\(item.set ? "●" : "○") \(item.label): \(item.detail)")
+                            .font(.footnote).foregroundStyle(item.set ? Palette.text : Palette.secondary)
+                    }
                     let memory = insights.memory
                     Text(memory.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(memory.headline).font(.footnote).foregroundStyle(Palette.secondary)

@@ -22,9 +22,31 @@ data class BotInsights(
     val connectors: InsightConnectors = InsightConnectors(),
     val tuning: InsightTuning = InsightTuning(),
     val memory: InsightMemory = InsightMemory(),
+    val workspace: InsightWorkspace = InsightWorkspace(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed summary of one bot's work environment. */
+@Serializable
+data class InsightWorkspace(
+    val headline: String = "",
+    val label: String = "",
+    val tone: String = "",
+    val score: Int = 0,
+    val folder: String = "",
+    val folderIcon: String = "",
+    val folderTone: String = "",
+    val set: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
+    val lines: List<InsightWorkspaceLine> = emptyList(),
+)
+
+@Serializable data class InsightWorkspaceLine(
+    val id: String = "", val label: String = "", val detail: String = "",
+    val icon: String = "", val tone: String = "", val set: Boolean = false,
+    val stateIcon: String = "", val stateTone: String = "",
 )
 
 /** A host-computed memory posture for one bot. */

@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -58,6 +58,18 @@ export function BotInsightsCard({ botId }: { botId: string }) {
           {usage.limit === null ? usage.usedText : `${usage.usedText} / ${usage.limit}`}
         </ValueRow>
         <ValueRow label={tr('Skills')}>{String(skills.total)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Workspace')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(workspace.tone)}>{workspace.label}</Text>
+        <Text size="footnote" tone="secondary">{workspace.headline}</Text>
+        <ValueRow label={tr('Folder')}>{workspace.folder}</ValueRow>
+        {workspace.lines.map((item) => (
+          <HStack key={item.id} gap={6}>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{item.set ? '●' : '○'}</Text>
+            <Text size="footnote" tone={toneOf(item.stateTone)}>{`${item.label}: ${item.detail}`}</Text>
+          </HStack>
+        ))}
       </CardSection>
 
       <CardSection title={tr('Memory')}>

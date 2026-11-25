@@ -19,9 +19,35 @@ public struct BotInsights: Decodable, Sendable {
     public let connectors: InsightConnectors
     public let tuning: InsightTuning
     public let memory: InsightMemory
+    public let workspace: InsightWorkspace
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed summary of one bot's work environment.
+public struct InsightWorkspace: Decodable, Sendable {
+    public let headline: String
+    public let label: String
+    public let tone: String
+    public let score: Int
+    public let folder: String
+    public let folderIcon: String
+    public let folderTone: String
+    public let set: Int
+    public let summary: [InsightSummaryRow]
+    public let lines: [InsightWorkspaceLine]
+}
+
+public struct InsightWorkspaceLine: Decodable, Sendable {
+    public let id: String
+    public let label: String
+    public let detail: String
+    public let icon: String
+    public let tone: String
+    public let set: Bool
+    public let stateIcon: String
+    public let stateTone: String
 }
 
 /// A host-computed memory posture for one bot.

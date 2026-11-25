@@ -626,6 +626,41 @@ fn memory_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Workspace: the folder, agent command, verification command and browser profile.
+fn workspace_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_workspace as w;
+
+    let c = &row.config;
+    let cwd = c.cwd.as_str();
+    let command = c.command.as_deref();
+    let verify = c.verify_command.as_deref();
+    let profile = c.browser_profile.as_deref();
+    let lines = w::build_lines(cwd, command, verify, profile);
+    let score = w::workspace_score(cwd, command, verify, profile);
+
+    json!({
+        "headline": w::workspace_headline(cwd, command, verify, profile),
+        "label": w::workspace_label(score),
+        "tone": w::workspace_tone(score),
+        "score": score,
+        "folder": w::folder_name(cwd),
+        "folderIcon": w::folder_icon(cwd),
+        "folderTone": w::folder_tone(cwd),
+        "set": w::set_count(cwd, command, verify, profile),
+        "summary": w::summary(cwd, command, verify, profile).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+        "lines": lines.iter().map(|l| json!({
+            "id": l.id,
+            "label": l.label,
+            "detail": l.detail,
+            "icon": l.icon,
+            "tone": l.tone,
+            "set": l.set,
+            "stateIcon": w::state_icon(l.set),
+            "stateTone": w::state_tone(l.set),
+        })).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -690,6 +725,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "connectors": connectors_view(&row),
         "tuning": tuning_view(&row),
         "memory": memory_view(&row),
+        "workspace": workspace_view(&row),
         "routines": routines,
         "usage": {
             "used": used,
