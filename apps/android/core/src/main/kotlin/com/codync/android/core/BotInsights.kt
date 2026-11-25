@@ -37,9 +37,20 @@ data class BotInsights(
     val blocks: InsightBlocks = InsightBlocks(),
     val access: InsightAccess = InsightAccess(),
     val dictation: InsightDictation = InsightDictation(),
+    val liveness: InsightLiveness = InsightLiveness(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed liveness and delivery summary. */
+@Serializable
+data class InsightLiveness(
+    val headline: String = "", val tone: String = "", val state: String = "",
+    val icon: String = "", val active: Boolean = false, val age: String = "",
+    val generation: Int = 0, val heartbeat: Int = 0, val due: Boolean = false,
+    val outcome: String = "", val outcomeIcon: String = "", val outcomeTone: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** Voice dictation settings from host configuration. */

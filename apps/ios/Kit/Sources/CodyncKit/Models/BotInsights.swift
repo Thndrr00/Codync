@@ -34,9 +34,27 @@ public struct BotInsights: Decodable, Sendable {
     public let blocks: InsightBlocks
     public let access: InsightAccess
     public let dictation: InsightDictation
+    public let liveness: InsightLiveness
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed liveness and delivery summary.
+public struct InsightLiveness: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let state: String
+    public let icon: String
+    public let active: Bool
+    public let age: String
+    public let generation: Int
+    public let heartbeat: Int
+    public let due: Bool
+    public let outcome: String
+    public let outcomeIcon: String
+    public let outcomeTone: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// Voice dictation settings from host configuration.

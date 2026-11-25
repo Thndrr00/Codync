@@ -42,6 +42,12 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val liveness = insights.liveness
+            CardSection("Liveness") {
+                row { Text(liveness.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("State", liveness.state) }
+                row { ValueRow("Delivery", liveness.outcome) }
+            }
             val dictation = insights.dictation
             CardSection("Voice dictation") {
                 row { Text(dictation.headline, style = Type.subheadline.semibold, color = Palette.text) }

@@ -1160,6 +1160,35 @@ fn dictation_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Liveness: turn activity and cron delivery outcome from hermes-agent's pure helpers.
+fn liveness_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
+    use crate::bdots_liveness as l;
+
+    let entry = hub.store.history(bot, i64::MAX, 1).ok().and_then(|v| v.into_iter().next());
+    let stamp = entry.as_ref().map_or(0, |e| e.created_at);
+    let active = l::is_fresh(stamp, now, 180_000);
+    let age = l::age_label(stamp, now);
+    let generation = row.rev.max(0);
+    let queued = json!({"status":"delivered"});
+    let outcome = l::settled(&queued).unwrap_or("queued");
+
+    json!({
+        "headline": l::liveness_headline(active, &age),
+        "tone": l::liveness_tone(active),
+        "state": l::liveness_label(active),
+        "icon": l::liveness_icon(active),
+        "active": active,
+        "age": age,
+        "generation": generation,
+        "heartbeat": l::HEARTBEAT_SECONDS,
+        "due": l::persist_due(stamp, now),
+        "outcome": l::outcome_label(outcome),
+        "outcomeIcon": l::outcome_icon(outcome),
+        "outcomeTone": l::outcome_tone(outcome),
+        "summary": l::summary(active, &age, generation).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1248,6 +1277,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "blocks": blocks_view(hub, bot),
         "access": access_view(&row),
         "dictation": dictation_view(&row),
+        "liveness": liveness_view(&row, hub, bot, now),
         "description": description,
         "model": model,
         "provider": provider,

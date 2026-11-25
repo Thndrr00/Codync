@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let liveness = &data["liveness"];
+    if liveness.is_object() {
+        line(buf, &mut y, tr("Liveness").into_owned(), t.bold.patch(t.panel));
+        let headline = liveness["headline"].as_str().unwrap_or("");
+        let outcome = liveness["outcome"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {}", tr("Delivery"), outcome), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let dictation = &data["dictation"];
     if dictation.is_object() {
         line(buf, &mut y, tr("Voice dictation").into_owned(), t.bold.patch(t.panel));

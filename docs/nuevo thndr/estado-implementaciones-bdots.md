@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Vivacidad (23 helpers + UI en 4 clientes)
+
+`bdots_liveness.rs` añade 23 helpers puros portados de `activity_tracking.py` y
+`delivery_outcome.py` de **hermes-agent**: estados de vivacidad, frescura y edad de actividad,
+generaciones y fencing, cadencia de heartbeat, resultados de entrega de cron, errores, y
+ensamblaje. Reutiliza `bdots_text`, `bdots_more`, `bdots_desk`. El endpoint `botInsights` añade el
+campo `liveness`; la sección «Liveness» se muestra en los cuatro clientes.
+
 ## Dictado de voz (23 helpers + UI en 4 clientes)
 
 `bdots_dictation.rs` añade 23 helpers puros portados del crate `mercury-voice` de **mercury-agent

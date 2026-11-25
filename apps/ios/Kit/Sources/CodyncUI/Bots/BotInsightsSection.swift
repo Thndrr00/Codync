@@ -30,6 +30,9 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let liveness = insights.liveness
+                    Text(liveness.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Delivery")): \(liveness.outcome)").font(.footnote).foregroundStyle(Palette.secondary)
                     let dictation = insights.dictation
                     Text(dictation.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Engine")): \(dictation.engine)").font(.footnote).foregroundStyle(Palette.secondary)
