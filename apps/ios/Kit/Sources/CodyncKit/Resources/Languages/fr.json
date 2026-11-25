@@ -2920,5 +2920,22 @@
   "Plan mode stopped. Wait for the user's next message.": "Plan mode stopped. Wait for the user's next message.",
   "What should change?": "What should change?",
   "Tell the agent what to change": "Tell the agent what to change",
-  "Send change": "Send change"
+  "Send change": "Send change",
+  "Use the sender's secret": "Use the sender's secret",
+  "Stop using the sender's secret": "Stop using the sender's secret",
+  "The sender's own Standard Webhooks signature is accepted alongside this key.": "The sender's own Standard Webhooks signature is accepted alongside this key.",
+  "Send test event": "Send test event",
+  "Signed test delivered · the routine ran.": "Signed test delivered · the routine ran.",
+  "Signed test delivered.": "Signed test delivered.",
+  "Ignored deliveries": "Ignored deliveries",
+  "Event didn't match": "Event didn't match",
+  "Reset usage": "Reset usage",
+  "Using credits": "Using credits",
+  "Codex couldn't start its sandbox. Choose Ask first or Full access to keep working.": "Codex couldn't start its sandbox. Choose Ask first or Full access to keep working.",
+  "Animate search results": "Animate search results",
+  "Blur": "Blur",
+  "Fade": "Fade",
+  "Working directory": "Working directory",
+  "{name} runs in each bot's working directory, so a relative path works only where that file exists.": "{name} runs in each bot's working directory, so a relative path works only where that file exists.",
+  "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists.": "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists."
 }

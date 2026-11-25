@@ -9,6 +9,14 @@ Rule: copy behavior with a short source comment, reuse Codync's code/APIs/compon
 decisions wired to real call sites. Excluded with reasons: joined servers, hosted/account service,
 web client, Chrome extension/X, OS packaging, performance-only internals. 39 portable items below.
 
+## State
+
+All portable items are integrated in six disjoint batches and pushed (commits 204-209); the catalogs
+carry 17 new labels. A few items are partial where the real call site lies outside the batch scope:
+voice language retry, symlinked-workspace skills, the "Animate search results" settings row, the
+Android branch button, Computer Use live cursor hookup and the visual-reply card placement are
+documented with reasons in their batch docs. Nothing here was compiled or run end to end.
+
 ## From the 21 new fragments
 
 1. Subagent helpers use the parent's browser/own tools (15942).

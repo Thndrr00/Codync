@@ -2920,5 +2920,22 @@
   "Plan mode stopped. Wait for the user's next message.": "Modo de planificación detenido. Espera el siguiente mensaje del usuario.",
   "What should change?": "¿Qué debería cambiar?",
   "Tell the agent what to change": "Dile al bot qué cambiar",
-  "Send change": "Enviar cambio"
+  "Send change": "Enviar cambio",
+  "Use the sender's secret": "Usar el secreto del remitente",
+  "Stop using the sender's secret": "Dejar de usar el secreto del remitente",
+  "The sender's own Standard Webhooks signature is accepted alongside this key.": "La firma Standard Webhooks del remitente se acepta junto a esta clave.",
+  "Send test event": "Enviar evento de prueba",
+  "Signed test delivered · the routine ran.": "Prueba firmada entregada · la rutina se ejecutó.",
+  "Signed test delivered.": "Prueba firmada entregada.",
+  "Ignored deliveries": "Entregas ignoradas",
+  "Event didn't match": "El evento no coincidió",
+  "Reset usage": "Restablecer uso",
+  "Using credits": "Usando créditos",
+  "Codex couldn't start its sandbox. Choose Ask first or Full access to keep working.": "Codex no pudo iniciar su sandbox. Elige Preguntar primero o Acceso completo para seguir.",
+  "Animate search results": "Animar los resultados de búsqueda",
+  "Blur": "Desenfoque",
+  "Fade": "Fundido",
+  "Working directory": "Directorio de trabajo",
+  "{name} runs in each bot's working directory, so a relative path works only where that file exists.": "{name} se ejecuta en el directorio de trabajo de cada bot, así que una ruta relativa solo funciona donde existe ese archivo.",
+  "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists.": "Un servidor guardado se ejecuta en el directorio de trabajo de cada bot que lo usa, así que una ruta relativa solo funciona donde existe ese archivo."
 }
