@@ -1297,6 +1297,44 @@ fn agenteschat_view(row: &crate::store::BotRow, used: u64) -> Value {
     })
 }
 
+/// Text hygiene from agentes-chat's plain text helpers: addresses, hidden marks and naming.
+fn textfmt_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_textfmt as t;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut valid = 0;
+    let mut invalid = 0;
+    let mut hidden = 0;
+    let mut password_like = 0;
+    for e in &entries {
+        let text = crate::store::message_text(&e.data);
+        let (found_valid, found_invalid) = t::emails_from(&text, &[]);
+        valid += found_valid.len();
+        invalid += found_invalid.len();
+        if t::has_invisible(&text) {
+            hidden += 1;
+        }
+        if t::looks_like_password(&text) {
+            password_like += 1;
+        }
+    }
+    let name = &row.config.name;
+    let slug = t::slugify(name);
+    json!({
+        "headline": format!("{} · {} emails · {} hidden", slug, t::count_label(valid + invalid), hidden),
+        "tone": t::hygiene_tone(valid, invalid, hidden),
+        "slug": slug,
+        "handle": t::handle_from(name),
+        "excerpt": t::excerpt(name, 48),
+        "validEmails": valid,
+        "invalidEmails": invalid,
+        "hidden": hidden,
+        "passwordLike": password_like,
+        "typoFix": t::email_typo_fix("ana@gmial.com").unwrap_or_default(),
+        "summary": t::summary(&slug, valid, invalid, hidden).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1390,6 +1428,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "opendots": opendots_view(hub, bot),
         "openbot": openbot_view(&row),
         "agenteschat": agenteschat_view(&row, used),
+        "textfmt": textfmt_view(&row, hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

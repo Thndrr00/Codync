@@ -5,6 +5,9 @@
 
 use serde_json::Value;
 
+// `shorten` lives in bdots_activity; keep the historical bdots_more path working for callers.
+pub use crate::bdots_activity::shorten;
+
 /// The first string field of a call's input (`describeCall` family).
 fn str_field<'a>(input: &'a Value, key: &str) -> &'a str {
     input.get(key).and_then(Value::as_str).unwrap_or("")

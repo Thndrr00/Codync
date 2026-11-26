@@ -124,6 +124,18 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Higiene de texto (28 helpers + UI en 4 clientes)
+
+`bdots_textfmt.rs` añade 28 helpers puros portados de `text.ts` y `html-text.ts` de
+**agentes-chat 0.7.5**: slugs y handles con plegado de acentos, validación y extracción de correos,
+corrección de dominios webmail, reglas de contraseña, parseo de importes, sentences y palabras,
+excerpt, escape/decode de HTML, limpieza de caracteres invisibles y bidi, y resúmenes. Reutiliza
+`bdots_activity` (shorten), `bdots_extra` (plain_text) y `bdots_desk`. El endpoint `botInsights`
+añade el campo `textfmt`; la sección «Text hygiene» se muestra en los cuatro clientes.
+
+Además se corrige la ruta histórica `bdots_more::shorten` con una reexportación desde
+`bdots_activity`, para que los ~40 módulos que la usan no queden con una referencia rota.
+
 ## Presupuesto de contexto (23 helpers + UI en 4 clientes)
 
 `bdots_agenteschat.rs` añade 23 helpers puros portados de **agentes-chat 0.7.5**: formatos de

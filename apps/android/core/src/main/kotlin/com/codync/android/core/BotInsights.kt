@@ -42,9 +42,20 @@ data class BotInsights(
     val opendots: InsightOpenDots = InsightOpenDots(),
     val openbot: InsightOpenBot = InsightOpenBot(),
     val agenteschat: InsightAgentesChat = InsightAgentesChat(),
+    val textfmt: InsightTextFmt = InsightTextFmt(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed text hygiene summary. */
+@Serializable
+data class InsightTextFmt(
+    val headline: String = "", val tone: String = "", val slug: String = "",
+    val handle: String = "", val excerpt: String = "",
+    val validEmails: Int = 0, val invalidEmails: Int = 0, val hidden: Int = 0,
+    val passwordLike: Int = 0, val typoFix: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** Agentes-chat-style context budget summary. */

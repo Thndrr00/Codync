@@ -39,9 +39,25 @@ public struct BotInsights: Decodable, Sendable {
     public let opendots: InsightOpenDots
     public let openbot: InsightOpenBot
     public let agenteschat: InsightAgentesChat
+    public let textfmt: InsightTextFmt
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed text hygiene summary.
+public struct InsightTextFmt: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let slug: String
+    public let handle: String
+    public let excerpt: String
+    public let validEmails: Int
+    public let invalidEmails: Int
+    public let hidden: Int
+    public let passwordLike: Int
+    public let typoFix: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// Agentes-chat-style context budget summary.

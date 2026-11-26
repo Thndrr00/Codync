@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,13 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Text hygiene')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(textfmt.tone)}>{textfmt.headline}</Text>
+        <ValueRow label={tr('Handle')}>{textfmt.handle}</ValueRow>
+        <ValueRow label={tr('Invalid emails')}>{String(textfmt.invalidEmails)}</ValueRow>
+        <ValueRow label={tr('Hidden marks')}>{String(textfmt.hidden)}</ValueRow>
+      </CardSection>
+
       <CardSection title={tr('Context budget')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(agenteschat.windowTone)}>{agenteschat.headline}</Text>
         <ValueRow label={tr('Window')}>{agenteschat.window}</ValueRow>

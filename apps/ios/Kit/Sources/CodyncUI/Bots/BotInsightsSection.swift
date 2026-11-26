@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let textfmt = insights.textfmt
+                    Text(textfmt.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Handle")): \(textfmt.handle)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Hidden marks")): \(textfmt.hidden)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let agenteschat = insights.agenteschat
                     Text(agenteschat.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Window")): \(agenteschat.window)").font(.footnote).foregroundStyle(Palette.secondary)

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let textfmt = &data["textfmt"];
+    if textfmt.is_object() {
+        line(buf, &mut y, tr("Text hygiene").into_owned(), t.bold.patch(t.panel));
+        let headline = textfmt["headline"].as_str().unwrap_or("");
+        let handle = textfmt["handle"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {}", tr("Handle"), handle), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let agenteschat = &data["agenteschat"];
     if agenteschat.is_object() {
         line(buf, &mut y, tr("Context budget").into_owned(), t.bold.patch(t.panel));

@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val textfmt = insights.textfmt
+            CardSection("Text hygiene") {
+                row { Text(textfmt.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Handle", textfmt.handle) }
+                row { ValueRow("Invalid", textfmt.invalidEmails.toString()) }
+                row { ValueRow("Hidden", textfmt.hidden.toString()) }
+            }
             val agenteschat = insights.agenteschat
             CardSection("Context budget") {
                 row { Text(agenteschat.headline, style = Type.subheadline.semibold, color = Palette.text) }
