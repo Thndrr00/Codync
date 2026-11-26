@@ -329,6 +329,52 @@ fn link_follows_step(link: &FlowLink, branches: &BTreeMap<String, Option<nodes::
     nodes::follows_branch(link.branch.as_deref(), branches.get(&link.from_bot_id).copied().flatten())
 }
 
+/// The model request a standalone `llm` node makes, built from its frozen spec and this run's
+/// template values. Pure, so the exact request a step sends can be checked without starting a model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct LlmRequest {
+    pub(super) provider: String,
+    pub(super) model: String,
+    pub(super) effort: String,
+    pub(super) system: String,
+    pub(super) prompt: String,
+}
+
+pub(super) fn build_llm_request(spec: &nodes::LlmStepSpec, values: &BTreeMap<String, String>) -> LlmRequest {
+    LlmRequest {
+        provider: spec.provider.clone(),
+        model: spec.model.clone(),
+        effort: spec.effort.clone(),
+        system: answers::fill_template(&spec.system, values),
+        prompt: answers::fill_template(&spec.prompt, values),
+    }
+}
+
+/// The text an `asset` step hands on: the shared file's name and where the next step reads it. Pure.
+pub(super) fn asset_output(source: &nodes::AssetSource, owner: &str) -> String {
+    let root = crate::chat::files::root(owner);
+    format!("{} ({})", source.file.name, root.join(&source.file.id).display())
+}
+
+/// Where an `output` step sends its message. Connector targets are left to the connector that owns
+/// them; the host never claims a platform send it did not make. Pure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum OutputDelivery {
+    Notice,
+    File,
+    ChatChannel,
+    Connector,
+}
+
+pub(super) fn deliver_target(action: &nodes::OutputAction) -> OutputDelivery {
+    match action.target.as_str() {
+        "file" => OutputDelivery::File,
+        "channel" | "chat-channel" => OutputDelivery::ChatChannel,
+        "github" | "discord" | "telegram" | "slack" => OutputDelivery::Connector,
+        _ => OutputDelivery::Notice,
+    }
+}
+
 pub async fn execute(hub: Arc<Hub>, mut start: Start) {
     let (run, routine, owner) = (start.run_id.clone(), start.routine_id.clone(), start.owner.clone());
     start.prepare(&hub.store);
@@ -523,7 +569,7 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
                 }
                 continue;
             }
-            match begin(hub, &start, &links, &results, bot, depth, &running.cancel)? {
+            match begin(hub, &start, &links, &results, bot, depth, &running.cancel).await? {
                 Begin::Done(outcome) => {
                     results.insert((*bot).to_owned(), outcome);
                 }
@@ -577,8 +623,8 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
 
 /// Decides one bot's step: its inputs are the replies of the bots linked to it that replied.
 #[allow(clippy::too_many_arguments)]
-fn begin(
-    hub: &Hub,
+async fn begin(
+    hub: &Arc<Hub>,
     start: &Start,
     links: &[FlowLink],
     results: &HashMap<String, Outcome>,
@@ -660,9 +706,6 @@ fn begin(
     }
     // Routing nodes are decided below, before a bot is asked to take the step.
     let statuses: BTreeMap<String, StepStatus> = steps.iter().map(|step| (step.bot_id.clone(), step.status)).collect();
-    if let Some(gap) = answer_paths::step_answer_gap(&graph, bot, &statuses) {
-        return end(StepStatus::Failed, &gap.text());
-    }
     let fields = graph.nodes.get(bot).map(|node| answers::fields_of(&node.spec)).unwrap_or_default();
     let sources = answer_paths::readable_sources_in_round(&graph, bot, RUN_ROUND, &ran_in_round);
     let mut outputs: BTreeMap<String, String> = steps
@@ -679,6 +722,22 @@ fn begin(
     // Trigger fields are fixed answer values, so a check such as `author = ana` works in a step
     // with no model before it. A step's own answer wins if it gave the same field a value.
     super::trigger_fields::merged_answer(&mut answer, &start.trigger_fields);
+    let mut values = answer_paths::template_values(&by_name, false);
+    super::trigger_fields::merged_values(&mut values, &start.trigger_fields);
+    // Host steps are decided here, before the routing and recipient checks: no bot is asked to take
+    // them, and their own answer does not need a supplier in an earlier step.
+    if let Some(id) = bot.strip_prefix("llm:") {
+        return begin_llm(hub, start, id, &values, cancel).await;
+    }
+    if let Some(id) = bot.strip_prefix("asset:") {
+        return begin_asset(hub, start, bot, id);
+    }
+    if let Some(id) = bot.strip_prefix("output:") {
+        return begin_output(hub, start, bot, id, &handoff_of(inputs), &values).await;
+    }
+    if let Some(gap) = answer_paths::step_answer_gap(&graph, bot, &statuses) {
+        return end(StepStatus::Failed, &gap.text());
+    }
     let node_kind = graph.nodes.get(bot).map(|node| node.kind);
     // A condition has no bot to ask: it routes the answer it just read to one of its two edges. The
     // branch is saved on the step, so the links of the other side carry nothing downstream.
@@ -711,8 +770,6 @@ fn begin(
     let Some(from) = hub.store.bot(from_id(&first.from_bot_id, &start.owner))?.filter(|b| !b.deleted) else {
         return end(StepStatus::Failed, "The bot that handed work on is gone");
     };
-    let mut values = answer_paths::template_values(&by_name, false);
-    super::trigger_fields::merged_values(&mut values, &start.trigger_fields);
     let mut names: Vec<StepInput> = inputs
         .iter()
         .map(|(link, text)| {
@@ -837,6 +894,238 @@ async fn approve(hub: &Arc<Hub>, pending: ApprovalPending, mut cancel: watch::Re
     };
     settle(hub, &step, StepStatus::Succeeded, Some(decision.as_str()), None);
     if pending.handoff.is_empty() { Outcome::Nothing } else { Outcome::Replied(pending.handoff) }
+}
+
+/// Runs a standalone `llm` node on the routine's own bot's harness, with the provider, model and
+/// effort the node froze, and settles its step with the answer checked against its field spec.
+async fn begin_llm(
+    hub: &Arc<Hub>,
+    start: &Start,
+    id: &str,
+    values: &BTreeMap<String, String>,
+    cancel: &watch::Receiver<bool>,
+) -> Result<Begin> {
+    let key = format!("llm:{id}");
+    let Some(node) = hub.store.flow_node(&start.routine_id, id)? else {
+        record_ended(hub, start, &key, StepStatus::Failed, "The model step is gone")?;
+        return Ok(Begin::Done(Outcome::Nothing));
+    };
+    let fields = match serde_json::to_value(&node.fields) {
+        Ok(fields) => fields,
+        Err(error) => {
+            let reason = format!("The model step is invalid: {error:#}");
+            record_ended(hub, start, &key, StepStatus::Failed, &reason)?;
+            return Ok(Begin::Done(Outcome::Nothing));
+        }
+    };
+    let spec = match nodes::llm_step_spec(&fields) {
+        Ok(spec) => spec,
+        Err(error) => {
+            let reason = format!("The model step is invalid: {error:#}");
+            record_ended(hub, start, &key, StepStatus::Failed, &reason)?;
+            return Ok(Begin::Done(Outcome::Nothing));
+        }
+    };
+    let request = build_llm_request(&spec, values);
+    let fresh = new_step(start, &key, &request.prompt, StepStatus::Running);
+    let Some(step) = record(hub, &fresh)? else {
+        return Ok(Begin::Done(earlier_outcome(hub, &start.run_id, &key)?));
+    };
+    record_settings(
+        hub,
+        &step.id,
+        &StepSettings {
+            kind: "llm".to_owned(),
+            model: (!request.model.is_empty()).then_some(request.model.clone()),
+            model_options: (!request.effort.is_empty())
+                .then(|| BTreeMap::from([("effort".to_owned(), request.effort.clone())]))
+                .unwrap_or_default(),
+            prompt: request.prompt.clone(),
+            instruction: request.system.clone(),
+            ..StepSettings::default()
+        },
+    );
+    let attempted = tokio::select! {
+        reply = llm_answer(hub, start, &request) => reply,
+        () = cancel.wait_for(|stopped| *stopped) => {
+            settle(hub, &step.id, StepStatus::Cancelled, None, Some(CANCELLED_BEFORE));
+            return Ok(Begin::Done(Outcome::Nothing));
+        }
+    };
+    let text = match attempted {
+        Ok(text) => text,
+        Err(error) => {
+            settle(hub, &step.id, StepStatus::Failed, None, Some(&format!("{error:#}")));
+            return Ok(Begin::Done(Outcome::Nothing));
+        }
+    };
+    let fields = answers::fields_of(&answers::NodeSpec { answer: spec.answer.clone(), check: String::new() });
+    let output = if fields.is_empty() {
+        text
+    } else {
+        match checked_answer(&fields, &text) {
+            Ok(answer) => answer,
+            Err(problems) => {
+                let reason = format!("The model's answer did not fit: {}", answers::fix_text(&problems));
+                settle(hub, &step.id, StepStatus::Failed, None, Some(&reason));
+                return Ok(Begin::Done(Outcome::Nothing));
+            }
+        }
+    };
+    settle(hub, &step.id, StepStatus::Succeeded, Some(&output), None);
+    Ok(Begin::Done(Outcome::Replied(output)))
+}
+
+/// The one model call a standalone step makes: the routine's own bot's harness with the node's
+/// provider, model and effort, through the same one-shot path background jobs use. No new client.
+async fn llm_answer(hub: &Arc<Hub>, start: &Start, request: &LlmRequest) -> Result<String> {
+    let Some(row) = hub.store.bot(&start.owner)? else {
+        anyhow::bail!("The routine's bot is gone");
+    };
+    let mut cfg = row.config;
+    if !request.provider.is_empty() {
+        cfg.backend = request.provider.clone();
+    }
+    if !request.model.is_empty() {
+        cfg.model = Some(request.model.clone());
+    }
+    if !request.effort.is_empty() {
+        cfg.model_options.insert("effort".to_owned(), request.effort.clone());
+    }
+    tokio::time::timeout(start.timeout, crate::chat::oneshot::one_shot(hub, &cfg, &request.system, &request.prompt))
+        .await
+        .context("the model step timed out")
+}
+
+/// Resolves an `asset` node's file from the owner's shared-file library and hands its path on.
+fn begin_asset(hub: &Hub, start: &Start, key: &str, id: &str) -> Result<Begin> {
+    let Some(node) = hub.store.flow_node(&start.routine_id, id)? else {
+        record_ended(hub, start, key, StepStatus::Failed, "The asset step is gone")?;
+        return Ok(Begin::Done(Outcome::Nothing));
+    };
+    let fields = match serde_json::to_value(&node.fields) {
+        Ok(fields) => fields,
+        Err(error) => {
+            let reason = format!("The asset step is invalid: {error:#}");
+            record_ended(hub, start, key, StepStatus::Failed, &reason)?;
+            return Ok(Begin::Done(Outcome::Nothing));
+        }
+    };
+    let mut files: Vec<(String, crate::chat::files::SharedFile)> = Vec::new();
+    for entry in hub.store.file_messages(&start.owner, 100).unwrap_or_default() {
+        let Some(meta) = entry.data.get("files").or_else(|| entry.data.get("attachments")).and_then(Value::as_array)
+        else {
+            continue;
+        };
+        for value in meta {
+            if let Ok(file) = serde_json::from_value::<crate::chat::files::SharedFile>(value.clone()) {
+                files.push((entry.id.clone(), file));
+            }
+        }
+    }
+    let Some(source) = nodes::asset_source(&fields, &files) else {
+        record_ended(hub, start, key, StepStatus::Failed, "The asset step's file is not in this bot's library")?;
+        return Ok(Begin::Done(Outcome::Nothing));
+    };
+    let text = asset_output(&source, &start.owner);
+    let mut fresh = new_step(start, key, &source.file.name, StepStatus::Succeeded);
+    if let Some(step) = record(hub, &fresh)? {
+        record_settings(hub, &step.id, &StepSettings { kind: "asset".to_owned(), ..StepSettings::default() });
+        settle_with(hub, &step.id, StepStatus::Succeeded, Some(&text), None, &[source.file.clone()]);
+    }
+    Ok(Begin::Done(Outcome::Replied(text)))
+}
+
+/// Applies an `output` node's action through the delivery paths the host already has. Connector
+/// targets are recorded plainly: no platform send is attempted or claimed from here.
+async fn begin_output(
+    hub: &Arc<Hub>,
+    start: &Start,
+    key: &str,
+    id: &str,
+    input: &str,
+    values: &BTreeMap<String, String>,
+) -> Result<Begin> {
+    let Some(node) = hub.store.flow_node(&start.routine_id, id)? else {
+        record_ended(hub, start, key, StepStatus::Failed, "The output step is gone")?;
+        return Ok(Begin::Done(Outcome::Nothing));
+    };
+    let fields = match serde_json::to_value(&node.fields) {
+        Ok(fields) => fields,
+        Err(error) => {
+            let reason = format!("The output step is invalid: {error:#}");
+            record_ended(hub, start, key, StepStatus::Failed, &reason)?;
+            return Ok(Begin::Done(Outcome::Nothing));
+        }
+    };
+    let action = match nodes::output_action(&fields) {
+        Ok(action) => action,
+        Err(error) => {
+            let reason = format!("The output step is invalid: {error:#}");
+            record_ended(hub, start, key, StepStatus::Failed, &reason)?;
+            return Ok(Begin::Done(Outcome::Nothing));
+        }
+    };
+    let template = super::output_template::load(&hub.store, &start.routine_id);
+    let source = if action.message.trim().is_empty() { input } else { action.message.as_str() };
+    let message = super::output_template::message_or_input(&template, source, values);
+    let title = super::output_template::notification_title(&template, &message, values);
+    let fresh = new_step(start, key, &message, StepStatus::Succeeded);
+    let Some(step) = record(hub, &fresh)? else {
+        return Ok(Begin::Done(earlier_outcome(hub, &start.run_id, key)?));
+    };
+    let mut note = String::new();
+    let mut files: Vec<crate::chat::files::SharedFile> = Vec::new();
+    match deliver_target(&action) {
+        OutputDelivery::Notice => {
+            hub.add_entry(
+                &Lane::main(&start.owner),
+                EntryKind::Notice,
+                hub.store.max_turn(&start.owner),
+                &serde_json::json!({"text": message, "title": title, "style": "info"}),
+            );
+            note = format!("Notified the owner: {title}");
+        }
+        OutputDelivery::ChatChannel => {
+            hub.routines.queue_flow_outputs(&hub.store, start, &message)?;
+            note = "Queued the workflow output to its chat channel".to_owned();
+        }
+        OutputDelivery::File => match save_output_file(&start.owner, &message) {
+            Ok(file) => {
+                note = format!("Saved {}", file.name);
+                files.push(file);
+            }
+            Err(error) => {
+                let reason = format!("The output file could not be saved: {error:#}");
+                settle(hub, &step.id, StepStatus::Failed, None, Some(&reason));
+                return Ok(Begin::Done(Outcome::Nothing));
+            }
+        },
+        OutputDelivery::Connector => {
+            note = format!("Delivery to {} needs its connector; nothing was sent", action.target);
+        }
+    }
+    record_settings(hub, &step.id, &StepSettings { kind: "output".to_owned(), ..StepSettings::default() });
+    settle_with(hub, &step.id, StepStatus::Succeeded, Some(&note), None, &files);
+    Ok(Begin::Done(Outcome::Replied(message)))
+}
+
+/// Publishes an output step's text in the owner's shared file store, through the same snapshot path
+/// media steps use, so the file card and the step both carry it.
+fn save_output_file(owner: &str, message: &str) -> Result<crate::chat::files::SharedFile> {
+    let root = crate::chat::files::root(owner);
+    let staged = crate::chat::files::stage(owner, "txt", message.as_bytes())?;
+    let relative = staged.strip_prefix(&root).context("a staged file is outside the file root")?;
+    let source = relative.to_string_lossy().replace('\\', "/");
+    let mut snapshot = crate::chat::files::snapshot(
+        &root,
+        &root,
+        &source,
+        Some("workflow-output.txt"),
+        &std::sync::atomic::AtomicBool::new(false),
+    )?;
+    snapshot.commit();
+    Ok(snapshot.meta)
 }
 
 /// The graph of answer fields a run started with. The routine's own bot is the trigger that gives

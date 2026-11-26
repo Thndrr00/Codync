@@ -866,3 +866,46 @@ async fn the_answer_tool_checks_an_answer_before_the_step_takes_it() {
     assert_eq!(saved["count"], answers::AnswerValue::Integer(2));
     f.shutdown().await;
 }
+
+#[test]
+fn a_standalone_model_decision_builds_its_request_from_the_runs_values() {
+    let spec = nodes::llm_step_spec(&json!({"fields": {
+        "provider": "codex", "model": "gpt-5", "effort": "high",
+        "prompt": "Summarize {{text}}", "system": "Be brief, {{author}}"
+    }}))
+    .unwrap();
+    let values =
+        BTreeMap::from([("text".to_owned(), "seven items".to_owned()), ("author".to_owned(), "ana".to_owned())]);
+    assert_eq!(
+        engine::build_llm_request(&spec, &values),
+        engine::LlmRequest {
+            provider: "codex".into(),
+            model: "gpt-5".into(),
+            effort: "high".into(),
+            system: "Be brief, ana".into(),
+            prompt: "Summarize seven items".into(),
+        }
+    );
+}
+
+#[test]
+fn an_asset_decision_resolves_its_file_and_the_path_it_hands_on() {
+    let file = crate::chat::files::SharedFile { id: "f1".into(), name: "notes.md".into(), size: 2, sha256: "d".into() };
+    let files = [("e1".to_owned(), file.clone())];
+    let source = nodes::asset_source(&json!({"fields": {"fileId": "f1"}}), &files).unwrap();
+    assert_eq!(source.port, "text");
+    let text = engine::asset_output(&source, "a");
+    assert!(text.starts_with("notes.md ("), "{text}");
+    assert!(text.contains(&file.id), "{text}");
+    assert!(nodes::asset_source(&json!({"fields": {"fileId": "gone"}}), &files).is_none());
+}
+
+#[test]
+fn an_output_decision_names_the_delivery_path() {
+    let action = |target: &str| nodes::OutputAction { target: target.to_owned(), ..nodes::OutputAction::default() };
+    assert_eq!(engine::deliver_target(&action("notify")), engine::OutputDelivery::Notice);
+    assert_eq!(engine::deliver_target(&action("file")), engine::OutputDelivery::File);
+    assert_eq!(engine::deliver_target(&action("chat-channel")), engine::OutputDelivery::ChatChannel);
+    assert_eq!(engine::deliver_target(&action("github")), engine::OutputDelivery::Connector);
+    assert_eq!(engine::deliver_target(&action("telegram")), engine::OutputDelivery::Connector);
+}
