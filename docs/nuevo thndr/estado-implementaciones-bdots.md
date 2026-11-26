@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Selector de uso (22 adiciones + UI en 4 clientes)
+
+`bdots_picker.rs` añade 18 helpers puros y 4 constantes portados de `model_picker_usage.py` de
+**hermes-agent**: fracciones de uso, estilos de gauge, barras `[||||      ]`, porcentaje usado,
+duración hasta el reset, ordenación de modelos destacados, modelos gratis y etiquetas del picker.
+Reutiliza `bdots_quota`, `bdots_desk` y `bdots_textfmt`. El endpoint `botInsights` añade el campo
+`picker`; la sección «Usage picker» se muestra en los cuatro clientes.
+
 ## Paleta de comandos (22 adiciones + UI en 4 clientes)
 
 `bdots_palette.rs` añade 18 helpers puros y 4 constantes portados de `messaging-commands.ts` y

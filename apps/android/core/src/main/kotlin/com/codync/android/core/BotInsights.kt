@@ -64,9 +64,20 @@ data class BotInsights(
     val connextra: InsightConnExtra = InsightConnExtra(),
     val shortcuts: InsightShortcuts = InsightShortcuts(),
     val palette: InsightPalette = InsightPalette(),
+    val picker: InsightPicker = InsightPicker(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed model-picker usage summary. */
+@Serializable
+data class InsightPicker(
+    val headline: String = "", val tone: String = "", val bar: String = "",
+    val used: String = "", val left: String = "", val style: String = "",
+    val resets: String = "", val featured: List<String> = emptyList(),
+    val gauges: Int = 0, val levels: Int = 0, val width: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed command palette summary. */

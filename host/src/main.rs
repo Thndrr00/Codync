@@ -53,6 +53,7 @@ mod bdots_notify;
 mod bdots_openbot;
 mod bdots_opendots;
 mod bdots_palette;
+mod bdots_picker;
 mod bdots_profile;
 mod bdots_prompts;
 mod bdots_pure;

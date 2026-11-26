@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let picker = insights.picker
+                    Text(picker.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(picker.bar).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Used")): \(picker.used)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let palette = insights.palette
                     Text(palette.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Command")): \(palette.command)").font(.footnote).foregroundStyle(Palette.secondary)

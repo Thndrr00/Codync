@@ -61,6 +61,7 @@ public struct BotInsights: Decodable, Sendable {
     public let connextra: InsightConnExtra
     public let shortcuts: InsightShortcuts
     public let palette: InsightPalette
+    public let picker: InsightPicker
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -90,6 +91,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed model-picker usage summary.
+public struct InsightPicker: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let bar: String
+    public let used: String
+    public let left: String
+    public let style: String
+    public let resets: String
+    public let featured: [String]
+    public let gauges: Int
+    public let levels: Int
+    public let width: Int
     public let summary: [InsightSummaryRow]
 }
 

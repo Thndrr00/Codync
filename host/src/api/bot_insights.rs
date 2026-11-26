@@ -1974,6 +1974,30 @@ fn palette_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Model-picker usage gauges from hermes-agent's picker chrome.
+fn picker_view() -> Value {
+    use crate::bdots_picker as p;
+
+    let left = 0.65;
+    let used = p::used_fraction(left);
+    let models = vec!["writer".to_owned(), "reviewer".to_owned(), "planner".to_owned()];
+    let featured = vec!["planner".to_owned()];
+    json!({
+        "headline": format!("{} · {} · {}", p::gauge_label("week"), p::format_percent_used(used), p::gauge_style(left)),
+        "tone": p::gauge_style(left),
+        "bar": p::render_bar(used, p::BAR_WIDTH),
+        "used": p::format_percent_used(used),
+        "left": format!("{}%", (left * 100.0).round() as i64),
+        "style": p::gauge_style(left),
+        "resets": p::format_resets_in(Some(7_200_000), 0),
+        "featured": p::featured_first(&models, &featured),
+        "gauges": p::GAUGE_LABELS.len(),
+        "levels": p::SHOWN_LEVELS.len(),
+        "width": p::BAR_WIDTH,
+        "summary": p::summary(left, used, p::GAUGE_LABELS.len(), featured.len()),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2089,6 +2113,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "connextra": connextra_view(hub, bot),
         "shortcuts": shortcuts_view(),
         "palette": palette_view(hub, bot),
+        "picker": picker_view(),
         "description": description,
         "model": model,
         "provider": provider,

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let picker = &data["picker"];
+    if picker.is_object() {
+        line(buf, &mut y, tr("Usage picker").into_owned(), t.bold.patch(t.panel));
+        let headline = picker["headline"].as_str().unwrap_or("");
+        let used = picker["used"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {used}", tr("Used")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let palette = &data["palette"];
     if palette.is_object() {
         line(buf, &mut y, tr("Command palette").into_owned(), t.bold.patch(t.panel));

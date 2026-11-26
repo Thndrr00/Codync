@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val picker = insights.picker
+            CardSection("Usage picker") {
+                row { Text(picker.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(picker.bar, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Used", picker.used) }
+                row { ValueRow("Resets", picker.resets) }
+            }
             val palette = insights.palette
             CardSection("Command palette") {
                 row { Text(palette.headline, style = Type.subheadline.semibold, color = Palette.text) }
