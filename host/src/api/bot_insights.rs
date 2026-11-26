@@ -1998,6 +1998,39 @@ fn picker_view() -> Value {
     })
 }
 
+/// Context token budgeting from rakazo's selection layer.
+fn contextselect_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_context_select as x;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let source = entries.iter().map(|e| crate::store::message_text(&e.data)).collect::<Vec<_>>().join(" ");
+    let estimate = x::estimate_text_tokens(&source);
+    let fixed = x::fixed_tokens("system", &json!({}), None);
+    let window = 200_000;
+    let output = 4_000;
+    let available = x::available_tokens(window, output, fixed).unwrap_or(0);
+    let scores: Vec<u32> =
+        entries.iter().map(|e| x::estimate_text_tokens(&crate::store::message_text(&e.data))).collect();
+    let kept = x::fit_history(&scores, available);
+    json!({
+        "headline": format!("{} / {} · {} kept", x::count_label(estimate as usize), x::count_label(available as usize), kept),
+        "tone": if x::fits_budget(estimate, available) { "good" } else { "attention" },
+        "estimate": estimate,
+        "available": available,
+        "fixed": fixed,
+        "window": window,
+        "output": output,
+        "fits": x::fits_budget(estimate, available),
+        "tooSmall": x::model_too_small(window, output, fixed),
+        "strategy": x::strategy_label("balanced"),
+        "cache": x::cache_label("likely-warm"),
+        "cacheIcon": x::cache_icon("likely-warm"),
+        "kept": kept,
+        "omitted": x::omitted_marker(entries.len().saturating_sub(kept)),
+        "summary": x::summary(estimate, available, fixed, kept),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2114,6 +2147,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "shortcuts": shortcuts_view(),
         "palette": palette_view(hub, bot),
         "picker": picker_view(),
+        "contextselect": contextselect_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val contextselect = insights.contextselect
+            CardSection("Context budget") {
+                row { Text(contextselect.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Available", contextselect.available.toString()) }
+                row { ValueRow("Kept", contextselect.kept.toString()) }
+                row { ValueRow("Cache", contextselect.cache) }
+            }
             val picker = insights.picker
             CardSection("Usage picker") {
                 row { Text(picker.headline, style = Type.subheadline.semibold, color = Palette.text) }

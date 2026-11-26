@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Presupuesto de contexto (20 adiciones + UI en 4 clientes)
+
+`bdots_context_select.rs` añade 17 helpers puros y 3 constantes portados de `context-selection.ts`
+de **rakazo v0.14.0**: estimación neutral de tokens, overhead de framing, coste fijo, presupuesto
+disponible, estrategias, protección de mensajes, ajuste del historial, estado de caché y marker de
+omisión. Reutiliza `bdots_desk`. El endpoint `botInsights` añade el campo `contextselect`; la
+sección «Context budget» se muestra en los cuatro clientes.
+
 ## Selector de uso (22 adiciones + UI en 4 clientes)
 
 `bdots_picker.rs` añade 18 helpers puros y 4 constantes portados de `model_picker_usage.py` de

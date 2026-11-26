@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let contextselect = &data["contextselect"];
+    if contextselect.is_object() {
+        line(buf, &mut y, tr("Context budget").into_owned(), t.bold.patch(t.panel));
+        let headline = contextselect["headline"].as_str().unwrap_or("");
+        let kept = contextselect["kept"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {kept}", tr("Kept")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let picker = &data["picker"];
     if picker.is_object() {
         line(buf, &mut y, tr("Usage picker").into_owned(), t.bold.patch(t.panel));

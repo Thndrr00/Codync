@@ -65,9 +65,21 @@ data class BotInsights(
     val shortcuts: InsightShortcuts = InsightShortcuts(),
     val palette: InsightPalette = InsightPalette(),
     val picker: InsightPicker = InsightPicker(),
+    val contextselect: InsightContextSelect = InsightContextSelect(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed context budget summary. */
+@Serializable
+data class InsightContextSelect(
+    val headline: String = "", val tone: String = "", val estimate: Int = 0,
+    val available: Int = 0, val fixed: Int = 0, val window: Int = 0, val output: Int = 0,
+    val fits: Boolean = false, val tooSmall: Boolean = false, val strategy: String = "",
+    val cache: String = "", val cacheIcon: String = "", val kept: Int = 0,
+    val omitted: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed model-picker usage summary. */

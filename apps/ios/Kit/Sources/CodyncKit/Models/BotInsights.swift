@@ -62,6 +62,7 @@ public struct BotInsights: Decodable, Sendable {
     public let shortcuts: InsightShortcuts
     public let palette: InsightPalette
     public let picker: InsightPicker
+    public let contextselect: InsightContextSelect
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -91,6 +92,25 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed context budget summary.
+public struct InsightContextSelect: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let estimate: Int
+    public let available: Int
+    public let fixed: Int
+    public let window: Int
+    public let output: Int
+    public let fits: Bool
+    public let tooSmall: Bool
+    public let strategy: String
+    public let cache: String
+    public let cacheIcon: String
+    public let kept: Int
+    public let omitted: String
     public let summary: [InsightSummaryRow]
 }
 

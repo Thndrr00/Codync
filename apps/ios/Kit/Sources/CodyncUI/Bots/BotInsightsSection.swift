@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let contextselect = insights.contextselect
+                    Text(contextselect.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Available")): \(contextselect.available)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Kept")): \(contextselect.kept)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let picker = insights.picker
                     Text(picker.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(picker.bar).font(.footnote).foregroundStyle(Palette.secondary)
