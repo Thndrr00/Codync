@@ -1225,6 +1225,30 @@ fn context_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// OpenDots-style shaping: Learning settings and internal message prefixes.
+fn opendots_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_opendots as o;
+
+    let container = None; // Learning containers are a client-only capability in this host
+    let delivery = false;
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let internal = entries.iter().filter(|e| o::is_internal(&crate::store::message_text(&e.data))).count();
+
+    json!({
+        "headline": format!("Learning {} · {} internal", if o::valid_container(container) { "ready" } else { "not set" }, internal),
+        "container": container.unwrap_or("none"),
+        "valid": o::valid_container(container),
+        "delivery": delivery,
+        "deliveryError": o::delivery_error(container, delivery),
+        "learningIcon": o::learning_icon(o::valid_container(container)),
+        "learningTone": o::learning_tone(o::valid_container(container)),
+        "internal": internal,
+        "scheduledLabel": o::scheduled_label(""),
+        "voiceLabel": o::voice_label(""),
+        "summary": o::summary(container, delivery, internal).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1315,6 +1339,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "dictation": dictation_view(&row),
         "liveness": liveness_view(&row, hub, bot, now),
         "context": context_view(hub, bot),
+        "opendots": opendots_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

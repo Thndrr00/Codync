@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## OpenDots (23 helpers + UI en 4 clientes)
+
+`bdots_opendots.rs` añade 23 helpers puros portados de los modelos compartidos de **OpenDots**:
+validación de contenedores Learning, settings de entrega, prefijos de mensajes internos
+(scheduled task / voice receipt), extracción de ids, iconos, reviews con estrellas y resúmenes.
+Reutiliza `bdots_more` y `bdots_desk`. El endpoint `botInsights` añade el campo `opendots`; la
+sección «Learning» se muestra en los cuatro clientes.
+
 ## Contexto (23 helpers + UI en 4 clientes)
 
 `bdots_context.rs` añade 23 helpers puros portados de `context-pruning.ts` de **rakazo v0.14.0**:

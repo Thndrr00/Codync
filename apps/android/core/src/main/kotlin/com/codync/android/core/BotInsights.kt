@@ -39,9 +39,20 @@ data class BotInsights(
     val dictation: InsightDictation = InsightDictation(),
     val liveness: InsightLiveness = InsightLiveness(),
     val context: InsightContext = InsightContext(),
+    val opendots: InsightOpenDots = InsightOpenDots(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** OpenDots-style Learning and internal message summary. */
+@Serializable
+data class InsightOpenDots(
+    val headline: String = "", val container: String = "", val valid: Boolean = false,
+    val delivery: Boolean = false, val deliveryError: String = "",
+    val learningIcon: String = "", val learningTone: String = "", val internal: Int = 0,
+    val scheduledLabel: String = "", val voiceLabel: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed context pruning summary. */

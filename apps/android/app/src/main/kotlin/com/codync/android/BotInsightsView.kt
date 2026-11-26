@@ -42,6 +42,12 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val opendots = insights.opendots
+            CardSection("Learning") {
+                row { Text(opendots.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Container", opendots.container) }
+                row { ValueRow("Internal", opendots.internal.toString()) }
+            }
             val context = insights.context
             CardSection("Context window") {
                 row { Text(context.headline, style = Type.subheadline.semibold, color = Palette.text) }

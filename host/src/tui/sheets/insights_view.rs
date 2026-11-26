@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let opendots = &data["opendots"];
+    if opendots.is_object() {
+        line(buf, &mut y, tr("Learning").into_owned(), t.bold.patch(t.panel));
+        let headline = opendots["headline"].as_str().unwrap_or("");
+        let container = opendots["container"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {}", tr("Container"), container), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let context = &data["context"];
     if context.is_object() {
         line(buf, &mut y, tr("Context window").into_owned(), t.bold.patch(t.panel));

@@ -36,9 +36,25 @@ public struct BotInsights: Decodable, Sendable {
     public let dictation: InsightDictation
     public let liveness: InsightLiveness
     public let context: InsightContext
+    public let opendots: InsightOpenDots
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// OpenDots-style Learning and internal message summary.
+public struct InsightOpenDots: Decodable, Sendable {
+    public let headline: String
+    public let container: String
+    public let valid: Bool
+    public let delivery: Bool
+    public let deliveryError: String
+    public let learningIcon: String
+    public let learningTone: String
+    public let internal: Int
+    public let scheduledLabel: String
+    public let voiceLabel: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed context pruning summary.

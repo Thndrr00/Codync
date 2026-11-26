@@ -30,6 +30,9 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let opendots = insights.opendots
+                    Text(opendots.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Container")): \(opendots.container)").font(.footnote).foregroundStyle(Palette.secondary)
                     let context = insights.context
                     Text(context.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Page states")): \(context.page)").font(.footnote).foregroundStyle(Palette.secondary)
