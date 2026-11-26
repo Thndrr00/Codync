@@ -1631,6 +1631,40 @@ fn i18n_view() -> Value {
     })
 }
 
+/// Stream delivery policy from hermes-agent's stream mixin.
+fn stream_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_stream as s;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut held = 0;
+    let mut consumers = 0;
+    let mut chunks = 0;
+    for e in &entries {
+        let text = crate::store::message_text(&e.data);
+        if e.data["display_kind"] == "hidden" {
+            held += 1;
+        }
+        if e.data["stream_delta_callback"] == true {
+            consumers += 1;
+        }
+        chunks += s::chunk_count(&text, 200);
+    }
+    let last = entries.first().map(|e| crate::store::message_text(&e.data)).unwrap_or_default();
+    let interim = s::normalize_interim_text(&last);
+    let streamed = s::chunk_text(&interim, 40).into_iter().next().unwrap_or_default();
+    let remaining = s::visible_text(&streamed, &interim);
+    json!({
+        "headline": format!("{} · {} held · {} live", s::count_label(chunks), held, consumers),
+        "tone": if held > 0 { "attention" } else { "good" },
+        "held": held,
+        "consumers": consumers,
+        "chunks": chunks,
+        "remaining": remaining,
+        "writer": bot,
+        "summary": s::summary(chunks, held > 0, consumers > 0).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1735,6 +1769,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "appearance": appearance_view(),
         "quota": quota_view(used),
         "i18n": i18n_view(),
+        "stream": stream_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

@@ -50,9 +50,22 @@ public struct BotInsights: Decodable, Sendable {
     public let appearance: InsightAppearance
     public let quota: InsightQuota
     public let i18n: InsightI18n
+    public let stream: InsightStream
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed stream delivery summary.
+public struct InsightStream: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let held: Int
+    public let consumers: Int
+    public let chunks: Int
+    public let remaining: String
+    public let writer: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed locale and plural summary.

@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val stream = insights.stream
+            CardSection("Stream") {
+                row { Text(stream.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Held", stream.held.toString()) }
+                row { ValueRow("Consumers", stream.consumers.toString()) }
+                row { ValueRow("Chunks", stream.chunks.toString()) }
+            }
             val i18n = insights.i18n
             CardSection("Locale") {
                 row { Text(i18n.headline, style = Type.subheadline.semibold, color = Palette.text) }

@@ -66,6 +66,21 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let stream = &data["stream"];
+    if stream.is_object() {
+        line(buf, &mut y, tr("Stream").into_owned(), t.bold.patch(t.panel));
+        let headline = stream["headline"].as_str().unwrap_or("");
+        let held = stream["held"].as_u64().unwrap_or(0);
+        let chunks = stream["chunks"].as_u64().unwrap_or(0);
+        line(
+            buf,
+            &mut y,
+            format!("{headline} · {}: {held} · {}: {chunks}", tr("Held"), tr("Chunks")),
+            t.text.patch(t.panel),
+        );
+        y += 1;
+    }
+
     let i18n = &data["i18n"];
     if i18n.is_object() {
         line(buf, &mut y, tr("Locale").into_owned(), t.bold.patch(t.panel));

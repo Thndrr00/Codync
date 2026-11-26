@@ -53,9 +53,19 @@ data class BotInsights(
     val appearance: InsightAppearance = InsightAppearance(),
     val quota: InsightQuota = InsightQuota(),
     val i18n: InsightI18n = InsightI18n(),
+    val stream: InsightStream = InsightStream(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed stream delivery summary. */
+@Serializable
+data class InsightStream(
+    val headline: String = "", val tone: String = "", val held: Int = 0,
+    val consumers: Int = 0, val chunks: Int = 0, val remaining: String = "",
+    val writer: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed locale and plural summary. */

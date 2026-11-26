@@ -54,6 +54,7 @@ mod bdots_routines;
 mod bdots_search;
 mod bdots_session;
 mod bdots_spend;
+mod bdots_stream;
 mod bdots_text;
 mod bdots_textfmt;
 mod bdots_timezone;

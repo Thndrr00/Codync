@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let stream = insights.stream
+                    Text(stream.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Held")): \(stream.held)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Chunks")): \(stream.chunks)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let i18n = insights.i18n
                     Text(i18n.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Intl")): \(i18n.intl)").font(.footnote).foregroundStyle(Palette.secondary)
