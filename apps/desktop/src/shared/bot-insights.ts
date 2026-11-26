@@ -1,6 +1,18 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightMarkdown {
+  headline: string
+  tone: string
+  preview: string
+  blocks: number
+  links: number
+  mentions: number
+  wide: boolean
+  heading: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightLocalFmt {
   headline: string
   tone: string
@@ -578,6 +590,7 @@ export interface BotInsights {
   agenteschat: InsightAgentesChat
   textfmt: InsightTextFmt
   localfmt: InsightLocalFmt
+  markdown: InsightMarkdown
   routines: InsightRoutine[]
   usage: {
     used: number

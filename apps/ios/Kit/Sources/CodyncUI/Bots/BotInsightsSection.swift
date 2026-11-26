@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let markdown = insights.markdown
+                    Text(markdown.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(markdown.preview).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Mentions")): \(markdown.mentions)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let localfmt = insights.localfmt
                     Text(localfmt.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Weekday")): \(localfmt.weekday)").font(.footnote).foregroundStyle(Palette.secondary)

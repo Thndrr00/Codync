@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Markdown (27 helpers + UI en 4 clientes)
+
+`bdots_markdown.rs` añade 27 helpers puros portados de `packages/ui/src/markdown.ts` de
+**agentes-chat 0.7.5**: URLs seguras, spans de código/negrita, menciones, wikilinks, ids internos,
+inline a prosa, listas, reglas, fences, encabezados, celdas y alineación de tablas, `<details>` y
+bloques anchos. Reutiliza `bdots_textfmt`, `bdots_activity` y `bdots_desk`. El endpoint `botInsights`
+añade el campo `markdown`; la sección «Markdown» se muestra en los cuatro clientes.
+
 ## Formato local (27 helpers + UI en 4 clientes)
 
 `bdots_localfmt.rs` añade 27 helpers puros portados de `format.ts` de **agentes-chat 0.7.5**:

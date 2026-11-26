@@ -1363,6 +1363,39 @@ fn localfmt_view(now: i64, used: u64) -> Value {
     })
 }
 
+/// Markdown prose shaping from agentes-chat's safe renderer, over the bot's recent messages.
+fn markdown_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_markdown as m;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut blocks = 0;
+    let mut links = 0;
+    let mut mentions = 0;
+    let mut wide = false;
+    let mut preview = String::new();
+    for e in &entries {
+        let text = crate::store::message_text(&e.data);
+        blocks += m::plain_lines(&text).len();
+        links += m::wiki_links_in(&text).len();
+        mentions += m::mention_count(&text);
+        wide |= m::has_wide_block(&text);
+        if preview.is_empty() {
+            preview = m::plain_line(&text, 80);
+        }
+    }
+    json!({
+        "headline": format!("{} · {} links · {} mentions", m::count_label(blocks), links, mentions),
+        "tone": if wide { "accent" } else { "good" },
+        "preview": preview,
+        "blocks": blocks,
+        "links": links,
+        "mentions": mentions,
+        "wide": wide,
+        "heading": m::heading_id("Insights"),
+        "summary": m::summary(blocks, links, mentions, wide).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1458,6 +1491,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "agenteschat": agenteschat_view(&row, used),
         "textfmt": textfmt_view(&row, hub, bot),
         "localfmt": localfmt_view(now, used),
+        "markdown": markdown_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

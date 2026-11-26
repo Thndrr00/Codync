@@ -41,9 +41,23 @@ public struct BotInsights: Decodable, Sendable {
     public let agenteschat: InsightAgentesChat
     public let textfmt: InsightTextFmt
     public let localfmt: InsightLocalFmt
+    public let markdown: InsightMarkdown
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed Markdown prose summary.
+public struct InsightMarkdown: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let preview: String
+    public let blocks: Int
+    public let links: Int
+    public let mentions: Int
+    public let wide: Bool
+    public let heading: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed locale clock and number summary.

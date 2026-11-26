@@ -44,9 +44,19 @@ data class BotInsights(
     val agenteschat: InsightAgentesChat = InsightAgentesChat(),
     val textfmt: InsightTextFmt = InsightTextFmt(),
     val localfmt: InsightLocalFmt = InsightLocalFmt(),
+    val markdown: InsightMarkdown = InsightMarkdown(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed Markdown prose summary. */
+@Serializable
+data class InsightMarkdown(
+    val headline: String = "", val tone: String = "", val preview: String = "",
+    val blocks: Int = 0, val links: Int = 0, val mentions: Int = 0,
+    val wide: Boolean = false, val heading: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed locale clock and number summary. */

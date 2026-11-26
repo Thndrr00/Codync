@@ -66,6 +66,19 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let markdown = &data["markdown"];
+    if markdown.is_object() {
+        line(buf, &mut y, tr("Markdown").into_owned(), t.bold.patch(t.panel));
+        let headline = markdown["headline"].as_str().unwrap_or("");
+        let preview = markdown["preview"].as_str().unwrap_or("");
+        let mentions = markdown["mentions"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {mentions}", tr("Mentions")), t.text.patch(t.panel));
+        if !preview.is_empty() {
+            line(buf, &mut y, preview.to_owned(), t.secondary.patch(t.panel));
+        }
+        y += 1;
+    }
+
     let localfmt = &data["localfmt"];
     if localfmt.is_object() {
         line(buf, &mut y, tr("Local format").into_owned(), t.bold.patch(t.panel));

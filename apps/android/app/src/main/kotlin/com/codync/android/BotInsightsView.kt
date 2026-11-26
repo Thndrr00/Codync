@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val markdown = insights.markdown
+            CardSection("Markdown") {
+                row { Text(markdown.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(markdown.preview, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Blocks", markdown.blocks.toString()) }
+                row { ValueRow("Mentions", markdown.mentions.toString()) }
+            }
             val localfmt = insights.localfmt
             CardSection("Local format") {
                 row { Text(localfmt.headline, style = Type.subheadline.semibold, color = Palette.text) }
