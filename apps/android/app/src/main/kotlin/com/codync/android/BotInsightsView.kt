@@ -42,6 +42,12 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val agenteschat = insights.agenteschat
+            CardSection("Context budget") {
+                row { Text(agenteschat.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Window", agenteschat.window) }
+                row { ValueRow("Mode", agenteschat.auto) }
+            }
             val openbot = insights.openbot
             CardSection("Run model") {
                 row { Text(openbot.headline, style = Type.subheadline.semibold, color = Palette.text) }

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let agenteschat = insights.agenteschat
+                    Text(agenteschat.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Window")): \(agenteschat.window)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Mode")): \(agenteschat.auto)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let openbot = insights.openbot
                     Text(openbot.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Effort")): \(openbot.effort)").font(.footnote).foregroundStyle(Palette.secondary)

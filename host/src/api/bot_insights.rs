@@ -1273,6 +1273,30 @@ fn openbot_view(row: &crate::store::BotRow) -> Value {
     })
 }
 
+/// Agentes-chat-style context summary: window, auto mode and timeline limits.
+fn agenteschat_view(row: &crate::store::BotRow, used: u64) -> Value {
+    use crate::bdots_agenteschat as a;
+
+    let window = a::effective_window(None, row.config.model.as_deref());
+    let auto = row.config.mode.as_deref().is_some_and(|m| m.eq_ignore_ascii_case("auto"));
+    let pct = crate::bdots_activity::percent(used as usize, window as usize);
+    json!({
+        "headline": a::context_headline(used, window),
+        "window": a::limit_label(window),
+        "windowIcon": a::limit_icon(window),
+        "windowTone": a::limit_tone(window),
+        "used": a::context_size(used),
+        "percent": pct,
+        "auto": a::auto_label(auto),
+        "autoTone": a::auto_tone(auto),
+        "autoEfforts": a::auto_efforts(),
+        "timeout": a::AUTO_MODEL_TIMEOUT_MS,
+        "placeKept": a::PLACE_KEPT_MS,
+        "groupWindow": a::GROUP_WINDOW_MS,
+        "summary": a::summary(used, window, auto).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1365,6 +1389,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "context": context_view(hub, bot),
         "opendots": opendots_view(hub, bot),
         "openbot": openbot_view(&row),
+        "agenteschat": agenteschat_view(&row, used),
         "description": description,
         "model": model,
         "provider": provider,

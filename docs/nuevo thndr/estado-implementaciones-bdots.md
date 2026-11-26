@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Presupuesto de contexto (23 helpers + UI en 4 clientes)
+
+`bdots_agenteschat.rs` añade 23 helpers puros portados de **agentes-chat 0.7.5**: formatos de
+contexto, ventanas de plan `[1m]`, ajuste de límites, claves y agrupación de timeline, ventanas de
+placeholder, esfuerzos automáticos, timeouts, fallbacks y resúmenes. Reutiliza `bdots_activity` y
+`bdots_desk`. El endpoint `botInsights` añade el campo `agenteschat`; la sección «Context budget»
+se muestra en los cuatro clientes.
+
 ## Modelo de run (23 helpers + UI en 4 clientes)
 
 `bdots_openbot.rs` añade 23 helpers puros portados de `agent-langgraph-ts` de **OpenBot-CopilotKit

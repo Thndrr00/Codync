@@ -38,9 +38,27 @@ public struct BotInsights: Decodable, Sendable {
     public let context: InsightContext
     public let opendots: InsightOpenDots
     public let openbot: InsightOpenBot
+    public let agenteschat: InsightAgentesChat
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// Agentes-chat-style context budget summary.
+public struct InsightAgentesChat: Decodable, Sendable {
+    public let headline: String
+    public let window: String
+    public let windowIcon: String
+    public let windowTone: String
+    public let used: String
+    public let percent: Int
+    public let auto: String
+    public let autoTone: String
+    public let autoEfforts: [String]
+    public let timeout: Int
+    public let placeKept: Int
+    public let groupWindow: Int
+    public let summary: [InsightSummaryRow]
 }
 
 /// OpenBot-style run model summary.

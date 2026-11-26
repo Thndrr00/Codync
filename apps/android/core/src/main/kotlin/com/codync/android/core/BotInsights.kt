@@ -41,9 +41,20 @@ data class BotInsights(
     val context: InsightContext = InsightContext(),
     val opendots: InsightOpenDots = InsightOpenDots(),
     val openbot: InsightOpenBot = InsightOpenBot(),
+    val agenteschat: InsightAgentesChat = InsightAgentesChat(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** Agentes-chat-style context budget summary. */
+@Serializable
+data class InsightAgentesChat(
+    val headline: String = "", val window: String = "", val windowIcon: String = "",
+    val windowTone: String = "", val used: String = "", val percent: Int = 0,
+    val auto: String = "", val autoTone: String = "", val autoEfforts: List<String> = emptyList(),
+    val timeout: Int = 0, val placeKept: Int = 0, val groupWindow: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** OpenBot-style run model summary. */

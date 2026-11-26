@@ -66,6 +66,17 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let agenteschat = &data["agenteschat"];
+    if agenteschat.is_object() {
+        line(buf, &mut y, tr("Context budget").into_owned(), t.bold.patch(t.panel));
+        let headline = agenteschat["headline"].as_str().unwrap_or("");
+        let window = agenteschat["window"].as_str().unwrap_or("");
+        let mode = agenteschat["auto"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {}", tr("Window"), window), t.text.patch(t.panel));
+        line(buf, &mut y, format!("  {}: {}", tr("Mode"), mode), t.secondary.patch(t.panel));
+        y += 1;
+    }
+
     let openbot = &data["openbot"];
     if openbot.is_object() {
         line(buf, &mut y, tr("Run model").into_owned(), t.bold.patch(t.panel));
