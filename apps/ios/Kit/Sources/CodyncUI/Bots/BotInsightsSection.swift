@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let apierror = insights.apierror
+                    Text(apierror.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(apierror.preview).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Class")): \(apierror.classLabel)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let history = insights.history
                     Text(history.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(history.preview).font(.footnote).foregroundStyle(Palette.secondary)

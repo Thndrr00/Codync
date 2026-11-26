@@ -1746,6 +1746,42 @@ fn history_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Provider API error classification from hermes-agent's error summary mixin.
+fn apierror_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_apierror as a;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut samples = 0;
+    let mut status = None;
+    let mut text = String::new();
+    for e in &entries {
+        let error = &e.data["error"];
+        let message = error["message"].as_str().unwrap_or("");
+        if !message.is_empty() {
+            samples += 1;
+            status = error["status"].as_u64().and_then(|code| u16::try_from(code).ok()).or(status);
+            if text.is_empty() {
+                text = message.to_owned();
+            }
+        }
+    }
+    let class = a::error_class(status, &text);
+    json!({
+        "headline": format!("{} · {}", a::class_label(class), a::status_label(status)),
+        "tone": a::class_tone(class),
+        "icon": a::class_icon(class),
+        "class": class,
+        "classLabel": a::class_label(class),
+        "status": a::status_label(status),
+        "retryable": a::is_retryable(status, &text),
+        "streamParse": a::is_stream_parse_error(&text),
+        "network": a::is_network_error(&text),
+        "samples": samples,
+        "preview": a::redact_error(&text),
+        "summary": a::summary(status, class, a::is_retryable(status, &text), samples).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1854,6 +1890,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "blueprint": blueprint_view(),
         "review": review_view(),
         "history": history_view(hub, bot),
+        "apierror": apierror_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

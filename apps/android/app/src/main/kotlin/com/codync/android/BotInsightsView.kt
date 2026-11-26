@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val apierror = insights.apierror
+            CardSection("API errors") {
+                row { Text(apierror.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(apierror.preview, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Class", apierror.classLabel) }
+                row { ValueRow("Retryable", apierror.retryable.toString()) }
+            }
             val history = insights.history
             CardSection("History") {
                 row { Text(history.headline, style = Type.subheadline.semibold, color = Palette.text) }

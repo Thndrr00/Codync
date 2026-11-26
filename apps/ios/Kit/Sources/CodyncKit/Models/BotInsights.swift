@@ -54,9 +54,26 @@ public struct BotInsights: Decodable, Sendable {
     public let blueprint: InsightBlueprint
     public let review: InsightReview
     public let history: InsightHistory
+    public let apierror: InsightApiError
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed provider API error summary.
+public struct InsightApiError: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let `class`: String
+    public let classLabel: String
+    public let status: String
+    public let retryable: Bool
+    public let streamParse: Bool
+    public let network: Bool
+    public let samples: Int
+    public let preview: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed history commentary summary.

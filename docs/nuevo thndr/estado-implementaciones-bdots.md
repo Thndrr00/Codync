@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Errores de API (24 adiciones + UI en 4 clientes)
+
+`bdots_apierror.rs` añade 21 helpers puros y 3 constantes portados de `api_error_summary.py` de
+**hermes-agent**: markers de parseo de stream y DNS, detección de entitlement xAI, prefijo HTTP,
+coerción de detalles estructurados, clasificación (auth/rate/context/model/transient), retry,
+redacción log-safe y resúmenes. Reutiliza `bdots_more`, `bdots_mailtext` y `bdots_desk`. El endpoint
+`botInsights` añade el campo `apierror`; la sección «API errors» se muestra en los cuatro clientes.
+
 ## Historial (22 adiciones + UI en 4 clientes)
 
 `bdots_history.rs` añade 21 helpers puros y una constante portados de `history_commentary.py` y

@@ -66,6 +66,16 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let apierror = &data["apierror"];
+    if apierror.is_object() {
+        line(buf, &mut y, tr("API errors").into_owned(), t.bold.patch(t.panel));
+        let headline = apierror["headline"].as_str().unwrap_or("");
+        let status = apierror["status"].as_str().unwrap_or("");
+        let samples = apierror["samples"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {status} · {}: {samples}", tr("Samples")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let history = &data["history"];
     if history.is_object() {
         line(buf, &mut y, tr("History").into_owned(), t.bold.patch(t.panel));

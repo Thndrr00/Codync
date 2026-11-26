@@ -57,9 +57,21 @@ data class BotInsights(
     val blueprint: InsightBlueprint = InsightBlueprint(),
     val review: InsightReview = InsightReview(),
     val history: InsightHistory = InsightHistory(),
+    val apierror: InsightApiError = InsightApiError(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed provider API error summary. */
+@Serializable
+data class InsightApiError(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val `class`: String = "", val classLabel: String = "",
+    val status: String = "", val retryable: Boolean = false,
+    val streamParse: Boolean = false, val network: Boolean = false,
+    val samples: Int = 0, val preview: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed history commentary summary. */

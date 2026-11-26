@@ -1,6 +1,21 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightApiError {
+  headline: string
+  tone: string
+  icon: string
+  class: string
+  classLabel: string
+  status: string
+  retryable: boolean
+  streamParse: boolean
+  network: boolean
+  samples: number
+  preview: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightHistory {
   headline: string
   tone: string
@@ -788,6 +803,7 @@ export interface BotInsights {
   blueprint: InsightBlueprint
   review: InsightReview
   history: InsightHistory
+  apierror: InsightApiError
   routines: InsightRoutine[]
   usage: {
     used: number
