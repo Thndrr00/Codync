@@ -50,9 +50,21 @@ data class BotInsights(
     val connstate: InsightConnState = InsightConnState(),
     val eval: InsightEval = InsightEval(),
     val search: InsightSearch = InsightSearch(),
+    val appearance: InsightAppearance = InsightAppearance(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed appearance and colour token summary. */
+@Serializable
+data class InsightAppearance(
+    val headline: String = "", val tone: String = "", val preference: String = "",
+    val appearance: String = "", val icon: String = "", val background: String = "",
+    val text: String = "", val foreground: String = "", val accent: String = "",
+    val radius: String = "", val bodySize: Int = 0, val bodyLine: Int = 0,
+    val fontScale: Double = 0.0, val maxScale: Double = 0.0, val botColor: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed connection state summary. */

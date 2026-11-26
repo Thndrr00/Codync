@@ -1549,6 +1549,33 @@ fn search_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Appearance and colour tokens from rakazo's ui-tokens package.
+fn appearance_view() -> Value {
+    use crate::bdots_appearance as a;
+
+    let preference = "system";
+    let appearance = a::resolve_appearance(preference, "light");
+    let (background, text, accent) = a::tokens_for_appearance(appearance);
+    json!({
+        "headline": format!("{} · {} · {} pt body", a::appearance_label(preference), crate::bdots_textfmt::upper_first(appearance), a::type_size("body")),
+        "tone": if a::is_dark(appearance) { "accent" } else { "good" },
+        "preference": a::appearance_label(preference),
+        "appearance": crate::bdots_textfmt::upper_first(appearance),
+        "icon": a::appearance_icon(preference),
+        "background": background,
+        "text": text,
+        "foreground": a::contrast_foreground(background),
+        "accent": accent,
+        "radius": a::RADIUS,
+        "bodySize": a::type_size("body"),
+        "bodyLine": a::type_line_height("body"),
+        "fontScale": a::clamp_font_scale(1.0),
+        "maxScale": a::max_font_scale(),
+        "botColor": a::bot_color(0),
+        "summary": a::summary(preference, appearance, 1.0).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1650,6 +1677,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "connstate": connstate_view(hub, bot, now),
         "eval": eval_view(hub, bot),
         "search": search_view(hub, bot),
+        "appearance": appearance_view(),
         "description": description,
         "model": model,
         "provider": provider,

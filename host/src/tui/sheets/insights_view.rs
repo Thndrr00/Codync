@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let appearance = &data["appearance"];
+    if appearance.is_object() {
+        line(buf, &mut y, tr("Appearance").into_owned(), t.bold.patch(t.panel));
+        let headline = appearance["headline"].as_str().unwrap_or("");
+        let accent = appearance["accent"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {accent}", tr("Accent")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let connstate = &data["connstate"];
     if connstate.is_object() {
         line(buf, &mut y, tr("Connections").into_owned(), t.bold.patch(t.panel));

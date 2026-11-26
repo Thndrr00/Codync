@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val appearance = insights.appearance
+            CardSection("Appearance") {
+                row { Text(appearance.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Appearance", appearance.appearance) }
+                row { ValueRow("Accent", appearance.accent) }
+                row { ValueRow("Body size", appearance.bodySize.toString()) }
+            }
             val connstate = insights.connstate
             CardSection("Connections") {
                 row { Text(connstate.headline, style = Type.subheadline.semibold, color = Palette.text) }

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let appearance = insights.appearance
+                    Text(appearance.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Appearance")): \(appearance.appearance)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Body size")): \(appearance.bodySize)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let connstate = insights.connstate
                     Text(connstate.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("State")): \(connstate.state)").font(.footnote).foregroundStyle(Palette.secondary)

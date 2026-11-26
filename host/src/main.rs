@@ -15,6 +15,7 @@ mod bdots_activity;
 mod bdots_advice;
 mod bdots_agent;
 mod bdots_agenteschat;
+mod bdots_appearance;
 mod bdots_approvals;
 mod bdots_blocks;
 mod bdots_connectors;

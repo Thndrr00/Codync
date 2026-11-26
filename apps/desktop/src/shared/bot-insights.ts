@@ -1,6 +1,25 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightAppearance {
+  headline: string
+  tone: string
+  preference: string
+  appearance: string
+  icon: string
+  background: string
+  text: string
+  foreground: string
+  accent: string
+  radius: string
+  bodySize: number
+  bodyLine: number
+  fontScale: number
+  maxScale: number
+  botColor: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightConnState {
   headline: string
   tone: string
@@ -672,6 +691,7 @@ export interface BotInsights {
   connstate: InsightConnState
   eval: InsightEval
   search: InsightSearch
+  appearance: InsightAppearance
   routines: InsightRoutine[]
   usage: {
     used: number

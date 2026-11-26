@@ -47,9 +47,30 @@ public struct BotInsights: Decodable, Sendable {
     public let connstate: InsightConnState
     public let eval: InsightEval
     public let search: InsightSearch
+    public let appearance: InsightAppearance
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed appearance and colour token summary.
+public struct InsightAppearance: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let preference: String
+    public let appearance: String
+    public let icon: String
+    public let background: String
+    public let text: String
+    public let foreground: String
+    public let accent: String
+    public let radius: String
+    public let bodySize: Int
+    public let bodyLine: Int
+    public let fontScale: Double
+    public let maxScale: Double
+    public let botColor: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed connection state summary.

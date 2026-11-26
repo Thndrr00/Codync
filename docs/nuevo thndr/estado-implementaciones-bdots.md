@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Apariencia (28 adiciones + UI en 4 clientes)
+
+`bdots_appearance.rs` añade 23 helpers puros y 5 constantes portados de `packages/ui-tokens` de
+**rakazo v0.14.0**: preferencias de apariencia, resolución system/light/dark, paletas móvil y web,
+nombres de variables CSS, escala tipográfica y de fuente, colores de bots y barras, contraste,
+luminancia, mezcla y alpha. Reutiliza `bdots_textfmt` y `bdots_desk`. El endpoint `botInsights`
+añade el campo `appearance`; la sección «Appearance» se muestra en los cuatro clientes.
+
 ## Conexiones, evaluación y búsqueda (40 adiciones + UI en 4 clientes)
 
 Tres módulos puros creados en paralelo por agentes hijos (T-83/T-84/T-85 agotaron su tiempo y no
