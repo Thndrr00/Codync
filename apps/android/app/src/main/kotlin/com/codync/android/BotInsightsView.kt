@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val i18n = insights.i18n
+            CardSection("Locale") {
+                row { Text(i18n.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Intl", i18n.intl) }
+                row { ValueRow("Week starts", i18n.weekLabel) }
+                row { ValueRow("Plural", i18n.plural) }
+            }
             val quota = insights.quota
             CardSection("Quota") {
                 row { Text(quota.headline, style = Type.subheadline.semibold, color = Palette.text) }

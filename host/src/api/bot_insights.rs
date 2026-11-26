@@ -1604,6 +1604,33 @@ fn quota_view(used: u64) -> Value {
     })
 }
 
+/// Locale registry and plural rules from agentes-chat's i18n package.
+fn i18n_view() -> Value {
+    use crate::bdots_i18n as i;
+
+    let code = i::DEFAULT_LOCALE;
+    let tag = "en-US";
+    let script = i::script_of(code);
+    json!({
+        "headline": i::locale_label(code),
+        "tone": if i::is_rtl(code) { "attention" } else { "good" },
+        "code": code,
+        "native": i::locale_native(code),
+        "english": i::locale_english(code),
+        "intl": i::intl_locale(code, &[tag]),
+        "week": i::week_start(code),
+        "weekLabel": i::week_start_label(code),
+        "script": i::script_label(script),
+        "direction": i::script_direction(script),
+        "rtl": i::is_rtl(code),
+        "plural": i::plural_key(code, 2),
+        "pluralFrom": i::plural_form(code, "many", "other"),
+        "categories": i::plural_categories(code),
+        "locales": i::LOCALE_CODES.len(),
+        "summary": i::summary(code, tag, i::plural_key(code, 2)).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1707,6 +1734,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "search": search_view(hub, bot),
         "appearance": appearance_view(),
         "quota": quota_view(used),
+        "i18n": i18n_view(),
         "description": description,
         "model": model,
         "provider": provider,

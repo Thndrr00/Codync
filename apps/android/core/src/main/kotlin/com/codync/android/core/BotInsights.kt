@@ -52,9 +52,22 @@ data class BotInsights(
     val search: InsightSearch = InsightSearch(),
     val appearance: InsightAppearance = InsightAppearance(),
     val quota: InsightQuota = InsightQuota(),
+    val i18n: InsightI18n = InsightI18n(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed locale and plural summary. */
+@Serializable
+data class InsightI18n(
+    val headline: String = "", val tone: String = "", val code: String = "",
+    val native: String = "", val english: String = "", val intl: String = "",
+    val week: Int = 0, val weekLabel: String = "", val script: String = "",
+    val direction: String = "", val rtl: Boolean = false, val plural: String = "",
+    val pluralFrom: String = "", val categories: List<String> = emptyList(),
+    val locales: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed account quota summary. */

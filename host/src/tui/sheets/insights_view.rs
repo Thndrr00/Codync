@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let i18n = &data["i18n"];
+    if i18n.is_object() {
+        line(buf, &mut y, tr("Locale").into_owned(), t.bold.patch(t.panel));
+        let headline = i18n["headline"].as_str().unwrap_or("");
+        let plural = i18n["plural"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {plural}", tr("Plural")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let quota = &data["quota"];
     if quota.is_object() {
         line(buf, &mut y, tr("Quota").into_owned(), t.bold.patch(t.panel));

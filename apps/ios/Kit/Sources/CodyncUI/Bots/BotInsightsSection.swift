@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let i18n = insights.i18n
+                    Text(i18n.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Intl")): \(i18n.intl)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Plural")): \(i18n.plural)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let quota = insights.quota
                     Text(quota.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Status")): \(quota.status)").font(.footnote).foregroundStyle(Palette.secondary)

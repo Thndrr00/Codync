@@ -49,9 +49,30 @@ public struct BotInsights: Decodable, Sendable {
     public let search: InsightSearch
     public let appearance: InsightAppearance
     public let quota: InsightQuota
+    public let i18n: InsightI18n
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed locale and plural summary.
+public struct InsightI18n: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let code: String
+    public let native: String
+    public let english: String
+    public let intl: String
+    public let week: Int
+    public let weekLabel: String
+    public let script: String
+    public let direction: String
+    public let rtl: Bool
+    public let plural: String
+    public let pluralFrom: String
+    public let categories: [String]
+    public let locales: Int
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed account quota summary.

@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Locales y plurales (26 adiciones + UI en 4 clientes)
+
+`bdots_i18n.rs` añade 24 helpers puros y 2 constantes portados de `packages/i18n` de
+**agentes-chat 0.7.5**: registro de locales, nombres nativos/ingleses, tags Intl, inicio de semana,
+scripts y dirección, resolución de tags de navegador (`pt-PT`, `zh-*`, `in`), formas plurales CLDR
+y huecos de traducción. Reutiliza `bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade
+el campo `i18n`; la sección «Locale» se muestra en los cuatro clientes.
+
 ## Cuotas (25 adiciones + UI en 4 clientes)
 
 `bdots_quota.rs` añade 24 helpers puros y una constante portados de `account_usage.py` de

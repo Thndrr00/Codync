@@ -33,6 +33,7 @@ mod bdots_failures;
 mod bdots_fallbacks;
 mod bdots_fresh;
 mod bdots_health;
+mod bdots_i18n;
 mod bdots_identity;
 mod bdots_library;
 mod bdots_links;
