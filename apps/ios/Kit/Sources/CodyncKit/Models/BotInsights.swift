@@ -64,6 +64,7 @@ public struct BotInsights: Decodable, Sendable {
     public let picker: InsightPicker
     public let contextselect: InsightContextSelect
     public let mdtables: InsightMdTables
+    public let contextpin: InsightContextPin
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -93,6 +94,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed context window pin summary.
+public struct InsightContextPin: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let window: Int
+    public let marker: String
+    public let suffix: String
+    public let pinned: Bool
+    public let fallback: Bool
+    public let pinnedSuffix: String
+    public let advertised: Int?
+    public let disagrees: Bool
+    public let known: Bool
+    public let ratio: Int
     public let summary: [InsightSummaryRow]
 }
 

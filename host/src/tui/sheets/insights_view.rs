@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let contextpin = &data["contextpin"];
+    if contextpin.is_object() {
+        line(buf, &mut y, tr("Window pin").into_owned(), t.bold.patch(t.panel));
+        let headline = contextpin["headline"].as_str().unwrap_or("");
+        let marker = contextpin["marker"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {marker}", tr("Marker")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let mdtables = &data["mdtables"];
     if mdtables.is_object() {
         line(buf, &mut y, tr("Markdown tables").into_owned(), t.bold.patch(t.panel));

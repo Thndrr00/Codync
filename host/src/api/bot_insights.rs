@@ -2065,6 +2065,32 @@ fn md_tables_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Context window pin and marker helpers from hermes-agent.
+fn contextpin_view() -> Value {
+    use crate::bdots_context_pin as p;
+
+    let window = 200_000;
+    let pin = Some(200_000);
+    let model = "claude-sonnet";
+    let marker = p::context_marker(window, pin, model, None);
+    json!({
+        "headline": format!("{} · {}{}", p::window_label(window), p::marker_label(marker), p::context_suffix(marker)),
+        "tone": p::marker_tone(marker),
+        "icon": p::marker_icon(marker),
+        "window": window,
+        "marker": p::marker_label(marker),
+        "suffix": p::context_suffix(marker),
+        "pinned": p::is_context_pinned(window, pin),
+        "fallback": p::is_fallback_window(window, model, None),
+        "pinnedSuffix": p::pin_suffix(window, pin),
+        "advertised": p::advertised_window(model),
+        "disagrees": p::pin_disagrees(model, window),
+        "known": p::is_known_window(window, pin),
+        "ratio": p::window_ratio(window),
+        "summary": p::summary(window, marker, p::is_known_window(window, pin), p::window_ratio(window)),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2183,6 +2209,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "picker": picker_view(),
         "contextselect": contextselect_view(hub, bot),
         "mdtables": md_tables_view(hub, bot),
+        "contextpin": contextpin_view(),
         "description": description,
         "model": model,
         "provider": provider,

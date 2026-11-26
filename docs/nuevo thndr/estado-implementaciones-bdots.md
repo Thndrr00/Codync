@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Pin de ventana de contexto (20 adiciones + UI en 4 clientes)
+
+`bdots_context_pin.rs` añade 18 helpers puros y 2 constantes portados de `context_pin.py` de
+**hermes-agent**: pins explícitos de ventana, detección de fallback, marcadores y sufijos de
+display, metadatos locales de ventana anunciada, desacuerdo de pin y etiquetas. Reutiliza
+`bdots_textfmt`, `bdots_localfmt`, `bdots_more`, `bdots_activity` y `bdots_desk`. El endpoint
+`botInsights` añade el campo `contextpin`; la sección «Window pin» se muestra en los cuatro clientes.
+
 ## Tablas markdown (21 adiciones + UI en 4 clientes)
 
 `bdots_md_tables.rs` añade 20 helpers puros y una constante portados de `markdown_tables.py` de

@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val contextpin = insights.contextpin
+            CardSection("Window pin") {
+                row { Text(contextpin.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Marker", contextpin.marker) }
+                row { ValueRow("Pinned", contextpin.pinned.toString()) }
+                row { ValueRow("Ratio", "${contextpin.ratio}%") }
+            }
             val mdtables = insights.mdtables
             CardSection("Markdown tables") {
                 row { Text(mdtables.headline, style = Type.subheadline.semibold, color = Palette.text) }

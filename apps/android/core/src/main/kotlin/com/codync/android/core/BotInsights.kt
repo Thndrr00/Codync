@@ -67,9 +67,21 @@ data class BotInsights(
     val picker: InsightPicker = InsightPicker(),
     val contextselect: InsightContextSelect = InsightContextSelect(),
     val mdtables: InsightMdTables = InsightMdTables(),
+    val contextpin: InsightContextPin = InsightContextPin(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed context window pin summary. */
+@Serializable
+data class InsightContextPin(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val window: Int = 0, val marker: String = "", val suffix: String = "",
+    val pinned: Boolean = false, val fallback: Boolean = false, val pinnedSuffix: String = "",
+    val advertised: Int? = null, val disagrees: Boolean = false, val known: Boolean = false,
+    val ratio: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed markdown table summary. */

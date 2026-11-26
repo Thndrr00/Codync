@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let contextpin = insights.contextpin
+                    Text(contextpin.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Marker")): \(contextpin.marker)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Ratio")): \(contextpin.ratio)%").font(.footnote).foregroundStyle(Palette.tertiary)
                     let mdtables = insights.mdtables
                     Text(mdtables.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Rows")): \(mdtables.rows)").font(.footnote).foregroundStyle(Palette.secondary)
