@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let openbot = insights.openbot
+                    Text(openbot.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Effort")): \(openbot.effort)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Route")): \(openbot.route)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let opendots = insights.opendots
                     Text(opendots.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Container")): \(opendots.container)").font(.footnote).foregroundStyle(Palette.secondary)

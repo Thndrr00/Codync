@@ -40,9 +40,20 @@ data class BotInsights(
     val liveness: InsightLiveness = InsightLiveness(),
     val context: InsightContext = InsightContext(),
     val opendots: InsightOpenDots = InsightOpenDots(),
+    val openbot: InsightOpenBot = InsightOpenBot(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** OpenBot-style run model summary. */
+@Serializable
+data class InsightOpenBot(
+    val headline: String = "", val tone: String = "", val engine: String = "",
+    val model: String = "", val effort: String = "", val effortIcon: String = "",
+    val effortTone: String = "", val route: String = "", val routeIcon: String = "",
+    val plan: Boolean = false, val thread: String = "", val responsesApi: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** OpenDots-style Learning and internal message summary. */

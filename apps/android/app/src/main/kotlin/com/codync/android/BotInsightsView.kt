@@ -42,6 +42,12 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val openbot = insights.openbot
+            CardSection("Run model") {
+                row { Text(openbot.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Effort", openbot.effort) }
+                row { ValueRow("Route", openbot.route) }
+            }
             val opendots = insights.opendots
             CardSection("Learning") {
                 row { Text(opendots.headline, style = Type.subheadline.semibold, color = Palette.text) }

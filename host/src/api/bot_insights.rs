@@ -1249,6 +1249,30 @@ fn opendots_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// OpenBot-style run model: efforts, gateway routes and plan threads.
+fn openbot_view(row: &crate::store::BotRow) -> Value {
+    use crate::bdots_openbot as o;
+
+    let model = row.config.model.as_deref();
+    let effort = row.config.model_options.get("effort").map(String::as_str);
+    let route = "deployment";
+    json!({
+        "headline": o::run_headline(model, effort, route),
+        "tone": o::run_tone(route),
+        "engine": o::bot_id(),
+        "model": o::model_choice(model, effort),
+        "effort": effort.map_or_else(|| "Default".to_owned(), o::effort_label),
+        "effortIcon": effort.map_or_else(|| "brain", o::effort_icon),
+        "effortTone": effort.map_or_else(|| "secondary", o::effort_tone),
+        "route": o::route_label(route),
+        "routeIcon": o::route_icon(route),
+        "plan": o::uses_plan(route),
+        "thread": o::claude_thread_id(&row.id, "main"),
+        "responsesApi": model.is_some_and(o::requires_responses_api),
+        "summary": o::summary(model, effort, route).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1340,6 +1364,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "liveness": liveness_view(&row, hub, bot, now),
         "context": context_view(hub, bot),
         "opendots": opendots_view(hub, bot),
+        "openbot": openbot_view(&row),
         "description": description,
         "model": model,
         "provider": provider,

@@ -66,6 +66,21 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let openbot = &data["openbot"];
+    if openbot.is_object() {
+        line(buf, &mut y, tr("Run model").into_owned(), t.bold.patch(t.panel));
+        let headline = openbot["headline"].as_str().unwrap_or("");
+        let effort = openbot["effort"].as_str().unwrap_or("");
+        let route = openbot["route"].as_str().unwrap_or("");
+        line(
+            buf,
+            &mut y,
+            format!("{headline} · {}: {} · {}: {}", tr("Effort"), effort, tr("Route"), route),
+            t.text.patch(t.panel),
+        );
+        y += 1;
+    }
+
     let opendots = &data["opendots"];
     if opendots.is_object() {
         line(buf, &mut y, tr("Learning").into_owned(), t.bold.patch(t.panel));

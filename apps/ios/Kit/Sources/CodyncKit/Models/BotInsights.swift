@@ -37,9 +37,27 @@ public struct BotInsights: Decodable, Sendable {
     public let liveness: InsightLiveness
     public let context: InsightContext
     public let opendots: InsightOpenDots
+    public let openbot: InsightOpenBot
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// OpenBot-style run model summary.
+public struct InsightOpenBot: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let engine: String
+    public let model: String
+    public let effort: String
+    public let effortIcon: String
+    public let effortTone: String
+    public let route: String
+    public let routeIcon: String
+    public let plan: Bool
+    public let thread: String
+    public let responsesApi: Bool
+    public let summary: [InsightSummaryRow]
 }
 
 /// OpenDots-style Learning and internal message summary.

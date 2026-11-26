@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Modelo de run (23 helpers + UI en 4 clientes)
+
+`bdots_openbot.rs` añade 23 helpers puros portados de `agent-langgraph-ts` de **OpenBot-CopilotKit
+v1.1.1**: esfuerzos de razonamiento (RUN_EFFORTS, Anthropic, Google), rangos y etiquetas, rutas de
+gateway, threads de plan Claude, modelos forwardados, requiresResponsesApi, send-once y resúmenes.
+Reutiliza `bdots_more` y `bdots_desk`. El endpoint `botInsights` añade el campo `openbot`; la sección
+«Run model» se muestra en los cuatro clientes.
+
 ## OpenDots (23 helpers + UI en 4 clientes)
 
 `bdots_opendots.rs` añade 23 helpers puros portados de los modelos compartidos de **OpenDots**:

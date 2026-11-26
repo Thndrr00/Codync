@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,12 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Run model')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(openbot.tone)}>{openbot.headline}</Text>
+        <ValueRow label={tr('Effort')}>{openbot.effort}</ValueRow>
+        <ValueRow label={tr('Route')}>{openbot.route}</ValueRow>
+      </CardSection>
+
       <CardSection title={tr('Learning')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(opendots.learningTone)}>{opendots.headline}</Text>
         <ValueRow label={tr('Container')}>{opendots.container}</ValueRow>
