@@ -43,9 +43,21 @@ data class BotInsights(
     val openbot: InsightOpenBot = InsightOpenBot(),
     val agenteschat: InsightAgentesChat = InsightAgentesChat(),
     val textfmt: InsightTextFmt = InsightTextFmt(),
+    val localfmt: InsightLocalFmt = InsightLocalFmt(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed locale clock and number summary. */
+@Serializable
+data class InsightLocalFmt(
+    val headline: String = "", val tone: String = "", val locale: String = "",
+    val clock: String = "", val day: String = "", val weekday: String = "",
+    val shortDate: String = "", val month: String = "", val relative: String = "",
+    val timeAgo: String = "", val count: String = "", val tokens: String = "",
+    val spend: String = "", val budget: String = "", val ordinal: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed text hygiene summary. */

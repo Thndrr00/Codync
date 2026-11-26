@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Formato local (27 helpers + UI en 4 clientes)
+
+`bdots_localfmt.rs` añade 27 helpers puros portados de `format.ts` de **agentes-chat 0.7.5**:
+signos decimales y agrupación por locale, dinero, porcentajes, tokens cortos, aritmética civil de
+días sin crate de fechas, conversión epoch ↔ ISO, reloj de 12/24 h, fechas cortas y largas,
+días de la semana, etiquetas relativas, formas ordinales y resúmenes. Reutiliza `bdots_extra`,
+`bdots_text`, `bdots_textfmt`, `bdots_desk` y `bdots_activity`. El endpoint `botInsights` añade el
+campo `localfmt`; la sección «Local format» se muestra en los cuatro clientes.
+
 ## Higiene de texto (28 helpers + UI en 4 clientes)
 
 `bdots_textfmt.rs` añade 28 helpers puros portados de `text.ts` y `html-text.ts` de

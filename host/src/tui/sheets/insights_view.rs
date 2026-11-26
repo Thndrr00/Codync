@@ -66,6 +66,16 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let localfmt = &data["localfmt"];
+    if localfmt.is_object() {
+        line(buf, &mut y, tr("Local format").into_owned(), t.bold.patch(t.panel));
+        let headline = localfmt["headline"].as_str().unwrap_or("");
+        let weekday = localfmt["weekday"].as_str().unwrap_or("");
+        let tokens = localfmt["tokens"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {weekday} · {}: {}", tr("Tokens"), tokens), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let textfmt = &data["textfmt"];
     if textfmt.is_object() {
         line(buf, &mut y, tr("Text hygiene").into_owned(), t.bold.patch(t.panel));

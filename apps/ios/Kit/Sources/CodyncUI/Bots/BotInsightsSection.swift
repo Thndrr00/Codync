@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let localfmt = insights.localfmt
+                    Text(localfmt.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Weekday")): \(localfmt.weekday)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Tokens")): \(localfmt.tokens)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let textfmt = insights.textfmt
                     Text(textfmt.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Handle")): \(textfmt.handle)").font(.footnote).foregroundStyle(Palette.secondary)

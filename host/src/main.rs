@@ -34,6 +34,7 @@ mod bdots_identity;
 mod bdots_library;
 mod bdots_links;
 mod bdots_liveness;
+mod bdots_localfmt;
 mod bdots_memory;
 mod bdots_more;
 mod bdots_openbot;

@@ -42,6 +42,14 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val localfmt = insights.localfmt
+            CardSection("Local format") {
+                row { Text(localfmt.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Clock", localfmt.clock) }
+                row { ValueRow("Weekday", localfmt.weekday) }
+                row { ValueRow("Tokens", localfmt.tokens) }
+                row { ValueRow("Budget", localfmt.budget) }
+            }
             val textfmt = insights.textfmt
             CardSection("Text hygiene") {
                 row { Text(textfmt.headline, style = Type.subheadline.semibold, color = Palette.text) }

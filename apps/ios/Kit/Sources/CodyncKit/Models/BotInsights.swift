@@ -40,9 +40,30 @@ public struct BotInsights: Decodable, Sendable {
     public let openbot: InsightOpenBot
     public let agenteschat: InsightAgentesChat
     public let textfmt: InsightTextFmt
+    public let localfmt: InsightLocalFmt
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed locale clock and number summary.
+public struct InsightLocalFmt: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let locale: String
+    public let clock: String
+    public let day: String
+    public let weekday: String
+    public let shortDate: String
+    public let month: String
+    public let relative: String
+    public let timeAgo: String
+    public let count: String
+    public let tokens: String
+    public let spend: String
+    public let budget: String
+    public let ordinal: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed text hygiene summary.

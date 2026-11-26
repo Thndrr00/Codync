@@ -1335,6 +1335,34 @@ fn textfmt_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value 
     })
 }
 
+/// Locale-aware clock, calendar and number formatting from agentes-chat's format helpers.
+fn localfmt_view(now: i64, used: u64) -> Value {
+    use crate::bdots_localfmt as f;
+
+    let locale = "en-US";
+    let today = f::ms_to_iso(now);
+    let earlier = f::ms_to_iso(now - 3_600_000);
+    let percent = crate::bdots_activity::percent(used as usize, 200_000);
+    json!({
+        "headline": f::when_at(locale, &today, &today),
+        "tone": if percent > 80 { "attention" } else { "good" },
+        "locale": locale,
+        "clock": f::format_time(locale, &today),
+        "day": f::day_label(locale, &today, &today),
+        "weekday": f::format_weekday(locale, &today),
+        "shortDate": f::format_short_date(locale, &today, true),
+        "month": f::format_month_year(locale, &today),
+        "relative": f::relative_time(locale, &earlier, &today),
+        "timeAgo": f::time_ago(&earlier, &today),
+        "count": f::format_int(locale, used as f64),
+        "tokens": f::format_tokens_short(locale, used as f64),
+        "spend": f::format_usd(locale, 0.42),
+        "budget": f::format_percent(locale, f64::from(percent)),
+        "ordinal": f::ordinal_form(locale, 3),
+        "summary": f::summary(locale, &today, &today).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1429,6 +1457,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "openbot": openbot_view(&row),
         "agenteschat": agenteschat_view(&row, used),
         "textfmt": textfmt_view(&row, hub, bot),
+        "localfmt": localfmt_view(now, used),
         "description": description,
         "model": model,
         "provider": provider,
