@@ -38,6 +38,7 @@ mod bdots_localfmt;
 mod bdots_markdown;
 mod bdots_memory;
 mod bdots_more;
+mod bdots_notify;
 mod bdots_openbot;
 mod bdots_opendots;
 mod bdots_profile;

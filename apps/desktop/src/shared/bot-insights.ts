@@ -1,6 +1,26 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightNotify {
+  headline: string
+  tone: string
+  state: string
+  stateIcon: string
+  marker: string
+  diagnostic: number
+  freeform: number
+  delivered: number
+  failed: number
+  muted: boolean
+  maxOutput: number
+  maxAttempts: number
+  floodDefault: number
+  floodCap: number
+  retryDelay: number
+  obligation: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightMarkdown {
   headline: string
   tone: string
@@ -591,6 +611,7 @@ export interface BotInsights {
   textfmt: InsightTextFmt
   localfmt: InsightLocalFmt
   markdown: InsightMarkdown
+  notify: InsightNotify
   routines: InsightRoutine[]
   usage: {
     used: number

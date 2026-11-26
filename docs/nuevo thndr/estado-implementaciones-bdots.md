@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Notificaciones (27 helpers + UI en 4 clientes)
+
+`bdots_notify.rs` añade 27 helpers puros portados de `notification_presentation.py`,
+`warning_notifications.py`, `delivery.py` y `delivery_ledger.py` de **hermes-agent**: eventos
+freeform, silenciado de diagnósticos, políticas de notificación, narración de silencio, ids de
+obligación, errores de flood, backoff de reintento y estados de entrega con marcadores honestos.
+Reutiliza `bdots_more`, `bdots_desk` y `bdots_activity`. El endpoint `botInsights` añade el campo
+`notify`; la sección «Notifications» se muestra en los cuatro clientes.
+
 ## Markdown (27 helpers + UI en 4 clientes)
 
 `bdots_markdown.rs` añade 27 helpers puros portados de `packages/ui/src/markdown.ts` de

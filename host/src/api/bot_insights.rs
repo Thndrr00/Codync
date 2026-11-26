@@ -1396,6 +1396,38 @@ fn markdown_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Notification presentation and delivery policy from hermes-agent's gateway helpers.
+fn notify_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_notify as n;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let diagnostic = entries.iter().filter(|e| n::classify_event(&e.data)).count();
+    let freeform = entries.iter().filter(|e| n::is_freeform_event(e.data["type"].as_str().unwrap_or(""))).count();
+    let failed = entries.iter().filter(|e| e.data["error"].is_string()).count();
+    let delivered = entries.len().saturating_sub(failed);
+    let muted = entries.iter().any(|e| e.data["suppress_warning_notifications"] == true);
+    let state = if failed > 0 { "failed" } else { "delivered" };
+    json!({
+        "headline": n::delivery_headline(delivered, failed, muted),
+        "tone": n::state_tone(state),
+        "state": n::state_label(state),
+        "stateIcon": n::state_icon(state),
+        "marker": n::marker_for(state),
+        "diagnostic": diagnostic,
+        "freeform": freeform,
+        "delivered": delivered,
+        "failed": failed,
+        "muted": muted,
+        "maxOutput": n::MAX_PLATFORM_OUTPUT,
+        "maxAttempts": n::MAX_ATTEMPTS,
+        "floodDefault": n::FLOOD_RETRY_DEFAULT,
+        "floodCap": n::FLOOD_RETRY_CAP,
+        "retryDelay": n::flood_retry_delay(30.0),
+        "obligation": n::obligation_id(bot, "insights", &format!("{delivered}:{failed}")),
+        "summary": n::summary(delivered, failed, 0, muted).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1492,6 +1524,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "textfmt": textfmt_view(&row, hub, bot),
         "localfmt": localfmt_view(now, used),
         "markdown": markdown_view(hub, bot),
+        "notify": notify_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

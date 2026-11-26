@@ -66,6 +66,21 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let notify = &data["notify"];
+    if notify.is_object() {
+        line(buf, &mut y, tr("Notifications").into_owned(), t.bold.patch(t.panel));
+        let headline = notify["headline"].as_str().unwrap_or("");
+        let state = notify["state"].as_str().unwrap_or("");
+        let failed = notify["failed"].as_u64().unwrap_or(0);
+        line(
+            buf,
+            &mut y,
+            format!("{headline} · {}: {state} · {}: {failed}", tr("State"), tr("Failed")),
+            t.text.patch(t.panel),
+        );
+        y += 1;
+    }
+
     let markdown = &data["markdown"];
     if markdown.is_object() {
         line(buf, &mut y, tr("Markdown").into_owned(), t.bold.patch(t.panel));

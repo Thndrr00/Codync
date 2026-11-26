@@ -42,9 +42,31 @@ public struct BotInsights: Decodable, Sendable {
     public let textfmt: InsightTextFmt
     public let localfmt: InsightLocalFmt
     public let markdown: InsightMarkdown
+    public let notify: InsightNotify
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed notification and delivery summary.
+public struct InsightNotify: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let state: String
+    public let stateIcon: String
+    public let marker: String
+    public let diagnostic: Int
+    public let freeform: Int
+    public let delivered: Int
+    public let failed: Int
+    public let muted: Bool
+    public let maxOutput: Int
+    public let maxAttempts: Int
+    public let floodDefault: Double
+    public let floodCap: Double
+    public let retryDelay: Double
+    public let obligation: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed Markdown prose summary.

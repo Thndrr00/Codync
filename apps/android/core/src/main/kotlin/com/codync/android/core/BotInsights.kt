@@ -45,9 +45,23 @@ data class BotInsights(
     val textfmt: InsightTextFmt = InsightTextFmt(),
     val localfmt: InsightLocalFmt = InsightLocalFmt(),
     val markdown: InsightMarkdown = InsightMarkdown(),
+    val notify: InsightNotify = InsightNotify(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed notification and delivery summary. */
+@Serializable
+data class InsightNotify(
+    val headline: String = "", val tone: String = "", val state: String = "",
+    val stateIcon: String = "", val marker: String = "",
+    val diagnostic: Int = 0, val freeform: Int = 0, val delivered: Int = 0,
+    val failed: Int = 0, val muted: Boolean = false,
+    val maxOutput: Int = 0, val maxAttempts: Int = 0,
+    val floodDefault: Double = 0.0, val floodCap: Double = 0.0, val retryDelay: Double = 0.0,
+    val obligation: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed Markdown prose summary. */
