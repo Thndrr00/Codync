@@ -66,6 +66,22 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let context = &data["context"];
+    if context.is_object() {
+        line(buf, &mut y, tr("Context window").into_owned(), t.bold.patch(t.panel));
+        let headline = context["headline"].as_str().unwrap_or("");
+        line(buf, &mut y, headline.to_owned(), t.text.patch(t.panel));
+        let page = context["page"].as_str().unwrap_or("");
+        let shots = context["screenshots"].as_str().unwrap_or("");
+        line(
+            buf,
+            &mut y,
+            format!("  {}: {page} · {}: {shots}", tr("Page states"), tr("Screenshots")),
+            t.secondary.patch(t.panel),
+        );
+        y += 1;
+    }
+
     let liveness = &data["liveness"];
     if liveness.is_object() {
         line(buf, &mut y, tr("Liveness").into_owned(), t.bold.patch(t.panel));

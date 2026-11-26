@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Contexto (23 helpers + UI en 4 clientes)
+
+`bdots_context.rs` añade 23 helpers puros portados de `context-pruning.ts` de **rakazo v0.14.0**:
+herramientas que muestran estado de página, conteos a conservar, umbral de texto obsoleto,
+normalización de límites, conteo de imágenes, detección de screenshots, decisiones de poda,
+notas, iconos y resúmenes. Reutiliza `bdots_desk`, `bdots_more`, `bdots_text`. El endpoint
+`botInsights` añade el campo `context`; la sección «Context window» se muestra en los cuatro clientes.
+
 ## Vivacidad (23 helpers + UI en 4 clientes)
 
 `bdots_liveness.rs` añade 23 helpers puros portados de `activity_tracking.py` y

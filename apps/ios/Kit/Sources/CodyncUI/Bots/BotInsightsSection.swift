@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let context = insights.context
+                    Text(context.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Page states")): \(context.page)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Screenshots")): \(context.screenshots)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let liveness = insights.liveness
                     Text(liveness.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Delivery")): \(liveness.outcome)").font(.footnote).foregroundStyle(Palette.secondary)

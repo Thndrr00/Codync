@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val context = insights.context
+            CardSection("Context window") {
+                row { Text(context.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Page states", context.page) }
+                row { ValueRow("Screenshots", context.screenshots) }
+                row { Text(context.pageNote, style = Type.caption, color = Palette.tertiary) }
+            }
             val liveness = insights.liveness
             CardSection("Liveness") {
                 row { Text(liveness.headline, style = Type.subheadline.semibold, color = Palette.text) }

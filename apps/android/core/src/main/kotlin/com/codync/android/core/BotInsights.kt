@@ -38,9 +38,20 @@ data class BotInsights(
     val access: InsightAccess = InsightAccess(),
     val dictation: InsightDictation = InsightDictation(),
     val liveness: InsightLiveness = InsightLiveness(),
+    val context: InsightContext = InsightContext(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed context pruning summary. */
+@Serializable
+data class InsightContext(
+    val headline: String = "", val page: String = "", val screenshots: String = "",
+    val pageKeep: Int = 0, val screenshotKeep: Int = 0, val staleMin: Int = 0,
+    val pageNote: String = "", val screenshotNote: String = "",
+    val pruned: String = "", val tone: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed liveness and delivery summary. */

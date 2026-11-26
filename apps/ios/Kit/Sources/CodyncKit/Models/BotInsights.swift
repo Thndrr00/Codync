@@ -35,9 +35,25 @@ public struct BotInsights: Decodable, Sendable {
     public let access: InsightAccess
     public let dictation: InsightDictation
     public let liveness: InsightLiveness
+    public let context: InsightContext
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed context pruning summary.
+public struct InsightContext: Decodable, Sendable {
+    public let headline: String
+    public let page: String
+    public let screenshots: String
+    public let pageKeep: Int
+    public let screenshotKeep: Int
+    public let staleMin: Int
+    public let pageNote: String
+    public let screenshotNote: String
+    public let pruned: String
+    public let tone: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed liveness and delivery summary.

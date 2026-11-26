@@ -1189,6 +1189,42 @@ fn liveness_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str, now: i64
     })
 }
 
+/// Context pruning policy from rakazo: page-state results and screenshot budgets.
+fn context_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_context as c;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut page = 0;
+    let mut screenshots = 0;
+    for e in &entries {
+        let tool = e.data["title"].as_str().unwrap_or("");
+        let parts: Vec<Value> = e.data["parts"].as_array().map_or(Vec::new(), |a| a.clone());
+        if c::is_page_state_tool(tool)
+            && !c::is_error_result(&e.data)
+            && c::is_large_page(&e.data["text"].as_str().unwrap_or(""))
+        {
+            page += 1;
+        }
+        if c::is_screenshot(tool, &parts) {
+            screenshots += 1;
+        }
+    }
+    let keep = c::default_screenshot_keep();
+    json!({
+        "headline": format!("{} page states · {} screenshots", c::count_label(page), c::count_label(screenshots)),
+        "page": c::count_label(page),
+        "screenshots": c::count_label(screenshots),
+        "pageKeep": c::default_page_keep(),
+        "screenshotKeep": keep,
+        "staleMin": c::stale_min_chars(),
+        "pageNote": c::page_note(),
+        "screenshotNote": c::screenshot_note(),
+        "pruned": c::prune_icon(screenshots > keep),
+        "tone": c::prune_tone(screenshots > keep),
+        "summary": c::summary(page, screenshots, keep).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1278,6 +1314,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "access": access_view(&row),
         "dictation": dictation_view(&row),
         "liveness": liveness_view(&row, hub, bot, now),
+        "context": context_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

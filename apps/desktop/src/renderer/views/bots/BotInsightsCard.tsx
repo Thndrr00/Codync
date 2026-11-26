@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,13 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Context window')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(context.tone)}>{context.headline}</Text>
+        <ValueRow label={tr('Page states')}>{context.page}</ValueRow>
+        <ValueRow label={tr('Screenshots')}>{context.screenshots}</ValueRow>
+        <Text size="footnote" tone="tertiary">{context.pageNote}</Text>
+      </CardSection>
+
       <CardSection title={tr('Liveness')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(liveness.tone)}>{liveness.headline}</Text>
         <ValueRow label={tr('State')}>{liveness.state}</ValueRow>
