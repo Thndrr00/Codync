@@ -60,9 +60,30 @@ data class BotInsights(
     val apierror: InsightApiError = InsightApiError(),
     val memoryctx: InsightMemoryCtx = InsightMemoryCtx(),
     val searchextra: InsightSearchExtra = InsightSearchExtra(),
+    val evalextra: InsightEvalExtra = InsightEvalExtra(),
+    val connextra: InsightConnExtra = InsightConnExtra(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed eval metrics summary from the child-agent port. */
+@Serializable
+data class InsightEvalExtra(
+    val headline: String = "", val tone: String = "", val lines: Int = 0,
+    val code: Int = 0, val median: Int = 0, val p90: Int = 0,
+    val over1k: Int = 0, val over2k: Int = 0, val skip: Boolean = false,
+    val module: String = "", val verdicts: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed connection summary from the child-agent port. */
+@Serializable
+data class InsightConnExtra(
+    val headline: String = "", val tone: String = "",
+    val channels: List<String> = emptyList(), val providers: List<String> = emptyList(),
+    val selected: Int = 0, val rows: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed ranked-search summary from the child-agent port. */

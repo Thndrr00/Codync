@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx, searchextra } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx, searchextra, evalextra, connextra } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,18 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Eval metrics')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(evalextra.tone)}>{evalextra.headline}</Text>
+        <ValueRow label={tr('Median')}>{String(evalextra.median)}</ValueRow>
+        <ValueRow label={tr('Over 1k')}>{String(evalextra.over1k)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Connections extra')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(connextra.tone)}>{connextra.headline}</Text>
+        <ValueRow label={tr('Channels')}>{connextra.channels.join(', ')}</ValueRow>
+        <ValueRow label={tr('Selected')}>{String(connextra.selected)}</ValueRow>
+      </CardSection>
+
       <CardSection title={tr('Ranked search')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(searchextra.tone)}>{searchextra.headline}</Text>
         <ValueRow label={tr('Query')}>{searchextra.query}</ValueRow>

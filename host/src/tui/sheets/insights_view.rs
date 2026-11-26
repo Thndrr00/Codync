@@ -13,8 +13,8 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     let inner = frame_box(buf, r, t.text, t.panel, Some((&title, t.text)));
     let inner = page_tabs(buf, inner, Page::Insights);
     let Some(data) = i.data.as_ref().filter(|v| !v.is_null()) else {
-        put(buf, inner.x, inner.y, inner.width, &tr("Loading…"), t.dim.patch(t.panel));
-        footer(buf, inner, None, "esc · shift+←→ pages");
+        put(buf, inner.x, inner.y, inner.width, &tr("LoadingÃ¢â‚¬Â¦"), t.dim.patch(t.panel));
+        footer(buf, inner, None, "esc Ã‚Â· shift+Ã¢â€ ÂÃ¢â€ â€™ pages");
         return;
     };
 
@@ -66,12 +66,30 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let evalextra = &data["evalextra"];
+    if evalextra.is_object() {
+        line(buf, &mut y, tr("Eval metrics").into_owned(), t.bold.patch(t.panel));
+        let headline = evalextra["headline"].as_str().unwrap_or("");
+        let median = evalextra["median"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {median}", tr("Median")), t.text.patch(t.panel));
+        y += 1;
+    }
+
+    let connextra = &data["connextra"];
+    if connextra.is_object() {
+        line(buf, &mut y, tr("Connections extra").into_owned(), t.bold.patch(t.panel));
+        let headline = connextra["headline"].as_str().unwrap_or("");
+        let channels = connextra["channels"].as_array().map_or(0, Vec::len);
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {channels}", tr("Channels")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let searchextra = &data["searchextra"];
     if searchextra.is_object() {
         line(buf, &mut y, tr("Ranked search").into_owned(), t.bold.patch(t.panel));
         let headline = searchextra["headline"].as_str().unwrap_or("");
         let matched = searchextra["matched"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {}: {matched}", tr("Matched")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {matched}", tr("Matched")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -80,7 +98,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Memory context").into_owned(), t.bold.patch(t.panel));
         let headline = memoryctx["headline"].as_str().unwrap_or("");
         let hidden = memoryctx["hidden"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {}: {hidden}", tr("Hidden")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {hidden}", tr("Hidden")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -90,7 +108,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = apierror["headline"].as_str().unwrap_or("");
         let status = apierror["status"].as_str().unwrap_or("");
         let samples = apierror["samples"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {status} · {}: {samples}", tr("Samples")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {status} Ã‚Â· {}: {samples}", tr("Samples")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -99,7 +117,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("History").into_owned(), t.bold.patch(t.panel));
         let headline = history["headline"].as_str().unwrap_or("");
         let withheld = history["withheld"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {}: {withheld}", tr("Withheld")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {withheld}", tr("Withheld")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -112,7 +130,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(
             buf,
             &mut y,
-            format!("{headline} · {}: {mode} · {}: {queued}", tr("Mode"), tr("Queued")),
+            format!("{headline} Ã‚Â· {}: {mode} Ã‚Â· {}: {queued}", tr("Mode"), tr("Queued")),
             t.text.patch(t.panel),
         );
         y += 1;
@@ -123,7 +141,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Blueprint").into_owned(), t.bold.patch(t.panel));
         let headline = blueprint["headline"].as_str().unwrap_or("");
         let cron = blueprint["cron"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {cron}", tr("Cron")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {cron}", tr("Cron")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -136,7 +154,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(
             buf,
             &mut y,
-            format!("{headline} · {}: {held} · {}: {chunks}", tr("Held"), tr("Chunks")),
+            format!("{headline} Ã‚Â· {}: {held} Ã‚Â· {}: {chunks}", tr("Held"), tr("Chunks")),
             t.text.patch(t.panel),
         );
         y += 1;
@@ -147,7 +165,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Locale").into_owned(), t.bold.patch(t.panel));
         let headline = i18n["headline"].as_str().unwrap_or("");
         let plural = i18n["plural"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {plural}", tr("Plural")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {plural}", tr("Plural")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -157,7 +175,12 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = quota["headline"].as_str().unwrap_or("");
         let status = quota["status"].as_str().unwrap_or("");
         let remaining = quota["remaining"].as_i64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {status} · {}: {remaining}%", tr("Remaining")), t.text.patch(t.panel));
+        line(
+            buf,
+            &mut y,
+            format!("{headline} Ã‚Â· {status} Ã‚Â· {}: {remaining}%", tr("Remaining")),
+            t.text.patch(t.panel),
+        );
         y += 1;
     }
 
@@ -166,7 +189,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Appearance").into_owned(), t.bold.patch(t.panel));
         let headline = appearance["headline"].as_str().unwrap_or("");
         let accent = appearance["accent"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {accent}", tr("Accent")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {accent}", tr("Accent")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -175,7 +198,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Connections").into_owned(), t.bold.patch(t.panel));
         let headline = connstate["headline"].as_str().unwrap_or("");
         let state = connstate["state"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {state}", tr("State")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {state}", tr("State")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -184,7 +207,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Evaluation").into_owned(), t.bold.patch(t.panel));
         let headline = eval_result["headline"].as_str().unwrap_or("");
         let verdict = eval_result["verdict"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {verdict}", tr("Verdict")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {verdict}", tr("Verdict")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -193,7 +216,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Search").into_owned(), t.bold.patch(t.panel));
         let headline = search["headline"].as_str().unwrap_or("");
         let hits = search["hits"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {}: {hits}", tr("Hits")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {hits}", tr("Hits")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -203,7 +226,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = mailtext["headline"].as_str().unwrap_or("");
         let address = mailtext["address"].as_str().unwrap_or("");
         let rows = mailtext["rows"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {address} · {}: {rows}", tr("Rows")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {address} Ã‚Â· {}: {rows}", tr("Rows")), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -216,7 +239,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(
             buf,
             &mut y,
-            format!("{headline} · {}: {state} · {}: {failed}", tr("State"), tr("Failed")),
+            format!("{headline} Ã‚Â· {}: {state} Ã‚Â· {}: {failed}", tr("State"), tr("Failed")),
             t.text.patch(t.panel),
         );
         y += 1;
@@ -228,7 +251,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = markdown["headline"].as_str().unwrap_or("");
         let preview = markdown["preview"].as_str().unwrap_or("");
         let mentions = markdown["mentions"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {}: {mentions}", tr("Mentions")), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {mentions}", tr("Mentions")), t.text.patch(t.panel));
         if !preview.is_empty() {
             line(buf, &mut y, preview.to_owned(), t.secondary.patch(t.panel));
         }
@@ -241,7 +264,12 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = localfmt["headline"].as_str().unwrap_or("");
         let weekday = localfmt["weekday"].as_str().unwrap_or("");
         let tokens = localfmt["tokens"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {weekday} · {}: {}", tr("Tokens"), tokens), t.text.patch(t.panel));
+        line(
+            buf,
+            &mut y,
+            format!("{headline} Ã‚Â· {weekday} Ã‚Â· {}: {}", tr("Tokens"), tokens),
+            t.text.patch(t.panel),
+        );
         y += 1;
     }
 
@@ -250,7 +278,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Text hygiene").into_owned(), t.bold.patch(t.panel));
         let headline = textfmt["headline"].as_str().unwrap_or("");
         let handle = textfmt["handle"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {}", tr("Handle"), handle), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {}", tr("Handle"), handle), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -260,7 +288,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = agenteschat["headline"].as_str().unwrap_or("");
         let window = agenteschat["window"].as_str().unwrap_or("");
         let mode = agenteschat["auto"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {}", tr("Window"), window), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {}", tr("Window"), window), t.text.patch(t.panel));
         line(buf, &mut y, format!("  {}: {}", tr("Mode"), mode), t.secondary.patch(t.panel));
         y += 1;
     }
@@ -274,7 +302,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(
             buf,
             &mut y,
-            format!("{headline} · {}: {} · {}: {}", tr("Effort"), effort, tr("Route"), route),
+            format!("{headline} Ã‚Â· {}: {} Ã‚Â· {}: {}", tr("Effort"), effort, tr("Route"), route),
             t.text.patch(t.panel),
         );
         y += 1;
@@ -285,7 +313,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Learning").into_owned(), t.bold.patch(t.panel));
         let headline = opendots["headline"].as_str().unwrap_or("");
         let container = opendots["container"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {}", tr("Container"), container), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {}", tr("Container"), container), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -299,7 +327,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(
             buf,
             &mut y,
-            format!("  {}: {page} · {}: {shots}", tr("Page states"), tr("Screenshots")),
+            format!("  {}: {page} Ã‚Â· {}: {shots}", tr("Page states"), tr("Screenshots")),
             t.secondary.patch(t.panel),
         );
         y += 1;
@@ -310,7 +338,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Liveness").into_owned(), t.bold.patch(t.panel));
         let headline = liveness["headline"].as_str().unwrap_or("");
         let outcome = liveness["outcome"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {}", tr("Delivery"), outcome), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {}", tr("Delivery"), outcome), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -320,7 +348,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = dictation["headline"].as_str().unwrap_or("");
         let engine = dictation["engine"].as_str().unwrap_or("");
         let model = dictation["model"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {engine} · {model}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {engine} Ã‚Â· {model}"), t.text.patch(t.panel));
         y += 1;
     }
 
@@ -329,7 +357,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Public access").into_owned(), t.bold.patch(t.panel));
         let mode = access["mode"].as_str().unwrap_or("");
         let routing = access["routing"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{mode} · {routing}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{mode} Ã‚Â· {routing}"), t.text.patch(t.panel));
         let items: Vec<String> = access["collections"]
             .as_array()
             .map(|a| a.iter().take(8).map(|c| format!("  {}", c["name"].as_str().unwrap_or(""))).collect())
@@ -345,14 +373,18 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Last message").into_owned(), t.bold.patch(t.panel));
         let headline = blocks["headline"].as_str().unwrap_or("");
         let origin = blocks["origin"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {origin}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {origin}"), t.text.patch(t.panel));
         let items: Vec<String> = blocks["blocks"]
             .as_array()
             .map(|a| {
                 a.iter()
                     .take(8)
                     .map(|b| {
-                        format!("  {} {}", if b["says"] == true { "●" } else { "○" }, b["text"].as_str().unwrap_or(""))
+                        format!(
+                            "  {} {}",
+                            if b["says"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
+                            b["text"].as_str().unwrap_or("")
+                        )
                     })
                     .collect()
             })
@@ -374,7 +406,9 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
             .map(|a| {
                 a.iter()
                     .take(8)
-                    .map(|i| format!("  {} · {}", i["name"].as_str().unwrap_or(""), i["header"].as_str().unwrap_or("")))
+                    .map(|i| {
+                        format!("  {} Ã‚Â· {}", i["name"].as_str().unwrap_or(""), i["header"].as_str().unwrap_or(""))
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -389,7 +423,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Prompt style").into_owned(), t.bold.patch(t.panel));
         let model = prompts["model"].as_str().unwrap_or("");
         let price = prompts["price"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{model} · {price}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{model} Ã‚Â· {price}"), t.text.patch(t.panel));
         let lines: Vec<String> = prompts["lines"]
             .as_array()
             .map(|a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect())
@@ -424,7 +458,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Agent profile").into_owned(), t.bold.patch(t.panel));
         let label = agent["label"].as_str().unwrap_or("");
         let headline = agent["headline"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let lines: Vec<String> = agent["lines"]
             .as_array()
             .map(|a| {
@@ -432,7 +466,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|l| {
                         format!(
                             "  {} {}: {}",
-                            if l["set"] == true { "●" } else { "○" },
+                            if l["set"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
                             l["label"].as_str().unwrap_or(""),
                             l["detail"].as_str().unwrap_or("")
                         )
@@ -451,7 +485,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Conversation").into_owned(), t.bold.patch(t.panel));
         let headline = conversation["headline"].as_str().unwrap_or("");
         let rhythm = conversation["line"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {rhythm}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {rhythm}"), t.text.patch(t.panel));
         let kinds: Vec<String> = conversation["kinds"]
             .as_array()
             .map(|a| {
@@ -483,7 +517,9 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
             .map(|a| {
                 a.iter()
                     .take(8)
-                    .map(|i| format!("  {} · {}", i["name"].as_str().unwrap_or(""), i["reason"].as_str().unwrap_or("")))
+                    .map(|i| {
+                        format!("  {} Ã‚Â· {}", i["name"].as_str().unwrap_or(""), i["reason"].as_str().unwrap_or(""))
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -504,7 +540,9 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
             .map(|a| {
                 a.iter()
                     .take(8)
-                    .map(|i| format!("  {} · {}", i["title"].as_str().unwrap_or(""), i["age"].as_str().unwrap_or("")))
+                    .map(|i| {
+                        format!("  {} Ã‚Â· {}", i["title"].as_str().unwrap_or(""), i["age"].as_str().unwrap_or(""))
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -519,7 +557,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Time zones").into_owned(), t.bold.patch(t.panel));
         let headline = zones["headline"].as_str().unwrap_or("");
         let local = zones["local"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{headline} · {}: {}", tr("This computer"), local), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {}: {}", tr("This computer"), local), t.text.patch(t.panel));
         let all: Vec<String> = zones["all"]
             .as_array()
             .map(|a| {
@@ -547,7 +585,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let label = digest["label"].as_str().unwrap_or("");
         let headline = digest["headline"].as_str().unwrap_or("");
         let one_line = digest["oneLine"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         line(buf, &mut y, one_line.to_owned(), t.tertiary.patch(t.panel));
         let stats: Vec<String> = digest["stats"]
             .as_array()
@@ -568,7 +606,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Suggestions").into_owned(), t.bold.patch(t.panel));
         let label = advice["label"].as_str().unwrap_or("");
         let headline = advice["headline"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let items: Vec<String> = advice["items"]
             .as_array()
             .map(|a| {
@@ -596,7 +634,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let label = session["label"].as_str().unwrap_or("");
         let headline = session["headline"].as_str().unwrap_or("");
         let bar = session["bar"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{bar} {label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{bar} {label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let lines: Vec<String> = session["lines"]
             .as_array()
             .map(|a| {
@@ -604,7 +642,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|l| {
                         format!(
                             "  {} {}: {}",
-                            if l["ok"] == true { "●" } else { "○" },
+                            if l["ok"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
                             l["label"].as_str().unwrap_or(""),
                             l["detail"].as_str().unwrap_or("")
                         )
@@ -623,7 +661,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Workspace").into_owned(), t.bold.patch(t.panel));
         let label = workspace["label"].as_str().unwrap_or("");
         let headline = workspace["headline"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let lines: Vec<String> = workspace["lines"]
             .as_array()
             .map(|a| {
@@ -631,7 +669,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|l| {
                         format!(
                             "  {} {}: {}",
-                            if l["set"] == true { "●" } else { "○" },
+                            if l["set"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
                             l["label"].as_str().unwrap_or(""),
                             l["detail"].as_str().unwrap_or("")
                         )
@@ -651,7 +689,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let label = memory["label"].as_str().unwrap_or("");
         let headline = memory["headline"].as_str().unwrap_or("");
         let shared = memory["shared"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         line(buf, &mut y, format!("  {}: {}", tr("Shared notes"), shared), t.secondary.patch(t.panel));
         let items: Vec<String> = memory["lines"]
             .as_array()
@@ -660,7 +698,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|l| {
                         format!(
                             "  {} {}: {}",
-                            if l["on"] == true { "●" } else { "○" },
+                            if l["on"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
                             l["title"].as_str().unwrap_or(""),
                             l["detail"].as_str().unwrap_or("")
                         )
@@ -679,7 +717,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Model tuning").into_owned(), t.bold.patch(t.panel));
         let effort = tuning["effort"].as_str().unwrap_or("");
         let headline = tuning["headline"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{effort} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{effort} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let options: Vec<String> = tuning["options"]
             .as_array()
             .map(|a| {
@@ -720,7 +758,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
         let names: Vec<String> = accounts["connectors"]
             .as_array()
-            .map(|a| a.iter().map(|n| format!("  • {}", n["name"].as_str().unwrap_or(""))).collect())
+            .map(|a| a.iter().map(|n| format!("  Ã¢â‚¬Â¢ {}", n["name"].as_str().unwrap_or(""))).collect())
             .unwrap_or_default();
         for name in names {
             line(buf, &mut y, name, t.tertiary.patch(t.panel));
@@ -736,7 +774,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let band = identity["band"].as_str().unwrap_or("");
         let section = identity["section"].as_str().unwrap_or("");
         let rank = identity["rank"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("  {band} · {section} · #{}", rank), t.secondary.patch(t.panel));
+        line(buf, &mut y, format!("  {band} Ã‚Â· {section} Ã‚Â· #{}", rank), t.secondary.patch(t.panel));
         let traits: Vec<String> = identity["traits"]
             .as_array()
             .map(|a| {
@@ -744,7 +782,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|tr| {
                         format!(
                             "  {} {}: {}",
-                            if tr["on"] == true { "●" } else { "○" },
+                            if tr["on"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
                             tr["label"].as_str().unwrap_or(""),
                             tr["detail"].as_str().unwrap_or("")
                         )
@@ -764,13 +802,17 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let label = resilience["label"].as_str().unwrap_or("");
         let headline = resilience["headline"].as_str().unwrap_or("");
         let bar = resilience["bar"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{bar} {label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{bar} {label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let switches: Vec<String> = resilience["switches"]
             .as_array()
             .map(|a| {
                 a.iter()
                     .map(|s| {
-                        format!("{} {}", if s["on"] == true { "●" } else { "○" }, s["label"].as_str().unwrap_or(""))
+                        format!(
+                            "{} {}",
+                            if s["on"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
+                            s["label"].as_str().unwrap_or("")
+                        )
                     })
                     .collect()
             })
@@ -793,7 +835,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Trust").into_owned(), t.bold.patch(t.panel));
         let label = trust["label"].as_str().unwrap_or("");
         let headline = trust["headline"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let mode = trust["modeLabel"].as_str().unwrap_or("");
         line(buf, &mut y, format!("  {}: {}", tr("Approval"), mode), t.secondary.patch(t.panel));
         let rules: Vec<String> = trust["rules"]
@@ -851,7 +893,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
         let skills: Vec<String> = library["skills"]
             .as_array()
-            .map(|a| a.iter().take(8).map(|s| format!("  • {}", s["name"].as_str().unwrap_or(""))).collect())
+            .map(|a| a.iter().take(8).map(|s| format!("  Ã¢â‚¬Â¢ {}", s["name"].as_str().unwrap_or(""))).collect())
             .unwrap_or_default();
         for skill in skills {
             line(buf, &mut y, skill, t.tertiary.patch(t.panel));
@@ -871,7 +913,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(
             buf,
             &mut y,
-            format!("  {}: {active} · {}: {paused} · {mix}", tr("Active"), tr("Paused")),
+            format!("  {}: {active} Ã‚Â· {}: {paused} Ã‚Â· {mix}", tr("Active"), tr("Paused")),
             t.secondary.patch(t.panel),
         );
         let soonest: Vec<String> = schedule["soonest"]
@@ -881,13 +923,13 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .take(6)
                     .map(|r| {
                         format!(
-                            "  {} {} · {}{}",
-                            if r["enabled"] == true { "●" } else { "○" },
+                            "  {} {} Ã‚Â· {}{}",
+                            if r["enabled"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
                             r["name"].as_str().unwrap_or(""),
                             r["trigger"].as_str().unwrap_or(""),
                             {
                                 let n = r["nextIn"].as_str().unwrap_or("");
-                                if n.is_empty() { String::new() } else { format!(" · {n}") }
+                                if n.is_empty() { String::new() } else { format!(" Ã‚Â· {n}") }
                             }
                         )
                     })
@@ -905,10 +947,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("This week").into_owned(), t.bold.patch(t.panel));
         let verdict = week["verdict"].as_str().unwrap_or("");
         let headline = week["headline"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{verdict} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{verdict} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let steps = week["totalLabel"].as_str().unwrap_or("0");
         let trend = week["trend"]["label"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("  {}: {steps} · {}: {trend}", tr("Steps"), tr("Trend")), t.secondary.patch(t.panel));
+        line(
+            buf,
+            &mut y,
+            format!("  {}: {steps} Ã‚Â· {}: {trend}", tr("Steps"), tr("Trend")),
+            t.secondary.patch(t.panel),
+        );
         let top: Vec<String> = week["top"]
             .as_array()
             .map(|a| {
@@ -945,7 +992,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|c| {
                         format!(
                             "  {} {}: {}",
-                            if c["enabled"] == true { "●" } else { "○" },
+                            if c["enabled"] == true { "Ã¢â€”Â" } else { "Ã¢â€”â€¹" },
                             c["title"].as_str().unwrap_or(""),
                             c["detail"].as_str().unwrap_or("")
                         )
@@ -964,7 +1011,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         line(buf, &mut y, tr("Health").into_owned(), t.bold.patch(t.panel));
         let label = health["label"].as_str().unwrap_or("");
         let headline = health["headline"].as_str().unwrap_or("");
-        line(buf, &mut y, format!("{label} · {headline}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("{label} Ã‚Â· {headline}"), t.text.patch(t.panel));
         let checks: Vec<String> = health["checks"]
             .as_array()
             .map(|a| {
@@ -973,7 +1020,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|c| {
                         format!(
                             "  {} {}: {}",
-                            if c["severity"] == "error" { "!" } else { "·" },
+                            if c["severity"] == "error" { "!" } else { "Ã‚Â·" },
                             c["title"].as_str().unwrap_or(""),
                             c["detail"].as_str().unwrap_or("")
                         )
@@ -993,7 +1040,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         let headline = activity["headline"].as_str().unwrap_or("");
         let steps = activity["steps"].as_u64().unwrap_or(0);
         let errors = activity["errors"].as_u64().unwrap_or(0);
-        line(buf, &mut y, format!("{headline} · {steps} {}", tr("steps")), t.secondary.patch(t.panel));
+        line(buf, &mut y, format!("{headline} Ã‚Â· {steps} {}", tr("steps")), t.secondary.patch(t.panel));
         if errors > 0 {
             line(buf, &mut y, format!("{errors} {}", tr("failed")), t.red.patch(t.panel));
         }
@@ -1007,7 +1054,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
             })
             .unwrap_or_default();
         for group in groups {
-            line(buf, &mut y, format!("  • {group}"), t.secondary.patch(t.panel));
+            line(buf, &mut y, format!("  Ã¢â‚¬Â¢ {group}"), t.secondary.patch(t.panel));
         }
         let days: Vec<String> = activity["days"]
             .as_array()
@@ -1019,7 +1066,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                         format!(
                             "  {} {} {}",
                             d["label"].as_str().unwrap_or(""),
-                            "▮".repeat(d["width"].as_u64().unwrap_or(0).max(1) as usize),
+                            "Ã¢â€“Â®".repeat(d["width"].as_u64().unwrap_or(0).max(1) as usize),
                             d["count"].as_u64().unwrap_or(0)
                         )
                     })
@@ -1037,7 +1084,11 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
                     .map(|i| {
                         let text = i["text"].as_str().unwrap_or("");
                         let detail = i["detail"].as_str().unwrap_or("");
-                        if detail.is_empty() { format!("  • {text}") } else { format!("  • {text} — {detail}") }
+                        if detail.is_empty() {
+                            format!("  Ã¢â‚¬Â¢ {text}")
+                        } else {
+                            format!("  Ã¢â‚¬Â¢ {text} Ã¢â‚¬â€ {detail}")
+                        }
                     })
                     .collect()
             })
@@ -1053,7 +1104,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     if !recent.is_empty() {
         line(buf, &mut y, tr("Recent work").into_owned(), t.bold.patch(t.panel));
         for item in recent {
-            line(buf, &mut y, format!("• {item}"), t.secondary.patch(t.panel));
+            line(buf, &mut y, format!("Ã¢â‚¬Â¢ {item}"), t.secondary.patch(t.panel));
         }
         y += 1;
     }
@@ -1071,10 +1122,10 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     for routine in routines {
         let name = routine["name"].as_str().unwrap_or("?");
         let flag = if routine["enabled"] == true { "" } else { " (paused)" };
-        line(buf, &mut y, format!("• {name}{flag}"), t.text.patch(t.panel));
+        line(buf, &mut y, format!("Ã¢â‚¬Â¢ {name}{flag}"), t.text.patch(t.panel));
         let schedules = routine["schedules"]
             .as_array()
-            .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" · "))
+            .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" Ã‚Â· "))
             .unwrap_or_default();
         if !schedules.is_empty() {
             line(buf, &mut y, format!("  {schedules}"), t.secondary.patch(t.panel));
@@ -1083,5 +1134,5 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
             line(buf, &mut y, format!("  {}: {next}", tr("Next in")), t.dim.patch(t.panel));
         }
     }
-    footer(buf, inner, None, "esc · shift+←→ pages");
+    footer(buf, inner, None, "esc Ã‚Â· shift+Ã¢â€ ÂÃ¢â€ â€™ pages");
 }

@@ -30,6 +30,12 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let evalextra = insights.evalextra
+                    Text(evalextra.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Median")): \(evalextra.median)").font(.footnote).foregroundStyle(Palette.secondary)
+                    let connextra = insights.connextra
+                    Text(connextra.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Channels")): \(connextra.channels.joined(separator: ", "))").font(.footnote).foregroundStyle(Palette.secondary)
                     let searchextra = insights.searchextra
                     Text(searchextra.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Query")): \(searchextra.query)").font(.footnote).foregroundStyle(Palette.secondary)
@@ -131,18 +137,18 @@ struct BotInsightsSection: View {
                     Text(blocks.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(blocks.origin).font(.footnote).foregroundStyle(Palette.tertiary)
                     ForEach(blocks.blocks, id: \.kind) { item in
-                        Text("\(item.says ? "●" : "○") \(item.text)").font(.footnote).foregroundStyle(Palette.secondary)
+                        Text("\(item.says ? "â—" : "â—‹") \(item.text)").font(.footnote).foregroundStyle(Palette.secondary)
                     }
                     let directory = insights.directory
                     Text(directory.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(directory.bar).font(.footnote).foregroundStyle(Palette.accent)
                     ForEach(directory.integrations, id: \.id) { item in
-                        Text("\(item.name) · \(item.header)").font(.footnote).foregroundStyle(Palette.secondary)
+                        Text("\(item.name) Â· \(item.header)").font(.footnote).foregroundStyle(Palette.secondary)
                     }
                     let prompts = insights.prompts
                     Text(prompts.model).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(prompts.price).font(.footnote).foregroundStyle(Palette.secondary)
-                    Text("\(prompts.context) · \(prompts.zone) · \(prompts.length)").font(.footnote).foregroundStyle(Palette.tertiary)
+                    Text("\(prompts.context) Â· \(prompts.zone) Â· \(prompts.length)").font(.footnote).foregroundStyle(Palette.tertiary)
                     ForEach(prompts.lines, id: \.self) { line in
                         Text(line).font(.footnote).foregroundStyle(Palette.secondary)
                     }
@@ -151,12 +157,12 @@ struct BotInsightsSection: View {
                     ForEach(fresh.summary, id: \.key) { row in
                         Text("\(row.key): \(row.value)").font(.footnote).foregroundStyle(Palette.secondary)
                     }
-                    Text("\(fresh.titles.exec) · \(fresh.titles.write)").font(.footnote).foregroundStyle(Palette.tertiary)
+                    Text("\(fresh.titles.exec) Â· \(fresh.titles.write)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let agent = insights.agent
                     Text(agent.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(agent.headline).font(.footnote).foregroundStyle(Palette.secondary)
                     ForEach(agent.lines, id: \.id) { item in
-                        Text("\(item.set ? "●" : "○") \(item.label): \(item.detail)")
+                        Text("\(item.set ? "â—" : "â—‹") \(item.label): \(item.detail)")
                             .font(.footnote).foregroundStyle(item.set ? Palette.text : Palette.secondary)
                     }
                     let conversation = insights.conversation
@@ -182,7 +188,7 @@ struct BotInsightsSection: View {
                         ForEach(failures.items, id: \.reason) { item in
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(item.name).font(.footnote).foregroundStyle(Palette.text)
-                                Text("\(item.reason) · \(item.age)").font(.footnote).foregroundStyle(Palette.tertiary)
+                                Text("\(item.reason) Â· \(item.age)").font(.footnote).foregroundStyle(Palette.tertiary)
                             }
                         }
                     }
@@ -192,7 +198,7 @@ struct BotInsightsSection: View {
                     ForEach(approvals.items, id: \.id) { item in
                         VStack(alignment: .leading, spacing: 1) {
                             Text(item.title).font(.footnote).foregroundStyle(Palette.text)
-                            Text("\(item.detail) · \(item.age)").font(.footnote).foregroundStyle(Palette.tertiary)
+                            Text("\(item.detail) Â· \(item.age)").font(.footnote).foregroundStyle(Palette.tertiary)
                         }
                     }
                     let zones = insights.timezone
@@ -229,14 +235,14 @@ struct BotInsightsSection: View {
                     Text(session.headline).font(.footnote).foregroundStyle(Palette.secondary)
                     Text(session.bar).font(.footnote).foregroundStyle(Palette.accent)
                     ForEach(session.lines, id: \.id) { item in
-                        Text("\(item.ok ? "●" : "○") \(item.label): \(item.detail)")
+                        Text("\(item.ok ? "â—" : "â—‹") \(item.label): \(item.detail)")
                             .font(.footnote).foregroundStyle(item.ok ? Palette.text : Palette.secondary)
                     }
                     let workspace = insights.workspace
                     Text(workspace.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(workspace.headline).font(.footnote).foregroundStyle(Palette.secondary)
                     ForEach(workspace.lines, id: \.id) { item in
-                        Text("\(item.set ? "●" : "○") \(item.label): \(item.detail)")
+                        Text("\(item.set ? "â—" : "â—‹") \(item.label): \(item.detail)")
                             .font(.footnote).foregroundStyle(item.set ? Palette.text : Palette.secondary)
                     }
                     let memory = insights.memory
@@ -245,7 +251,7 @@ struct BotInsightsSection: View {
                     Text("\(L10n.tr("Shared notes")): \(memory.shared)").font(.footnote).foregroundStyle(Palette.secondary)
                     Text(memory.sharedDetail).font(.footnote).foregroundStyle(Palette.tertiary)
                     ForEach(memory.lines, id: \.id) { item in
-                        Text("\(item.on ? "●" : "○") \(item.title): \(item.detail)")
+                        Text("\(item.on ? "â—" : "â—‹") \(item.title): \(item.detail)")
                             .font(.footnote).foregroundStyle(item.on ? Palette.text : Palette.secondary)
                     }
                     let tuning = insights.tuning
@@ -277,17 +283,17 @@ struct BotInsightsSection: View {
                         Text("\(L10n.tr("Rank")): \(identity.rank)")
                     }
                     .font(.footnote).foregroundStyle(Palette.secondary)
-                    Text("\(identity.color) · \(identity.shape) · \(identity.look)")
+                    Text("\(identity.color) Â· \(identity.shape) Â· \(identity.look)")
                         .font(.footnote).foregroundStyle(Palette.tertiary)
                     ForEach(identity.traits, id: \.id) { trait in
-                        Text("\(trait.on ? "●" : "○") \(trait.label): \(trait.detail)")
+                        Text("\(trait.on ? "â—" : "â—‹") \(trait.label): \(trait.detail)")
                             .font(.footnote).foregroundStyle(trait.on ? Palette.text : Palette.secondary)
                     }
                     let resilience = insights.resilience
                     Text(resilience.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(resilience.bar).font(.footnote).foregroundStyle(Palette.accent)
                     Text(resilience.headline).font(.footnote).foregroundStyle(Palette.secondary)
-                    Text(resilience.switches.map { "\($0.on ? "●" : "○") \($0.label)" }.joined(separator: "  "))
+                    Text(resilience.switches.map { "\($0.on ? "â—" : "â—‹") \($0.label)" }.joined(separator: "  "))
                         .font(.footnote).foregroundStyle(Palette.tertiary)
                     ForEach(resilience.fallbacks, id: \.backend) { fb in
                         Text(fb.label).font(.footnote).foregroundStyle(Palette.text)
@@ -329,8 +335,8 @@ struct BotInsightsSection: View {
                     .font(.footnote).foregroundStyle(Palette.secondary)
                     ForEach(schedule.soonest, id: \.id) { item in
                         HStack(spacing: 6) {
-                            Text(item.enabled ? "●" : "○").foregroundStyle(Palette.secondary)
-                            Text("\(item.name) · \(item.trigger)").font(.footnote).foregroundStyle(Palette.text)
+                            Text(item.enabled ? "â—" : "â—‹").foregroundStyle(Palette.secondary)
+                            Text("\(item.name) Â· \(item.trigger)").font(.footnote).foregroundStyle(Palette.text)
                             if !item.nextIn.isEmpty {
                                 Text(item.nextIn).font(.footnote).foregroundStyle(Palette.tertiary)
                             }
@@ -345,7 +351,7 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote).foregroundStyle(Palette.secondary)
                     if let peak = week.peak {
-                        Text("\(L10n.tr("Busiest")): \(peak.label) · \(peak.count)")
+                        Text("\(L10n.tr("Busiest")): \(peak.label) Â· \(peak.count)")
                             .font(.footnote).foregroundStyle(Palette.secondary)
                     }
                     ForEach(week.top, id: \.label) { day in
@@ -359,11 +365,11 @@ struct BotInsightsSection: View {
                     Text(profile.bar).font(.footnote).foregroundStyle(Palette.accent)
                     Text(profile.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     if !profile.nextUp.isEmpty {
-                        Text("\(L10n.tr("Next up")): \(profile.nextUp.map(\.title).joined(separator: " · "))")
+                        Text("\(L10n.tr("Next up")): \(profile.nextUp.map(\.title).joined(separator: " Â· "))")
                             .font(.footnote).foregroundStyle(Palette.secondary)
                     }
                     ForEach(profile.caps) { cap in
-                        Text("\(cap.enabled ? "●" : "○") \(cap.title): \(cap.detail)")
+                        Text("\(cap.enabled ? "â—" : "â—‹") \(cap.title): \(cap.detail)")
                             .font(.footnote)
                             .foregroundStyle(cap.enabled ? Palette.text : Palette.secondary)
                     }
@@ -386,14 +392,14 @@ struct BotInsightsSection: View {
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
                     if !activity.groups.isEmpty {
-                        Text(activity.groups.prefix(6).map { "\($0.count) \($0.label)" }.joined(separator: " · "))
+                        Text(activity.groups.prefix(6).map { "\($0.count) \($0.label)" }.joined(separator: " Â· "))
                             .font(.footnote).foregroundStyle(Palette.secondary)
                     }
                     if !activity.days.isEmpty {
                         ForEach(activity.days.suffix(5)) { day in
                             HStack(spacing: 6) {
                                 Text(day.label).font(.footnote).foregroundStyle(Palette.tertiary)
-                                Text(String(repeating: "▮", count: max(1, day.width)))
+                                Text(String(repeating: "â–®", count: max(1, day.width)))
                                     .font(.footnote).foregroundStyle(Palette.accent)
                                 Text("\(day.count)").font(.footnote).foregroundStyle(Palette.secondary)
                             }
@@ -427,7 +433,7 @@ struct BotInsightsSection: View {
                                     }
                                 }
                                 if !routine.schedules.isEmpty {
-                                    Text(routine.schedules.joined(separator: " · "))
+                                    Text(routine.schedules.joined(separator: " Â· "))
                                         .font(.footnote).foregroundStyle(Palette.secondary)
                                 }
                                 if let next = routine.nextIn {
@@ -439,7 +445,7 @@ struct BotInsightsSection: View {
                     }
                 }
             } else {
-                Text(L10n.tr("Loading…")).font(.footnote).foregroundStyle(Palette.secondary)
+                Text(L10n.tr("Loadingâ€¦")).font(.footnote).foregroundStyle(Palette.secondary)
             }
         }
         .task(id: botId) { await load() }

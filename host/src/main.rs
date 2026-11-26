@@ -31,6 +31,7 @@ mod bdots_dictation;
 mod bdots_digest;
 mod bdots_directory;
 mod bdots_eval;
+mod bdots_eval_extra;
 mod bdots_extra;
 mod bdots_failures;
 mod bdots_fallbacks;

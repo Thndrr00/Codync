@@ -27,7 +27,7 @@ import com.codync.android.design.*
         if (error != null) CardSection("Insights") {
             row { Text("Could not load insights.", style = Type.body, color = Palette.secondary) }
         } else if (data == null) CardSection("Insights") {
-            row { Text("Loadingâ€¦", style = Type.body, color = Palette.secondary) }
+            row { Text("LoadingÃ¢â‚¬Â¦", style = Type.body, color = Palette.secondary) }
         } else {
             val insights = data!!
             if (insights.description.isNotBlank()) CardSection("About") {
@@ -41,6 +41,30 @@ import com.codync.android.design.*
                     ValueRow("Tokens", if (insights.usage.limit != null) "${insights.usage.usedText} / ${insights.usage.limit}" else insights.usage.usedText)
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
+            }
+            val evalextra = insights.evalextra
+            CardSection("Eval metrics") {
+                row { Text(evalextra.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Median", evalextra.median.toString()) }
+                row { ValueRow("Over 1k", evalextra.over1k.toString()) }
+            }
+            val connextra = insights.connextra
+            CardSection("Connections extra") {
+                row { Text(connextra.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Channels", connextra.channels.joinToString(", ")) }
+                row { ValueRow("Selected", connextra.selected.toString()) }
+            }
+            val evalextra = insights.evalextra
+            CardSection("Eval metrics") {
+                row { Text(evalextra.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Median", evalextra.median.toString()) }
+                row { ValueRow("Over 1k", evalextra.over1k.toString()) }
+            }
+            val connextra = insights.connextra
+            CardSection("Connections extra") {
+                row { Text(connextra.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Channels", connextra.channels.joinToString(", ")) }
+                row { ValueRow("Selected", connextra.selected.toString()) }
             }
             val searchextra = insights.searchextra
             CardSection("Ranked search") {
@@ -217,7 +241,7 @@ import com.codync.android.design.*
                 row { Text(blocks.headline, style = Type.subheadline.semibold, color = Palette.text) }
                 row { Text(blocks.origin, style = Type.caption, color = Palette.tertiary) }
                 for (item in blocks.blocks) row {
-                    Text("${if (item.says) "●" else "○"} ${item.text}", style = Type.caption, color = Palette.secondary)
+                    Text("${if (item.says) "â—" else "â—‹"} ${item.text}", style = Type.caption, color = Palette.secondary)
                 }
             }
             val directory = insights.directory
@@ -226,14 +250,14 @@ import com.codync.android.design.*
                 row { Text(directory.bar, style = Type.caption, color = Palette.accent) }
                 row { ValueRow("Integrations", directory.integrations.size.toString()) }
                 for (item in directory.integrations) row {
-                    Text("${item.name} · ${item.header}", style = Type.caption, color = Palette.secondary)
+                    Text("${item.name} Â· ${item.header}", style = Type.caption, color = Palette.secondary)
                 }
             }
             val prompts = insights.prompts
             CardSection("Prompt style") {
                 row { Text(prompts.model, style = Type.subheadline.semibold, color = Palette.text) }
                 row { Text(prompts.price, style = Type.caption, color = Palette.secondary) }
-                row { Text("${prompts.context} · ${prompts.zone} · ${prompts.length}", style = Type.caption, color = Palette.tertiary) }
+                row { Text("${prompts.context} Â· ${prompts.zone} Â· ${prompts.length}", style = Type.caption, color = Palette.tertiary) }
                 for (line in prompts.lines) row {
                     Text(line, style = Type.caption, color = Palette.secondary)
                 }
@@ -244,14 +268,14 @@ import com.codync.android.design.*
                 for (row in fresh.summary) row {
                     Text("${row.key}: ${row.value}", style = Type.caption, color = Palette.secondary)
                 }
-                row { Text("${fresh.titles.exec} · ${fresh.titles.write}", style = Type.caption, color = Palette.tertiary) }
+                row { Text("${fresh.titles.exec} Â· ${fresh.titles.write}", style = Type.caption, color = Palette.tertiary) }
             }
             val agent = insights.agent
             CardSection("Agent profile") {
                 row { Text(agent.label, style = Type.subheadline.semibold, color = Palette.text) }
                 row { Text(agent.headline, style = Type.caption, color = Palette.secondary) }
                 for (item in agent.lines) row {
-                    Text("${if (item.set) "●" else "○"} ${item.label}: ${item.detail}",
+                    Text("${if (item.set) "â—" else "â—‹"} ${item.label}: ${item.detail}",
                         style = Type.caption, color = if (item.set) Palette.text else Palette.secondary)
                 }
             }
@@ -272,7 +296,7 @@ import com.codync.android.design.*
                 for (item in failures.items) row {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(item.name, style = Type.caption, color = Palette.text)
-                        Text("${item.reason} · ${item.age}", style = Type.caption, color = Palette.tertiary)
+                        Text("${item.reason} Â· ${item.age}", style = Type.caption, color = Palette.tertiary)
                     }
                 }
             }
@@ -283,7 +307,7 @@ import com.codync.android.design.*
                 for (item in approvals.items) row {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(item.title, style = Type.caption, color = Palette.text)
-                        Text("${item.detail} · ${item.age}", style = Type.caption, color = Palette.tertiary)
+                        Text("${item.detail} Â· ${item.age}", style = Type.caption, color = Palette.tertiary)
                     }
                 }
             }
@@ -322,7 +346,7 @@ import com.codync.android.design.*
                 row { Text(session.bar, style = Type.caption, color = Palette.accent) }
                 row { ValueRow("Unread", session.unread) }
                 for (item in session.lines) row {
-                    Text("${if (item.ok) "●" else "○"} ${item.label}: ${item.detail}",
+                    Text("${if (item.ok) "â—" else "â—‹"} ${item.label}: ${item.detail}",
                         style = Type.caption, color = if (item.ok) Palette.text else Palette.secondary)
                 }
             }
@@ -332,7 +356,7 @@ import com.codync.android.design.*
                 row { Text(workspace.headline, style = Type.caption, color = Palette.secondary) }
                 row { ValueRow("Folder", workspace.folder) }
                 for (item in workspace.lines) row {
-                    Text("${if (item.set) "●" else "○"} ${item.label}: ${item.detail}",
+                    Text("${if (item.set) "â—" else "â—‹"} ${item.label}: ${item.detail}",
                         style = Type.caption, color = if (item.set) Palette.text else Palette.secondary)
                 }
             }
@@ -343,7 +367,7 @@ import com.codync.android.design.*
                 row { Text("Shared notes: ${memory.shared}", style = Type.caption, color = Palette.secondary) }
                 row { Text(memory.sharedDetail, style = Type.caption, color = Palette.tertiary) }
                 for (item in memory.lines) row {
-                    Text("${if (item.on) "●" else "○"} ${item.title}: ${item.detail}",
+                    Text("${if (item.on) "â—" else "â—‹"} ${item.title}: ${item.detail}",
                         style = Type.caption, color = if (item.on) Palette.text else Palette.secondary)
                 }
             }
@@ -374,9 +398,9 @@ import com.codync.android.design.*
                 row { Text(identity.headline, style = Type.subheadline.semibold, color = Palette.text) }
                 row { Text("Roster: ${identity.band}   Section: ${identity.section}   Rank: ${identity.rank}",
                     style = Type.caption, color = Palette.secondary) }
-                row { Text("${identity.color} Â· ${identity.shape} Â· ${identity.look}", style = Type.caption, color = Palette.tertiary) }
+                row { Text("${identity.color} Ã‚Â· ${identity.shape} Ã‚Â· ${identity.look}", style = Type.caption, color = Palette.tertiary) }
                 for (trait in identity.traits) row {
-                    Text("${if (trait.on) "â—" else "â—‹"} ${trait.label}: ${trait.detail}",
+                    Text("${if (trait.on) "Ã¢â€”Â" else "Ã¢â€”â€¹"} ${trait.label}: ${trait.detail}",
                         style = Type.caption, color = if (trait.on) Palette.text else Palette.secondary)
                 }
             }
@@ -386,7 +410,7 @@ import com.codync.android.design.*
                 row { Text(resilience.bar, style = Type.caption, color = Palette.accent) }
                 row { Text(resilience.headline, style = Type.caption, color = Palette.secondary) }
                 if (resilience.switches.isNotEmpty()) row {
-                    Text(resilience.switches.joinToString("  ") { "${if (it.on) "â—" else "â—‹"} ${it.label}" },
+                    Text(resilience.switches.joinToString("  ") { "${if (it.on) "Ã¢â€”Â" else "Ã¢â€”â€¹"} ${it.label}" },
                         style = Type.caption, color = Palette.tertiary)
                 }
                 for (fb in resilience.fallbacks) row {
@@ -426,7 +450,7 @@ import com.codync.android.design.*
                 row { Text("Active: ${schedule.active}   Paused: ${schedule.paused}   ${schedule.mix}",
                     style = Type.caption, color = Palette.secondary) }
                 for (item in schedule.soonest) row {
-                    Text("${if (item.enabled) "â—" else "â—‹"} ${item.name} Â· ${item.trigger}${if (item.nextIn.isNotBlank()) " Â· ${item.nextIn}" else ""}",
+                    Text("${if (item.enabled) "Ã¢â€”Â" else "Ã¢â€”â€¹"} ${item.name} Ã‚Â· ${item.trigger}${if (item.nextIn.isNotBlank()) " Ã‚Â· ${item.nextIn}" else ""}",
                         style = Type.caption, color = Palette.secondary)
                 }
             }
@@ -436,7 +460,7 @@ import com.codync.android.design.*
                 row { Text(week.headline, style = Type.caption, color = Palette.secondary) }
                 row { ValueRow("Steps", week.totalLabel) }
                 row { ValueRow("Trend", week.trend.label) }
-                week.peak?.let { row { Text("Busiest: ${it.label} Â· ${it.count}", style = Type.caption, color = Palette.secondary) } }
+                week.peak?.let { row { Text("Busiest: ${it.label} Ã‚Â· ${it.count}", style = Type.caption, color = Palette.secondary) } }
                 for (day in week.top) row {
                     Text("${day.label}  ${day.bar}  ${day.count}", style = Type.caption, color = Palette.tertiary)
                 }
@@ -446,11 +470,11 @@ import com.codync.android.design.*
                 row { Text(profile.bar, style = Type.caption, color = Palette.accent) }
                 row { Text(profile.headline, style = Type.subheadline.semibold, color = Palette.text) }
                 if (profile.nextUp.isNotEmpty()) row {
-                    Text("Next up: ${profile.nextUp.joinToString(" Â· ") { it.title }}",
+                    Text("Next up: ${profile.nextUp.joinToString(" Ã‚Â· ") { it.title }}",
                         style = Type.caption, color = Palette.secondary)
                 }
                 for (cap in profile.caps) row {
-                    Text("${if (cap.enabled) "â—" else "â—‹"} ${cap.title}: ${cap.detail}",
+                    Text("${if (cap.enabled) "Ã¢â€”Â" else "Ã¢â€”â€¹"} ${cap.title}: ${cap.detail}",
                         style = Type.caption, color = if (cap.enabled) Palette.text else Palette.secondary)
                 }
             }
@@ -471,11 +495,11 @@ import com.codync.android.design.*
                     Text("$activity.errors failed", style = Type.caption, color = Palette.danger)
                 }
                 if (activity.groups.isNotEmpty()) row {
-                    Text(activity.groups.take(6).joinToString(" Â· ") { "${it.count} ${it.label}" },
+                    Text(activity.groups.take(6).joinToString(" Ã‚Â· ") { "${it.count} ${it.label}" },
                         style = Type.caption, color = Palette.secondary)
                 }
                 for (day in activity.days.takeLast(5)) row {
-                    Text("${day.label}  ${"â–®".repeat(day.width.coerceAtLeast(1))}  ${day.count}",
+                    Text("${day.label}  ${"Ã¢â€“Â®".repeat(day.width.coerceAtLeast(1))}  ${day.count}",
                         style = Type.caption, color = Palette.tertiary)
                 }
                 for (step in activity.items.take(6)) row {
@@ -500,7 +524,7 @@ import com.codync.android.design.*
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(routine.name, style = Type.subheadline.semibold, color = Palette.text)
                             if (!routine.enabled) Text("Paused", style = Type.caption, color = Palette.secondary)
-                            if (routine.schedules.isNotEmpty()) Text(routine.schedules.joinToString(" Â· "), style = Type.caption, color = Palette.secondary)
+                            if (routine.schedules.isNotEmpty()) Text(routine.schedules.joinToString(" Ã‚Â· "), style = Type.caption, color = Palette.secondary)
                             routine.nextIn?.let { Text("Next in $it", style = Type.caption, color = Palette.tertiary) }
                         }
                     }

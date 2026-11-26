@@ -124,6 +124,18 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Métricas eval y conexiones (41 adiciones + UI en 4 clientes)
+
+Módulos con los que terminaron los agentes hijos T-86 y T-87:
+- `bdots_eval_extra.rs`: 24 helpers puros y constantes de los evals de **hermes-agent**
+  (static_metrics.py, goal_judge_wait.py): conteo de líneas, percentiles, umbrales, ciclos de
+  importación y parseo de veredictos del juez.
+- `bdots_connstate_extra.rs`: 12 helpers puros de `connection-context.ts` de **rakazo v0.14.0**:
+  claves de conexión, proveedores Composio, recuperación y selección de conexiones para un run.
+
+El endpoint `botInsights` añade los campos `evalextra` y `connextra`, con secciones «Eval metrics» y
+«Connections extra» en Desktop, iOS, Android y TUI.
+
 ## Búsqueda rankeada (19 adiciones + UI en 4 clientes)
 
 `bdots_search_extra.rs` es el módulo con el que terminó el agente hijo T-85: 12 helpers puros y

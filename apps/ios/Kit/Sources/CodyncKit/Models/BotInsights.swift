@@ -57,10 +57,41 @@ public struct BotInsights: Decodable, Sendable {
     public let apierror: InsightApiError
     public let memoryctx: InsightMemoryCtx
     public let searchextra: InsightSearchExtra
+    public let evalextra: InsightEvalExtra
+    public let connextra: InsightConnExtra
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
 }
+
+/// A host-computed eval metrics summary from the child-agent port.
+public struct InsightEvalExtra: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let lines: Int
+    public let code: Int
+    public let median: Int
+    public let p90: Int
+    public let over1k: Int
+    public let over2k: Int
+    public let skip: Bool
+    public let module: String
+    public let verdicts: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed connection selection summary from the child-agent port.
+public struct InsightConnExtra: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let channels: [String]
+    public let providers: [String]
+    public let selected: Int
+    public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed eval metrics summary from the child-agent port.
 
 /// A host-computed ranked-search summary from the child-agent port.
 public struct InsightSearchExtra: Decodable, Sendable {

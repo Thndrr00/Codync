@@ -18,7 +18,7 @@ fn routine_view(r: &crate::routines::Routine, now: i64) -> Value {
                 crate::bdots_cron::parse_cron(expression)
                     .and_then(|cron| crate::bdots_cron::describe_cron(&cron))
                     .unwrap_or_else(|| trigger.description())
-                    + &format!(" · {time_zone}")
+                    + &format!(" Â· {time_zone}")
             }
             other => other.description(),
         })
@@ -813,8 +813,8 @@ fn timezone_view(routines: &[Value]) -> Value {
                 .as_array()
                 .map_or(Vec::new(), |a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect::<Vec<_>>())
         })
-        .filter(|s| s.contains(" · "))
-        .map(|s| s.split(" · ").nth(1).unwrap_or("").trim().to_owned())
+        .filter(|s| s.contains(" Â· "))
+        .map(|s| s.split(" Â· ").nth(1).unwrap_or("").trim().to_owned())
         .collect();
 
     json!({
@@ -1211,7 +1211,7 @@ fn context_view(hub: &Arc<Hub>, bot: &str) -> Value {
     }
     let keep = c::default_screenshot_keep();
     json!({
-        "headline": format!("{} page states · {} screenshots", c::count_label(page), c::count_label(screenshots)),
+        "headline": format!("{} page states Â· {} screenshots", c::count_label(page), c::count_label(screenshots)),
         "page": c::count_label(page),
         "screenshots": c::count_label(screenshots),
         "pageKeep": c::default_page_keep(),
@@ -1235,7 +1235,7 @@ fn opendots_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let internal = entries.iter().filter(|e| o::is_internal(&crate::store::message_text(&e.data))).count();
 
     json!({
-        "headline": format!("Learning {} · {} internal", if o::valid_container(container) { "ready" } else { "not set" }, internal),
+        "headline": format!("Learning {} Â· {} internal", if o::valid_container(container) { "ready" } else { "not set" }, internal),
         "container": container.unwrap_or("none"),
         "valid": o::valid_container(container),
         "delivery": delivery,
@@ -1321,7 +1321,7 @@ fn textfmt_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value 
     let name = &row.config.name;
     let slug = t::slugify(name);
     json!({
-        "headline": format!("{} · {} emails · {} hidden", slug, t::count_label(valid + invalid), hidden),
+        "headline": format!("{} Â· {} emails Â· {} hidden", slug, t::count_label(valid + invalid), hidden),
         "tone": t::hygiene_tone(valid, invalid, hidden),
         "slug": slug,
         "handle": t::handle_from(name),
@@ -1384,7 +1384,7 @@ fn markdown_view(hub: &Arc<Hub>, bot: &str) -> Value {
         }
     }
     json!({
-        "headline": format!("{} · {} links · {} mentions", m::count_label(blocks), links, mentions),
+        "headline": format!("{} Â· {} links Â· {} mentions", m::count_label(blocks), links, mentions),
         "tone": if wide { "accent" } else { "good" },
         "preview": preview,
         "blocks": blocks,
@@ -1451,7 +1451,7 @@ fn mailtext_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value
     let (table, shown, cut) = t::format_rows(&columns, &rows);
     let inbox = "insights@codync.local";
     json!({
-        "headline": format!("{} rows · {} addresses · {} keys", shown, addresses, keys),
+        "headline": format!("{} rows Â· {} addresses Â· {} keys", shown, addresses, keys),
         "tone": if keys > 0 { "attention" } else { "good" },
         "address": t::format_address(Some(&row.config.name), inbox),
         "mailbox": t::mailbox_of(inbox),
@@ -1486,7 +1486,7 @@ fn connstate_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
     let selected =
         mine.first().map_or_else(|| "default".to_owned(), |r| c::channel_label(r["channel"].as_str().unwrap_or("")));
     json!({
-        "headline": format!("{} · {} connected · {} stale", selected, connected, stale),
+        "headline": format!("{} Â· {} connected Â· {} stale", selected, connected, stale),
         "tone": c::state_tone(state),
         "selected": selected,
         "state": c::state_label(state).to_owned(),
@@ -1509,9 +1509,9 @@ fn eval_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let score = e::average(&scores);
     let threshold = e::threshold_for("normal");
     let verdict = if scores.is_empty() { "pending" } else { e::verdict(score, threshold) };
-    let grade = if scores.is_empty() { "—" } else { e::grade(score) };
+    let grade = if scores.is_empty() { "â€”" } else { e::grade(score) };
     json!({
-        "headline": if scores.is_empty() { "No eval samples".to_owned() } else { format!("{} · {} · {}", verdict, grade, score) },
+        "headline": if scores.is_empty() { "No eval samples".to_owned() } else { format!("{} Â· {} Â· {}", verdict, grade, score) },
         "tone": e::verdict_tone(verdict),
         "score": score,
         "verdict": verdict.to_owned(),
@@ -1537,7 +1537,7 @@ fn search_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let score = rows.first().map_or(0, |r| s::relevance_score(r["title"].as_str().unwrap_or(""), &terms));
     let empty = s::is_empty_query(&query) || hits == 0;
     json!({
-        "headline": format!("{} · {} hits", s::hit_label(hits), query),
+        "headline": format!("{} Â· {} hits", s::hit_label(hits), query),
         "tone": s::search_tone(empty),
         "query": query,
         "hits": hits,
@@ -1557,7 +1557,7 @@ fn appearance_view() -> Value {
     let appearance = a::resolve_appearance(preference, "light");
     let (background, text, accent) = a::tokens_for_appearance(appearance);
     json!({
-        "headline": format!("{} · {} · {} pt body", a::appearance_label(preference), crate::bdots_textfmt::upper_first(appearance), a::type_size("body")),
+        "headline": format!("{} Â· {} Â· {} pt body", a::appearance_label(preference), crate::bdots_textfmt::upper_first(appearance), a::type_size("body")),
         "tone": if a::is_dark(appearance) { "accent" } else { "good" },
         "preference": a::appearance_label(preference),
         "appearance": crate::bdots_textfmt::upper_first(appearance),
@@ -1654,7 +1654,7 @@ fn stream_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let streamed = s::chunk_text(&interim, 40).into_iter().next().unwrap_or_default();
     let remaining = s::visible_text(&streamed, &interim);
     json!({
-        "headline": format!("{} · {} held · {} live", s::count_label(chunks), held, consumers),
+        "headline": format!("{} Â· {} held Â· {} live", s::count_label(chunks), held, consumers),
         "tone": if held > 0 { "attention" } else { "good" },
         "held": held,
         "consumers": consumers,
@@ -1704,7 +1704,7 @@ fn review_view() -> Value {
     pending.insert("session-a".to_owned(), 970.0);
     let dispatchable = r::dispatchable_sessions(&pending, now, max_age, settled, r::is_deferred(mode, true));
     json!({
-        "headline": format!("{} · {} queued · {}", r::review_mode_label(mode), pending.len(), r::idle_label(settled)),
+        "headline": format!("{} Â· {} queued Â· {}", r::review_mode_label(mode), pending.len(), r::idle_label(settled)),
         "tone": r::idle_tone(settled),
         "mode": r::review_mode_label(mode),
         "modeIcon": r::review_mode_icon(mode),
@@ -1734,7 +1734,7 @@ fn history_view(hub: &Arc<Hub>, bot: &str) -> Value {
         .map(|row| h::visible_commentary(&h::flatten_message_text(&row["content"])))
         .unwrap_or_default();
     json!({
-        "headline": format!("{} · {} commentary · {} final", h::count_label(messages.len()), commentary, finals),
+        "headline": format!("{} Â· {} commentary Â· {} final", h::count_label(messages.len()), commentary, finals),
         "tone": if withheld > 0 { "attention" } else { "good" },
         "messages": messages.len(),
         "commentary": commentary,
@@ -1767,7 +1767,7 @@ fn apierror_view(hub: &Arc<Hub>, bot: &str) -> Value {
     }
     let class = a::error_class(status, &text);
     json!({
-        "headline": format!("{} · {}", a::class_label(class), a::status_label(status)),
+        "headline": format!("{} Â· {}", a::class_label(class), a::status_label(status)),
         "tone": a::class_tone(class),
         "icon": a::class_icon(class),
         "class": class,
@@ -1808,7 +1808,7 @@ fn memoryctx_view(hub: &Arc<Hub>, bot: &str) -> Value {
         }
     }
     json!({
-        "headline": format!("{} fenced · {} hidden", fenced, hidden),
+        "headline": format!("{} fenced Â· {} hidden", fenced, hidden),
         "tone": m::context_tone(fenced > 0, hidden),
         "icon": m::context_icon(fenced > 0),
         "fenced": fenced,
@@ -1832,7 +1832,7 @@ fn searchextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let summary = s::search_summary(&query, total, returned, score);
     let matched = entries.iter().filter(|e| s::matches_words(&crate::store::message_text(&e.data), &query)).count();
     json!({
-        "headline": format!("{} · {} matched · {:.3}", summary["totalLabel"].as_str().unwrap_or("0"), matched, score),
+        "headline": format!("{} Â· {} matched Â· {:.3}", summary["totalLabel"].as_str().unwrap_or("0"), matched, score),
         "tone": if summary["empty"] == true { "secondary" } else { "good" },
         "query": summary["query"],
         "terms": summary["terms"],
@@ -1850,6 +1850,62 @@ fn searchextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
             json!({"key": "matched", "value": matched.to_string()}),
             json!({"key": "ops", "value": s::SEARCH_OPS.len().to_string()}),
             json!({"key": "sort", "value": s::search_sort_for(None, &query)}),
+        ],
+    })
+}
+
+/// Static metrics and judge parsing from T-86's hermes-agent eval port.
+fn evalextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_eval_extra as e;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let source = entries.first().map(|e| crate::store::message_text(&e.data)).unwrap_or_default();
+    let lines = [100_u64, 1_500, 2_500];
+    json!({
+        "headline": format!("{} lines Â· {} median Â· {} over 1k", e::source_line_count(&source), e::median_file_lines(&lines), e::count_gt(&lines, 1_000)),
+        "tone": if e::count_gt(&lines, 2_000) > 0 { "attention" } else { "good" },
+        "lines": e::source_line_count(&source),
+        "code": e::code_line_count(&source),
+        "median": e::median_file_lines(&lines),
+        "p90": e::percentile_pick(&lines, 0.9),
+        "over1k": e::count_gt(&lines, 1_000),
+        "over2k": e::count_ge(&lines, 2_000),
+        "skip": e::skip_top_dir("tests"),
+        "module": e::module_name_for_path("agent/foo.py"),
+        "verdicts": e::JUDGE_VERDICTS.len(),
+        "summary": vec![
+            json!({"key": "lines", "value": e::source_line_count(&source).to_string()}),
+            json!({"key": "median", "value": e::median_file_lines(&lines).to_string()}),
+            json!({"key": "over1k", "value": e::count_gt(&lines, 1_000).to_string()}),
+            json!({"key": "verdicts", "value": e::JUDGE_VERDICTS.len().to_string()}),
+        ],
+    })
+}
+
+/// Connection selection from T-87's rakazo port.
+fn connextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_connstate_extra as c;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut rows: Vec<Value> = entries.iter().filter_map(|e| e.data.get("connection").cloned()).collect();
+    if rows.is_empty() {
+        rows.push(json!({"connectorId":"desktop","provider":"local","status":"connected"}));
+    }
+    let channels = c::connected_channels(&rows);
+    let providers = c::connected_providers(&rows);
+    json!({
+        "headline": format!("{} channels Â· {} providers", channels.len(), providers.len()),
+        "tone": if channels.is_empty() { "attention" } else { "good" },
+        "channels": channels,
+        "providers": providers,
+        "selected": c::select_run_connections(&rows, &[]).len(),
+        "rows": rows.len(),
+        "context": c::connected_context(&rows),
+        "summary": vec![
+            json!({"key": "channels", "value": channels.len().to_string()}),
+            json!({"key": "providers", "value": providers.len().to_string()}),
+            json!({"key": "rows", "value": rows.len().to_string()}),
+            json!({"key": "state", "value": c::STATUS_CONNECTED}),
         ],
     })
 }
@@ -1965,6 +2021,8 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "apierror": apierror_view(hub, bot),
         "memoryctx": memoryctx_view(hub, bot),
         "searchextra": searchextra_view(hub, bot),
+        "evalextra": evalextra_view(hub, bot),
+        "connextra": connextra_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,
