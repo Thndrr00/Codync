@@ -55,9 +55,23 @@ public struct BotInsights: Decodable, Sendable {
     public let review: InsightReview
     public let history: InsightHistory
     public let apierror: InsightApiError
+    public let memoryctx: InsightMemoryCtx
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed memory-context sanitisation summary.
+public struct InsightMemoryCtx: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let fenced: Int
+    public let notes: Int
+    public let hidden: Int
+    public let preview: String
+    public let block: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed provider API error summary.

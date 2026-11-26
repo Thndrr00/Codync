@@ -1782,6 +1782,44 @@ fn apierror_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Memory-context fencing and output sanitisation from hermes-agent.
+fn memoryctx_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_memoryctx as m;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut fenced = 0;
+    let mut notes = 0;
+    let mut hidden = 0;
+    let mut sample = String::new();
+    for e in &entries {
+        let text = crate::store::message_text(&e.data);
+        if m::has_fence(&text) {
+            fenced += 1;
+        }
+        if m::has_system_note(&text) {
+            notes += 1;
+        }
+        let clean = m::sanitize_context(&text);
+        if clean.chars().count() < text.chars().count() {
+            hidden += 1;
+        }
+        if sample.is_empty() {
+            sample = clean;
+        }
+    }
+    json!({
+        "headline": format!("{} fenced · {} hidden", fenced, hidden),
+        "tone": m::context_tone(fenced > 0, hidden),
+        "icon": m::context_icon(fenced > 0),
+        "fenced": fenced,
+        "notes": notes,
+        "hidden": hidden,
+        "preview": m::bound_context(&sample, 80),
+        "block": m::bound_context(&m::build_memory_context_block(&sample), 120),
+        "summary": m::summary(fenced > 0, notes, hidden, sample.chars().count()).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1891,6 +1929,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "review": review_view(),
         "history": history_view(hub, bot),
         "apierror": apierror_view(hub, bot),
+        "memoryctx": memoryctx_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Contexto de memoria (22 adiciones + UI en 4 clientes)
+
+`bdots_memoryctx.rs` añade 16 helpers puros, 3 constantes y un scrubber con estado portados de
+`memory_context.py` de **hermes-agent**: fencing `<memory-context>`, sanitización de salida,
+notas del sistema inyectadas, scrubber de deltas con cola de tag parcial, bloque de recall y dedup
+de bullets repetidos. Reutiliza `bdots_more` y `bdots_desk`. El endpoint `botInsights` añade el
+campo `memoryctx`; la sección «Memory context» se muestra en los cuatro clientes.
+
 ## Errores de API (24 adiciones + UI en 4 clientes)
 
 `bdots_apierror.rs` añade 21 helpers puros y 3 constantes portados de `api_error_summary.py` de

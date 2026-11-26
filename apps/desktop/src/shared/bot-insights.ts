@@ -1,6 +1,18 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightMemoryCtx {
+  headline: string
+  tone: string
+  icon: string
+  fenced: number
+  notes: number
+  hidden: number
+  preview: string
+  block: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightApiError {
   headline: string
   tone: string
@@ -804,6 +816,7 @@ export interface BotInsights {
   review: InsightReview
   history: InsightHistory
   apierror: InsightApiError
+  memoryctx: InsightMemoryCtx
   routines: InsightRoutine[]
   usage: {
     used: number

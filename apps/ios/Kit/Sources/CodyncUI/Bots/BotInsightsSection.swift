@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let memoryctx = insights.memoryctx
+                    Text(memoryctx.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(memoryctx.preview).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Hidden")): \(memoryctx.hidden)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let apierror = insights.apierror
                     Text(apierror.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(apierror.preview).font(.footnote).foregroundStyle(Palette.secondary)

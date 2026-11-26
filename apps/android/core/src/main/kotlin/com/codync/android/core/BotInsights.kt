@@ -58,9 +58,19 @@ data class BotInsights(
     val review: InsightReview = InsightReview(),
     val history: InsightHistory = InsightHistory(),
     val apierror: InsightApiError = InsightApiError(),
+    val memoryctx: InsightMemoryCtx = InsightMemoryCtx(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed memory-context sanitisation summary. */
+@Serializable
+data class InsightMemoryCtx(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val fenced: Int = 0, val notes: Int = 0, val hidden: Int = 0,
+    val preview: String = "", val block: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed provider API error summary. */

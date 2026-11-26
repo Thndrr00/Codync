@@ -45,6 +45,7 @@ mod bdots_localfmt;
 mod bdots_mailtext;
 mod bdots_markdown;
 mod bdots_memory;
+mod bdots_memoryctx;
 mod bdots_more;
 mod bdots_notify;
 mod bdots_openbot;

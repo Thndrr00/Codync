@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let memoryctx = &data["memoryctx"];
+    if memoryctx.is_object() {
+        line(buf, &mut y, tr("Memory context").into_owned(), t.bold.patch(t.panel));
+        let headline = memoryctx["headline"].as_str().unwrap_or("");
+        let hidden = memoryctx["hidden"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {hidden}", tr("Hidden")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let apierror = &data["apierror"];
     if apierror.is_object() {
         line(buf, &mut y, tr("API errors").into_owned(), t.bold.patch(t.panel));

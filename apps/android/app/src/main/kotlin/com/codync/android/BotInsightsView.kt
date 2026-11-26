@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val memoryctx = insights.memoryctx
+            CardSection("Memory context") {
+                row { Text(memoryctx.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(memoryctx.preview, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Notes", memoryctx.notes.toString()) }
+                row { ValueRow("Hidden", memoryctx.hidden.toString()) }
+            }
             val apierror = insights.apierror
             CardSection("API errors") {
                 row { Text(apierror.headline, style = Type.subheadline.semibold, color = Palette.text) }
