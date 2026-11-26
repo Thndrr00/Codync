@@ -1470,6 +1470,85 @@ fn mailtext_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value
     })
 }
 
+/// Connection selection and state from rakazo's connection context.
+fn connstate_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
+    use crate::bdots_connstate as c;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut rows: Vec<Value> = entries.iter().filter_map(|e| e.data.get("connection").cloned()).collect();
+    if rows.is_empty() {
+        rows.push(json!({"bot": bot, "state": "connected", "updatedAt": now, "enabled": true}));
+    }
+    let mine = c::select_connections(&rows, bot);
+    let connected = c::connected_count(&rows);
+    let stale = c::stale_count(&rows, now, 180_000);
+    let state = mine.first().map_or("unknown", |r| r["state"].as_str().unwrap_or("unknown"));
+    let selected =
+        mine.first().map_or_else(|| "default".to_owned(), |r| c::channel_label(r["channel"].as_str().unwrap_or("")));
+    json!({
+        "headline": format!("{} · {} connected · {} stale", selected, connected, stale),
+        "tone": c::state_tone(state),
+        "selected": selected,
+        "state": c::state_label(state).to_owned(),
+        "connected": connected,
+        "channels": mine.len(),
+        "stale": stale,
+        "backoff": c::backoff_ms(stale as u32),
+        "icon": c::state_icon(state),
+        "summary": c::summary(connected, mine.len(), stale, c::backoff_ms(stale as u32)).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
+/// Evaluation scores and verdicts from hermes-agent's eval metrics.
+fn eval_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_eval as e;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let scores: Vec<u32> =
+        entries.iter().filter_map(|entry| entry.data["score"].as_u64().map(|v| e::clamp_score(v as i64))).collect();
+    let score = e::average(&scores);
+    let threshold = e::threshold_for("normal");
+    let verdict = if scores.is_empty() { "pending" } else { e::verdict(score, threshold) };
+    let grade = if scores.is_empty() { "—" } else { e::grade(score) };
+    json!({
+        "headline": if scores.is_empty() { "No eval samples".to_owned() } else { format!("{} · {} · {}", verdict, grade, score) },
+        "tone": e::verdict_tone(verdict),
+        "score": score,
+        "verdict": verdict.to_owned(),
+        "threshold": threshold,
+        "samples": scores.len(),
+        "grade": grade.to_owned(),
+        "icon": e::grade_icon(grade),
+        "summary": e::summary(score, threshold, scores.len()).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
+/// Search shaping from agentes-chat's query and filter helpers.
+fn search_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_search as s;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let rows: Vec<Value> =
+        entries.iter().map(|e| json!({"title": crate::store::message_text(&e.data), "kind": "chat"})).collect();
+    let query = bot.to_owned();
+    let terms = s::query_terms(&query);
+    let hits = s::filter_rows(&rows, &terms, "title").len();
+    let filtered = s::apply_kind_filter(&rows, &[]).len();
+    let score = rows.first().map_or(0, |r| s::relevance_score(r["title"].as_str().unwrap_or(""), &terms));
+    let empty = s::is_empty_query(&query) || hits == 0;
+    json!({
+        "headline": format!("{} · {} hits", s::hit_label(hits), query),
+        "tone": s::search_tone(empty),
+        "query": query,
+        "hits": hits,
+        "filtered": filtered,
+        "score": score,
+        "empty": empty,
+        "icon": s::search_icon(empty),
+        "summary": s::summary(hits, filtered, score).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1568,6 +1647,9 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "markdown": markdown_view(hub, bot),
         "notify": notify_view(hub, bot),
         "mailtext": mailtext_view(&row, hub, bot),
+        "connstate": connstate_view(hub, bot, now),
+        "eval": eval_view(hub, bot),
+        "search": search_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

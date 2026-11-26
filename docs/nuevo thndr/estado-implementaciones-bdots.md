@@ -124,6 +124,23 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Conexiones, evaluación y búsqueda (40 adiciones + UI en 4 clientes)
+
+Tres módulos puros creados en paralelo por agentes hijos (T-83/T-84/T-85 agotaron su tiempo y no
+escribieron archivos, así que se completaron en esta sesión):
+
+- `bdots_connstate.rs` (13 helpers + 1 constante) portado de `connection-context.ts` de **rakazo
+  v0.14.0**: estados de conexión, frescura, backoff exponencial, selección por bot, conteos y
+  etiquetas de canal.
+- `bdots_eval.rs` (13 helpers) portado de los evals de **hermes-agent**: scores acotados, umbrales,
+  veredictos, notas, promedio, mediana, tasa de aprobado y tolerancias.
+- `bdots_search.rs` (13 helpers) portado de los helpers de búsqueda de **agentes-chat 0.7.5**:
+  normalización de consultas, términos, coincidencias, relevancia, filtros, resaltado y resúmenes.
+
+Reutilizan `bdots_desk`, `bdots_activity` y `bdots_more`. El endpoint `botInsights` añade los campos
+`connstate`, `eval` y `search`; las secciones «Connections», «Evaluation» y «Search» se muestran en
+los cuatro clientes.
+
 ## Correo y datos (24 helpers + UI en 4 clientes)
 
 `bdots_mailtext.rs` añade 24 helpers puros y constantes portados de `mail/text.ts`,

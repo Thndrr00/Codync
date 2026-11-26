@@ -44,9 +44,52 @@ public struct BotInsights: Decodable, Sendable {
     public let markdown: InsightMarkdown
     public let notify: InsightNotify
     public let mailtext: InsightMailText
+    public let connstate: InsightConnState
+    public let eval: InsightEval
+    public let search: InsightSearch
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed connection state summary.
+public struct InsightConnState: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let selected: String
+    public let state: String
+    public let connected: Int
+    public let channels: Int
+    public let stale: Int
+    public let backoff: Int
+    public let icon: String
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed evaluation summary.
+public struct InsightEval: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let score: Int
+    public let verdict: String
+    public let threshold: Int
+    public let samples: Int
+    public let grade: String
+    public let icon: String
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed search summary.
+public struct InsightSearch: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let query: String
+    public let hits: Int
+    public let filtered: Int
+    public let score: Int
+    public let empty: Bool
+    public let icon: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed mailbox and database text summary.

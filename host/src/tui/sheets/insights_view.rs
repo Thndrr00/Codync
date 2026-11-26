@@ -66,6 +66,33 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let connstate = &data["connstate"];
+    if connstate.is_object() {
+        line(buf, &mut y, tr("Connections").into_owned(), t.bold.patch(t.panel));
+        let headline = connstate["headline"].as_str().unwrap_or("");
+        let state = connstate["state"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {state}", tr("State")), t.text.patch(t.panel));
+        y += 1;
+    }
+
+    let eval_result = &data["eval"];
+    if eval_result.is_object() {
+        line(buf, &mut y, tr("Evaluation").into_owned(), t.bold.patch(t.panel));
+        let headline = eval_result["headline"].as_str().unwrap_or("");
+        let verdict = eval_result["verdict"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {verdict}", tr("Verdict")), t.text.patch(t.panel));
+        y += 1;
+    }
+
+    let search = &data["search"];
+    if search.is_object() {
+        line(buf, &mut y, tr("Search").into_owned(), t.bold.patch(t.panel));
+        let headline = search["headline"].as_str().unwrap_or("");
+        let hits = search["hits"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {hits}", tr("Hits")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let mailtext = &data["mailtext"];
     if mailtext.is_object() {
         line(buf, &mut y, tr("Mail & data").into_owned(), t.bold.patch(t.panel));

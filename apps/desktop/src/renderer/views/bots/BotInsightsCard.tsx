@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,24 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Connections')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(connstate.tone)}>{connstate.headline}</Text>
+        <ValueRow label={tr('State')}>{connstate.state}</ValueRow>
+        <ValueRow label={tr('Connected')}>{String(connstate.connected)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Evaluation')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(evalResult.tone)}>{evalResult.headline}</Text>
+        <ValueRow label={tr('Verdict')}>{evalResult.verdict}</ValueRow>
+        <ValueRow label={tr('Score')}>{String(evalResult.score)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Search')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(search.tone)}>{search.headline}</Text>
+        <ValueRow label={tr('Query')}>{search.query}</ValueRow>
+        <ValueRow label={tr('Hits')}>{String(search.hits)}</ValueRow>
+      </CardSection>
+
       <CardSection title={tr('Mail & data')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(mailtext.tone)}>{mailtext.headline}</Text>
         <ValueRow label={tr('Address')}>{mailtext.address}</ValueRow>

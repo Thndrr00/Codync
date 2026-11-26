@@ -42,6 +42,24 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val connstate = insights.connstate
+            CardSection("Connections") {
+                row { Text(connstate.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("State", connstate.state) }
+                row { ValueRow("Connected", connstate.connected.toString()) }
+            }
+            val evalResult = insights.eval
+            CardSection("Evaluation") {
+                row { Text(evalResult.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Verdict", evalResult.verdict) }
+                row { ValueRow("Score", evalResult.score.toString()) }
+            }
+            val search = insights.search
+            CardSection("Search") {
+                row { Text(search.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Query", search.query) }
+                row { ValueRow("Hits", search.hits.toString()) }
+            }
             val mailtext = insights.mailtext
             CardSection("Mail & data") {
                 row { Text(mailtext.headline, style = Type.subheadline.semibold, color = Palette.text) }

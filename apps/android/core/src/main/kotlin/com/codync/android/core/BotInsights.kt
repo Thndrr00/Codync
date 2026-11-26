@@ -47,9 +47,39 @@ data class BotInsights(
     val markdown: InsightMarkdown = InsightMarkdown(),
     val notify: InsightNotify = InsightNotify(),
     val mailtext: InsightMailText = InsightMailText(),
+    val connstate: InsightConnState = InsightConnState(),
+    val eval: InsightEval = InsightEval(),
+    val search: InsightSearch = InsightSearch(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed connection state summary. */
+@Serializable
+data class InsightConnState(
+    val headline: String = "", val tone: String = "", val selected: String = "",
+    val state: String = "", val connected: Int = 0, val channels: Int = 0,
+    val stale: Int = 0, val backoff: Int = 0, val icon: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed evaluation summary. */
+@Serializable
+data class InsightEval(
+    val headline: String = "", val tone: String = "", val score: Int = 0,
+    val verdict: String = "", val threshold: Int = 0, val samples: Int = 0,
+    val grade: String = "", val icon: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed search summary. */
+@Serializable
+data class InsightSearch(
+    val headline: String = "", val tone: String = "", val query: String = "",
+    val hits: Int = 0, val filtered: Int = 0, val score: Int = 0,
+    val empty: Boolean = false, val icon: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed mailbox and database text summary. */

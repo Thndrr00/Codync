@@ -30,6 +30,15 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let connstate = insights.connstate
+                    Text(connstate.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("State")): \(connstate.state)").font(.footnote).foregroundStyle(Palette.secondary)
+                    let evalResult = insights.eval
+                    Text(evalResult.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Verdict")): \(evalResult.verdict)").font(.footnote).foregroundStyle(Palette.secondary)
+                    let search = insights.search
+                    Text(search.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Hits")): \(search.hits)").font(.footnote).foregroundStyle(Palette.secondary)
                     let mailtext = insights.mailtext
                     Text(mailtext.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Address")): \(mailtext.address)").font(.footnote).foregroundStyle(Palette.secondary)
