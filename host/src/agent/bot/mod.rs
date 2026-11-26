@@ -203,6 +203,8 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         request_last_result: HashMap::new(),
         detached_questions: HashMap::new(),
         no_answer_empty: false,
+        no_answer_noticed: false,
+        retry_warning: None,
         turn_replayed_result: false,
         background_children: false,
         recovery_announced: false,
@@ -453,6 +455,10 @@ struct Actor {
     detached_questions: HashMap<String, DetachedQuestion>,
     /// The turn is being handed to a backup because it wrote no answer: say that, not a generic failure.
     no_answer_empty: bool,
+    /// The CheckSteps note for this turn is already in the chat; a retry or replay must not post it again.
+    no_answer_noticed: bool,
+    /// A retry warning notice still in the chat, with its text, cleared when a later answer arrives.
+    retry_warning: Option<(String, String)>,
     /// The messages this turn answers include a teammate result that restart recovery gave again after its
     /// provider turn had started (OpenBot nightly triage-14330). An empty replay then ends quietly.
     turn_replayed_result: bool,
@@ -493,12 +499,16 @@ impl Actor {
                 Err(acp::Failure::error(acp::FailureKind::Exited, "the agent ended its turn with no answer"))
             }
             Some(action @ (turn_rules::NoAnswer::CheckSteps | turn_rules::NoAnswer::EndedWithNoAnswer)) => {
+                let steps = self.watchdog.tool_calls();
                 let text = if action == turn_rules::NoAnswer::CheckSteps {
-                    turn_rules::NO_ANSWER_AFTER_STEPS
+                    turn_rules::no_answer_note(steps, self.has_written_answer(), self.no_answer_noticed)
                 } else {
-                    turn_rules::NO_ANSWER_EMPTY
+                    (!self.no_answer_noticed).then_some(turn_rules::NO_ANSWER_EMPTY)
                 };
-                self.notice(text, NoticeStyle::Info);
+                if let Some(text) = text {
+                    self.notice(text, NoticeStyle::Info);
+                    self.no_answer_noticed = true;
+                }
                 done
             }
             _ => done,
@@ -638,13 +648,20 @@ impl Actor {
 
     /// A notice in the running turn's lane (or the bot's own chat between turns).
     fn notice(&self, text: &str, style: NoticeStyle) {
+        let _ = self.notice_entry(text, style);
+    }
+
+    /// The same notice, with its saved id so a later answer can take a retry warning out of the chat.
+    fn notice_entry(&self, text: &str, style: NoticeStyle) -> Option<String> {
         let Some(turn) = self.turn else {
             let main = Lane::main(&self.cfg.id);
             let turn = self.hub.store.max_turn(&self.cfg.id);
-            self.hub.add_entry(&main, EntryKind::Notice, turn, &json!({"text": text, "style": style}));
-            return;
+            return self
+                .hub
+                .add_entry(&main, EntryKind::Notice, turn, &json!({"text": text, "style": style}))
+                .map(|e| e.id);
         };
-        self.add(EntryKind::Notice, turn, json!({"text": text, "style": style}));
+        self.add(EntryKind::Notice, turn, json!({"text": text, "style": style})).map(|e| e.id)
     }
 }
 

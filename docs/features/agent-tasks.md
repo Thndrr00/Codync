@@ -185,6 +185,15 @@ tests (`host/src/agent/bot/turn_rules.rs`):
   `background_answer_seen` in `agent/bot/turn_rules.rs`). A message read by a busy Claude whose
   session then closes is requeued instead of lost, while a self-continued background reply still
   reaches the chat (triage-16361/16364; `late_message_action`).
+- A turn that settles drops any stale "Waiting for background work…" line before it frees the queue,
+  so a queued message never opens on the old restart line (`clear_stale_waiting`). A completed turn
+  that did steps but wrote no answer gets one plain note, never a duplicate CheckSteps note
+  (`no_answer_note`, `NO_ANSWER_AFTER_STEPS`). A provider retry shown as a warning is taken out of
+  the chat once the agent answers (`retry_cleared`); a real stop or refusal stays.
+- A write denied by a profile short of Full carries the hint "Workspace only blocks this. Try Full
+  access." (`blocked_write_hint` in `agent/security_profile.rs`). A provider key saved after an auth
+  refusal is used by the next agent launch, so the queued message reaches the provider with it
+  (`fresh_key` in `agent/auth/proxied.rs`).
 - A turn that stopped in every place and answered nothing says so plainly — "The agent stopped
   before it answered. Send your message again…" — so the person knows to resend (triage-15306;
   `stopped_before_answer`). A "model after this turn" change waits until running turns end

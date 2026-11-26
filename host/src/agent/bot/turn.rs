@@ -208,6 +208,7 @@ impl Actor {
         self.loop_guard = super::stall::LoopGuard::default();
         self.task_started = false;
         self.no_answer_empty = false;
+        self.no_answer_noticed = false;
         self.plan_entry = None;
         self.last_text = None;
         self.sent.clear();
@@ -347,7 +348,7 @@ impl Actor {
 
     /// Whether this turn has written anything the user can read. A text bubble, a `send_message`, a file card or a
     /// kept reaction all count; narration left in the trace does not.
-    fn has_written_answer(&self) -> bool {
+    pub(super) fn has_written_answer(&self) -> bool {
         if !self.sent.is_empty() || self.files.summary.is_some() || !matches!(self.reacted, Reacted::No) {
             return true;
         }
@@ -387,6 +388,11 @@ impl Actor {
     pub(super) fn finish_turn(&mut self, done: &Result<Value>) {
         if self.turn.is_none() {
             return;
+        }
+        // An old "Waiting for background work…" line must not reach a message queued while this turn settles
+        // (OpenBot 0.70.0, Gemini busy notice). The turn-end reset below clears every other activity.
+        if super::turn_rules::clear_stale_waiting(&self.hub.runtime(&self.id()).activity, true) {
+            self.hub.set_runtime(&self.id(), |r| r.activity = String::new());
         }
         self.cancel_deadline = None;
         self.after_turn(done);
@@ -513,12 +519,12 @@ impl Actor {
             // v0.79.0: a provider retry is a warning that clears when the agent recovers, not a
             // persistent red error. A genuine stop-with-no-answer stays an error.
             _ if stalled.is_some() => {
-                let style = if super::turn_rules::retry_is_warning(stalled.as_deref().unwrap_or_default()) {
-                    NoticeStyle::Info
+                let text = stalled.as_deref().unwrap_or_default();
+                if super::turn_rules::retry_is_warning(text) {
+                    self.retry_warning = self.notice_entry(text, NoticeStyle::Info).map(|id| (id, text.to_owned()));
                 } else {
-                    NoticeStyle::Error
-                };
-                self.notice(stalled.as_deref().unwrap_or_default(), style)
+                    self.notice(text, NoticeStyle::Error);
+                }
             }
             (Err(e), _) if !self.stop_requested => {
                 let tail = self.exit_tail.take().filter(|t| !t.is_empty());
@@ -542,7 +548,10 @@ impl Actor {
             _ if verdict.unfinished() && !self.task_started => self.pause_card(verdict),
             _ if verdict.unfinished() => {}
             (_, "refusal") => self.notice("The agent declined to continue.", NoticeStyle::Info),
-            (Ok(_), "end_turn") if !stopped => crate::market::agent_sign_in::answered(&self.hub, &self.cfg.backend),
+            (Ok(_), "end_turn") if !stopped => {
+                crate::market::agent_sign_in::answered(&self.hub, &self.cfg.backend);
+                self.clear_retry_warning(has_answer);
+            }
             _ => {}
         }
         let failure = done.as_ref().err().filter(|_| !self.stop_requested);
@@ -670,6 +679,20 @@ impl Actor {
 }
 
 impl Actor {
+    /// Takes a retry warning out of the chat once the agent has answered. A warning the agent hasn't answered
+    /// stays for a later turn to clear.
+    fn clear_retry_warning(&mut self, answered: bool) {
+        let Some((id, text)) = self.retry_warning.as_ref() else { return };
+        if !super::turn_rules::retry_cleared(text, answered) {
+            return;
+        }
+        let id = id.clone();
+        self.retry_warning = None;
+        if let Err(error) = self.hub.delete_entry(&id) {
+            tracing::warn!(bot = %self.cfg.id, %error, "couldn't clear the retry warning");
+        }
+    }
+
     /// Ends what an attempt left open: file shares, the last text, unanswered permission cards (they can't be
     /// answered after the turn) and tool calls the agent never closed out (they'd spin forever in the trace).
     pub(super) fn close_attempt(&mut self, failed: bool) {

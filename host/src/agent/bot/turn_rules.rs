@@ -97,6 +97,12 @@ pub(super) fn no_answer_action(steps: u32, background: bool, has_backup: bool) -
     }
 }
 
+/// One plain note for a turn that did steps but wrote no answer. A retried or replayed turn that already
+/// showed the CheckSteps note must not show it again (triage-13142).
+pub(super) fn no_answer_note(steps: u32, has_text: bool, already_noticed: bool) -> Option<&'static str> {
+    (steps > 0 && !has_text && !already_noticed).then_some(NO_ANSWER_AFTER_STEPS)
+}
+
 /// When a message the person asked to send now reaches the actor (OpenBot v0.78.0).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SteerStage {
@@ -202,6 +208,27 @@ pub(super) enum BackgroundAnswer {
 
 pub(super) fn background_answer_seen(text: &str, seen: bool) -> BackgroundAnswer {
     if seen || text.trim().is_empty() { BackgroundAnswer::Skip } else { BackgroundAnswer::Show }
+}
+
+/// Whether a settled turn's activity is a stale "Waiting for background work…" line that must not carry
+/// into the next (possibly queued) message. An unfinished turn still waits; other activity is left for
+/// the turn-end reset (OpenBot 0.70.0, Gemini busy notice).
+pub(super) fn clear_stale_waiting(activity: &str, settled: bool) -> bool {
+    settled && activity.trim_start().to_ascii_lowercase().starts_with("waiting")
+}
+
+/// v0.79.0: a provider that retried a request shows a warning, not a red error, and the notice is
+/// cleared when the agent goes on to answer. A real stop or refusal stays an error.
+pub(super) fn retry_is_warning(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    (lower.contains("retry") || lower.contains("try again") || lower.contains("failed this request"))
+        && !lower.contains("stopped")
+        && !lower.contains("declined")
+}
+
+/// Whether a posted notice is a retry warning that the agent has now answered. Errors and stops stay.
+pub(super) fn retry_cleared(notice_kind: &str, answered: bool) -> bool {
+    answered && retry_is_warning(notice_kind)
 }
 
 /// The plain words for a provider that stopped before it answered (OpenBot triage-15306). `reason`
@@ -329,15 +356,6 @@ mod tests {
         assert_eq!(background_answer_seen("  ", false), BackgroundAnswer::Skip, "no answer to show");
     }
 
-    /// v0.79.0: a provider that retried a request shows a warning, not a red error, and the notice is
-    /// cleared when the agent goes on to answer. A real stop or refusal stays an error.
-    pub(super) fn retry_is_warning(text: &str) -> bool {
-        let lower = text.to_ascii_lowercase();
-        (lower.contains("retry") || lower.contains("try again") || lower.contains("failed this request"))
-            && !lower.contains("stopped")
-            && !lower.contains("declined")
-    }
-
     #[test]
     fn a_provider_that_stopped_says_so_and_offers_a_resend() {
         let plain = stopped_before_answer("");
@@ -352,5 +370,30 @@ mod tests {
         assert!(retry_is_warning("The provider failed this request 3 times; it will try again"));
         assert!(!retry_is_warning("Stopped."));
         assert!(!retry_is_warning("The agent declined to continue."));
+    }
+
+    #[test]
+    fn a_turn_with_steps_but_no_text_gets_one_plain_note() {
+        assert_eq!(no_answer_note(3, false, false), Some(NO_ANSWER_AFTER_STEPS));
+        assert_eq!(no_answer_note(3, false, true), None, "the CheckSteps note is not posted twice");
+        assert_eq!(no_answer_note(3, true, false), None, "an answer was written");
+        assert_eq!(no_answer_note(0, false, false), None, "no steps: another rule decides");
+    }
+
+    #[test]
+    fn only_a_settled_turn_drops_its_stale_waiting_line() {
+        assert!(clear_stale_waiting("Waiting for background work… 4s", true));
+        assert!(clear_stale_waiting(" waiting for the agent", true), "case and leading space don't hide it");
+        assert!(!clear_stale_waiting("Waiting for background work… 4s", false), "a running turn still waits");
+        assert!(!clear_stale_waiting("Writing a reply…", true), "ordinary activity is left to the turn-end reset");
+    }
+
+    #[test]
+    fn a_retry_warning_is_cleared_once_the_agent_answers() {
+        let retry = "The provider failed this request 3 times; it will try again";
+        assert!(retry_cleared(retry, true));
+        assert!(!retry_cleared(retry, false), "a silent turn keeps the warning");
+        assert!(!retry_cleared("Stopped.", true), "a real stop stays on screen");
+        assert!(!retry_cleared("The agent declined to continue.", true));
     }
 }

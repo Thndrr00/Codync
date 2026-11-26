@@ -4,12 +4,26 @@
 //! with its base-URL variable stays visible: it goes to that address as it is. Every other variable stays in the
 //! visible map `agent-env:<backend>`, which agents can read.
 
+use crate::agent::backends;
 use crate::keeper::PLACEHOLDER;
 use crate::keeper::client::{self, Grants};
 use crate::keeper::record::{ANTHROPIC, GEMINI, Keep, Record};
-use crate::store::Store;
+use crate::store::{Store, now_ms};
 use anyhow::{Result, bail};
 use std::collections::BTreeSet;
+
+/// How long a saved key counts as newly saved. Older saves don't clear a later auth failure.
+const FRESH_KEY_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// Whether this launch may use a key saved since a prior auth failure. A dated, recent save clears the
+/// refusal latch so the next message reaches the provider with the new key (OpenBot 0.70.0).
+pub(super) fn fresh_key(previous_failed: bool, saved_at: Option<i64>, now: i64) -> bool {
+    let Some(at) = saved_at else { return false };
+    if at > now || now - at > FRESH_KEY_MS {
+        return false;
+    }
+    !previous_failed || at < now
+}
 
 /// How a provider takes its key.
 enum Auth {
@@ -51,6 +65,11 @@ fn slot(backend: &str, var: &str) -> String {
     format!("agent-env:{backend}:{var}")
 }
 
+/// When a provider key was last saved, so a fresh one can clear an old auth refusal once.
+fn fresh_slot(backend: &str) -> String {
+    format!("agent-env:{backend}:fresh")
+}
+
 /// The proxied keys saved for `backend`.
 pub fn names(store: &Store, backend: &str) -> Result<Vec<String>> {
     let prefix = slot(backend, "");
@@ -62,6 +81,15 @@ pub fn names(store: &Store, backend: &str) -> Result<Vec<String>> {
 /// the first one's grant serves both (the keeper drops whatever key header the agent sends).
 pub fn add(store: &Store, backend: &str, env: &mut Vec<(String, String)>, grants: &mut Grants) -> Result<()> {
     let saved = names(store, backend)?;
+    if saved.iter().any(|name| KEYS.iter().any(|k| k.var == name)) {
+        // A key saved since the last refusal is used now; the marker is spent so a later failure stands.
+        let saved_at = store.kv_get(&fresh_slot(backend)).and_then(|v| v.parse().ok());
+        let previous_failed = backends::apply_prompt_refusal(backend, Some(true)) == Some(false);
+        if fresh_key(previous_failed, saved_at, now_ms()) {
+            backends::clear_prompt_refused(backend);
+            store.kv_delete(&fresh_slot(backend))?;
+        }
+    }
     for key in KEYS.iter().filter(|k| saved.iter().any(|s| s == k.var)) {
         env.push((key.var.into(), PLACEHOLDER.into()));
         if !env.iter().any(|(name, _)| name == key.base) {
@@ -101,7 +129,25 @@ pub fn save(store: &Store, backend: &str, changes: &[(String, Option<String>)]) 
     for var in deletes {
         client::delete(store, &slot(backend, var))?;
     }
+    if changes.iter().any(|(name, value)| value.is_some() && KEYS.iter().any(|k| k.var == name)) {
+        store.kv_set(&fresh_slot(backend), &now_ms().to_string())?;
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod fresh_tests {
+    use super::*;
+
+    #[test]
+    fn a_key_saved_after_a_refusal_is_used_on_the_next_launch() {
+        let now = 2_000_000_000_000;
+        assert!(fresh_key(true, Some(now - 1000), now), "the next message uses the new key");
+        assert!(!fresh_key(true, None, now), "an undated key doesn't clear a refusal");
+        assert!(!fresh_key(true, Some(now - FRESH_KEY_MS - 1), now), "a stale save doesn't clear a new refusal");
+        assert!(!fresh_key(true, Some(now + 1), now), "no future save");
+        assert!(fresh_key(false, Some(now - 1000), now), "without a refusal any dated key is fine");
+    }
 }
 
 #[cfg(all(test, unix))]
