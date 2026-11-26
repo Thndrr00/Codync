@@ -60,6 +60,7 @@ public struct BotInsights: Decodable, Sendable {
     public let evalextra: InsightEvalExtra
     public let connextra: InsightConnExtra
     public let shortcuts: InsightShortcuts
+    public let palette: InsightPalette
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -89,6 +90,20 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed command palette summary.
+public struct InsightPalette: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let command: String
+    public let needle: String
+    public let results: Int
+    public let recentPages: Int
+    public let commands: Int
+    public let bots: Int
     public let summary: [InsightSummaryRow]
 }
 

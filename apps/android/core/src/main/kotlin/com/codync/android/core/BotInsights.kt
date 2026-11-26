@@ -63,9 +63,19 @@ data class BotInsights(
     val evalextra: InsightEvalExtra = InsightEvalExtra(),
     val connextra: InsightConnExtra = InsightConnExtra(),
     val shortcuts: InsightShortcuts = InsightShortcuts(),
+    val palette: InsightPalette = InsightPalette(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed command palette summary. */
+@Serializable
+data class InsightPalette(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val command: String = "", val needle: String = "", val results: Int = 0,
+    val recentPages: Int = 0, val commands: Int = 0, val bots: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed keyboard shortcut summary. */

@@ -1942,6 +1942,38 @@ fn shortcuts_view() -> Value {
     })
 }
 
+/// Owner commands and command-palette shaping from rakazo.
+fn palette_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_palette as p;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut command = "message";
+    let mut bots: Vec<Value> = Vec::new();
+    for e in &entries {
+        let text = crate::store::message_text(&e.data);
+        if let Some(found) = p::parse_messaging_command(&text) {
+            command = found;
+        }
+        let name = e.data["title"].as_str().unwrap_or("");
+        bots.push(json!({"name": name, "description": "", "preview": crate::bdots_more::shorten(&text, 80)}));
+    }
+    let needle = bot;
+    let filtered = p::filter_bots(&bots, needle);
+    let ranked = p::rank_rows(&filtered, needle, "name");
+    json!({
+        "headline": format!("{} · {} results · {}", p::command_class_label(command), ranked.len(), p::palette_modifier(false)),
+        "tone": p::command_class_tone(command),
+        "icon": p::command_class_icon(command),
+        "command": p::command_class_label(command),
+        "needle": p::needle_of(needle),
+        "results": ranked.len(),
+        "recentPages": p::RECENT_PAGES,
+        "commands": p::MESSAGING_COMMANDS.len(),
+        "bots": bots.len(),
+        "summary": p::summary(p::MESSAGING_COMMANDS.len(), bots.len(), ranked.len(), ranked.len()),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2056,6 +2088,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "evalextra": evalextra_view(hub, bot),
         "connextra": connextra_view(hub, bot),
         "shortcuts": shortcuts_view(),
+        "palette": palette_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

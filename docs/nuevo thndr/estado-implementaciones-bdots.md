@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Paleta de comandos (22 adiciones + UI en 4 clientes)
+
+`bdots_palette.rs` añade 18 helpers puros y 4 constantes portados de `messaging-commands.ts` y
+`command-palette.tsx` de **rakazo v0.14.0**: comandos del dueño (yes/no/leave/stop en varios
+idiomas), normalización de búsqueda, filtrado de bots y acciones, ranking por prefijo, páginas
+recientes y presentación. Reutiliza `bdots_textfmt`, `bdots_desk`, `bdots_more` y `bdots_i18n`.
+El endpoint `botInsights` añade el campo `palette`; la sección «Command palette» se muestra en los
+cuatro clientes.
+
 ## Atajos de teclado (22 adiciones + UI en 4 clientes)
 
 `bdots_shortcuts.rs` añade 18 helpers puros, un `ShortcutHost`, `KeyMods` y dos constantes de

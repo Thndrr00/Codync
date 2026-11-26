@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let palette = &data["palette"];
+    if palette.is_object() {
+        line(buf, &mut y, tr("Command palette").into_owned(), t.bold.patch(t.panel));
+        let headline = palette["headline"].as_str().unwrap_or("");
+        let results = palette["results"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {results}", tr("Results")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let shortcuts = &data["shortcuts"];
     if shortcuts.is_object() {
         line(buf, &mut y, tr("Shortcuts").into_owned(), t.bold.patch(t.panel));

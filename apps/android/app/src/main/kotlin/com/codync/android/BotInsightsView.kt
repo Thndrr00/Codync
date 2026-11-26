@@ -42,6 +42,12 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val palette = insights.palette
+            CardSection("Command palette") {
+                row { Text(palette.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Command", palette.command) }
+                row { ValueRow("Results", palette.results.toString()) }
+            }
             val shortcuts = insights.shortcuts
             CardSection("Shortcuts") {
                 row { Text(shortcuts.headline, style = Type.subheadline.semibold, color = Palette.text) }
