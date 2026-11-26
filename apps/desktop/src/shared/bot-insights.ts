@@ -1,6 +1,25 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightMailText {
+  headline: string
+  tone: string
+  address: string
+  mailbox: string
+  domain: string
+  valid: boolean
+  keys: number
+  addresses: number
+  rows: number
+  columns: number
+  cut: boolean
+  maxBody: number
+  maxRows: number
+  maxValue: number
+  preview: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightNotify {
   headline: string
   tone: string
@@ -612,6 +631,7 @@ export interface BotInsights {
   localfmt: InsightLocalFmt
   markdown: InsightMarkdown
   notify: InsightNotify
+  mailtext: InsightMailText
   routines: InsightRoutine[]
   usage: {
     used: number

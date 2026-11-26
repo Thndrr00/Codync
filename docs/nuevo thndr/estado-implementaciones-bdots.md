@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Correo y datos (24 helpers + UI en 4 clientes)
+
+`bdots_mailtext.rs` añade 24 helpers puros y constantes portados de `mail/text.ts`,
+`databases/text.ts` y `api-key-text.ts` de **agentes-chat 0.7.5**: bloques untrusted, recorte de
+cuerpos y celdas, normalización y reglas de direcciones, mailbox de Gmail, filas acotadas y
+detección/redacción de claves API. Reutiliza `bdots_textfmt`, `bdots_more`, `bdots_desk` y
+`bdots_activity`. El endpoint `botInsights` añade el campo `mailtext`; la sección «Mail & data» se
+muestra en los cuatro clientes.
+
 ## Notificaciones (27 helpers + UI en 4 clientes)
 
 `bdots_notify.rs` añade 27 helpers puros portados de `notification_presentation.py`,

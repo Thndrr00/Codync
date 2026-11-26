@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let mailtext = insights.mailtext
+                    Text(mailtext.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Address")): \(mailtext.address)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Rows")): \(mailtext.rows)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let notify = insights.notify
                     Text(notify.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("State")): \(notify.state)").font(.footnote).foregroundStyle(Palette.secondary)

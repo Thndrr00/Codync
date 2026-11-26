@@ -35,6 +35,7 @@ mod bdots_library;
 mod bdots_links;
 mod bdots_liveness;
 mod bdots_localfmt;
+mod bdots_mailtext;
 mod bdots_markdown;
 mod bdots_memory;
 mod bdots_more;

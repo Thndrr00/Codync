@@ -1428,6 +1428,48 @@ fn notify_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Untrusted mail/database text shaping and API-key detection from agentes-chat.
+fn mailtext_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_mailtext as t;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut keys = 0;
+    let mut addresses = 0;
+    for e in &entries {
+        let text = crate::store::message_text(&e.data);
+        if t::looks_like_api_key(&text).is_some() {
+            keys += 1;
+        }
+        addresses += crate::bdots_textfmt::addresses_in(&text).len();
+    }
+    let columns = vec!["id".to_owned(), "title".to_owned()];
+    let rows: Vec<Vec<Value>> = entries
+        .iter()
+        .take(3)
+        .map(|e| vec![json!(e.id), json!(t::one_line(&crate::store::message_text(&e.data), 40))])
+        .collect();
+    let (table, shown, cut) = t::format_rows(&columns, &rows);
+    let inbox = "insights@codync.local";
+    json!({
+        "headline": format!("{} rows · {} addresses · {} keys", shown, addresses, keys),
+        "tone": if keys > 0 { "attention" } else { "good" },
+        "address": t::format_address(Some(&row.config.name), inbox),
+        "mailbox": t::mailbox_of(inbox),
+        "domain": t::address_domain(inbox),
+        "valid": t::is_email_address(inbox),
+        "keys": keys,
+        "addresses": addresses,
+        "rows": shown,
+        "columns": columns.len(),
+        "cut": cut,
+        "maxBody": t::MAX_BODY_CHARS,
+        "maxRows": t::MAX_ROWS,
+        "maxValue": t::MAX_VALUE,
+        "preview": t::one_line(&table, 100),
+        "summary": t::summary(columns.len(), shown, keys, cut).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1525,6 +1567,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "localfmt": localfmt_view(now, used),
         "markdown": markdown_view(hub, bot),
         "notify": notify_view(hub, bot),
+        "mailtext": mailtext_view(&row, hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

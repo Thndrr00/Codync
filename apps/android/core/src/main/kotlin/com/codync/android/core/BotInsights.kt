@@ -46,9 +46,21 @@ data class BotInsights(
     val localfmt: InsightLocalFmt = InsightLocalFmt(),
     val markdown: InsightMarkdown = InsightMarkdown(),
     val notify: InsightNotify = InsightNotify(),
+    val mailtext: InsightMailText = InsightMailText(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed mailbox and database text summary. */
+@Serializable
+data class InsightMailText(
+    val headline: String = "", val tone: String = "", val address: String = "",
+    val mailbox: String = "", val domain: String = "", val valid: Boolean = false,
+    val keys: Int = 0, val addresses: Int = 0, val rows: Int = 0, val columns: Int = 0,
+    val cut: Boolean = false, val maxBody: Int = 0, val maxRows: Int = 0, val maxValue: Int = 0,
+    val preview: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed notification and delivery summary. */

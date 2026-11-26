@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val mailtext = insights.mailtext
+            CardSection("Mail & data") {
+                row { Text(mailtext.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Address", mailtext.address) }
+                row { ValueRow("Rows", mailtext.rows.toString()) }
+                row { ValueRow("Keys", mailtext.keys.toString()) }
+            }
             val notify = insights.notify
             CardSection("Notifications") {
                 row { Text(notify.headline, style = Type.subheadline.semibold, color = Palette.text) }

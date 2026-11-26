@@ -43,9 +43,30 @@ public struct BotInsights: Decodable, Sendable {
     public let localfmt: InsightLocalFmt
     public let markdown: InsightMarkdown
     public let notify: InsightNotify
+    public let mailtext: InsightMailText
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed mailbox and database text summary.
+public struct InsightMailText: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let address: String
+    public let mailbox: String
+    public let domain: String
+    public let valid: Bool
+    public let keys: Int
+    public let addresses: Int
+    public let rows: Int
+    public let columns: Int
+    public let cut: Bool
+    public let maxBody: Int
+    public let maxRows: Int
+    public let maxValue: Int
+    public let preview: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed notification and delivery summary.

@@ -66,6 +66,16 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let mailtext = &data["mailtext"];
+    if mailtext.is_object() {
+        line(buf, &mut y, tr("Mail & data").into_owned(), t.bold.patch(t.panel));
+        let headline = mailtext["headline"].as_str().unwrap_or("");
+        let address = mailtext["address"].as_str().unwrap_or("");
+        let rows = mailtext["rows"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {address} · {}: {rows}", tr("Rows")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let notify = &data["notify"];
     if notify.is_object() {
         line(buf, &mut y, tr("Notifications").into_owned(), t.bold.patch(t.panel));
