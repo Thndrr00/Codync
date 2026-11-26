@@ -93,10 +93,21 @@ pub async fn call(hub: &std::sync::Arc<Hub>, method: &str, body: Value) -> Resul
         let object = focus["result"]["objectId"].as_str().context("Focus a password or one-time-code input first")?;
         let base = json!({"objectId":object,"functionDeclaration":FILL,"arguments":[{"value":site},{"value":kind}],"returnByValue":true,"silent":true});
         let probe = rpc(socket, "Runtime.callFunctionOn", base.clone(), Some(session)).await?;
+        let checked = probe["result"]["value"].clone();
         ensure!(
-            probe["result"]["value"]["ready"] == true && probe["result"]["value"]["origin"] == site,
+            checked["ready"] == true && checked["origin"] == site,
             "Focus the correct protected field on the exact approved HTTPS origin"
         );
+        if kind == "password" {
+            // The page picks among the form's inputs; the host re-decides from the same descriptors
+            // before a secret is sent, so a changed DOM cannot redirect the fill (OpenBot 0.70).
+            let chosen = checked["chosen"].as_i64().and_then(|i| usize::try_from(i).ok());
+            let fields: Vec<Value> = checked["fields"].as_array().cloned().unwrap_or_default();
+            ensure!(
+                chosen == password_field(&fields),
+                "The password field changed before delivery; nothing was confirmed"
+            );
+        }
         let secret = if kind == "code" {
             ensure!(request.login_id.is_none(), "A code request accepts no login");
             let code = request.code.as_deref().context("Code is required")?;
@@ -281,6 +292,36 @@ async fn open(hub: &std::sync::Arc<Hub>, id: &str, site: &str, bot: &str, profil
     Ok(Browser { id: id.into(), process, folder, pipe: socket, target, context, persistent, relay })
 }
 
+/// Pure mirror of `password_field` in protected-fill.js: the index of the input that really takes a
+/// password on a page hiding it behind a masked decoy. Descriptors carry no field values.
+fn password_field(fields: &[Value]) -> Option<usize> {
+    let mut best = None;
+    let mut score = 0;
+    for (index, field) in fields.iter().enumerate() {
+        if field["visible"] != true
+            || field["disabled"] == true
+            || field["readOnly"] == true
+            || field["hidden"] == true
+            || field["inert"] == true
+        {
+            continue;
+        }
+        let password = field["type"].as_str() == Some("password");
+        let masked = field["masked"] == true;
+        if !password && !masked {
+            continue;
+        }
+        let rank = i32::from(field["autocomplete"].as_str() == Some("current-password")) * 4
+            + i32::from(password) * 2
+            + i32::from(masked);
+        if best.is_none_or(|_| rank > score) {
+            best = Some(index);
+            score = rank;
+        }
+    }
+    best
+}
+
 /// A safe folder name for a bot or profile label.
 fn profile_slug(value: &str) -> String {
     value
@@ -310,12 +351,30 @@ pub(crate) fn browser_executable() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::profile_slug;
+    use super::{password_field, profile_slug};
+    use serde_json::json;
 
     #[test]
     fn profile_and_bot_names_make_safe_short_folders() {
         assert_eq!(profile_slug(" Client A "), "client-a");
         assert_eq!(profile_slug("acme/../etc"), "acme----etc");
         assert_eq!(profile_slug(&"x".repeat(80)).len(), 40);
+    }
+
+    #[test]
+    fn the_real_password_field_wins_over_a_masked_decoy() {
+        let field = |kind: &str, autocomplete: &str, masked: bool| {
+            json!({"type":kind,"autocomplete":autocomplete,"masked":masked,
+                "visible":true,"disabled":false,"readOnly":false,"hidden":false,"inert":false})
+        };
+        let decoy = field("text", "off", true);
+        let real = field("password", "", false);
+        assert_eq!(password_field(&[decoy.clone(), real.clone()]), Some(1), "a password input beats a mask");
+        let explicit = field("password", "current-password", false);
+        assert_eq!(password_field(&[explicit, real]), Some(0), "current-password wins outright");
+        assert_eq!(password_field(&[field("text", "off", false)]), None, "a plain text box is not a password");
+        let hidden = json!({"type":"password","autocomplete":"current-password","masked":false,
+            "visible":false,"disabled":false,"readOnly":false,"hidden":false,"inert":false});
+        assert_eq!(password_field(&[hidden, decoy]), Some(1), "an invisible field never receives a secret");
     }
 }

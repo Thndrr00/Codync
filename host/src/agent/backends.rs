@@ -15,9 +15,12 @@ use std::path::Path;
 
 mod capability;
 mod catalog;
+mod claude;
 mod credentials;
 mod hermes;
+mod mistral;
 pub(crate) mod openai_compatible;
+mod pi;
 mod search_path;
 mod sign_in;
 mod workbuddy;
@@ -26,6 +29,7 @@ pub(crate) use capability::{capability_failure, provider_capability, sse41, star
 pub use catalog::HARNESSES;
 pub(crate) use credentials::for_id as credential_state;
 pub(crate) use credentials::for_profile as profile_credential_state;
+pub use pi::restart_with_history as pi_restart_with_history;
 pub use search_path::{hydrate_path, on_path, which};
 pub use sign_in::{
     SignInCheck, agent_checks_off, apply_prompt_refusal, clear_prompt_refused, cli_signed_in, from_files_first, merged,
@@ -137,6 +141,8 @@ pub fn list() -> Vec<Value> {
                 "accounts": profile_home(h.id).is_some(),
                 "signOut": sign_out_available(h.id),
                 "updateAvailable": reg.is_some_and(registry::update_pending),
+                // A Mistral chat opened before a GitHub connect needs one reopen to see its tools.
+                "reopenChat": mistral::pending(h.id),
                 // A fixed note, not a download error: the CLI cannot run here at all.
                 "capability": provider_capability(h.id, sse41()).then_some(UNSUPPORTED_CPU),
             })

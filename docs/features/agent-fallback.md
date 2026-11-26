@@ -17,6 +17,18 @@ from the project files Claude Code loads; with the switch on, the user's own exc
 Mistral model's Effort menu lists the thinking levels in the model catalog (None, Low, High, Max)
 instead of one level that does nothing. Neither changes which agent takes the turn.
 
+Three recoveries stay inside the agent instead of moving the turn to another one (OpenBot 0.70):
+
+- Pi's signed-in model can refuse an over-long chat. The pure `context_overflow` decision in
+  `host/src/agent/backends/pi.rs` classifies that error; the session is reopened fresh with the
+  history carried over, and it is never shown as a processor or download failure.
+- A Mistral Vibe chat freezes its tools when it opens. `mistral_reopen` in
+  `host/src/agent/backends/mistral.rs` asks for one reopen when GitHub is connected while that chat
+  was open, so later messages keep working. Other backends and tools are untouched.
+- A user's Claude Code that starts but never answers a sign-in check gives way to Codync's bundled
+  ACP copy. `copy_fallback` in `host/src/agent/backends/claude.rs` switches after 20 seconds; a copy
+  that did answer, however late, keeps the check.
+
 ## What other projects taught
 
 Read from their source on 2026-10-21. They all chain models inside one agent:

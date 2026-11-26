@@ -18,6 +18,9 @@ pub const DOWNLOAD_FAILURE: &str =
 pub(crate) enum StartFailure {
     IllegalInstruction,
     DownloadOrNetwork,
+    /// Pi's signed-in model refused an over-long chat: the session must be reopened with history,
+    /// not reported as a processor or download failure.
+    ContextOverflow,
     Other,
 }
 
@@ -32,6 +35,8 @@ pub(crate) fn start_failure(stderr_tail: &str) -> StartFailure {
         .any(|line| line.contains("couldn't download") || line.contains("network") || line.contains("timed out"))
     {
         StartFailure::DownloadOrNetwork
+    } else if super::pi::restart_with_history("pi", stderr_tail) {
+        StartFailure::ContextOverflow
     } else {
         StartFailure::Other
     }
@@ -101,6 +106,13 @@ mod tests {
         assert_eq!(capability_failure("gemini", false, StartFailure::DownloadOrNetwork), Some(DOWNLOAD_FAILURE));
         assert_eq!(capability_failure("claude", true, StartFailure::DownloadOrNetwork), Some(DOWNLOAD_FAILURE));
         assert_eq!(capability_failure("gemini", false, StartFailure::IllegalInstruction), Some(UNSUPPORTED_CPU));
+    }
+
+    #[test]
+    fn a_context_overflow_asks_for_a_fresh_session_not_a_start_error() {
+        assert_eq!(start_failure("error: context length exceeded (128000 > 64000)"), StartFailure::ContextOverflow);
+        assert_eq!(capability_failure("pi", false, StartFailure::ContextOverflow), None);
+        assert_eq!(start_failure("agent said no\n"), StartFailure::Other);
     }
 
     #[test]

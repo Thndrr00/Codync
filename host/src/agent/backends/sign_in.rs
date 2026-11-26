@@ -150,6 +150,11 @@ pub async fn refresh_sign_in() {
     let results =
         futures::future::join_all(installed.map(|h| async move { (h.id, cli_signed_in(h, &[]).await) })).await;
     for (id, ok) in results {
+        // A Mistral chat that was signed out when it opened cannot see a GitHub connection made
+        // since; reopen it once rather than failing every message (OpenBot 0.70).
+        if id == "vibe" && ok == Some(true) && signed_in(id) == Some(false) {
+            super::mistral::note(super::mistral::ChatState { backend: id, connected: true, chat_open: true });
+        }
         set_signed_in(id, ok);
     }
 }
@@ -162,6 +167,7 @@ pub async fn cli_signed_in(h: &Harness, env: &[(String, String)]) -> Option<bool
     }
     let check = h.signed_in?;
     let bin = h.bins.iter().find_map(|b| which(b))?;
+    let started = std::time::Instant::now();
     let run = tokio::process::Command::new(bin)
         .args(check.args.split_whitespace())
         .envs(env.iter().map(|(k, v)| (k, v)))
@@ -169,10 +175,50 @@ pub async fn cli_signed_in(h: &Harness, env: &[(String, String)]) -> Option<bool
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true)
         .output();
-    match tokio::time::timeout(Duration::from_secs(15), run).await {
-        Ok(Ok(out)) => Some((check.ok)(out.status.success(), &String::from_utf8_lossy(&out.stdout))),
+    let budget = if h.id == "claude" { super::claude::FALLBACK_AFTER } else { Duration::from_secs(15) };
+    let (judged, answered) = match tokio::time::timeout(budget, run).await {
+        Ok(Ok(out)) => {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let answered = out.status.success() && !text.trim().is_empty();
+            (Some((check.ok)(out.status.success(), &text)), answered)
+        }
         Ok(Err(e)) => {
             tracing::info!(backend = h.id, error = %e, "sign-in check failed");
+            (None, false)
+        }
+        Err(_) => (None, false),
+    };
+    let elapsed = started.elapsed();
+    // A silent user copy is not a signed-out account: Claude's bundled copy answers within 20 s.
+    if h.id == "claude"
+        && super::claude::copy_fallback(elapsed, answered)
+        && let Some(bundled) = super::claude::bundled()
+    {
+        if let Some(ok) = check_with(&bundled, &check, env, super::claude::BUNDLED_BUDGET).await {
+            return Some(ok);
+        }
+    }
+    judged
+}
+
+/// One bounded sign-in check against `bin`, used for the bundled copy when the user's was silent.
+async fn check_with(
+    bin: &std::path::Path,
+    check: &SignInCheck,
+    env: &[(String, String)],
+    timeout: Duration,
+) -> Option<bool> {
+    let run = tokio::process::Command::new(bin)
+        .args(check.args.split_whitespace())
+        .envs(env.iter().map(|(k, v)| (k, v)))
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .output();
+    match tokio::time::timeout(timeout, run).await {
+        Ok(Ok(out)) => Some((check.ok)(out.status.success(), &String::from_utf8_lossy(&out.stdout))),
+        Ok(Err(e)) => {
+            tracing::info!(error = %e, "bundled sign-in check failed");
             None
         }
         Err(_) => None,

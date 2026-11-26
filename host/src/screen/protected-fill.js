@@ -10,20 +10,66 @@
     try { return hasAttribute.call(node, 'hidden') || hasAttribute.call(node, 'inert'); } catch (error) { return false; }
   }
   const inHiddenTree = field.closest && field.closest('[hidden],[inert]');
-  const ready = !!view && view.top === view && doc.location.protocol === 'https:' &&
-    doc.location.origin === expectedOrigin && field instanceof view.HTMLInputElement &&
-    doc.activeElement === field && field.isConnected && !field.disabled && !field.readOnly &&
-    !marked(field) && !inHiddenTree && field.getClientRects().length > 0 &&
-    (kind === 'password' ? field.type === 'password' : kind === 'code' &&
-      field.autocomplete === 'one-time-code' && ['text', 'password', 'tel', 'number'].includes(field.type));
+  // OpenBot 0.70: some sign-in pages put a masked decoy in front of the real password input. This
+  // pure decision reads only plain descriptors (never values) and mirrors `password_field` in
+  // protected_browser.rs. An explicit current-password field wins, then a password input, then a
+  // text input masked with -webkit-text-security. Hidden, disabled, read-only and invisible fields
+  // are never chosen; the first best field wins a tie.
+  // begin password_field
+  function password_field(fields) {
+    let best = -1;
+    let score = -1;
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      if (!f || !f.visible || f.disabled || f.readOnly || f.hidden || f.inert) continue;
+      if (f.type !== 'password' && !f.masked) continue;
+      const rank = (f.autocomplete === 'current-password' ? 4 : 0) +
+        (f.type === 'password' ? 2 : 0) + (f.masked ? 1 : 0);
+      if (rank > score) { score = rank; best = i; }
+    }
+    return best;
+  }
+  // end password_field
+
+  // A password may be filled only into an input of the focused field's own form; a decoy outside
+  // that form can never point the secret at an unrelated credential field.
+  const form = kind === 'password' && field.closest ? field.closest('form') : null;
+  const candidates = form && view ? Array.from(form.querySelectorAll('input')).slice(0, 40) : [field];
+  const describe = (node) => {
+    let style = null;
+    try { style = view && view.getComputedStyle(node); } catch (error) { style = null; }
+    const security = style && (style.webkitTextSecurity || style.textSecurity || '');
+    return {
+      type: node.type,
+      autocomplete: node.autocomplete || '',
+      masked: security === 'disc' || security === 'circle',
+      visible: node.getClientRects().length > 0,
+      disabled: !!node.disabled,
+      readOnly: !!node.readOnly,
+      hidden: marked(node),
+      inert: !!(node.closest && node.closest('[hidden],[inert]'))
+    };
+  };
+  const descriptors = candidates.map(describe);
+  const chosen = kind === 'password' ? password_field(descriptors) : 0;
+  const target = chosen >= 0 ? candidates[chosen] : null;
   // The host probes this exact remote node BEFORE sending a secret to its execution context.
-  if (arguments.length < 3) return { ready, origin: doc ? doc.location.origin : null };
+  const ready = !!view && view.top === view && doc.location.protocol === 'https:' &&
+    doc.location.origin === expectedOrigin && !!target && target instanceof view.HTMLInputElement &&
+    (kind === 'password'
+      ? !!form && target.closest('form') === form
+      : doc.activeElement === field && field === target && field.isConnected && !field.disabled &&
+        !field.readOnly && !marked(field) && !inHiddenTree && field.getClientRects().length > 0 &&
+        field.autocomplete === 'one-time-code' && ['text', 'password', 'tel', 'number'].includes(field.type)) &&
+    !marked(target) && !(target.closest && target.closest('[hidden],[inert]')) &&
+    !target.disabled && !target.readOnly && target.isConnected && target.getClientRects().length > 0;
+  if (arguments.length < 3) return { ready, origin: doc ? doc.location.origin : null, fields: descriptors, chosen };
   if (!ready || typeof value !== 'string') return 'refused';
-  if (field.type === 'number' && !/^\d+$/.test(value)) return 'refused';
+  if (target.type === 'number' && !/^\d+$/.test(value)) return 'refused';
   const setter = Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, 'value').set;
-  setter.call(field, value);
-  if (field.value !== value) return 'refused';
-  field.dispatchEvent(new view.Event('input', { bubbles: true }));
-  field.dispatchEvent(new view.Event('change', { bubbles: true }));
+  setter.call(target, value);
+  if (target.value !== value) return 'refused';
+  target.dispatchEvent(new view.Event('input', { bubbles: true }));
+  target.dispatchEvent(new view.Event('change', { bubbles: true }));
   return 'filled';
 })

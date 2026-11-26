@@ -58,6 +58,29 @@ pub(crate) fn policy_allows_dispatch(mode: Mode) -> bool {
     mode != Mode::Deny
 }
 
+/// Pure: this tool call was refused because the server's saved sign-in lacks a scope, not because
+/// the tool is disabled or denied by the owner (OpenBot 0.70). Only the server is marked; a policy
+/// denial or a generic error is never mistaken for missing scope.
+pub(crate) fn insufficient_scope(error: &str) -> bool {
+    let lower = error.to_ascii_lowercase();
+    let missing = lower.contains("insufficient_scope")
+        || lower.contains("insufficient scope")
+        || lower.contains("missing required scope")
+        || lower.contains("missing scope")
+        || lower.contains("required scope")
+        || lower.contains("scope is required")
+        || (lower.contains("scope") && (lower.contains("not authorized") || lower.contains("not permitted")));
+    missing && !lower.contains("policy")
+}
+
+/// Mark one server as needing sign-in without touching any tool's allow/ask/deny policy, so the
+/// server's other tools stay usable. The fixed label comes from the shared MCP wording.
+fn mark_sign_in_needed(hub: &Hub, connector: &str) -> Result<String> {
+    let notice = super::notices::mcp_notice(super::notices::McpNotice::SignInNeeded).to_owned();
+    hub.store.kv_set(&format!("mcp-sign-in-needed:{connector}"), &notice)?;
+    Ok(notice)
+}
+
 pub(super) fn field<'a>(body: &'a Value, name: &str) -> Result<&'a str> {
     body[name].as_str().with_context(|| format!("{name} is required"))
 }
@@ -229,7 +252,17 @@ pub async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, body: Value) ->
             Ok(json!({}))
         }
         "completeMcpCall" => {
-            hub.store.complete_mcp_call(field(&body, "id")?, &body["reply"])?;
+            let id = field(&body, "id")?;
+            // A tool result that failed for want of a sign-in scope marks only its server; the
+            // server's other tools and every tool policy stay as they were.
+            let denied = body["reply"]["result"]["isError"] == true || body["reply"]["error"].is_object();
+            if denied
+                && insufficient_scope(&body["reply"].to_string())
+                && let Some(call) = hub.store.mcp_call(id)?
+            {
+                mark_sign_in_needed(hub, &call.connector)?;
+            }
+            hub.store.complete_mcp_call(id, &body["reply"])?;
             Ok(json!({}))
         }
         "getMcpToolResult" => {
@@ -282,6 +315,12 @@ pub async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, body: Value) ->
             let bot = field(&body, "botId")?;
             let connector = field(&body, "connectorId")?;
             enabled(hub, bot, connector)?;
+            // A tool the server refused for want of a scope asks for sign-in on that server only;
+            // no tool policy changes, so its other tools stay usable.
+            if let Some(error) = body["denial"].as_str().filter(|e| insufficient_scope(e)) {
+                let notice = mark_sign_in_needed(hub, connector)?;
+                return Ok(json!({"signInNeeded":true,"notice":notice}));
+            }
             ensure_fingerprint(hub, connector, &body)?;
             notice_failed_server(hub, bot, connector);
             let id = hub.store.create_mcp_call(bot, connector, &body["message"])?;
@@ -469,6 +508,50 @@ mod tests {
         let other_kind = FailureCause { server: "filesystem".into(), kind: "auth".into() };
         assert!(failure_notice(&other_server, &seen).is_some(), "every dropped server is named");
         assert!(failure_notice(&other_kind, &seen).is_some(), "a changed cause is named again");
+    }
+
+    #[test]
+    fn a_missing_scope_is_not_a_policy_or_generic_denial() {
+        for error in [
+            "insufficient_scope: token is missing required scopes",
+            "Insufficient Scope for repositories",
+            "Error: missing scope 'repo'",
+            "the required scope was not granted",
+            "scope is required for this tool",
+            "scope not authorized",
+        ] {
+            assert!(insufficient_scope(error), "{error}");
+        }
+        for error in [
+            "",
+            "tool request was denied by policy",
+            "the tool is disabled by policy",
+            "permission denied",
+            "network timeout",
+            "HTTP 403 Forbidden",
+        ] {
+            assert!(!insufficient_scope(error), "{error}");
+        }
+    }
+
+    #[test]
+    fn marking_a_server_for_sign_in_leaves_every_tool_usable() {
+        use crate::remote::identity::Identity;
+        use crate::store::Store;
+
+        let dir = std::env::temp_dir().join(format!("codync-mcp-scope-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir.join("test.db")).unwrap();
+        let create = store.mcp_policy("linear", "create_issue").unwrap();
+        let read = store.mcp_policy("linear", "read_issue").unwrap();
+        let hub = Hub::new(store, "test".into(), Identity::load_or_create(&dir).unwrap(), "token".into(), 19225);
+        assert_eq!(mark_sign_in_needed(&hub, "linear").unwrap(), "Sign-in needed");
+        assert_eq!(hub.store.kv_get("mcp-sign-in-needed:linear").as_deref(), Some("Sign-in needed"));
+        assert_eq!(hub.store.mcp_policy("linear", "create_issue").unwrap(), create);
+        assert_eq!(hub.store.mcp_policy("linear", "read_issue").unwrap(), read);
+        assert!(policy_allows_dispatch(hub.store.mcp_policy("linear", "create_issue").unwrap()));
+        drop(hub);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -149,6 +149,8 @@ the user to close tabs it cannot see, and then to reload the page with `navigate
 before retrying. Codync's browser tools have no saved-logins or card-fill surface; the note is the
 guidance that a secure fill would need, and a secret would go only to the page, never to the agent.
 
+Protected entry now signs in on pages that hide the real password field behind a masked decoy (OpenBot 0.70). The fill script in `host/src/screen/protected-fill.js` gathers the inputs of the focused field's own form and its pure `password_field` picks the real one: an explicit `current-password` input, else a password input, else a text input masked with `-webkit-text-security`. Hidden, disabled and read-only inputs never win, and a decoy outside that form can never receive a saved password. The host mirrors the decision in `protected_browser.rs` and re-checks it from the probe's field descriptors before delivering the secret, alongside the approved-origin and focus gates; no field value ever leaves the page in a probe.
+
 ## Cookie banners, bot checks and site memories
 
 The bot's tab refuses cookie banners on its own (OpenBot `browser.md`). An isolated-world script
