@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let mdtables = &data["mdtables"];
+    if mdtables.is_object() {
+        line(buf, &mut y, tr("Markdown tables").into_owned(), t.bold.patch(t.panel));
+        let headline = mdtables["headline"].as_str().unwrap_or("");
+        let layout = mdtables["layout"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {layout}", tr("Layout")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let contextselect = &data["contextselect"];
     if contextselect.is_object() {
         line(buf, &mut y, tr("Context budget").into_owned(), t.bold.patch(t.panel));

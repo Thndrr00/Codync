@@ -2031,6 +2031,40 @@ fn contextselect_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Markdown table detection and alignment from hermes-agent's table module.
+fn md_tables_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_md_tables as m;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let lines: Vec<&str> = entries
+        .iter()
+        .flat_map(|e| crate::store::message_text(&e.data).lines().map(str::to_owned).collect::<Vec<_>>())
+        .collect::<Vec<_>>()
+        .iter()
+        .map(String::as_str)
+        .collect();
+    let rows: Vec<Vec<String>> = lines
+        .iter()
+        .filter(|line| m::looks_like_table_row(line) && !m::is_table_divider(line))
+        .map(|line| m::split_table_row(line))
+        .collect();
+    let cols = rows.first().map_or(0, Vec::len);
+    let wide = rows.iter().map(|row| row.iter().map(|cell| m::display_width(cell)).sum::<usize>()).max().unwrap_or(0);
+    let narrow = m::too_wide(&rows, 40);
+    json!({
+        "headline": format!("{} rows · {} cols · {} cells", m::count_label(rows.len()), cols, m::count_label(wide)),
+        "tone": if rows.is_empty() { "secondary" } else { "good" },
+        "rows": rows.len(),
+        "cols": cols,
+        "wide": wide,
+        "narrow": narrow,
+        "layout": if narrow { "vertical" } else { "horizontal" },
+        "divider": m::divider_for(cols, "left"),
+        "aligned": m::render_block(&rows).len(),
+        "summary": m::summary(rows.len(), cols, wide, narrow),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2148,6 +2182,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "palette": palette_view(hub, bot),
         "picker": picker_view(),
         "contextselect": contextselect_view(hub, bot),
+        "mdtables": md_tables_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

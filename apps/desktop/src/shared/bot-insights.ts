@@ -1,6 +1,19 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightMdTables {
+  headline: string
+  tone: string
+  rows: number
+  cols: number
+  wide: number
+  narrow: boolean
+  layout: string
+  divider: string
+  aligned: number
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightContextSelect {
   headline: string
   tone: string
@@ -924,6 +937,7 @@ export interface BotInsights {
   palette: InsightPalette
   picker: InsightPicker
   contextselect: InsightContextSelect
+  mdtables: InsightMdTables
   routines: InsightRoutine[]
   usage: {
     used: number

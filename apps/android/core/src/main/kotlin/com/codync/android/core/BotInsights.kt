@@ -66,9 +66,19 @@ data class BotInsights(
     val palette: InsightPalette = InsightPalette(),
     val picker: InsightPicker = InsightPicker(),
     val contextselect: InsightContextSelect = InsightContextSelect(),
+    val mdtables: InsightMdTables = InsightMdTables(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed markdown table summary. */
+@Serializable
+data class InsightMdTables(
+    val headline: String = "", val tone: String = "", val rows: Int = 0,
+    val cols: Int = 0, val wide: Int = 0, val narrow: Boolean = false,
+    val layout: String = "", val divider: String = "", val aligned: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed context budget summary. */

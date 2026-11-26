@@ -63,6 +63,7 @@ public struct BotInsights: Decodable, Sendable {
     public let palette: InsightPalette
     public let picker: InsightPicker
     public let contextselect: InsightContextSelect
+    public let mdtables: InsightMdTables
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -92,6 +93,20 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed markdown table summary.
+public struct InsightMdTables: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let rows: Int
+    public let cols: Int
+    public let wide: Int
+    public let narrow: Bool
+    public let layout: String
+    public let divider: String
+    public let aligned: Int
     public let summary: [InsightSummaryRow]
 }
 

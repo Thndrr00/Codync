@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Tablas markdown (21 adiciones + UI en 4 clientes)
+
+`bdots_md_tables.rs` añade 20 helpers puros y una constante portados de `markdown_tables.py` de
+**hermes-agent**: detección de filas y divisores, anchos de display CJK/emoji, padding, renderizado
+uniforme, wrapping, realineación y diseño vertical para tablas angostas. Reutiliza `bdots_desk`.
+El endpoint `botInsights` añade el campo `mdtables`; la sección «Markdown tables» se muestra en los
+cuatro clientes.
+
 ## Presupuesto de contexto (20 adiciones + UI en 4 clientes)
 
 `bdots_context_select.rs` añade 17 helpers puros y 3 constantes portados de `context-selection.ts`

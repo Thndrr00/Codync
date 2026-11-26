@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val mdtables = insights.mdtables
+            CardSection("Markdown tables") {
+                row { Text(mdtables.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Rows", mdtables.rows.toString()) }
+                row { ValueRow("Layout", mdtables.layout) }
+                row { ValueRow("Aligned", mdtables.aligned.toString()) }
+            }
             val contextselect = insights.contextselect
             CardSection("Context budget") {
                 row { Text(contextselect.headline, style = Type.subheadline.semibold, color = Palette.text) }

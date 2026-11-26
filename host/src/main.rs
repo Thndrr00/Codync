@@ -47,6 +47,7 @@ mod bdots_liveness;
 mod bdots_localfmt;
 mod bdots_mailtext;
 mod bdots_markdown;
+mod bdots_md_tables;
 mod bdots_memory;
 mod bdots_memoryctx;
 mod bdots_more;
