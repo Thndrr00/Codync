@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let history = &data["history"];
+    if history.is_object() {
+        line(buf, &mut y, tr("History").into_owned(), t.bold.patch(t.panel));
+        let headline = history["headline"].as_str().unwrap_or("");
+        let withheld = history["withheld"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {withheld}", tr("Withheld")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let review = &data["review"];
     if review.is_object() {
         line(buf, &mut y, tr("Review queue").into_owned(), t.bold.patch(t.panel));

@@ -56,9 +56,19 @@ data class BotInsights(
     val stream: InsightStream = InsightStream(),
     val blueprint: InsightBlueprint = InsightBlueprint(),
     val review: InsightReview = InsightReview(),
+    val history: InsightHistory = InsightHistory(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed history commentary summary. */
+@Serializable
+data class InsightHistory(
+    val headline: String = "", val tone: String = "", val messages: Int = 0,
+    val commentary: Int = 0, val finals: Int = 0, val withheld: Int = 0,
+    val preview: String = "", val visible: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed idle review queue summary. */

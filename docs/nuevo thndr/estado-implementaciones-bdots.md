@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Historial (22 adiciones + UI en 4 clientes)
+
+`bdots_history.rs` añade 21 helpers puros y una constante portados de `history_commentary.py` y
+`message_content.py` de **hermes-agent**: proyección display-only de commentary, strip de `<think>`,
+fases de items de Codex, flag `commentary_withheld`, aplanado de contenido y conteos. Reutiliza
+`bdots_stream`, `bdots_mailtext`, `bdots_more` y `bdots_desk`. El endpoint `botInsights` añade el
+campo `history`; la sección «History» se muestra en los cuatro clientes.
+
 ## Revisión en idle (24 adiciones + UI en 4 clientes)
 
 `bdots_review.rs` añade 21 helpers puros y 3 constantes portados de `review_idle_queue.py` de

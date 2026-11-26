@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val history = insights.history
+            CardSection("History") {
+                row { Text(history.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { Text(history.preview, style = Type.caption, color = Palette.secondary) }
+                row { ValueRow("Commentary", history.commentary.toString()) }
+                row { ValueRow("Withheld", history.withheld.toString()) }
+            }
             val review = insights.review
             CardSection("Review queue") {
                 row { Text(review.headline, style = Type.subheadline.semibold, color = Palette.text) }

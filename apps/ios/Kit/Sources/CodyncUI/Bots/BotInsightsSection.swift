@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let history = insights.history
+                    Text(history.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(history.preview).font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Withheld")): \(history.withheld)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let review = insights.review
                     Text(review.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Mode")): \(review.mode)").font(.footnote).foregroundStyle(Palette.secondary)

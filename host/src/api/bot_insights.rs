@@ -1719,6 +1719,33 @@ fn review_view() -> Value {
     })
 }
 
+/// Display-only history commentary projection from hermes-agent.
+fn history_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_history as h;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let messages: Vec<Value> = entries.iter().map(|e| e.data.clone()).collect();
+    let projected = h::project_history(&messages, true);
+    let commentary: usize = messages.iter().map(h::commentary_count).sum();
+    let finals: usize = messages.iter().map(h::final_count).sum();
+    let withheld = projected.iter().filter(|row| row["withheld"] == true).count();
+    let preview = messages
+        .first()
+        .map(|row| h::visible_commentary(&h::flatten_message_text(&row["content"])))
+        .unwrap_or_default();
+    json!({
+        "headline": format!("{} · {} commentary · {} final", h::count_label(messages.len()), commentary, finals),
+        "tone": if withheld > 0 { "attention" } else { "good" },
+        "messages": messages.len(),
+        "commentary": commentary,
+        "finals": finals,
+        "withheld": withheld,
+        "preview": crate::bdots_more::shorten(&preview, 80),
+        "visible": h::visible_length(&preview),
+        "summary": h::summary(messages.len(), commentary, finals, withheld).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1826,6 +1853,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "stream": stream_view(hub, bot),
         "blueprint": blueprint_view(),
         "review": review_view(),
+        "history": history_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,
