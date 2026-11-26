@@ -1,7 +1,7 @@
 //! Running a flow: after a routine's run ends, level by level from the routine's own bot, each
 //! bot with the replies of the bots linked to it.
 
-use super::{answer_paths, answers, graph, nodes};
+use super::{answer_paths, answers, graph, nodes, step_error::step_error};
 use crate::chat::team::ModelOverride;
 use crate::chat::team::flow::{FlowCancelled, Handoff, handoff, recipient};
 use crate::hub::Hub;
@@ -433,6 +433,14 @@ fn settle(hub: &Hub, id: &str, status: StepStatus, output: Option<&str>, error: 
     settle_with(hub, id, status, output, error, &[]);
 }
 
+/// Keeps the stable failure kind beside a step's settings, so the run history can filter by it.
+/// The text never goes to analytics; this is only the kind the pure decision named.
+fn remember_failure_kind(hub: &Hub, id: &str, kind: &'static str) -> Result<()> {
+    let mut settings = hub.store.flow_step_settings(id)?.unwrap_or_else(|| Value::Object(serde_json::Map::new()));
+    settings["failureKind"] = Value::from(kind);
+    hub.store.flow_set_step_settings(id, Some(settings))
+}
+
 fn settle_with(
     hub: &Hub,
     id: &str,
@@ -441,7 +449,18 @@ fn settle_with(
     error: Option<&str>,
     files: &[crate::chat::files::SharedFile],
 ) {
-    if let Err(e) = hub.emit_flow_change(|| Ok(((), hub.store.flow_settle_step(id, status, output, error, files)?))) {
+    // OpenBot 0.79.0: keep the provider's whole bounded error, not just its first three lines, and
+    // name the failure kind beside it. A cancellation keeps its words too.
+    let seen = error.filter(|_| status == StepStatus::Failed || status == StepStatus::Cancelled).map(step_error);
+    if let Err(e) = hub.emit_flow_change(|| {
+        if let Some(seen) = &seen {
+            if let Err(e) = remember_failure_kind(hub, id, seen.kind) {
+                tracing::warn!(step = id, error = format!("{e:#}"), "couldn't save a routine flow step's failure kind");
+            }
+        }
+        let error = seen.as_ref().map_or(error, |seen| Some(seen.as_str()));
+        Ok(((), hub.store.flow_settle_step(id, status, output, error, files)?))
+    }) {
         tracing::error!(step = id, error = format!("{e:#}"), "couldn't save a routine flow step");
     }
 }
@@ -468,19 +487,42 @@ fn new_step<'a>(start: &'a Start, bot: &'a str, input: &'a str, status: StepStat
 
 fn record_root(hub: &Hub, start: &Start) -> Result<()> {
     let mut step = new_step(start, &start.owner, &start.instruction, StepStatus::Succeeded);
+    let mut kind = None;
     match &start.root {
         Root::Replied(text) => step.output = Some(text),
-        Root::Failed(error) => (step.status, step.error) = (StepStatus::Failed, Some(error.as_str())),
-        Root::Cancelled(error) => (step.status, step.error) = (StepStatus::Cancelled, Some(error.as_str())),
+        Root::Failed(error) => {
+            let seen = step_error(error);
+            kind = Some(seen.kind);
+            (step.status, step.error) = (StepStatus::Failed, Some(seen.text.as_str()));
+        }
+        Root::Cancelled(error) => {
+            let seen = step_error(error);
+            kind = Some(seen.kind);
+            (step.status, step.error) = (StepStatus::Cancelled, Some(seen.text.as_str()));
+        }
     }
-    record(hub, &step).map(drop)
+    let recorded = record(hub, &step)?;
+    if let (Some(step), Some(kind)) = (recorded, kind)
+        && let Err(e) = remember_failure_kind(hub, &step.id, kind)
+    {
+        tracing::warn!(step = step.id, error = format!("{e:#}"), "couldn't save a routine flow step's failure kind");
+    }
+    Ok(())
 }
 
 /// Ends a step that never ran, with `reason`.
 pub(super) fn record_ended(hub: &Hub, start: &Start, bot: &str, status: StepStatus, reason: &str) -> Result<()> {
     let mut step = new_step(start, bot, "", status);
-    step.error = Some(reason);
-    record(hub, &step).map(drop)
+    let seen = step_error(reason);
+    step.error = Some(seen.text.as_str());
+    let recorded = record(hub, &step)?;
+    if let Some(step) = recorded
+        && status == StepStatus::Failed
+        && let Err(e) = remember_failure_kind(hub, &step.id, seen.kind)
+    {
+        tracing::warn!(step = step.id, error = format!("{e:#}"), "couldn't save a routine flow step's failure kind");
+    }
+    Ok(())
 }
 
 fn skip_all<'a>(hub: &Hub, start: &Start, bots: impl IntoIterator<Item = &'a str>, reason: &str) -> Result<()> {

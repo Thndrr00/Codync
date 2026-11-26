@@ -21,6 +21,18 @@ fn said(text: &str) -> Entry {
 }
 
 #[test]
+fn compact_context_is_offered_only_when_a_member_can_compact() {
+    let member = |backend: &'static str, custom_ready| CompactMember { backend, custom_ready };
+    assert!(!compact_available([]), "an empty channel has nobody to compact");
+    assert!(!compact_available([member("gemini", false), member("grok", true)]));
+    assert!(compact_available([member("gemini", false), member("claude", false)]));
+    assert!(compact_available([member("codex", false)]));
+    assert!(compact_available([member("pi", false)]));
+    assert!(!compact_available([member("custom", false)]), "a custom command whose window is unknown can't compact");
+    assert!(compact_available([member("custom", true)]));
+}
+
+#[test]
 fn only_the_first_handoff_of_a_request_is_available_to_reply() {
     let by = |id: &str, seq: i64, final_answer: bool| Entry {
         id: id.into(),

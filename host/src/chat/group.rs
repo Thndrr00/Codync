@@ -441,6 +441,34 @@ pub fn channel_reply_allowed(member: &BotConfig) -> bool {
     member.notify != Some(false)
 }
 
+/// One channel member as the compact decision sees it: the agent's backend, and whether a custom
+/// command has reported a context window (the only way Codync can compact a custom command's chat).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompactMember<'a> {
+    pub backend: &'a str,
+    pub custom_ready: bool,
+}
+
+/// Whether a channel's **Compact context** action has a member who can carry it out. Pure over the
+/// members: Claude Code, Codex and Pi compact their own chats; a custom command only once its agent
+/// has reported a context window. This is the same rule as
+/// `agent::bot::compaction::offers_threshold`, but it needs no turn and no store, so the channel
+/// card can hide the action when nobody in it can compact.
+pub fn compact_available<'a>(members: impl IntoIterator<Item = CompactMember<'a>>) -> bool {
+    members.into_iter().any(|member| {
+        matches!(member.backend, "claude" | "codex" | "pi") || (member.backend == "custom" && member.custom_ready)
+    })
+}
+
+/// The same decision over a group's saved members, for the channel card in `hub::sync`.
+pub fn channel_compact_available(store: &Store, group: &BotConfig) -> bool {
+    let rows: Vec<_> = group.members.iter().filter_map(|id| store.bot(id).ok().flatten()).collect();
+    compact_available(rows.iter().map(|row| CompactMember {
+        backend: &row.config.backend,
+        custom_ready: crate::agent::bot::context_window(store, &row.config.id).is_some(),
+    }))
+}
+
 /// The "done" push for `name`'s reply in the group.
 fn alert(hub: &Hub, group_id: &str, from: &str, name: &str, text: &str) -> Result<()> {
     // The room's own mute is checked in `push::notify`; this is the member speaking in it.

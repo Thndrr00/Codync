@@ -1,6 +1,7 @@
 //! The host owns editor hydration, cron generation, validation and preview.
 use super::Trigger;
 use anyhow::{Context, Result, bail};
+use chrono::{DateTime, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,6 +27,10 @@ pub struct ScheduleDraft {
     pub hour: u8,
     pub minute: u8,
     pub at: i64,
+    /// A one-off time an agent named as local text (e.g. `2026-11-27 09:30`) instead of an epoch.
+    /// Resolved in `zone` by [`scheduled_at`] when the draft is compiled, so the exact time is kept.
+    #[serde(default)]
+    pub at_text: String,
     pub expression: String,
     pub zone: String,
     /// An event trigger: the service, the event it sends and its filters.
@@ -53,6 +58,7 @@ impl Default for ScheduleDraft {
             hour: 9,
             minute: 0,
             at: 0,
+            at_text: String::new(),
             expression: "0 9 * * *".into(),
             zone: "UTC".into(),
             event_source: "github".into(),
@@ -61,6 +67,22 @@ impl Default for ScheduleDraft {
             original: Vec::new(),
         }
     }
+}
+
+/// The exact instant a one-off schedule names. An agent can name a local wall-clock time in the
+/// routine's IANA zone (`2026-11-27 09:30`, with optional seconds or a `T` separator) instead of an
+/// epoch; an RFC 3339 text carries its own offset and is honoured as written. Pure so the editor
+/// preview, the save path and the test agree: an unreadable time, an unknown zone, or a local time
+/// skipped or repeated by a daylight-saving change has no exact instant and is refused.
+pub fn scheduled_at(text: &str, zone: &str) -> Option<i64> {
+    let text = text.trim();
+    if let Ok(at) = DateTime::parse_from_rfc3339(text) {
+        return Some(at.timestamp_millis());
+    }
+    let zone: chrono_tz::Tz = zone.parse().ok()?;
+    let formats = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"];
+    let naive = formats.iter().find_map(|format| NaiveDateTime::parse_from_str(text, format).ok())?;
+    naive.and_local_timezone(zone).single().map(|at| at.timestamp_millis())
 }
 
 impl ScheduleDraft {
@@ -178,7 +200,12 @@ impl ScheduleDraft {
                 }
                 vec![Trigger::Interval { seconds: amount.checked_mul(self.unit).context("interval overflow")? }]
             }
-            "once" => vec![Trigger::Once { at: self.at }],
+            "once" => {
+                // An agent's exact local time wins over a numeric epoch: reading it in the routine's
+                // own zone is what makes "at 9:30 tomorrow" land on the moment it named.
+                let at = scheduled_at(&self.at_text, &self.zone).unwrap_or(self.at);
+                vec![Trigger::Once { at }]
+            }
             "webhook" => vec![Trigger::Webhook],
             "event" => {
                 super::events::validate(&self.event_source, &self.event_name, &self.event_filters)?;
@@ -493,6 +520,28 @@ mod tests {
         // The window's end at the run's own minute still fits that run (09:00-10:00 runs at 09:00).
         let result = preview(&draft("hourly", json!({"windowStart":540,"windowEnd":600})), NOW).unwrap();
         assert_eq!(result["triggers"][0]["expression"], "0 9-10 * * *");
+    }
+
+    #[test]
+    fn an_exact_agent_time_is_read_in_the_routines_own_zone() {
+        let taipei = DateTime::parse_from_rfc3339("2026-11-27T01:30:00Z").unwrap().timestamp_millis();
+        assert_eq!(scheduled_at("2026-11-27 09:30", "Asia/Taipei"), Some(taipei), "the wall clock is local");
+        assert_eq!(scheduled_at("2026-11-27T09:30:00+08:00", "UTC"), Some(taipei), "an explicit offset wins");
+        assert_eq!(scheduled_at("2026-11-27T01:30", "UTC"), Some(taipei), "seconds are optional");
+        assert!(scheduled_at("2026-03-08 02:30", "America/New_York").is_none(), "a skipped DST time is not exact");
+        assert_eq!(scheduled_at("not a time", "UTC"), None);
+        assert_eq!(scheduled_at("2026-11-27 09:30", "not-a-zone"), None);
+        assert_eq!(scheduled_at("", "UTC"), None, "an empty text does not override the numeric epoch");
+    }
+
+    #[test]
+    fn the_editor_and_save_path_keep_an_exact_one_off_time() {
+        let body = json!({"draft":{"kind":"once","atText":"2026-11-27 09:30","zone":"Asia/Taipei"}});
+        let result = preview(&body, NOW).unwrap();
+        let expected = scheduled_at("2026-11-27 09:30", "Asia/Taipei").unwrap();
+        assert_eq!(result["triggers"][0]["type"], "once");
+        assert_eq!(result["triggers"][0]["at"], json!(expected));
+        assert_eq!(result["nextRunAt"], json!(expected));
     }
 
     #[test]

@@ -30,6 +30,37 @@ pub(super) fn wake_target(separate_thread: bool, open_wait: bool) -> WakeTarget 
     if separate_thread && !open_wait { WakeTarget::Thread } else { WakeTarget::Main }
 }
 
+/// A routine run has nobody to fill a browser card. When a saved login cannot fill a password, the
+/// run used to sit on the card until the wait expired (ten minutes) and then retry: neither helps a
+/// person who must save the login again. Pure over the failure text, so the retry decision and the
+/// failure notice report the same reason. Other failures are left to the usual ladder.
+pub(super) fn login_fill_failure(reason: &str) -> Option<String> {
+    let lower = reason.to_ascii_lowercase();
+    let about_card = ["password", "sign-in", "sign in", "login"].iter().any(|word| lower.contains(word))
+        && ["card", "field", "form"].iter().any(|word| lower.contains(word));
+    let could_not_fill = [
+        "saved login",
+        "saved password",
+        "could not fill",
+        "couldn't fill",
+        "can't fill",
+        "unable to fill",
+        "no saved",
+        "expired",
+        "needs the password",
+    ]
+    .iter()
+    .any(|word| lower.contains(word));
+    if about_card && could_not_fill {
+        let reason = reason.trim();
+        Some(format!(
+            "The saved login could not fill the password card ({reason}). Save the login again, or fill the card yourself when the routine runs."
+        ))
+    } else {
+        None
+    }
+}
+
 impl Routines {
     /// An enabled clock schedule keeps the local daemon's machine awake between
     /// runs. Explicit system sleep or a closed laptop lid still suspends execution.
@@ -198,12 +229,15 @@ impl Routines {
             })
         };
         let acted = failed && retry::acted(hub, id);
+        // A saved login that cannot fill a password card needs a person to save it again; waiting
+        // ten minutes and retrying the same dead login only hides the reason.
+        let login_failure = failed && detail.as_deref().is_some_and(|detail| login_fill_failure(detail).is_some());
         // A quiet run has no notice for `acted()` to read; its stored step status decides whether an
         // automatic retry is safe (a step that began may have done work). A timeout is never retried.
-        let safe = failed && retry::retry_ladder_safe(quiet, started, acted, timed_out);
+        let safe = failed && !login_failure && retry::retry_ladder_safe(quiet, started, acted, timed_out);
         // A run that failed before its first step did nothing: a provider that wasn't up, or a
         // timeout in session setup, is transient and gets one more try a few minutes later.
-        let start_retry = failed && retry::retry_start(attempt, started, acted);
+        let start_retry = failed && !login_failure && retry::retry_start(attempt, started, acted);
         let (bot, withdrawn, flow, ended) = self.change(&hub.store, |s| {
             let i = s.runs.iter().position(|r| r.id == id).context("routine run not found")?;
             let mut withdrawn = Vec::new();
@@ -347,6 +381,8 @@ impl Routines {
                     .unwrap_or_else(|| {
                         format!("the agent gave no reason ({})", run.failure_code.as_deref().unwrap_or("error"))
                     });
+                // Report the concrete why instead of a bare "could not finish" followed by a wait.
+                let detail = login_fill_failure(&detail).unwrap_or(detail);
                 let failure = format!("Routine could not finish: {detail}");
                 let (text, style, kind) = match run.retry_at {
                     Some(at) => {
@@ -546,6 +582,17 @@ fn tick(hub: &Arc<Hub>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_saved_login_that_cannot_fill_a_password_is_reported_not_retried() {
+        let reason = "The saved login could not fill the password field: it expired.";
+        let report = login_fill_failure(reason).expect("a password card the saved login could not fill");
+        assert!(report.contains("expired"), "the reason is in the notice: {report}");
+        assert!(report.contains("Save the login again"), "and so is what to do: {report}");
+        assert_eq!(login_fill_failure("the model was busy"), None);
+        assert_eq!(login_fill_failure("a timeout in session setup"), None);
+        assert_eq!(login_fill_failure("could not fill the address form"), None, "not a password card");
+    }
 
     #[test]
     fn a_wake_of_an_open_wait_stays_in_the_main_chat() {

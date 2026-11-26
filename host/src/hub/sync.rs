@@ -15,9 +15,26 @@ impl Hub {
         v["harnessMemory"] =
             (!cfg.is_group() && crate::agent::own_memory::switchable(cfg)).then_some(cfg.harness_memory).into();
         // Null where Codync doesn't summarize the chat. The sizes it may take: none until the agent tells its window.
-        let compacts = crate::agent::bot::offers_threshold(&self.store, cfg);
+        // A channel has no agent of its own: Compact context is hidden unless one of its members can do it.
+        let compacts = if cfg.is_group() {
+            crate::chat::group::channel_compact_available(&self.store, cfg)
+        } else {
+            crate::agent::bot::offers_threshold(&self.store, cfg)
+        };
         v["compaction"] = if compacts { v["compaction"].take() } else { Value::Null };
-        let window = compacts.then(|| crate::agent::bot::context_window(&self.store, &cfg.id)).flatten();
+        let window = compacts
+            .then(|| {
+                if cfg.is_group() {
+                    cfg.members
+                        .iter()
+                        .filter_map(|id| self.store.bot(id).ok().flatten())
+                        .filter(|row| crate::agent::bot::offers_threshold(&self.store, &row.config))
+                        .find_map(|row| crate::agent::bot::context_window(&self.store, &row.config.id))
+                } else {
+                    crate::agent::bot::context_window(&self.store, &cfg.id)
+                }
+            })
+            .flatten();
         v["compactionTokens"] = json!(window.and_then(codync_mem::compaction::sizes));
         if !cfg.is_group() {
             v["harnessMemoryShared"] = crate::agent::own_memory::shared(cfg).into();
@@ -95,6 +112,39 @@ mod tests {
 
         let gemini = hub.bot_value_for_test("g");
         assert!(gemini["compaction"].is_null() && gemini["compactionTokens"].is_null(), "Codync can't compact it");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_channel_hides_compact_context_unless_a_member_can_compact() {
+        let dir = std::env::temp_dir().join(format!("codync-channel-compaction-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir.join("t.db")).unwrap();
+        for (id, backend) in [("a", "claude"), ("b", "gemini")] {
+            let bot = json!({"id": id, "name": id, "backend": backend, "cwd": "/tmp"});
+            store.save_bot(&serde_json::from_value(bot).unwrap()).unwrap();
+        }
+        let hub = Hub::new(store, "test".into(), Identity::load_or_create(&dir).unwrap(), "token".into(), 0);
+        let save = |members: &[&str]| {
+            let group = json!({"id": "g", "name": "g", "kind": "group", "members": members, "compaction": 300_000});
+            hub.store.save_bot(&serde_json::from_value(group).unwrap()).unwrap();
+        };
+        save(&["b"]);
+        let card = hub.bot_value_for_test("g");
+        assert!(card["compaction"].is_null(), "no member can compact this channel");
+
+        save(&["b", "a"]);
+        let card = hub.bot_value_for_test("g");
+        assert!(card["compaction"].is_number(), "the Claude member makes Compact context available");
+        assert!(card["compactionTokens"].is_null(), "no member reported a window yet");
+        hub.store.kv_set("context.window.a", "1000000").unwrap();
+        let card = hub.bot_value_for_test("g");
+        assert!(card["compactionTokens"].is_object(), "the window comes from the member who can compact");
+        hub.store.kv_set("context.window.b", "1000000").unwrap();
+        assert_eq!(
+            hub.bot_value_for_test("g")["compactionTokens"],
+            json!({"min": 50_000, "max": 960_000, "step": 10_000, "presets": (1..=9).map(|n| n * 100_000).collect::<Vec<u64>>()})
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 }

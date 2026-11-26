@@ -31,6 +31,7 @@ mod pause;
 mod portable;
 mod recover;
 mod registry;
+mod step_error;
 mod tools;
 mod trigger_fields;
 mod workflow_api;

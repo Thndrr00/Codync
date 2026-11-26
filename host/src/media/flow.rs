@@ -150,12 +150,16 @@ pub async fn generate(
         let deadline = tokio::time::sleep(timeout);
         tokio::pin!(deadline);
         let mut reply = String::new();
+        let mut stopped = false;
         loop {
             tokio::select! {
                 r = &mut asked => { r.and_then(acp::codebuddy::prompt_result)?; break }
                 inc = conn.rx.recv() => {
                     if !collect(&acp, inc, &mut reply).await {
-                        bail!("the {} agent exited", request.model.subscription);
+                        // The agent was stopped while the tool ran. Its job may still have left a
+                        // file: read the folder below instead of throwing the result away here.
+                        stopped = true;
+                        break;
                     }
                 }
                 () = &mut deadline => bail!("making the {} took too long", request.kind.as_str()),
@@ -164,21 +168,23 @@ pub async fn generate(
         while let Ok(inc) = conn.rx.try_recv() {
             collect(&acp, Some(inc), &mut reply).await;
         }
-        Ok(reply)
+        Ok((reply, stopped))
     }
     .await;
     acp.kill().await;
-    let reply = result?;
+    let (reply, stopped) = result?;
     let after = root.as_deref().map(files_under).unwrap_or_default();
     let found = collected(&before, &after, request.kind, &reply);
-    if found.is_empty() {
+    if !super::publish_after_stop(Some(&found), stopped) {
         let last = reply.lines().map(str::trim).rfind(|line| !line.is_empty()).unwrap_or_default();
-        bail!(
-            "the {} made no file{}",
-            request.model.name,
-            if last.is_empty() { String::new() } else { format!(": {last}") }
-        );
+        let reason = if stopped {
+            format!("the {} agent was stopped before it made a file", request.model.name)
+        } else {
+            format!("the {} made no file", request.model.name)
+        };
+        bail!("{reason}{}", if last.is_empty() { String::new() } else { format!(": {last}") });
     }
+    // A stop ends the agent's turn, not the file the provider made: publish it to chat either way.
     keep(owner, request, found).await
 }
 

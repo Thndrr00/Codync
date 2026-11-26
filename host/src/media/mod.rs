@@ -138,6 +138,18 @@ pub fn name_with_prompt(kind: Kind, path: &str, index: usize, prompt: Option<&st
     format!("{stem}{suffix}.{extension}")
 }
 
+/// A provider job can finish after the agent that asked for it was stopped. A stop ends the agent's
+/// turn, not the file the job made: a finished result still goes to chat. Pure so the send path and
+/// its test agree — a finished job's files are published either way, while a job that made nothing
+/// has nothing to send (and, when it was stopped, is not reported as a result).
+#[must_use]
+pub fn publish_after_stop<T>(result: Option<&[T]>, cancelled: bool) -> bool {
+    match result {
+        Some(files) => !files.is_empty(),
+        None => !cancelled,
+    }
+}
+
 /// A setting of a request that the model does not make, named for the person who asked.
 pub fn unsupported(what: &str, value: &str, model: &catalog::Model) -> Result<()> {
     bail!("{} does not make {what} {value}; try another model", model.name)
@@ -253,6 +265,16 @@ mod tests {
         let model = catalog::model("gpt-image").unwrap();
         let error = unsupported("a video", "", model).unwrap_err().to_string();
         assert!(error.contains("GPT Image"), "{error}");
+    }
+
+    #[test]
+    fn a_finished_media_job_is_published_even_when_the_agent_was_stopped() {
+        let made = ["picture.png"];
+        assert!(publish_after_stop(Some(&made), false));
+        assert!(publish_after_stop(Some(&made), true), "a stop does not discard the file the job made");
+        assert!(!publish_after_stop(Some(&[] as &[&str]), true), "nothing made means nothing to publish");
+        assert!(!publish_after_stop(None::<&[&str]>, true), "a stopped job with no result is not a result");
+        assert!(publish_after_stop(None::<&[&str]>, false), "a running job is still on the normal path");
     }
 
     #[test]
