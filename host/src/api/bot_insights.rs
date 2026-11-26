@@ -1820,6 +1820,40 @@ fn memoryctx_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Search ranking helpers from T-85's agentes-chat port (RRF, operators, recency).
+fn searchextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_search_extra as s;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let query = bot.to_owned();
+    let total = entries.len();
+    let returned = total.min(8);
+    let score = s::recency_boost(s::reciprocal_rank(0), 0.0);
+    let summary = s::search_summary(&query, total, returned, score);
+    let matched = entries.iter().filter(|e| s::matches_words(&crate::store::message_text(&e.data), &query)).count();
+    json!({
+        "headline": format!("{} · {} matched · {:.3}", summary["totalLabel"].as_str().unwrap_or("0"), matched, score),
+        "tone": if summary["empty"] == true { "secondary" } else { "good" },
+        "query": summary["query"],
+        "terms": summary["terms"],
+        "total": total,
+        "returned": returned,
+        "hasMore": summary["hasMore"],
+        "empty": summary["empty"],
+        "score": format!("{score:.3}"),
+        "totalLabel": summary["totalLabel"],
+        "ops": s::SEARCH_OPS.len(),
+        "sort": s::search_sort_for(None, &query),
+        "matched": matched,
+        "summary": vec![
+            json!({"key": "total", "value": summary["totalLabel"]}),
+            json!({"key": "matched", "value": matched.to_string()}),
+            json!({"key": "ops", "value": s::SEARCH_OPS.len().to_string()}),
+            json!({"key": "sort", "value": s::search_sort_for(None, &query)}),
+        ],
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1930,6 +1964,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "history": history_view(hub, bot),
         "apierror": apierror_view(hub, bot),
         "memoryctx": memoryctx_view(hub, bot),
+        "searchextra": searchextra_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

@@ -1,6 +1,23 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightSearchExtra {
+  headline: string
+  tone: string
+  query: string
+  terms: string[]
+  total: number
+  returned: number
+  hasMore: boolean
+  empty: boolean
+  score: string
+  totalLabel: string
+  ops: number
+  sort: string
+  matched: number
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightMemoryCtx {
   headline: string
   tone: string
@@ -817,6 +834,7 @@ export interface BotInsights {
   history: InsightHistory
   apierror: InsightApiError
   memoryctx: InsightMemoryCtx
+  searchextra: InsightSearchExtra
   routines: InsightRoutine[]
   usage: {
     used: number

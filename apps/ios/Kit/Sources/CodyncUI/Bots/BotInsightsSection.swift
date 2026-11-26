@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let searchextra = insights.searchextra
+                    Text(searchextra.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Query")): \(searchextra.query)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Matched")): \(searchextra.matched)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let memoryctx = insights.memoryctx
                     Text(memoryctx.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(memoryctx.preview).font(.footnote).foregroundStyle(Palette.secondary)

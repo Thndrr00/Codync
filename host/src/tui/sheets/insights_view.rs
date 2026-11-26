@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let searchextra = &data["searchextra"];
+    if searchextra.is_object() {
+        line(buf, &mut y, tr("Ranked search").into_owned(), t.bold.patch(t.panel));
+        let headline = searchextra["headline"].as_str().unwrap_or("");
+        let matched = searchextra["matched"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {matched}", tr("Matched")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let memoryctx = &data["memoryctx"];
     if memoryctx.is_object() {
         line(buf, &mut y, tr("Memory context").into_owned(), t.bold.patch(t.panel));

@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Búsqueda rankeada (19 adiciones + UI en 4 clientes)
+
+`bdots_search_extra.rs` es el módulo con el que terminó el agente hijo T-85: 12 helpers puros y
+7 constantes portados del código de búsqueda de **agentes-chat 0.7.5** (fold con acentos, términos,
+operadores `from:`/`in:`/`has:`, RRF, recency, vector literal y resumen). Reutiliza `bdots_search`
+y `bdots_desk`. El endpoint `botInsights` añade el campo `searchextra`; la sección «Ranked search»
+se muestra en los cuatro clientes.
+
 ## Contexto de memoria (22 adiciones + UI en 4 clientes)
 
 `bdots_memoryctx.rs` añade 16 helpers puros, 3 constantes y un scrubber con estado portados de

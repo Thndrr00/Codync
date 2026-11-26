@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val searchextra = insights.searchextra
+            CardSection("Ranked search") {
+                row { Text(searchextra.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Query", searchextra.query) }
+                row { ValueRow("Matched", searchextra.matched.toString()) }
+                row { ValueRow("Sort", searchextra.sort) }
+            }
             val memoryctx = insights.memoryctx
             CardSection("Memory context") {
                 row { Text(memoryctx.headline, style = Type.subheadline.semibold, color = Palette.text) }

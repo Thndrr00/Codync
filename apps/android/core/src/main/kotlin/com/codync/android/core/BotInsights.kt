@@ -59,9 +59,21 @@ data class BotInsights(
     val history: InsightHistory = InsightHistory(),
     val apierror: InsightApiError = InsightApiError(),
     val memoryctx: InsightMemoryCtx = InsightMemoryCtx(),
+    val searchextra: InsightSearchExtra = InsightSearchExtra(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed ranked-search summary from the child-agent port. */
+@Serializable
+data class InsightSearchExtra(
+    val headline: String = "", val tone: String = "", val query: String = "",
+    val terms: List<String> = emptyList(), val total: Int = 0, val returned: Int = 0,
+    val hasMore: Boolean = false, val empty: Boolean = false, val score: String = "",
+    val totalLabel: String = "", val ops: Int = 0, val sort: String = "",
+    val matched: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed memory-context sanitisation summary. */

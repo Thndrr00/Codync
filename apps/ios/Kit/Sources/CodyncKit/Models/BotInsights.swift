@@ -56,9 +56,28 @@ public struct BotInsights: Decodable, Sendable {
     public let history: InsightHistory
     public let apierror: InsightApiError
     public let memoryctx: InsightMemoryCtx
+    public let searchextra: InsightSearchExtra
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed ranked-search summary from the child-agent port.
+public struct InsightSearchExtra: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let query: String
+    public let terms: [String]
+    public let total: Int
+    public let returned: Int
+    public let hasMore: Bool
+    public let empty: Bool
+    public let score: String
+    public let totalLabel: String
+    public let ops: Int
+    public let sort: String
+    public let matched: Int
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed memory-context sanitisation summary.

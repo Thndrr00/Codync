@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx, searchextra } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,13 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Ranked search')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(searchextra.tone)}>{searchextra.headline}</Text>
+        <ValueRow label={tr('Query')}>{searchextra.query}</ValueRow>
+        <ValueRow label={tr('Matched')}>{String(searchextra.matched)}</ValueRow>
+        <ValueRow label={tr('Sort')}>{searchextra.sort}</ValueRow>
+      </CardSection>
+
       <CardSection title={tr('Memory context')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(memoryctx.tone)}>{memoryctx.headline}</Text>
         <Text size="footnote" tone="secondary">{memoryctx.preview}</Text>
