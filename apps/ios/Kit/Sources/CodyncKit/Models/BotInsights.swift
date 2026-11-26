@@ -59,6 +59,7 @@ public struct BotInsights: Decodable, Sendable {
     public let searchextra: InsightSearchExtra
     public let evalextra: InsightEvalExtra
     public let connextra: InsightConnExtra
+    public let shortcuts: InsightShortcuts
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -91,7 +92,25 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let summary: [InsightSummaryRow]
 }
 
-/// A host-computed eval metrics summary from the child-agent port.
+/// A host-computed keyboard shortcut summary.
+public struct InsightShortcuts: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let modifier: String
+    public let quote: String
+    public let commandMenu: String?
+    public let primary: Bool
+    public let browserShift: Bool
+    public let resolved: [InsightShortcutRow]
+    public let summary: [InsightSummaryRow]
+}
+
+public struct InsightShortcutRow: Decodable, Sendable {
+    public let command: String
+    public let label: String
+    public let icon: String
+    public let tone: String
+}
 
 /// A host-computed ranked-search summary from the child-agent port.
 public struct InsightSearchExtra: Decodable, Sendable {

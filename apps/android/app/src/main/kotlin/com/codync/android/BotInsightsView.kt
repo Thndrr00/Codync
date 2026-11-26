@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val shortcuts = insights.shortcuts
+            CardSection("Shortcuts") {
+                row { Text(shortcuts.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Modifier", shortcuts.modifier) }
+                row { ValueRow("Quote", shortcuts.quote) }
+                row { ValueRow("Command menu", shortcuts.commandMenu ?: "—") }
+            }
             val evalextra = insights.evalextra
             CardSection("Eval metrics") {
                 row { Text(evalextra.headline, style = Type.subheadline.semibold, color = Palette.text) }

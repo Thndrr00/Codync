@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let shortcuts = &data["shortcuts"];
+    if shortcuts.is_object() {
+        line(buf, &mut y, tr("Shortcuts").into_owned(), t.bold.patch(t.panel));
+        let headline = shortcuts["headline"].as_str().unwrap_or("");
+        let quote = shortcuts["quote"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {quote}", tr("Quote")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let evalextra = &data["evalextra"];
     if evalextra.is_object() {
         line(buf, &mut y, tr("Eval metrics").into_owned(), t.bold.patch(t.panel));

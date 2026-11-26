@@ -1910,6 +1910,38 @@ fn connextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Keyboard shortcut resolution from rakazo's shell shortcuts.
+fn shortcuts_view() -> Value {
+    use crate::bdots_shortcuts as k;
+
+    let host = k::ShortcutHost { desktop: true, apple: false };
+    let mut keys = k::KeyMods::default();
+    keys.ctrl = true;
+    let commands = ["command-menu", "new", "toggle-sidebar", "focus-composer", "find", "shortcuts"];
+    let resolved: Vec<Value> = commands
+        .iter()
+        .map(|command| {
+            serde_json::json!({
+                "command": command,
+                "label": k::command_label(command),
+                "icon": k::command_icon(command),
+                "tone": k::command_tone(command, host),
+            })
+        })
+        .collect();
+    json!({
+        "headline": format!("{} shortcuts · {}", k::count_label(commands.len()), k::quote_shortcut_label(host)),
+        "tone": "good",
+        "modifier": if host.apple { "⌘" } else { "Ctrl" },
+        "quote": k::quote_shortcut_label(host),
+        "commandMenu": k::shell_shortcut("k", keys, host),
+        "primary": k::primary_modifier(keys, host.apple),
+        "browserShift": k::browser_needs_shift("find", k::ShortcutHost::default()),
+        "resolved": resolved,
+        "summary": k::summary(commands.len(), 3, host.apple),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2023,6 +2055,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "searchextra": searchextra_view(hub, bot),
         "evalextra": evalextra_view(hub, bot),
         "connextra": connextra_view(hub, bot),
+        "shortcuts": shortcuts_view(),
         "description": description,
         "model": model,
         "provider": provider,

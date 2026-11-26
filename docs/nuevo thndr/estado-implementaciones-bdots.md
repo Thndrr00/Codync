@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Atajos de teclado (22 adiciones + UI en 4 clientes)
+
+`bdots_shortcuts.rs` añade 18 helpers puros, un `ShortcutHost`, `KeyMods` y dos constantes de
+`shell-shortcuts.ts` de **rakazo v0.14.0**: resolución de modificador primario, chords de cita,
+comandos del shell, etiquetas de atajos, disponibilidad en web y presentación. Reutiliza
+`bdots_i18n`, `bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade el campo `shortcuts`;
+la sección «Shortcuts» se muestra en los cuatro clientes.
+
 ## Métricas eval y conexiones (41 adiciones + UI en 4 clientes)
 
 Módulos con los que terminaron los agentes hijos T-86 y T-87:

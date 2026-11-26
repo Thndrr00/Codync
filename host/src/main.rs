@@ -61,6 +61,7 @@ mod bdots_routines;
 mod bdots_search;
 mod bdots_search_extra;
 mod bdots_session;
+mod bdots_shortcuts;
 mod bdots_spend;
 mod bdots_stream;
 mod bdots_text;

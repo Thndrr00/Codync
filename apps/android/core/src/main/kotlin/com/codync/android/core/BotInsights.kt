@@ -62,9 +62,24 @@ data class BotInsights(
     val searchextra: InsightSearchExtra = InsightSearchExtra(),
     val evalextra: InsightEvalExtra = InsightEvalExtra(),
     val connextra: InsightConnExtra = InsightConnExtra(),
+    val shortcuts: InsightShortcuts = InsightShortcuts(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed keyboard shortcut summary. */
+@Serializable
+data class InsightShortcuts(
+    val headline: String = "", val tone: String = "", val modifier: String = "",
+    val quote: String = "", val commandMenu: String? = null, val primary: Boolean = false,
+    val browserShift: Boolean = false, val resolved: List<InsightShortcutRow> = emptyList(),
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+@Serializable
+data class InsightShortcutRow(
+    val command: String = "", val label: String = "", val icon: String = "", val tone: String = "",
 )
 
 /** A host-computed eval metrics summary from the child-agent port. */

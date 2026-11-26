@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let shortcuts = insights.shortcuts
+                    Text(shortcuts.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Modifier")): \(shortcuts.modifier)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Quote")): \(shortcuts.quote)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let evalextra = insights.evalextra
                     Text(evalextra.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Median")): \(evalextra.median)").font(.footnote).foregroundStyle(Palette.secondary)
