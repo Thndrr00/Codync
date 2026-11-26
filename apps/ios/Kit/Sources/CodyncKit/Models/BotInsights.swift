@@ -52,9 +52,26 @@ public struct BotInsights: Decodable, Sendable {
     public let i18n: InsightI18n
     public let stream: InsightStream
     public let blueprint: InsightBlueprint
+    public let review: InsightReview
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed idle review queue summary.
+public struct InsightReview: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let mode: String
+    public let modeIcon: String
+    public let maxAge: Double
+    public let settled: Bool
+    public let live: Int
+    public let queued: Int
+    public let dispatchable: [String]
+    public let pollMs: Int
+    public let idle: String
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed automation blueprint summary.

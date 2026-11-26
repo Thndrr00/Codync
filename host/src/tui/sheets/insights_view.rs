@@ -66,6 +66,21 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let review = &data["review"];
+    if review.is_object() {
+        line(buf, &mut y, tr("Review queue").into_owned(), t.bold.patch(t.panel));
+        let headline = review["headline"].as_str().unwrap_or("");
+        let mode = review["mode"].as_str().unwrap_or("");
+        let queued = review["queued"].as_u64().unwrap_or(0);
+        line(
+            buf,
+            &mut y,
+            format!("{headline} · {}: {mode} · {}: {queued}", tr("Mode"), tr("Queued")),
+            t.text.patch(t.panel),
+        );
+        y += 1;
+    }
+
     let blueprint = &data["blueprint"];
     if blueprint.is_object() {
         line(buf, &mut y, tr("Blueprint").into_owned(), t.bold.patch(t.panel));

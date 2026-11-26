@@ -51,6 +51,7 @@ mod bdots_profile;
 mod bdots_prompts;
 mod bdots_pure;
 mod bdots_quota;
+mod bdots_review;
 mod bdots_routines;
 mod bdots_search;
 mod bdots_session;

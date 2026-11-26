@@ -1,6 +1,21 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightReview {
+  headline: string
+  tone: string
+  mode: string
+  modeIcon: string
+  maxAge: number
+  settled: boolean
+  live: number
+  queued: number
+  dispatchable: string[]
+  pollMs: number
+  idle: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightBlueprint {
   headline: string
   tone: string
@@ -759,6 +774,7 @@ export interface BotInsights {
   i18n: InsightI18n
   stream: InsightStream
   blueprint: InsightBlueprint
+  review: InsightReview
   routines: InsightRoutine[]
   usage: {
     used: number

@@ -55,9 +55,20 @@ data class BotInsights(
     val i18n: InsightI18n = InsightI18n(),
     val stream: InsightStream = InsightStream(),
     val blueprint: InsightBlueprint = InsightBlueprint(),
+    val review: InsightReview = InsightReview(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed idle review queue summary. */
+@Serializable
+data class InsightReview(
+    val headline: String = "", val tone: String = "", val mode: String = "",
+    val modeIcon: String = "", val maxAge: Double = 0.0, val settled: Boolean = false,
+    val live: Int = 0, val queued: Int = 0, val dispatchable: List<String> = emptyList(),
+    val pollMs: Int = 0, val idle: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed automation blueprint summary. */

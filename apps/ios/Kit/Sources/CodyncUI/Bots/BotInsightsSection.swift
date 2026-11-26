@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let review = insights.review
+                    Text(review.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Mode")): \(review.mode)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Queued")): \(review.queued)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let blueprint = insights.blueprint
                     Text(blueprint.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Cron")): \(blueprint.cron)").font(.footnote).foregroundStyle(Palette.secondary)

@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Revisión en idle (24 adiciones + UI en 4 clientes)
+
+`bdots_review.rs` añade 21 helpers puros y 3 constantes portados de `review_idle_queue.py` de
+**hermes-agent**: modos de deferral, edad máxima, ciclo de vida de turns, quiet window, coalescing
+por sesión conservando el tiempo original, age-out, gating de despacho, sufijos de sesión y
+resúmenes. Reutiliza `bdots_desk`. El endpoint `botInsights` añade el campo `review`; la sección
+«Review queue» se muestra en los cuatro clientes.
+
 ## Blueprints (25 adiciones + UI en 4 clientes)
 
 `bdots_blueprint.rs` añade 22 helpers puros y 3 constantes portados de `blueprint_catalog.py` y

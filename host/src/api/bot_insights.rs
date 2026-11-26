@@ -1690,6 +1690,35 @@ fn blueprint_view() -> Value {
     })
 }
 
+/// Idle deferral and review queue from hermes-agent's review idle queue.
+fn review_view() -> Value {
+    use crate::bdots_review as r;
+
+    let mode = r::defer_mode(Some("auto"));
+    let max_age = r::defer_max_age_s(None);
+    let now = 1_000.0;
+    let quiet_since = Some(980.0);
+    let live = 0;
+    let settled = r::is_settled(live, quiet_since, now, r::IDLE_SETTLE_S);
+    let mut pending = std::collections::BTreeMap::new();
+    pending.insert("session-a".to_owned(), 970.0);
+    let dispatchable = r::dispatchable_sessions(&pending, now, max_age, settled, r::is_deferred(mode, true));
+    json!({
+        "headline": format!("{} · {} queued · {}", r::review_mode_label(mode), pending.len(), r::idle_label(settled)),
+        "tone": r::idle_tone(settled),
+        "mode": r::review_mode_label(mode),
+        "modeIcon": r::review_mode_icon(mode),
+        "maxAge": max_age,
+        "settled": settled,
+        "live": live,
+        "queued": pending.len(),
+        "dispatchable": dispatchable,
+        "pollMs": r::next_poll_ms(),
+        "idle": r::idle_label(settled),
+        "summary": r::summary(pending.len(), live, settled, mode).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1796,6 +1825,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "i18n": i18n_view(),
         "stream": stream_view(hub, bot),
         "blueprint": blueprint_view(),
+        "review": review_view(),
         "description": description,
         "model": model,
         "provider": provider,

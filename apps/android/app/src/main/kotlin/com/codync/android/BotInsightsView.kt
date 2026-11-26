@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val review = insights.review
+            CardSection("Review queue") {
+                row { Text(review.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Mode", review.mode) }
+                row { ValueRow("Queued", review.queued.toString()) }
+                row { ValueRow("Dispatchable", review.dispatchable.size.toString()) }
+            }
             val blueprint = insights.blueprint
             CardSection("Blueprint") {
                 row { Text(blueprint.headline, style = Type.subheadline.semibold, color = Palette.text) }
