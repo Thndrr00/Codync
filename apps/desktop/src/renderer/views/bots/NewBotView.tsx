@@ -9,6 +9,7 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { useTr } from '../../lib/use-language'
 import { errorText, fillDefaults, newDraft } from './drafts'
+import { keepDraft } from '../../lib/v79.ts'
 import { AvatarPicker } from './parts'
 import { AgentAndModel, PurposeField, Suggestions } from './NewBotParts'
 import { useCatalog } from './use-catalog'
@@ -28,8 +29,21 @@ export interface ComputerChoice {
  */
 export function NewBotView({ computer }: { computer: ComputerChoice | null }) {
   const store = useStore()
-  const [draft, setDraft] = useState(() => fillDefaults(store, newDraft()))
-  const change = useCallback((update: (d: BotDraft) => BotDraft) => setDraft(update), [])
+  // v0.79.0: leaving the screen and coming back before creating the bot keeps the chosen
+// model and reasoning level, stored only for this device.
+const DRAFT_KEY = 'codync.newBot.draft'
+const [draft, setDraft] = useState(() => {
+  let saved: BotDraft | null = null
+  try {
+    saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null') as BotDraft | null
+  } catch { saved = null }
+  return keepDraft(saved, fillDefaults(store, newDraft())) as unknown as BotDraft
+})
+  const change = useCallback((update: (d: BotDraft) => BotDraft) => setDraft((current) => {
+  const next = update(current)
+  try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next)) } catch { /* private window */ }
+  return next
+}), [])
   const { catalog } = useCatalog(store)
 
   const create = async () => {

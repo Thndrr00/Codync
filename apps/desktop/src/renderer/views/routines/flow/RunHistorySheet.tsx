@@ -4,7 +4,18 @@ import { Text } from '../../../components/Text'
 import { ModalHeader, Sheet } from '../../../components/Overlay'
 import { historyStatus, runSummary, type FlowStep, type WorkflowRunPage, type WorkflowStepSource } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
+import { stepErrorHint } from '../../../lib/v79.ts'
 import { StatusChip } from './FlowNodeCard'
+
+/** The failure kind behind a stored run error, for a short what-to-do hint. */
+function stepErrorKind(error: string): string {
+  const lower = error.toLowerCase()
+  if (lower.includes('sign') || lower.includes('auth')) return 'signin'
+  if (lower.includes('model') || lower.includes('unknown')) return 'model'
+  if (lower.includes('limit') || lower.includes('quota')) return 'limit'
+  if (lower.includes('field') || lower.includes('answer')) return 'field'
+  return 'other'
+}
 import { StepResult } from './StepResult'
 
 /** A portable history step in the shape the existing result chip already renders. */
@@ -60,7 +71,13 @@ export function RunHistorySheet({ open, onClose, page, loading, error, sourcesBy
                 <Button kind="secondary" onClick={() => onStopRun(detail.run.id)}>{tr('Stop run')}</Button>
               ) : null}
             </HStack>
-            {detail.run.error ? <Text size="caption" tone="danger">{detail.run.error}</Text> : null}
+            {detail.run.error ? (
+  <VStack gap={2}>
+    <Text size="caption" tone="danger">{detail.run.error}</Text>
+    {/* v0.79.0: a failed step says what to do, not just the raw error. */}
+    <Text size="caption" tone="secondary">{stepErrorHint(stepErrorKind(detail.run.error))}</Text>
+  </VStack>
+) : null}
             {detail.steps.map((step) => (
               <VStack key={step.id} gap={4} className="flow-history-step">
                 <HStack gap={8} align="center">

@@ -4,6 +4,23 @@ use super::{Output, Routine, outputs};
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 
+/// v0.79.0: the language a routine names for its report, so the first line is not left in English
+/// while the rest follow the instruction. Only an explicit "in <language>" / "reply in <language>"
+/// phrase is trusted; a bare word is not enough to override the chat's language.
+pub(crate) fn report_language(instruction: &str) -> Option<&str> {
+    let lower = instruction.to_ascii_lowercase();
+    for marker in ["reply in ", "write in ", "answer in ", "in spanish", "in english", "en español", "in chinese"] {
+        if let Some(at) = lower.find(marker) {
+            let tail = &instruction[at + marker.len()..];
+            let word = tail.split(|c: char| !c.is_alphabetic() && c != '-').find(|w| !w.is_empty())?;
+            if !word.is_empty() {
+                return Some(&instruction[at + marker.len() + tail.find(word)?..][..word.len()]);
+            }
+        }
+    }
+    None
+}
+
 pub(super) fn request(body: &Value) -> Result<Option<Vec<Output>>> {
     ensure!(body.get("outputs").is_none() || body.get("outputText").is_none(), "Use outputs or outputText, not both");
     if let Some(text) = body.get("outputText") {
@@ -165,5 +182,12 @@ mod tests {
         body["ifOutputs"] = json!([{"kind":"slack","target":"C-newer"}]);
         assert!(hub.routines.save(&hub, "bot", &body).is_ok());
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_named_report_language_is_read_from_the_instruction() {
+        assert_eq!(super::report_language("Summarize and reply in Spanish, then stop"), Some("Spanish"));
+        assert_eq!(super::report_language("escribe un resumen en español"), Some("español"));
+        assert_eq!(super::report_language("Summarize the report"), None);
     }
 }

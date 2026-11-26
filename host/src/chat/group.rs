@@ -22,6 +22,26 @@ use crate::store::{BotConfig, BotKind, Entry, EntryKind, Lane, Store};
 use anyhow::{Result, anyhow, bail};
 pub use rooms::Rooms;
 use rooms::Turn;
+
+/// v0.79.0: a member that couldn't route its turn names the concrete reason and what to do next,
+/// rather than showing a raw provider error in the channel.
+pub(crate) fn lead_failure(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    let (reason, next) = if lower.contains("busy") || lower.contains("another") {
+        ("the model is busy", "try again in a moment")
+    } else if lower.contains("disconnect") || lower.contains("connection") {
+        ("it lost its connection", "check the provider in Settings")
+    } else if lower.contains("sign") || lower.contains("auth") || lower.contains("expired") {
+        ("its sign-in expired", "sign in again in Settings")
+    } else if lower.contains("not available") || lower.contains("unknown model") {
+        ("the model is not available", "choose another model")
+    } else if lower.contains("refus") || lower.contains("reject") {
+        ("the model refused the request", "try a different request")
+    } else {
+        ("its turn could not start", "try again")
+    };
+    format!("{reason}; {next}.")
+}
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -260,16 +280,10 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, turn: &Turn, asked: &m
                 }
                 Ok(Ok(Ok(None))) => {} // a pass is not a result
                 Ok(Ok(Err(error))) => {
-                    route_channel_result(
-                        hub,
-                        &group,
-                        member,
-                        origin.as_ref(),
-                        archived,
-                        "failed",
-                        None,
-                        &format!("{error:#}"),
-                    );
+                    // v0.79.0: name the concrete routing failure and the next step instead of a bare error.
+                    let raw = format!("{error:#}");
+                    let reason = lead_failure(&raw);
+                    route_channel_result(hub, &group, member, origin.as_ref(), archived, "failed", None, &reason);
                 }
                 Ok(Err(_)) => {
                     route_channel_result(hub, &group, member, origin.as_ref(), archived, "cancelled", None, "");

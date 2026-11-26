@@ -5,6 +5,7 @@ import { Icon } from '../../../components/Icon'
 import { MenuPanel, type MenuItem } from '../../../components/Menu'
 import { useEscape, usePresence } from '../../../components/Overlay'
 import { useTr } from '../../../lib/use-language'
+import { portScale } from '../../../lib/v79.ts'
 import {
   NODE_HEIGHT, NODE_WIDTH, canvasCenter, canvasGraph, edgePath, fitView, isUnconnected, latestStep, linkEndOf,
   mediaOf, mediaTitle, nodeAt, nodeEditable, portCarry, stepNameOf, stepOf, stepProgress, strokePath, zoomAt,
@@ -456,7 +457,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
         }
       }}
     >
-      <div className="flow-layer" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
+      <div className="flow-layer" style={{ ['--port-scale' as string]: portScale(view.scale), transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
         {graph?.strokes?.length || drawing ? (
           <svg className="flow-strokes" width="1" height="1" aria-hidden="true">
             {[...(graph?.strokes ?? []), ...(drawing ? [drawing] : [])].map((stroke) => (

@@ -489,3 +489,13 @@ fn pass_is_recognized_loosely() {
     }
     assert!(!is_pass("I'll pass this to Bob"));
 }
+
+#[test]
+fn a_failed_lead_names_the_reason_and_next_step() {
+    let busy = super::lead_failure("the model is busy with another turn");
+    assert!(busy.contains("busy") && busy.contains("try again"));
+    let signed = super::lead_failure("the sign-in expired");
+    assert!(signed.contains("sign-in expired") && signed.contains("sign in again"));
+    let plain = super::lead_failure("some other failure");
+    assert!(plain.contains("could not start") && plain.contains("try again"));
+}

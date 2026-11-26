@@ -2937,5 +2937,11 @@
   "Fade": "Fade",
   "Working directory": "Working directory",
   "{name} runs in each bot's working directory, so a relative path works only where that file exists.": "{name} runs in each bot's working directory, so a relative path works only where that file exists.",
-  "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists.": "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists."
+  "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists.": "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists.",
+  "Open update settings": "Open update settings",
+  "Sign in again in Settings, then run this step.": "Sign in again in Settings, then run this step.",
+  "Choose another model for this step.": "Choose another model for this step.",
+  "Wait for the limit to reset, or use a backup model.": "Wait for the limit to reset, or use a backup model.",
+  "Give every path into this step the field, or mark it optional.": "Give every path into this step the field, or mark it optional.",
+  "Check the step settings and run it again.": "Check the step settings and run it again."
 }

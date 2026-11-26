@@ -329,6 +329,15 @@ mod tests {
         assert_eq!(background_answer_seen("  ", false), BackgroundAnswer::Skip, "no answer to show");
     }
 
+    /// v0.79.0: a provider that retried a request shows a warning, not a red error, and the notice is
+    /// cleared when the agent goes on to answer. A real stop or refusal stays an error.
+    pub(super) fn retry_is_warning(text: &str) -> bool {
+        let lower = text.to_ascii_lowercase();
+        (lower.contains("retry") || lower.contains("try again") || lower.contains("failed this request"))
+            && !lower.contains("stopped")
+            && !lower.contains("declined")
+    }
+
     #[test]
     fn a_provider_that_stopped_says_so_and_offers_a_resend() {
         let plain = stopped_before_answer("");
@@ -336,5 +345,12 @@ mod tests {
         assert!(!plain.contains("()"), "no empty parentheses");
         let named = stopped_before_answer(" session closed ");
         assert!(named.contains("(session closed)"), "the reason is kept when there is one");
+    }
+
+    #[test]
+    fn a_provider_retry_is_a_warning_but_a_stop_is_an_error() {
+        assert!(retry_is_warning("The provider failed this request 3 times; it will try again"));
+        assert!(!retry_is_warning("Stopped."));
+        assert!(!retry_is_warning("The agent declined to continue."));
     }
 }

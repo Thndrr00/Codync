@@ -1,5 +1,5 @@
 import type { CallLink, CallSession } from './call-link'
-import { errorMessage, isRepeatUtterance, microphone, onDevicesChanged, PROGRESS_TAG, reconnect, UTTERANCE_REPEAT_MS, VoiceEngine, VoiceSettings, type LastUtterance, type TalkAction } from './voice'
+import { errorMessage, isRepeatUtterance, microphone, onDevicesChanged, PROGRESS_TAG, reconnect, spokenRequest, UTTERANCE_REPEAT_MS, VoiceEngine, VoiceSettings, type LastUtterance, type TalkAction } from './voice'
 import { trNow } from '../../lib/l10n.ts'
 
 /**
@@ -324,7 +324,8 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
         }
         if (transcript.trim()) this.lastUser = { text: transcript, at: now }
         this.transcript?.openAI(msg)
-        this.link.add('user', transcript)
+        // v0.79.0: internal harness instructions are not words the person spoke.
+        this.link.add('user', spokenRequest(transcript))
         this.link.endTurn()
         break
       }

@@ -318,6 +318,15 @@ export function fromBase64(text: string) {
  * before whitespace, so punctuation inside words (`C++`, `x*2`, `#tag`) stays; nested markers are
  * peeled one at a time.
  */
+/** v0.79.0: a live-voice utterance never shows internal harness instructions as spoken words. */
+export function spokenRequest(text: string): string {
+  return text
+    .split('\n')
+    .filter((line) => !/^\s*#\s*AGENTS\.md/i.test(line))
+    .join('\n')
+    .trim()
+}
+
 export function cleanSpokenText(text: string): string {
   const quote = /^\s{0,3}>\s*/
   const marker = /^\s{0,3}(?:#{1,6}|[•+*-]|\d+[.)]|\[[ xX]\])(?:\s+|$)/

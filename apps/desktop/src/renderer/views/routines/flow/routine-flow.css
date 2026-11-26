@@ -649,6 +649,13 @@
   opacity: 0.4;
   cursor: default;
 }
+/* v0.79.0: keep port hit targets usable when the canvas is zoomed out. */
+.flow-layer {
+  --port-scale: 1;
+}
+.flow-layer .flow-port-node {
+  transform: scale(var(--port-scale));
+}
 .flow-port-node:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

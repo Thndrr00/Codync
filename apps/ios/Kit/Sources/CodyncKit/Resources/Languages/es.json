@@ -2937,5 +2937,11 @@
   "Fade": "Fundido",
   "Working directory": "Directorio de trabajo",
   "{name} runs in each bot's working directory, so a relative path works only where that file exists.": "{name} se ejecuta en el directorio de trabajo de cada bot, así que una ruta relativa solo funciona donde existe ese archivo.",
-  "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists.": "Un servidor guardado se ejecuta en el directorio de trabajo de cada bot que lo usa, así que una ruta relativa solo funciona donde existe ese archivo."
+  "A saved server runs in the working directory of each bot that uses it, so a relative path works only where that file exists.": "Un servidor guardado se ejecuta en el directorio de trabajo de cada bot que lo usa, así que una ruta relativa solo funciona donde existe ese archivo.",
+  "Open update settings": "Abrir ajustes de actualizaciones",
+  "Sign in again in Settings, then run this step.": "Inicia sesión de nuevo en Ajustes y ejecuta este paso.",
+  "Choose another model for this step.": "Elige otro modelo para este paso.",
+  "Wait for the limit to reset, or use a backup model.": "Espera a que se reinicie el límite o usa un modelo de respaldo.",
+  "Give every path into this step the field, or mark it optional.": "Da el campo a todas las rutas que llegan a este paso o márcalo como opcional.",
+  "Check the step settings and run it again.": "Revisa los ajustes del paso y vuelve a ejecutarlo."
 }

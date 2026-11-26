@@ -510,7 +510,16 @@ impl Actor {
         let stalled = self.loop_guard.tripped().map(str::to_owned);
         let mut awaiting_sign_in = false;
         match (&done, stop_reason.as_str()) {
-            _ if stalled.is_some() => self.notice(stalled.as_deref().unwrap_or_default(), NoticeStyle::Error),
+            // v0.79.0: a provider retry is a warning that clears when the agent recovers, not a
+            // persistent red error. A genuine stop-with-no-answer stays an error.
+            _ if stalled.is_some() => {
+                let style = if super::turn_rules::retry_is_warning(stalled.as_deref().unwrap_or_default()) {
+                    NoticeStyle::Info
+                } else {
+                    NoticeStyle::Error
+                };
+                self.notice(stalled.as_deref().unwrap_or_default(), style)
+            }
             (Err(e), _) if !self.stop_requested => {
                 let tail = self.exit_tail.take().filter(|t| !t.is_empty());
                 awaiting_sign_in = self.invite_sign_in(e);
