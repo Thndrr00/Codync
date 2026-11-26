@@ -68,6 +68,13 @@ html[data-platform='darwin'] .app-rail {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* An optional page returns with the same quiet motion as the rest of the rail. */
+.app-rail-optional {
+  animation: app-rail-item-in var(--layout) both;
+}
+@keyframes app-rail-item-in {
+  from { opacity: 0; transform: translateX(-4px); }
+}
 .app-rail-dot {
   position: absolute;
   right: 8px;
@@ -105,6 +112,7 @@ html[data-platform='darwin'] .app-rail {
 }
 @media (prefers-reduced-motion: reduce) {
   .app-rail-button { transition: none; }
+  .app-rail-optional { animation: none; }
   .app-rail-dot.starting { animation: none; }
 }
 

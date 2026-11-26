@@ -2943,5 +2943,11 @@
   "Choose another model for this step.": "Elige otro modelo para este paso.",
   "Wait for the limit to reset, or use a backup model.": "Espera a que se reinicie el límite o usa un modelo de respaldo.",
   "Give every path into this step the field, or mark it optional.": "Da el campo a todas las rutas que llegan a este paso o márcalo como opcional.",
-  "Check the step settings and run it again.": "Revisa los ajustes del paso y vuelve a ejecutarlo."
+  "Check the step settings and run it again.": "Revisa los ajustes del paso y vuelve a ejecutarlo.",
+  "Hide Marketplace": "Ocultar Marketplace",
+  "Show Marketplace": "Mostrar Marketplace",
+  "Hide Help": "Ocultar Ayuda",
+  "Show Help": "Mostrar Ayuda",
+  "The agent opened a page": "El bot abrió una página",
+  "Open page": "Abrir página"
 }

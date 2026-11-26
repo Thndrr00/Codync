@@ -56,6 +56,13 @@ object SpokenText {
         return text.trim()
     }
 
+    /** A live-voice request never shows internal harness instructions as words the person spoke. */
+    private val harnessLine = Regex("""^\s*#\s*AGENTS\.md""", RegexOption.IGNORE_CASE)
+    fun spokenRequest(text: String): String = text.split("\n")
+        .filterNot { harnessLine.containsMatchIn(it) }
+        .joinToString("\n")
+        .trim()
+
     /** How soon the same words are one utterance the provider posted twice (triage-15781). */
     const val utteranceRepeatMs = 2_000L
 

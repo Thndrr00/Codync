@@ -55,6 +55,11 @@ class VoiceTest {
         ).joinToString("\n"), SpokenText.cleanSpokenText(reply))
         assertEquals("Bold and link\nMore", SpokenText.from("- **Bold** and [link](https://x.y/1)\n===\n\nMore."))
     }
+    @Test fun aSpokenRequestNeverIncludesHarnessInstructions() {
+        assertEquals("Please summarize the file", SpokenText.spokenRequest("# AGENTS.md instructions\nPlease summarize the file"))
+        assertEquals("hello", SpokenText.spokenRequest("  #agents.md\nhello\n"))
+        assertEquals("hello", SpokenText.spokenRequest("hello"))
+    }
     @Test fun aRepeatedProviderUtteranceIsPostedOnceInsideTheWindow() {
         val at = 10_000L
         assertTrue(SpokenText.isRepeatUtterance("ship it", SpokenText.Utterance("ship it", at), 2_000, 11_000))

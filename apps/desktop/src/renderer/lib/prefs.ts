@@ -104,6 +104,8 @@ export const prefs = {
   hiddenComputers: pref('hiddenComputers', ''),
   computerOrder: pref<string[]>('computerOrder', []),
   collapsedComputers: pref<string[]>('collapsedComputerSections', []),
+  /** Rail pages hidden from its right-click menu; Credits is never one of them. */
+  hiddenRailItems: pref<string[]>('hiddenRailItems', []),
   /** Folded roster sections, by name: on this device only. */
   rosterSectionOrder: pref<Record<string, string[]>>('rosterSectionOrder', {}),
   collapsedRosterSections: pref<string[]>('collapsedRosterSections', []),

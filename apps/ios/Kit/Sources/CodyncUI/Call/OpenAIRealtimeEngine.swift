@@ -305,7 +305,7 @@ final class OpenAIRealtimeEngine: VoiceEngine {
                 if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     lastUserUtterance = SpokenText.Utterance(text: transcript, at: now)
                 }
-                link.add("user", transcript)
+                link.add("user", SpokenText.spokenRequest(transcript))
                 link.endTurn()
             }
         case "response.output_audio_transcript.done":

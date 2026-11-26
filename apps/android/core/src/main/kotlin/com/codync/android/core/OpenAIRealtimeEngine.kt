@@ -171,7 +171,7 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
                     link.transcribing(false)
                 } else {
                     if (words.isNotBlank()) lastUser = SpokenText.Utterance(words, now)
-                    transcript?.openAI(message); link.add("user", words); link.endTurn()
+                    transcript?.openAI(message); link.add("user", SpokenText.spokenRequest(words)); link.endTurn()
                 }
             }
             "response.output_audio_transcript.done" -> {

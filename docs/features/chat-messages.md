@@ -60,6 +60,22 @@ share it the chip falls back to text selected in the renderer-owned parts of the
 Reduced motion turns off the chip's fade. Other clients keep their existing artifact cards: this is
 the desktop preview only, and nothing about the page or the quote is added to analytics.
 
+## A page the agent needs you on
+
+When an agent leaves a page in reach and asks for a sign-in or CAPTCHA step there, the composer shows
+**The agent opened a page** with an **Open page** action (OpenBot 0.72.0). The pure `pageNotice` decision
+in `lib/page-notice.ts` reads the latest agent entry's artifact card or web link and keeps the side
+thread it belongs to, so opening the page from that thread goes back there. Desktop wires it in
+`views/thread/Composer.tsx`; a user line, a tool row and an answer with no page show nothing, and the
+notice fades out with reduced motion.
+
+## Spoken requests
+
+Internal harness instructions (`# AGENTS.md …`) that a live voice engine hears are dropped before the
+words are posted to the chat, on desktop and both phones. The pure `spokenRequest` rule lives beside
+each realtime engine (`views/call/voice.ts`, iOS `SpokenText.swift`, Android `Voice.kt`) and is checked
+before the duplicate-utterance decision, so a re-sent transcript still posts only once.
+
 ## Messages are sent, not streamed
 
 - Every bot gets the built-in `chat` MCP server (`codync-host mcp chat`,

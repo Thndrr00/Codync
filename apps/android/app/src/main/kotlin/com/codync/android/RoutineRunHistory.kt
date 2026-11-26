@@ -95,7 +95,10 @@ internal data class RoutineHistorySelection(val expanded: Boolean = false, val r
                                     Text("$routineName · ${run.label}", Modifier.semantics { heading() }, style = Type.caption.medium, color = Palette.text)
                                     Text("Created: ${formatter.format(Instant.ofEpochMilli(run.createdAt))}", style = Type.caption, color = Palette.secondary)
                                     run.finishedAt?.let { Text("Finished: ${formatter.format(Instant.ofEpochMilli(it))}", style = Type.caption, color = Palette.secondary) }
-                                    run.failureLabel?.let { Text("Reason: $it", style = Type.caption, color = Palette.danger) }
+                                    run.failureLabel?.let { reason ->
+                                        Text("Reason: $reason", style = Type.caption, color = Palette.danger)
+                                        Text(StepErrorHint.hint(StepErrorHint.kind(reason)), style = Type.caption, color = Palette.secondary)
+                                    }
                                     run.scheduledFor?.let { Text("Scheduled for: ${formatter.format(Instant.ofEpochMilli(it))}", style = Type.caption, color = Palette.secondary) }
                                     run.missed?.takeIf { it.count > 0 }?.let {
                                         Text("Missed occurrences: ${it.count}${it.until?.let { until -> " · last at ${formatter.format(Instant.ofEpochMilli(until))}" } ?: ""}",

@@ -51,6 +51,12 @@ import Testing
     #expect(SpokenText.from("- **Bold** and [link](https://x.y/1)\n===\n\nMore.") == "Bold and link\nMore.")
 }
 
+@Test func aSpokenRequestNeverIncludesHarnessInstructions() {
+    #expect(SpokenText.spokenRequest("# AGENTS.md instructions\nPlease summarize the file") == "Please summarize the file")
+    #expect(SpokenText.spokenRequest("  #agents.md\nhello\n") == "hello")
+    #expect(SpokenText.spokenRequest("hello") == "hello")
+}
+
 @Test func aRepeatedProviderUtteranceIsPostedOnceInsideTheWindow() {
     let at = Date(timeIntervalSince1970: 10_000)
     let posted = SpokenText.Utterance(text: "ship it", at: at)

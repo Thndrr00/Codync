@@ -11,24 +11,32 @@ struct RoutineNoticeRow: View {
     private var failed: Bool { entry.data.source == "scheduled_task" && entry.data.style != nil }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button(action: open) {
-                Label(L10n.tr(entry.data.text ?? "Routine"), systemImage: "clock.arrow.circlepath")
-                    .font(.footnote).foregroundStyle(Palette.secondary).padding(.vertical, 10)
-            }
-            .buttonStyle(.plain)
-            if entry.data.retry == true {
-                if model.answering[entry.id] != nil {
-                    Spinner(size: 12)
-                } else {
-                    IconButton("Try again", systemImage: "arrow.clockwise") { model.retryRoutineRun(entry) }
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Button(action: open) {
+                    Label(L10n.tr(entry.data.text ?? "Routine"), systemImage: "clock.arrow.circlepath")
+                        .font(.footnote).foregroundStyle(Palette.secondary).padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+                if entry.data.retry == true {
+                    if model.answering[entry.id] != nil {
+                        Spinner(size: 12)
+                    } else {
+                        IconButton("Try again", systemImage: "arrow.clockwise") { model.retryRoutineRun(entry) }
+                    }
+                }
+                if failed && entry.data.cancelled != true {
+                    IconButton("Cancel task", systemImage: "xmark") { model.cancelRoutineRun(entry) }
+                }
+                if entry.data.cancelled == true {
+                    Text("Cancelled").font(.caption).foregroundStyle(Palette.tertiary)
                 }
             }
-            if failed && entry.data.cancelled != true {
-                IconButton("Cancel task", systemImage: "xmark") { model.cancelRoutineRun(entry) }
-            }
-            if entry.data.cancelled == true {
-                Text("Cancelled").font(.caption).foregroundStyle(Palette.tertiary)
+            // A failed run says what to do next, not just the raw error.
+            if failed, let reason = entry.data.detail ?? entry.data.text, !reason.isEmpty {
+                Text(L10n.tr(StepErrorHint.hint(StepErrorHint.kind(reason))))
+                    .font(.caption)
+                    .foregroundStyle(Palette.secondary)
             }
         }
     }

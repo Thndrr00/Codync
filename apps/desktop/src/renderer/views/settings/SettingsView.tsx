@@ -159,7 +159,7 @@ function PageContent({ page, onExtensions, onPage }: { page: SettingsPage; onExt
     case 'diagnostics':
       return <DiagnosticsView />
     case 'updates':
-      return <UpdateSettings />
+      return <UpdateSettings onOpenSettings={() => onPage('updates')} />
     case 'keyboard':
       return <KeyboardSettings />
     case 'n8n':
@@ -453,7 +453,7 @@ function UsageLimitsList() {
 }
 
 /** The app's update check and preferences, the same as the menu bar's Updates menu. */
-function UpdateSettings() {
+function UpdateSettings({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const tr = useTr()
   const updates = useUpdates()
   if (!updates) return null
@@ -468,7 +468,7 @@ function UpdateSettings() {
           <ValueRow key="version" label="Version" detail={lastChecked}>
             <HStack as="span" gap={10}>
               <span>{window.codync.appVersion}</span>
-              <UpdateButton updates={updates} />
+              <UpdateButton updates={updates} onOpenSettings={onOpenSettings} />
             </HStack>
           </ValueRow>,
           ...(updates.downloadPercent !== null

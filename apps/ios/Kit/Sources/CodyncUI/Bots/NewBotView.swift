@@ -6,7 +6,7 @@ import SwiftUI
 public struct NewBotView: View {
     @Environment(BotStore.self) private var model
     @Environment(\.dismissModal) private var dismiss
-    @State private var draft = BotDraft()
+    @State private var draft = NewBotDraft.restore()
     @State private var saving = false
     @State private var error: String?
     private let computers: [(id: ComputerID, label: String)]
@@ -24,6 +24,8 @@ public struct NewBotView: View {
             CharacterAvatar(shape: draft.avatarShape, color: draft.avatarColor, size: 96)
         } content: {
             AvatarPicker(shape: $draft.avatarShape, color: $draft.avatarColor)
+            // The agent and model are part of the draft, so leaving this screen keeps them.
+            AgentModelPicker(backend: draft.backend, account: draft.account, selection: $draft.model, options: $draft.modelOptions)
             if computers.count > 1 || model.connection != .online {
                 VStack(alignment: .leading, spacing: 6) {
                     if computers.count > 1 {
@@ -41,6 +43,7 @@ public struct NewBotView: View {
                 }
             }
         }
+        .onChange(of: draft) { _, fresh in NewBotDraft.save(fresh) }
     }
 
     private func save() {
@@ -53,6 +56,7 @@ public struct NewBotView: View {
         Task {
             do {
                 let bot = try await model.save(draft)
+                NewBotDraft.clear()
                 dismiss()
                 model.selection = bot.id
             } catch {

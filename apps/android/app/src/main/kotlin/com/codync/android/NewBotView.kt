@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.Bot
 import com.codync.android.core.BotDraft
@@ -46,20 +47,25 @@ import com.codync.android.design.*
  * suggestion (desktop `NewBotView`); the rest starts on the defaults and changes later in its Settings.
  */
 @Composable fun NewBotView(state: AppState, store: AppStore) {
-    var draft by remember { mutableStateOf(BotDraft()) }
+    val context = LocalContext.current
+    val draftStore = remember(context) { NewBotDraftStore(context) }
+    var draft by remember { mutableStateOf(NewBotDraftKeep.keep(draftStore.saved, BotDraft())) }
     val agentDefaults = remember { NewBotAgentDefaults() }
     val catalog = rememberCatalog(state, store)
     val online = state.actualConnection is LinkState.Ready
     val dismiss = LocalDismissModal.current
+    // Leaving the screen keeps the chosen agent, model and reasoning option, as on the desktop.
+    val change = { next: BotDraft -> draft = next; draftStore.saved = next }
     // A new bot starts on an installed agent we know; the host turns on every connector and skill.
-    LaunchedEffect(state.hello) { draft = agentDefaults.refreshed(draft, state) }
-    CreateLayout(state, "New bot", draft.name, { draft = draft.copy(name = it) }, "Name your bot", online, { store.saveBot(draft) { dismiss() } },
-        { CharacterAvatar(draft.avatarShape, draft.avatarColor, 96.dp) }) {
-        AvatarPicker(draft.avatarShape, draft.avatarColor, { draft = draft.copy(avatarShape = it) }, { draft = draft.copy(avatarColor = it) })
-        PurposeField(draft.description) { draft = draft.copy(description = it) }
-        SecurityProfileChooser(state, store, draft, null) { draft = it }
-        AgentAndModel(state, store, draft) { draft = agentDefaults.edited(draft, it) }
-        Suggestions(catalog?.bots.orEmpty().filter { it.featured }) { draft = draft.from(it) }
+    LaunchedEffect(state.hello) { change(agentDefaults.refreshed(draft, state)) }
+    CreateLayout(state, "New bot", draft.name, { change(draft.copy(name = it)) }, "Name your bot", online, {
+        store.saveBot(draft) { draftStore.saved = null; dismiss() }
+    }, { CharacterAvatar(draft.avatarShape, draft.avatarColor, 96.dp) }) {
+        AvatarPicker(draft.avatarShape, draft.avatarColor, { change(draft.copy(avatarShape = it)) }, { change(draft.copy(avatarColor = it)) })
+        PurposeField(draft.description) { change(draft.copy(description = it)) }
+        SecurityProfileChooser(state, store, draft, null, change)
+        AgentAndModel(state, store, draft) { change(agentDefaults.edited(draft, it)) }
+        Suggestions(catalog?.bots.orEmpty().filter { it.featured }) { change(draft.from(it)) }
         if (!online) Text("Connect this computer to create the bot.", style = Type.caption, color = Palette.warning)
     }
 }

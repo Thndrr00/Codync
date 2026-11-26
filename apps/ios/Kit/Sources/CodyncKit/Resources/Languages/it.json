@@ -2943,5 +2943,11 @@
   "Choose another model for this step.": "Choose another model for this step.",
   "Wait for the limit to reset, or use a backup model.": "Wait for the limit to reset, or use a backup model.",
   "Give every path into this step the field, or mark it optional.": "Give every path into this step the field, or mark it optional.",
-  "Check the step settings and run it again.": "Check the step settings and run it again."
+  "Check the step settings and run it again.": "Check the step settings and run it again.",
+  "Hide Marketplace": "Hide Marketplace",
+  "Show Marketplace": "Show Marketplace",
+  "Hide Help": "Hide Help",
+  "Show Help": "Show Help",
+  "The agent opened a page": "The agent opened a page",
+  "Open page": "Open page"
 }

@@ -36,6 +36,15 @@ enum SpokenText {
         }.joined(separator: "\n")
     }
 
+    /// A live-voice request never shows internal harness instructions as words the person spoke.
+    static func spokenRequest(_ text: String) -> String {
+        let harnessLine = #"^\s*#\s*AGENTS\.md"#
+        return text.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { String($0).range(of: harnessLine, options: [.regularExpression, .caseInsensitive]) == nil }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// A reply as it should sound: markdown syntax and code blocks dropped.
     static func from(_ markdown: String) -> String {
         var text = cleanSpokenText(markdown)

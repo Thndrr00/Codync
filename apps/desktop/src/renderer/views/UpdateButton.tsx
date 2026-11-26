@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon'
 import { HStack, VStack } from '../components/Stack'
 import { Text } from '../components/Text'
 import { useStore } from '../store/context'
+import { updateNotice } from '../lib/v79.ts'
 import { liveClient } from './settings/parts'
 
 /** The app's update state, kept live. */
@@ -49,10 +50,12 @@ export function useHostRestartWait() {
 }
 
 /** Check, update, download progress, then Restart to update: whatever the update state offers. */
-export function UpdateButton({ updates, kind = 'secondary' }: { updates: UpdateState; kind?: 'primary' | 'secondary' }) {
+export function UpdateButton({ updates, kind = 'secondary', onOpenSettings }: { updates: UpdateState; kind?: 'primary' | 'secondary'; onOpenSettings?: () => void }) {
   const action = updateAction(updates)
   const { waitingFor, cancel, restartNow } = useHostRestartWait()
   const waiting = waitingFor.length > 0
+  // Only an idle update offers the way to Settings > Updates; a required update must restart at once.
+  const settingsLink = waiting ? updateNotice('idle') : null
   return (
     <VStack gap={6} align="flex-start">
       <Button
@@ -66,9 +69,12 @@ export function UpdateButton({ updates, kind = 'secondary' }: { updates: UpdateS
       {waiting ? (
         <>
           <Text size="caption" tone="secondary">{`Waiting to restart: ${waitingFor.join(', ')}`}</Text>
-          <HStack gap={8}>
+          <HStack gap={8} wrap>
             <Button kind="secondary" onClick={restartNow}>Restart now</Button>
             <Button kind="secondary" onClick={cancel}>Cancel restart wait</Button>
+            {settingsLink && onOpenSettings ? (
+              <Button kind="secondary" onClick={onOpenSettings}>{settingsLink}</Button>
+            ) : null}
           </HStack>
         </>
       ) : null}

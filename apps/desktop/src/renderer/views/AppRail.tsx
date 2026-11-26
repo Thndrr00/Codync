@@ -2,6 +2,9 @@ import type { ReactNode } from 'react'
 import type { N8nState } from '@shared/models'
 import { TOOLS, type ToolState } from '@shared/tools'
 import { Icon } from '../components/Icon'
+import { AnchoredMenu, useContextMenu } from '../components/Menu'
+import { prefs, usePref } from '../lib/prefs'
+import { railItems } from '../lib/rail-items'
 import { useTr } from '../lib/use-language'
 import appIcon from '../../../resources/icon.png'
 import './app-rail.css'
@@ -10,7 +13,7 @@ import './app-rail.css'
 export type AppRailPage = 'bots' | 'canvas' | 'usage' | 'marketplace' | 'settings'
 
 /** One icon in the rail: a square button with a tooltip and a selected state. */
-function RailButton({ label, icon, current, onClick, children, status }: {
+function RailButton({ label, icon, current, onClick, children, status, className }: {
   label: string
   icon?: string
   current?: boolean
@@ -18,11 +21,12 @@ function RailButton({ label, icon, current, onClick, children, status }: {
   children?: ReactNode
   /** A dot under the icon: `running`, `starting`, `error` or `off`. */
   status?: string
+  className?: string
 }) {
   return (
     <button
       type="button"
-      className="app-rail-button"
+      className={`app-rail-button ${className ?? ''}`.trim()}
       data-current={current ? 'true' : undefined}
       aria-label={label}
       aria-current={current ? 'page' : undefined}
@@ -66,8 +70,15 @@ export function AppRail({ active, onBots, onCanvas, onUsage, onN8n, onComfy, onB
   comfy?: ToolState | null
 }) {
   const tr = useTr()
+  // A right-click on the rail hides or shows its optional pages; Credits stays put.
+  const [hidden, setHidden] = usePref(prefs.hiddenRailItems)
+  const shown = railItems(hidden)
+  const menu = useContextMenu()
+  const toggle = (id: 'marketplace' | 'help') => setHidden(
+    hidden.includes(id) ? hidden.filter((item) => item !== id) : [...hidden, id],
+  )
   return (
-    <nav className="app-rail" aria-label={tr('Codync')}>
+    <nav className="app-rail" aria-label={tr('Codync')} onContextMenu={menu.onContextMenu}>
       <div className="app-rail-logo-wrap">
         <img className="app-rail-logo" src={appIcon} alt={tr('Codync')} draggable={false} />
       </div>
@@ -83,7 +94,12 @@ export function AppRail({ active, onBots, onCanvas, onUsage, onN8n, onComfy, onB
         />
         <RailButton label={tr('Browser')} icon="globe" onClick={onBrowser} />
         <RailButton label={tr('ComfyUI: make images, run by this computer')} icon={TOOLS.comfy.icon} onClick={onComfy} status={n8nStatus(comfy)} />
-        <RailButton label={tr('Extensions')} icon="square.grid.2x2" current={active === 'marketplace'} onClick={onExtensions} />
+        {shown.includes('marketplace') ? (
+          <RailButton label={tr('Extensions')} icon="square.grid.2x2" current={active === 'marketplace'} onClick={onExtensions} className="app-rail-optional" />
+        ) : null}
+        {shown.includes('help') ? (
+          <RailButton label={tr('Help & documentation')} icon="book" onClick={() => window.codync.app.openExternal('https://github.com/leepokai/codync#readme')} className="app-rail-optional" />
+        ) : null}
       </div>
       <div className="app-rail-group app-rail-bottom">
         {update}
@@ -99,6 +115,16 @@ export function AppRail({ active, onBots, onCanvas, onUsage, onN8n, onComfy, onB
           {account}
         </button>
       </div>
+      <AnchoredMenu
+        open={menu.open}
+        point={menu.point}
+        onClose={menu.close}
+        live
+        items={() => [
+          { title: tr(shown.includes('marketplace') ? 'Hide Marketplace' : 'Show Marketplace'), icon: 'square.grid.2x2', action: () => toggle('marketplace') },
+          { title: tr(shown.includes('help') ? 'Hide Help' : 'Show Help'), icon: 'book', action: () => toggle('help') },
+        ]}
+      />
     </nav>
   )
 }
