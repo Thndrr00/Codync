@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Blueprints (25 adiciones + UI en 4 clientes)
+
+`bdots_blueprint.rs` añade 22 helpers puros y 3 constantes portados de `blueprint_catalog.py` y
+`blueprint_plugins.py` de **hermes-agent**: tipos de slot, validación de claves/namespaces/nombres,
+horas `HH:MM`, placeholders de plantillas, presets de weekdays,表达式 cron, comandos slash, deep
+links y resúmenes. Reutiliza `bdots_desk` y `bdots_textfmt`. El endpoint `botInsights` añade el
+campo `blueprint`; la sección «Blueprint» se muestra en los cuatro clientes.
+
 ## Stream (22 helpers + UI en 4 clientes)
 
 `bdots_stream.rs` añade 22 helpers puros portados de `stream_delivery.py` de **hermes-agent**:

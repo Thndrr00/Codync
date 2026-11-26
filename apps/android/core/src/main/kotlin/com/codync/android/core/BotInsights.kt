@@ -54,9 +54,20 @@ data class BotInsights(
     val quota: InsightQuota = InsightQuota(),
     val i18n: InsightI18n = InsightI18n(),
     val stream: InsightStream = InsightStream(),
+    val blueprint: InsightBlueprint = InsightBlueprint(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed automation blueprint summary. */
+@Serializable
+data class InsightBlueprint(
+    val headline: String = "", val tone: String = "", val template: String = "",
+    val cron: String = "", val missing: List<String> = emptyList(), val slots: Int = 0,
+    val schedule: String = "", val slash: String = "", val deeplink: String = "",
+    val time: String? = null, val valid: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed stream delivery summary. */

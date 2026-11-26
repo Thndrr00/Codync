@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val blueprint = insights.blueprint
+            CardSection("Blueprint") {
+                row { Text(blueprint.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Cron", blueprint.cron) }
+                row { ValueRow("Schedule", blueprint.schedule) }
+                row { ValueRow("Command", blueprint.slash) }
+            }
             val stream = insights.stream
             CardSection("Stream") {
                 row { Text(stream.headline, style = Type.subheadline.semibold, color = Palette.text) }

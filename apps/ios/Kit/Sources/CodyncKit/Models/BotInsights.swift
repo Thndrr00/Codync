@@ -51,9 +51,26 @@ public struct BotInsights: Decodable, Sendable {
     public let quota: InsightQuota
     public let i18n: InsightI18n
     public let stream: InsightStream
+    public let blueprint: InsightBlueprint
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed automation blueprint summary.
+public struct InsightBlueprint: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let template: String
+    public let cron: String
+    public let missing: [String]
+    public let slots: Int
+    public let schedule: String
+    public let slash: String
+    public let deeplink: String
+    public let time: String?
+    public let valid: Bool
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed stream delivery summary.

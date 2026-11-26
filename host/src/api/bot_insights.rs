@@ -1665,6 +1665,31 @@ fn stream_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Automation blueprints from hermes-agent's cron catalog.
+fn blueprint_view() -> Value {
+    use crate::bdots_blueprint as b;
+
+    let template = "{minute} {hour} * * {dow}";
+    let mut values = std::collections::BTreeMap::new();
+    values.insert("minute".to_owned(), "0".to_owned());
+    values.insert("hour".to_owned(), "8".to_owned());
+    let missing = b::unfilled_placeholders(template, &values);
+    json!({
+        "headline": b::humanize_schedule(template),
+        "tone": if missing.is_empty() { "good" } else { "attention" },
+        "template": template,
+        "cron": b::fill_template(template, &values),
+        "missing": missing,
+        "slots": b::placeholders(template).len(),
+        "schedule": b::weekday_label("weekdays"),
+        "slash": b::blueprint_slash_command("daily", &values),
+        "deeplink": b::blueprint_deeplink("daily"),
+        "time": b::format_time_parts(8, 0),
+        "valid": b::valid_key("daily"),
+        "summary": b::summary(b::placeholders(template).len(), b::cron_fields(template), missing.len(), missing.is_empty()).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1770,6 +1795,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "quota": quota_view(used),
         "i18n": i18n_view(),
         "stream": stream_view(hub, bot),
+        "blueprint": blueprint_view(),
         "description": description,
         "model": model,
         "provider": provider,

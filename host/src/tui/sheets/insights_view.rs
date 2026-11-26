@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let blueprint = &data["blueprint"];
+    if blueprint.is_object() {
+        line(buf, &mut y, tr("Blueprint").into_owned(), t.bold.patch(t.panel));
+        let headline = blueprint["headline"].as_str().unwrap_or("");
+        let cron = blueprint["cron"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {cron}", tr("Cron")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let stream = &data["stream"];
     if stream.is_object() {
         line(buf, &mut y, tr("Stream").into_owned(), t.bold.patch(t.panel));

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let blueprint = insights.blueprint
+                    Text(blueprint.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Cron")): \(blueprint.cron)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Schedule")): \(blueprint.schedule)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let stream = insights.stream
                     Text(stream.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Held")): \(stream.held)").font(.footnote).foregroundStyle(Palette.secondary)
