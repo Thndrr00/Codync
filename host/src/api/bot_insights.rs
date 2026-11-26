@@ -1576,6 +1576,34 @@ fn appearance_view() -> Value {
     })
 }
 
+/// Account quota windows and reset labels from hermes-agent's account usage module.
+fn quota_view(used: u64) -> Value {
+    use crate::bdots_quota as q;
+
+    let used_pct = crate::bdots_activity::percent(used as usize, 200_000) as f64;
+    let remaining = q::remaining_percent(used_pct);
+    let reset = q::reset_label(Some(7_200));
+    let scope = "account";
+    let windows = vec![("session".to_owned(), used_pct), ("week".to_owned(), used_pct / 2.0)];
+    json!({
+        "headline": q::window_headline("session", used_pct, &reset),
+        "tone": q::usage_tone(used_pct),
+        "icon": q::usage_icon(used_pct),
+        "usedPct": used_pct.round() as i64,
+        "remaining": remaining.round() as i64,
+        "reset": reset,
+        "resetPhrase": q::reset_phrase(Some(7_200)),
+        "depleted": q::is_depleted(used_pct),
+        "low": q::is_low(used_pct, 80.0),
+        "scope": q::scope_label(scope),
+        "scopeIcon": q::scope_icon(scope),
+        "status": q::status_line(q::is_depleted(used_pct), false),
+        "windows": windows.len(),
+        "bpFull": q::BP_FULL,
+        "summary": q::summary(used_pct, remaining, windows.len(), &reset).into_iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -1678,6 +1706,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "eval": eval_view(hub, bot),
         "search": search_view(hub, bot),
         "appearance": appearance_view(),
+        "quota": quota_view(used),
         "description": description,
         "model": model,
         "provider": provider,

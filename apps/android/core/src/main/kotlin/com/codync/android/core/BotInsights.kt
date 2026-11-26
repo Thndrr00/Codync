@@ -51,9 +51,21 @@ data class BotInsights(
     val eval: InsightEval = InsightEval(),
     val search: InsightSearch = InsightSearch(),
     val appearance: InsightAppearance = InsightAppearance(),
+    val quota: InsightQuota = InsightQuota(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed account quota summary. */
+@Serializable
+data class InsightQuota(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val usedPct: Int = 0, val remaining: Int = 0, val reset: String = "",
+    val resetPhrase: String = "", val depleted: Boolean = false, val low: Boolean = false,
+    val scope: String = "", val scopeIcon: String = "", val status: String = "",
+    val windows: Int = 0, val bpFull: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed appearance and colour token summary. */

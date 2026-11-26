@@ -66,6 +66,16 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let quota = &data["quota"];
+    if quota.is_object() {
+        line(buf, &mut y, tr("Quota").into_owned(), t.bold.patch(t.panel));
+        let headline = quota["headline"].as_str().unwrap_or("");
+        let status = quota["status"].as_str().unwrap_or("");
+        let remaining = quota["remaining"].as_i64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {status} · {}: {remaining}%", tr("Remaining")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let appearance = &data["appearance"];
     if appearance.is_object() {
         line(buf, &mut y, tr("Appearance").into_owned(), t.bold.patch(t.panel));

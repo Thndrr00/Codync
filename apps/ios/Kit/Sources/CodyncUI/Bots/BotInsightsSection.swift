@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let quota = insights.quota
+                    Text(quota.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Status")): \(quota.status)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Remaining")): \(quota.remaining)%").font(.footnote).foregroundStyle(Palette.tertiary)
                     let appearance = insights.appearance
                     Text(appearance.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Appearance")): \(appearance.appearance)").font(.footnote).foregroundStyle(Palette.secondary)

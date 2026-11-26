@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Cuotas (25 adiciones + UI en 4 clientes)
+
+`bdots_quota.rs` añade 24 helpers puros y una constante portados de `account_usage.py` de
+**hermes-agent**: ventanas de uso, gauges en puntos base, etiquetas de reset, niveles de agotamiento,
+scope de cuenta/modelo, ordenación de ventanas y estados de cuenta. Reutiliza `bdots_activity`,
+`bdots_extra`, `bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade el campo `quota`; la
+sección «Quota» se muestra en los cuatro clientes.
+
 ## Apariencia (28 adiciones + UI en 4 clientes)
 
 `bdots_appearance.rs` añade 23 helpers puros y 5 constantes portados de `packages/ui-tokens` de

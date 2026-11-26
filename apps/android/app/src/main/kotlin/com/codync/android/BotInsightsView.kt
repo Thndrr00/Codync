@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val quota = insights.quota
+            CardSection("Quota") {
+                row { Text(quota.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Status", quota.status) }
+                row { ValueRow("Remaining", "${quota.remaining}%") }
+                row { ValueRow("Resets", quota.resetPhrase) }
+            }
             val appearance = insights.appearance
             CardSection("Appearance") {
                 row { Text(appearance.headline, style = Type.subheadline.semibold, color = Palette.text) }

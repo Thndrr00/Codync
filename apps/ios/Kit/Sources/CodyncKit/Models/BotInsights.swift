@@ -48,9 +48,29 @@ public struct BotInsights: Decodable, Sendable {
     public let eval: InsightEval
     public let search: InsightSearch
     public let appearance: InsightAppearance
+    public let quota: InsightQuota
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
+}
+
+/// A host-computed account quota summary.
+public struct InsightQuota: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let usedPct: Int
+    public let remaining: Int
+    public let reset: String
+    public let resetPhrase: String
+    public let depleted: Bool
+    public let low: Bool
+    public let scope: String
+    public let scopeIcon: String
+    public let status: String
+    public let windows: Int
+    public let bpFull: Int
+    public let summary: [InsightSummaryRow]
 }
 
 /// A host-computed appearance and colour token summary.
