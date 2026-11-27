@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val iteration = insights.iteration
+            CardSection("Iteration") {
+                row { Text(iteration.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Ghosts", iteration.ghosts.toString()) }
+                row { ValueRow("Tools", iteration.tools.toString()) }
+                row { ValueRow("Restart", iteration.restartLabel) }
+            }
             val rrule = insights.rrule
             CardSection("Recurrence") {
                 row { Text(rrule.headline, style = Type.subheadline.semibold, color = Palette.text) }

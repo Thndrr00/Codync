@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let iteration = insights.iteration
+                    Text(iteration.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Ghosts")): \(iteration.ghosts)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Restart")): \(iteration.restartLabel)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let rrule = insights.rrule
                     Text(rrule.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Cron")): \(rrule.cron ?? "—")").font(.footnote).foregroundStyle(Palette.secondary)

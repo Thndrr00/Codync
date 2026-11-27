@@ -1,6 +1,23 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightIteration {
+  headline: string
+  tone: string
+  used: number
+  max: number
+  warning: boolean
+  warningText: string
+  ghosts: number
+  tools: number
+  toolTail: boolean
+  steerAfter: number | null
+  restartLabel: string
+  restartIcon: string
+  refunded: number
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightRrule {
   headline: string
   tone: string
@@ -1004,6 +1021,7 @@ export interface BotInsights {
   verify: InsightVerify
   autofill: InsightAutofill
   rrule: InsightRrule
+  iteration: InsightIteration
   routines: InsightRoutine[]
   usage: {
     used: number

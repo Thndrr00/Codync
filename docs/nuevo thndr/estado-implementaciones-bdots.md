@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Iteraciones (21 adiciones + UI en 4 clientes)
+
+`bdots_iteration.rs` añade 16 helpers puros y 5 constantes portados de `turn_iteration_prep.py` de
+**hermes-agent**: anclaje del turno, presupuesto de iteraciones y aviso único, neutralización de
+filas fantasma de interrupción, emparejamiento de rondas de herramientas, steer y reembolsos por
+reinicio. Reutiliza `bdots_more`, `bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade
+el campo `iteration`; la sección «Iteration» se muestra en los cuatro clientes.
+
 ## Recurrencia (23 adiciones + UI en 4 clientes)
 
 `bdots_rrule.rs` añade 18 helpers puros y 5 constantes portados de `rrule.ts` de **agentes-chat

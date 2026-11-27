@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let iteration = &data["iteration"];
+    if iteration.is_object() {
+        line(buf, &mut y, tr("Iteration").into_owned(), t.bold.patch(t.panel));
+        let headline = iteration["headline"].as_str().unwrap_or("");
+        let ghosts = iteration["ghosts"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {}: {ghosts}", tr("Ghosts")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let rrule = &data["rrule"];
     if rrule.is_object() {
         line(buf, &mut y, tr("Recurrence").into_owned(), t.bold.patch(t.panel));

@@ -71,9 +71,20 @@ data class BotInsights(
     val verify: InsightVerify = InsightVerify(),
     val autofill: InsightAutofill = InsightAutofill(),
     val rrule: InsightRrule = InsightRrule(),
+    val iteration: InsightIteration = InsightIteration(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed iteration bookkeeping summary. */
+@Serializable
+data class InsightIteration(
+    val headline: String = "", val tone: String = "", val used: Int = 0, val max: Int = 0,
+    val warning: Boolean = false, val warningText: String = "", val ghosts: Int = 0,
+    val tools: Int = 0, val toolTail: Boolean = false, val steerAfter: Int? = null,
+    val restartLabel: String = "", val restartIcon: String = "", val refunded: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed recurrence rule summary. */

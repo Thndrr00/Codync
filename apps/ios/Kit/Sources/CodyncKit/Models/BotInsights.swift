@@ -68,6 +68,7 @@ public struct BotInsights: Decodable, Sendable {
     public let verify: InsightVerify
     public let autofill: InsightAutofill
     public let rrule: InsightRrule
+    public let iteration: InsightIteration
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -97,6 +98,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed iteration bookkeeping summary.
+public struct InsightIteration: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let used: Int
+    public let max: Int
+    public let warning: Bool
+    public let warningText: String
+    public let ghosts: Int
+    public let tools: Int
+    public let toolTail: Bool
+    public let steerAfter: Int?
+    public let restartLabel: String
+    public let restartIcon: String
+    public let refunded: Int
     public let summary: [InsightSummaryRow]
 }
 

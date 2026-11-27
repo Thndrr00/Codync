@@ -2182,6 +2182,35 @@ fn rrule_view() -> Value {
     })
 }
 
+/// Iteration bookkeeping from hermes-agent's turn preparation.
+fn iteration_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_iteration as i;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let rows: Vec<Value> = entries.iter().map(|e| e.data.clone()).collect();
+    let (clean, ghosts) = i::neutralise_ghosts(&rows);
+    let tools = i::previous_tool_round(&clean).len();
+    let used = 8;
+    let max = 10;
+    let warn = i::should_warn(used, max, None, false);
+    json!({
+        "headline": format!("{} / {} · {} ghosts · {} tools", used, max, ghosts, tools),
+        "tone": if ghosts > 0 { "attention" } else { "good" },
+        "used": used,
+        "max": max,
+        "warning": warn,
+        "warningText": if warn { i::warning_text(used, max) } else { String::new() },
+        "ghosts": ghosts,
+        "tools": tools,
+        "toolTail": i::is_tool_tail(&clean),
+        "steerAfter": i::steer_after_tool(&clean),
+        "restartLabel": i::restart_label("restart_with_redirected_messages"),
+        "restartIcon": i::restart_icon("restart_with_redirected_messages"),
+        "refunded": i::refund_iteration(used, 1, 3),
+        "summary": i::summary(warn, ghosts, tools, 0),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2304,6 +2333,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "verify": verify_view(hub, bot),
         "autofill": autofill_view(hub, bot),
         "rrule": rrule_view(),
+        "iteration": iteration_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,
