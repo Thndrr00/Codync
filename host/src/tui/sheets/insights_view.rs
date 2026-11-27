@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let plugins = &data["plugins"];
+    if plugins.is_object() {
+        line(buf, &mut y, tr("Plugins").into_owned(), t.bold.patch(t.panel));
+        let headline = plugins["headline"].as_str().unwrap_or("");
+        let root = plugins["root"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {root}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let csiterm = &data["csiterm"];
     if csiterm.is_object() {
         line(buf, &mut y, tr("Terminal sequences").into_owned(), t.bold.patch(t.panel));

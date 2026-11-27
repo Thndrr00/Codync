@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val plugins = insights.plugins
+            CardSection("Plugins") {
+                row { Text(plugins.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Root", plugins.root) }
+                row { ValueRow("API version", plugins.apiVersion) }
+                row { ValueRow("Compatible", plugins.compatible.toString()) }
+            }
             val csiterm = insights.csiterm
             CardSection("Terminal sequences") {
                 row { Text(csiterm.headline, style = Type.subheadline.semibold, color = Palette.text) }

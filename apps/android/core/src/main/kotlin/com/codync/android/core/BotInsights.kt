@@ -91,9 +91,21 @@ data class BotInsights(
     val botstore: InsightBotStore = InsightBotStore(),
     val promptactions: InsightPromptActions = InsightPromptActions(),
     val csiterm: InsightCsiTerm = InsightCsiTerm(),
+    val plugins: InsightPlugins = InsightPlugins(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed plugin store summary. */
+@Serializable
+data class InsightPlugins(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val root: String = "", val staging: String = "", val settings: String = "",
+    val validId: Boolean = false, val reserved: Boolean = false, val toolName: Boolean = false,
+    val relativePath: Boolean = false, val manifestVersion: Int = 0, val apiVersion: String = "",
+    val compatible: Boolean = false, val problem: String? = null, val staleLock: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed CSI terminal summary. */

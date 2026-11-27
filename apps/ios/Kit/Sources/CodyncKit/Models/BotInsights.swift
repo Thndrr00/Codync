@@ -88,6 +88,7 @@ public struct BotInsights: Decodable, Sendable {
     public let botstore: InsightBotStore
     public let promptactions: InsightPromptActions
     public let csiterm: InsightCsiTerm
+    public let plugins: InsightPlugins
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -117,6 +118,26 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed plugin store summary.
+public struct InsightPlugins: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let root: String
+    public let staging: String
+    public let settings: String
+    public let validId: Bool
+    public let reserved: Bool
+    public let toolName: Bool
+    public let relativePath: Bool
+    public let manifestVersion: Int
+    public let apiVersion: String
+    public let compatible: Bool
+    public let problem: String?
+    public let staleLock: Bool
     public let summary: [InsightSummaryRow]
 }
 

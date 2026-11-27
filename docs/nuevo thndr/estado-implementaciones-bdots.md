@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Plugins (29 adiciones + UI en 4 clientes)
+
+`bdots_plugins.rs` añade 23 helpers puros y 6 constantes portados de `plugins/store.ts` y
+`plugins/types.ts` de **mercury-agent 2.7.0**: ids y rutas, compatibilidad semver, migración de
+settings, secretos y caducidad de locks. Reutiliza `bdots_desk`. El endpoint `botInsights` añade el
+campo `plugins`; la sección «Plugins» se muestra en los cuatro clientes.
+
 ## Secuencias CSI (30 adiciones + UI en 4 clientes)
 
 `bdots_csi.rs` añade 24 helpers puros y 6 constantes portados de `csi.ts` del TUI de

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let plugins = insights.plugins
+                    Text(plugins.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Root")): \(plugins.root)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Compatible")): \(plugins.compatible)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let csiterm = insights.csiterm
                     Text(csiterm.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Prefix")): \(csiterm.prefix.debugDescription)").font(.footnote).foregroundStyle(Palette.secondary)

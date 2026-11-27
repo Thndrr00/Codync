@@ -2704,6 +2704,35 @@ fn csi_view() -> Value {
     })
 }
 
+/// Plugin store layout, compatibility and settings from mercury-agent.
+fn plugins_view() -> Value {
+    use crate::bdots_plugins as p;
+
+    let manifest = serde_json::json!({
+        "engines": {"mercury": "^2.0.0", "pluginApi": "^1.0.0"},
+        "platforms": ["darwin-arm64", "linux-x64", "win32-x64"],
+    });
+    let problem = p::incompatibility(&manifest, "2.45.1", "darwin-arm64");
+    json!({
+        "headline": format!("{} · {} · {}", p::count_label(p::PLATFORM_KEYS.len()), p::PLUGIN_API_VERSION, p::MANIFEST_VERSION),
+        "tone": if problem.is_none() { "good" } else { "attention" },
+        "icon": "puzzlepiece.extension.fill",
+        "root": p::plugins_root("/home/me"),
+        "staging": p::staging_root("/home/me"),
+        "settings": p::plugin_settings_path("/home/me", "voice-notes"),
+        "validId": p::is_valid_plugin_id("voice-notes"),
+        "reserved": p::is_reserved_plugin_id("mcp"),
+        "toolName": p::is_valid_tool_name("search_web"),
+        "relativePath": p::is_valid_relative_path("data/notes.txt"),
+        "manifestVersion": p::MANIFEST_VERSION,
+        "apiVersion": p::PLUGIN_API_VERSION,
+        "compatible": problem.is_none(),
+        "problem": problem,
+        "staleLock": p::is_lock_stale(p::LOCK_STALE_MS + 1, true, 123),
+        "summary": p::summary(3, 2, 1, 1),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2846,6 +2875,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "botstore": botstore_view(),
         "promptactions": promptactions_view(),
         "csiterm": csi_view(),
+        "plugins": plugins_view(),
         "description": description,
         "model": model,
         "provider": provider,

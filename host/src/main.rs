@@ -72,6 +72,7 @@ mod bdots_opendots;
 mod bdots_palette;
 mod bdots_picker;
 mod bdots_plans;
+mod bdots_plugins;
 mod bdots_profile;
 mod bdots_prompt_actions;
 mod bdots_prompts;
