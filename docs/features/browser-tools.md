@@ -184,6 +184,10 @@ for `example.com` also applies to `shop.example.com` but not to `notexample.com`
 memory files and store the bot already has, are shown as data (not instructions), and cannot be
 created by a page or a tool result — only by the user's own request.
 
+### Learning from my browsing (opt-in)
+
+The off-by-default device pref `teach.learnFromBrowsing` (host `kv`, `chat/teach.rs`) lets a finished `finish_teaching` session add one site fact to the bot's memory from a control the person pressed on an http(s) page. Only a successful click or submit counts: the fact is `@site <host> <note>` with the lower-case page host and a short, whitespace-collapsed note from the control's own description (OpenBot `browsing-memory-v1` keeps that shape). Secrets, field values, failed steps, non-http pages and empty or oversized addresses give nothing; the pure `site_fact` and `browser_step_fact` decisions decide this before any write. The fact is stored with `memory::add_facts` in the memory files the bot already has, and the check and de-duplication there keep it bounded and prevent repeats. The client toggle is not wired yet — the host read/write helpers `learn_from_browsing` and `set_learn_from_browsing` are ready for it; no new UI was added.
+
 ## Sign-in and takeover cards (OpenBot 0.77.0)
 
 A saved password that lands on a slow page no longer hands the browser to the user (OpenBot nightly). After

@@ -3,8 +3,9 @@
 //! sessions (`start_teaching`, `finish_teaching`) with privacy-preserving DOM event capture
 //! (`RECORDER`: Ideas 38, 39, 40, 49 from `bdots`).
 
+use crate::chat::memory::{self, site};
 use crate::hub::Hub;
-use crate::store::{Entry, EntryKind, Lane};
+use crate::store::{Entry, EntryKind, Lane, Store};
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
@@ -15,6 +16,49 @@ const READ: i64 = 500;
 const MAX_STEPS: usize = 200;
 /// Longest piece of a user message in a step.
 const MAX_SAID: usize = 400;
+/// Host kv key of the device pref "Learn from my browsing" (off unless explicitly on).
+pub const LEARN_FROM_BROWSING_KEY: &str = "teach.learnFromBrowsing";
+
+/// Pure decision for the pref: only an explicit on turns browsing learning on. A missing key, an
+/// empty value, or anything else leaves it off (OpenBot `browsing-memory-v1`).
+pub fn learning_enabled(value: Option<&str>) -> bool {
+    value.is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "true" | "1" | "on"))
+}
+
+/// Reads the device pref from the host kv store.
+pub fn learn_from_browsing(store: &Store) -> bool {
+    learning_enabled(store.kv_get(LEARN_FROM_BROWSING_KEY).as_deref())
+}
+
+/// Writes the device pref in the host kv store; an app toggle can call this on its own later.
+pub fn set_learn_from_browsing(store: &Store, on: bool) -> Result<()> {
+    store.kv_set(LEARN_FROM_BROWSING_KEY, if on { "true" } else { "false" })
+}
+
+/// The one site fact a finished teaching session may learn from the person's own control presses:
+/// a click or submit on an http(s) page, with the page's host and the control's name. Secrets, field
+/// values and failed steps give nothing, and the note is bounded by `site_fact`.
+fn browser_step_fact(events: &[Value], fallback_url: Option<&str>) -> Option<String> {
+    for event in events {
+        let kind = event["kind"].as_str().unwrap_or_default();
+        if !matches!(kind, "click" | "submit") {
+            continue;
+        }
+        if event["status"].as_str().is_some_and(|status| status != "completed") {
+            continue;
+        }
+        let Some(label) = event["label"].as_str().map(str::trim).filter(|label| !label.is_empty()) else {
+            continue;
+        };
+        let Some(url) = event["url"].as_str().filter(|url| !url.is_empty()).or(fallback_url) else {
+            continue;
+        };
+        if let Some(fact) = site::site_fact(url, label) {
+            return Some(fact);
+        }
+    }
+    None
+}
 
 /// Browser DOM recorder injected via `Page.addScriptToEvaluateOnNewDocument` (Ideas 38 & 39).
 /// Captures semantic clicks, non-secret inputs, submits and SPA navigations while persisting
@@ -217,6 +261,15 @@ async fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
         nav_history.extend(browser["navHistory"].as_array().cloned().unwrap_or_default());
     }
     let dom_steps = format_dom_events(&dom_events, &nav_history);
+    // Opt-in: a finished session's own successful control press on a browser page adds one site
+    // fact to the memory file the bot already has. `add_facts` checks and de-duplicates it.
+    if browser.is_some()
+        && learn_from_browsing(&hub.store)
+        && let Some(fact) = browser_step_fact(&dom_events, session["url"].as_str())
+        && let Err(error) = memory::add_facts(hub, bot, &[fact])
+    {
+        tracing::warn!(bot, error = format!("{error:#}"), "couldn't learn a site fact from browsing");
+    }
     let notice = json!({
         "text": "Teaching session finished",
         "style": "info",
@@ -341,6 +394,30 @@ mod tests {
         assert_eq!(step(&mine, "a").unwrap()["tool"], "npm run build");
         assert!(step(&theirs, "a").is_none(), "another bot's step in a group");
         assert!(step(&reply, "a").is_none());
+    }
+
+    #[test]
+    fn browsing_learning_is_off_until_explicitly_on() {
+        assert!(!learning_enabled(None));
+        assert!(!learning_enabled(Some("")));
+        assert!(!learning_enabled(Some("false")));
+        assert!(!learning_enabled(Some("0")));
+        assert!(learning_enabled(Some("true")));
+        assert!(learning_enabled(Some("  TRUE ")));
+        assert!(learning_enabled(Some("1")), "a stored 1 also means on");
+    }
+
+    #[test]
+    fn a_finished_control_press_gives_one_site_fact_and_a_secret_gives_none() {
+        let press = json!({"kind": "click", "label": " Sign in ", "url": "https://Shop.Example.com/a?token=x"});
+        assert_eq!(browser_step_fact(&[press], None).as_deref(), Some("@site shop.example.com Sign in"));
+        let secret = json!({"kind": "secret", "label": "Password", "url": "https://example.com/login"});
+        let fill = json!({"kind": "fill", "label": "Email", "sample": "ada@example.com", "url": "https://example.com"});
+        let failed = json!({"kind": "submit", "label": "Go", "status": "failed", "url": "https://example.com"});
+        assert_eq!(browser_step_fact(&[secret, fill, failed], None), None);
+        let local = json!({"kind": "click", "label": "Go"});
+        assert_eq!(browser_step_fact(&[local], Some("about:blank")), None, "a non-http page gives no fact");
+        assert_eq!(browser_step_fact(&[], Some("https://example.com")), None, "no press, no fact");
     }
 
     #[test]

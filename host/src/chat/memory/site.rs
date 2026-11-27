@@ -14,6 +14,8 @@ pub(crate) const SITE_PREFIX: &str = "@site ";
 pub(crate) const MAX_SITE_MEMORIES: usize = 5;
 /// How much of one memory's text the snapshot carries.
 const MAX_TEXT: usize = 300;
+/// An address longer than this is not a page worth a fact (the `navigate` tool's address cap).
+const MAX_URL: usize = 2048;
 
 /// Whether a memory stored for `site` applies to `host`. Both are lower-case hosts without a scheme,
 /// port or path. A stored parent domain also matches its subdomains, but never a look-alike host.
@@ -32,6 +34,31 @@ pub(crate) fn site_of(url: &str) -> String {
     let Some((_, rest)) = url.split_once("://") else { return String::new() };
     let host = rest.split(['/', '?', '#']).next().unwrap_or_default().split('@').last().unwrap_or_default();
     host.split(':').next().unwrap_or_default().trim().to_ascii_lowercase()
+}
+
+/// The one fact a finished browser step may add: `@site <lower-case host> <note>`. The note is
+/// whitespace-collapsed and cut at `MAX_TEXT`; an empty or oversized address, a non-http page or an
+/// empty note gives nothing. Only the host and the step's own short description are kept — never a
+/// query, a path, a field value or a secret.
+pub(crate) fn site_fact(url: &str, text: &str) -> Option<String> {
+    let url = url.trim();
+    if url.is_empty() || url.len() > MAX_URL {
+        return None;
+    }
+    let (scheme, _) = url.split_once("://")?;
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
+    let host = site_of(url);
+    if !site_memory_match(&host, &host) {
+        return None;
+    }
+    let note: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if note.is_empty() {
+        return None;
+    }
+    let note: String = note.chars().take(MAX_TEXT).collect();
+    Some(format!("{SITE_PREFIX}{host} {note}"))
 }
 
 /// One site memory, as it is written in a memory file.
@@ -155,6 +182,30 @@ mod tests {
         assert!(!claim(turn, host), "a later snapshot in the same turn does not repeat it");
         assert!(claim(turn + 1, host), "the next turn sees it again");
         assert!(claim(turn, "another.example"), "a different host is its own claim");
+    }
+
+    #[test]
+    fn a_browser_step_gives_one_bounded_site_fact() {
+        let fact =
+            site_fact("https://Shop.Example.com:8443/secret/reset?token=abc#x", "  Prefers\tconcise\n answers  ")
+                .expect("a site fact");
+        assert_eq!(fact, "@site shop.example.com Prefers concise answers");
+        assert_eq!(parse_site_memory(&fact).map(|memory| memory.text), Some("Prefers concise answers".into()));
+
+        let long = site_fact("https://example.com", &"x ".repeat(MAX_TEXT + 20)).expect("a bounded fact");
+        let memory = parse_site_memory(&long).expect("the fact is parseable");
+        assert_eq!(memory.text.chars().count(), MAX_TEXT);
+    }
+
+    #[test]
+    fn an_empty_oversized_or_non_http_page_gives_no_site_fact() {
+        assert_eq!(site_fact("", "A hint"), None);
+        assert_eq!(site_fact("   ", "A hint"), None);
+        assert_eq!(site_fact("https://example.com", "  \n "), None);
+        assert_eq!(site_fact(&format!("https://example.com/{}", "x".repeat(MAX_URL)), "A hint"), None);
+        for bad in ["about:blank", "ftp://example.com/a", "file:///C:/a", "example.com/a", "https:///a"] {
+            assert_eq!(site_fact(bad, "A hint"), None, "{bad} is not an http page");
+        }
     }
 
     #[test]
