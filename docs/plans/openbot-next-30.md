@@ -52,20 +52,22 @@ compiled or run end to end here (no memory for a build), as requested.
 | 38 | UTF-8 BOM in `SKILL.md` no longer hides its front matter | `market/skills.rs` |
 | 39 | A side question reads the thread it was asked in | `chat/team/side_question.rs` |
 
-## Still open, with a reason
+## Closed after this plan was written
 
-- **6 — roster row shows a picture's name**: a small host-preview change; not needed for the 20–30 target.
-- **7 — 0-byte attachment refused**: clear value, needs a decision on wording in every composer.
-- **9 — Read-aloud failure is visible**: Android only has the per-message Read aloud surface.
-- **10 — a chat correction updates the routine that uses it**: needs a belief→routine mapping.
-- **12 — mark a chat unread from the sidebar**: the host method exists; only the menus are left.
-- **14 — opt-in "Learn from my browsing"**: a new off-by-default setting and site-memory capture.
-- **25 — auth code detection reads label/placeholder**: the agent-driven half has no Codync surface.
-- **26 — recreate shared-tables file after deletion**: no shared-tables tool exists in Codync.
-- **27 — Stop ends a Gemini turn the provider no longer runs**: the existing stale-turn path covers most of it.
-- **28 — read online videos**: no bundled downloader; spawning one would bypass egress pinning.
-- **32 (part) — display formulas**: no math renderer in any client; would be its own change.
-- **35 — new flow node in view / composer focus after new thread**: low-impact micro-fixes.
+Verified in the code (the old "Still open" list was stale): #6 roster picture name (`message_text`
+reads `data["files"]`), #7 zero-byte refusal (`attachment_ok`), #9 read-aloud failure notice
+(`voice/receipts.rs`), #10 correction updates routines (`Routines::apply_belief`), #25 code field by
+label/placeholder (`code_field`), #27 stale-turn stop, #32 math in chat (`math_blocks`), and #35
+visible-spot placement plus composer focus (`visibleSpot`).
+
+## Still open, in the final close-out
+
+- **12 - mark a chat unread from the sidebar**: host method exists; wiring the client menus.
+- **14 - opt-in "Learn from my browsing"**: device pref plus site facts in the existing memory store.
+- **26 - recreate shared tables after deletion**: no shared-tables tool exists in Codync; a narrow
+  file-recreate helper is being added instead of inventing a tool surface.
+- **28 - read online videos**: no bundled downloader; a bounded link/metadata contract is being
+  added instead of fetching arbitrary URLs outside egress pinning.
 
 ## Out of scope (unchanged)
 

@@ -150,6 +150,59 @@ pub fn publish_after_stop<T>(result: Option<&[T]>, cancelled: bool) -> bool {
     }
 }
 
+/// OpenBot inventory #28: a link to a known video site, recognised without fetching it. Other
+/// hosts are refused, so no pure code can be used to probe arbitrary addresses outside egress.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VideoSite {
+    YouTube,
+    Vimeo,
+    TikTok,
+    Instagram,
+    Facebook,
+}
+
+/// The site a video link points to, or `None` when it is not a known video host.
+pub fn video_link_kind(url: &str) -> Option<VideoSite> {
+    let lower = url.trim().to_ascii_lowercase();
+    if !lower.starts_with("https://") && !lower.starts_with("http://") {
+        return None;
+    }
+    let host = lower.split("://").nth(1)?.split('/').next()?;
+    let host = host.split('@').last()?.split(':').next()?;
+    let site = if host == "youtu.be" || host.ends_with(".youtube.com") || host == "youtube.com" {
+        VideoSite::YouTube
+    } else if host == "vimeo.com" || host.ends_with(".vimeo.com") {
+        VideoSite::Vimeo
+    } else if host == "tiktok.com" || host.ends_with(".tiktok.com") {
+        VideoSite::TikTok
+    } else if host == "instagram.com" || host.ends_with(".instagram.com") {
+        VideoSite::Instagram
+    } else if host == "facebook.com" || host.ends_with(".facebook.com") || host == "fb.co" {
+        VideoSite::Facebook
+    } else {
+        return None;
+    };
+    Some(site)
+}
+
+/// A bounded plain-text description of a video an agent was asked about. No URL, page text or
+/// transcript is fetched here; the caller can fill these fields from an allowed browser snapshot.
+pub fn video_info_text(title: &str, author: &str, counts: &str, frames: usize) -> String {
+    let clean = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (title, author, counts) = (clean(title), clean(author), clean(counts));
+    let mut out = format!("Video: {}", title.chars().take(240).collect::<String>());
+    if !author.is_empty() {
+        out.push_str(&format!(" by {}", author.chars().take(120).collect::<String>()));
+    }
+    if !counts.is_empty() {
+        out.push_str(&format!(" ({})", counts.chars().take(120).collect::<String>()));
+    }
+    if frames > 0 {
+        out.push_str(&format!("; {frames} still frames available"));
+    }
+    out
+}
+
 /// A setting of a request that the model does not make, named for the person who asked.
 pub fn unsupported(what: &str, value: &str, model: &catalog::Model) -> Result<()> {
     bail!("{} does not make {what} {value}; try another model", model.name)
@@ -265,6 +318,22 @@ mod tests {
         let model = catalog::model("gpt-image").unwrap();
         let error = unsupported("a video", "", model).unwrap_err().to_string();
         assert!(error.contains("GPT Image"), "{error}");
+    }
+
+    #[test]
+    fn a_video_link_is_recognised_without_fetching_it() {
+        use super::{VideoSite, video_info_text, video_link_kind};
+        assert_eq!(video_link_kind("https://youtu.be/abc123"), Some(VideoSite::YouTube));
+        assert_eq!(video_link_kind("https://www.youtube.com/watch?v=x"), Some(VideoSite::YouTube));
+        assert_eq!(video_link_kind("https://vimeo.com/1"), Some(VideoSite::Vimeo));
+        assert_eq!(video_link_kind("https://www.tiktok.com/@a/video/1"), Some(VideoSite::TikTok));
+        assert_eq!(video_link_kind("https://instagram.com/reel/x"), Some(VideoSite::Instagram));
+        assert_eq!(video_link_kind("https://facebook.com/watch/?v=1"), Some(VideoSite::Facebook));
+        assert_eq!(video_link_kind("https://example.com/video"), None);
+        assert_eq!(video_link_kind("file:///etc/passwd"), None);
+        let text = video_info_text(" A  long\n title ", " Ana ", "1.2M views", 3);
+        assert!(text.contains("A long title") && text.contains("Ana") && text.contains("1.2M views"));
+        assert!(text.contains("3 still frames") && !text.contains('\n'));
     }
 
     #[test]

@@ -101,6 +101,25 @@ impl Store {
         Ok(self.db.locked().query_row("SELECT v FROM kv WHERE k = ?", [k], |r| r.get(0)).optional()?)
     }
 
+    /// OpenBot inventory #26: a table's backing value can disappear while the host runs. Read it
+    /// as a JSON array and recreate an empty one at the next action, leaving a real table alone.
+    /// Codync keeps tables in kv, so this is the equivalent of recreating a deleted `agent-data.db`.
+    pub fn table_rows(&self, key: &str) -> Result<Vec<serde_json::Value>> {
+        let raw = self.kv_get(key).unwrap_or_default();
+        match serde_json::from_str::<Vec<serde_json::Value>>(&raw) {
+            Ok(rows) => Ok(rows),
+            Err(_) => {
+                self.kv_set(key, "[]")?;
+                Ok(Vec::new())
+            }
+        }
+    }
+
+    /// The pure decision behind [`Store::table_rows`]: only a missing or corrupt table is recreated.
+    pub fn table_rows_from(raw: Option<&str>) -> Option<Vec<serde_json::Value>> {
+        raw.and_then(|value| serde_json::from_str::<Vec<serde_json::Value>>(value).ok())
+    }
+
     pub fn kv_get(&self, k: &str) -> Option<String> {
         let c = self.db.locked();
         logged("kv", c.query_row("SELECT v FROM kv WHERE k = ?", [k], |r| r.get(0)).optional()).flatten()
@@ -152,5 +171,20 @@ pub(crate) mod tests {
         let dir = std::env::temp_dir().join(format!("codync-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         Store::open(&dir.join("t.db")).unwrap()
+    }
+
+    #[test]
+    fn a_deleted_table_is_recreated_empty_at_the_next_read() {
+        use serde_json::json;
+        let store = temp_store();
+        store.kv_set("tables.notes", "[{\"id\":\"a\"}]").unwrap();
+        assert_eq!(store.table_rows("tables.notes").unwrap().len(), 1);
+        store.kv_delete("tables.notes").unwrap();
+        assert!(store.table_rows("tables.notes").unwrap().is_empty(), "a missing table becomes empty");
+        assert_eq!(store.kv_get("tables.notes").as_deref(), Some("[]"));
+        store.kv_set("tables.notes", "not json").unwrap();
+        assert!(store.table_rows("tables.notes").unwrap().is_empty(), "a corrupt table is replaced");
+        assert_eq!(Store::table_rows_from(Some("[1,2]")).unwrap(), vec![json!(1), json!(2)]);
+        assert_eq!(Store::table_rows_from(None), None);
     }
 }

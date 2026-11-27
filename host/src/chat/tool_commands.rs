@@ -41,6 +41,21 @@ pub const LISTED: [(&str, &str, &str); 4] = [
 /// sends the message as written. `backend` is the asked bot's agent, which decides the image and
 /// video models: a backend without image tools answers a note saying so.
 pub fn expand(text: &str, backend: &str) -> Option<String> {
+    // OpenBot inventory #28: a recognised video link is named as such, with a plain hint instead
+    // of a raw fetch error. No network request is made here; egress rules still own any fetching.
+    if let Some(site) = crate::media::video_link_kind(text.split_whitespace().next().unwrap_or_default()) {
+        let name = match site {
+            crate::media::VideoSite::YouTube => "YouTube",
+            crate::media::VideoSite::Vimeo => "Vimeo",
+            crate::media::VideoSite::TikTok => "TikTok",
+            crate::media::VideoSite::Instagram => "Instagram",
+            crate::media::VideoSite::Facebook => "Facebook",
+        };
+        return Some(format!(
+            "[Codync: the user shared a {name} video link. Read the page with the browser tool if it is allowed; \
+             if you cannot read it, say so plainly and ask them to describe what they want from it.]"
+        ));
+    }
     if let Some(asked) = crate::media::command::expand(text, backend) {
         return Some(asked);
     }
