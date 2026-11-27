@@ -2952,5 +2952,7 @@
   "Open page": "Abrir página",
   "Unsupported file type: {name}": "Tipo de archivo no compatible: {name}",
   "Adding files to the canvas…": "Añadiendo archivos al lienzo…",
-  "Loading channels…": "Cargando canales…"
+  "Loading channels…": "Cargando canales…",
+  "Learn from my browsing": "Aprender de mi navegación",
+  "Off by default. When a browser task succeeds, the agent can remember how that site works and use it on later visits. Only changes this device.": "Desactivado por defecto. Cuando una tarea en el navegador termina bien, el bot puede recordar cómo funciona ese sitio y usarlo en visitas posteriores. Solo afecta a este dispositivo."
 }

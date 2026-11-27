@@ -99,8 +99,11 @@ internal suspend fun AppStore.botTasks(botId: String): kotlinx.serialization.jso
 suspend fun AppStore.listFiles(botId: String, path: String): kotlinx.serialization.json.JsonArray =
     hostQuery("listFiles", buildJsonObject { put("botId", botId); put("path", path) }).jsonObject["entries"]!!.jsonArray
 /** Makes this message and the ones after it unread; opening the chat clears them. */
-internal fun AppStore.markUnread(entry: Entry) =
-    command("markUnread", body("botId" to entry.botId, "entryId" to entry.id), "unread:" + entry.id)
+internal fun AppStore.markUnread(entry: Entry) = markUnread(entry.botId, entry.id)
+
+/** The roster's "Mark unread": the host marks this message and everything after it, so the count stays as it is. */
+internal fun AppStore.markUnread(botId: String, entryId: String) =
+    command("markUnread", body("botId" to botId, "entryId" to entryId), "unread:" + entryId)
 
 internal suspend fun AppStore.hostCall(method: String, body: JsonObject, timeoutMillis: Long = 240_000): JsonElement = ready().call(method, body, timeoutMillis)
 internal suspend fun AppStore.hostFiles(): HostFiles = HostFiles(ready())

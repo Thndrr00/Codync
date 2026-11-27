@@ -10,6 +10,16 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
+/** The host payload behind a roster "Mark unread" menu item. */
+internal data class UnreadAction(val entryId: String)
+
+/** The pure decision behind "Mark unread": without a message there is no menu item to offer. */
+internal fun markUnreadAction(entryId: String?): UnreadAction? = entryId?.let(::UnreadAction)
+
+/** The newest chat-visible agent reply in the cached conversation, which the host marks unread from. */
+internal fun unreadEntryId(entries: List<Entry>): String? =
+    entries.asReversed().firstOrNull { it.kind == "agent" && it.isChat }?.id
+
 /** Shared single-source-of-truth mutations for the bot roster. */
 internal fun AppStore.toggleBotPin(bot: Bot) {
     if (bot.lead) return
@@ -116,6 +126,14 @@ internal fun botRosterActions(bot: Bot, store: AppStore, edit: () -> Unit, delet
         add(
             MenuItem("Mark as read", icon = "checkmark.message") {
                 store.markBotRead(bot)
+            },
+        )
+        val unread = markUnreadAction(
+            unreadEntryId(store.state.value.entries.filter { it.botId == bot.id && it.threadId == null }),
+        )
+        if (unread != null) add(
+            MenuItem("Mark unread", icon = "envelope.fill") {
+                store.markUnread(bot.id, unread.entryId)
             },
         )
         add(

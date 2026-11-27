@@ -200,6 +200,11 @@ extension BotStore {
         perform(replay: true) { try await $0.markRead(botId) }
     }
 
+    /// The roster's "Mark unread": the host marks this message and the rest from it, so the count stays as it is.
+    public func markUnread(_ botId: String, entryId: String) {
+        perform(replay: true) { try await $0.markUnread(botId: botId, entryId: entryId) }
+    }
+
     public func setPinned(_ bot: Bot, _ pinned: Bool) {
         var d = BotDraft(bot)
         d.pinned = pinned

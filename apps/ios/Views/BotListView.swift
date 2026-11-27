@@ -429,6 +429,12 @@ struct BotListView: View {
                     store.setMuted(bot, bot.notify != false)
                 },
             ]
+            // The host needs a message to start from; without a cached reply there is no item.
+            if let unread = unreadAction(unreadEntryId(store.chat(bot.id))) {
+                items.append(MenuItem("Mark unread", icon: "envelope.fill") {
+                    store.markUnread(bot.id, entryId: unread.entryId)
+                })
+            }
             if !bot.lead && !bot.isGroup && store.supportsLeadChoice {
                 items.append(MenuItem("Make lead agent", icon: "star") { store.setLead(bot) })
             }

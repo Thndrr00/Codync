@@ -304,6 +304,11 @@ public extension HostClient {
         let _: Empty = try await call("markRead", ["botId": id])
     }
 
+    /// Makes this message and those after it unread; opening the chat clears them again.
+    func markUnread(botId: String, entryId: String) async throws {
+        let _: Empty = try await call("markUnread", ["botId": botId, "entryId": entryId])
+    }
+
     /// Goes on with a turn that stopped half done, from its card; the host refuses a card already used.
     func continueTurn(entryId: String) async throws {
         let _: Empty = try await call("continueTurn", ["entryId": entryId])

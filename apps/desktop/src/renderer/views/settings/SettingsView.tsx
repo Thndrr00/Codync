@@ -19,6 +19,7 @@ import { analytics, useScreenViewed } from '../../store/analytics'
 import { useBackWithHistory } from '../chat-navigation'
 import { StoreContext, useApp } from '../../store/context'
 import { SwitchRow } from '../bots/parts'
+import { BrowsingLearningRow } from './BrowsingLearningRow'
 import { ComputerBadge } from '../ComputerBadge'
 import { UpdateButton, useUpdates } from '../UpdateButton'
 import { ComputersView } from './ComputersView'
@@ -290,6 +291,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <SwitchRow title="Moving agent faces" detail="Bot faces look around, blink and breathe. Turn it off to keep them still. Only changes this device." on={movingAgentFaces} onChange={setMovingAgentFaces} />
         <SwitchRow title="Startup animation" detail="Opens with the agent pile. Turn it off to show one agent with bouncing dots while a computer opens or connects. Only changes this device." on={startupAnimation} onChange={setStartupAnimation} />
         <SwitchRow title="Restore the last workspace on launch" detail="Reopen the files and artifacts you had open in each chat. Only changes this device." on={restoreLastWorkspace} onChange={setRestoreLastWorkspace} />
+        <BrowsingLearningRow />
       </CardSection>
       <EnterpriseSection />
       <ThemePaletteSection />

@@ -6,6 +6,7 @@ mod apps_bridge;
 pub mod apps_runtime;
 mod bots;
 pub(crate) mod browser_fix;
+mod browsing_learning;
 mod catalog;
 mod computer_activity;
 mod custom_provider;
@@ -272,6 +273,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };
+    if browsing_learning::METHODS.contains(&method) {
+        return browsing_learning::call(hub, method, &b);
+    }
     let b = match templates::call(hub, caller, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,

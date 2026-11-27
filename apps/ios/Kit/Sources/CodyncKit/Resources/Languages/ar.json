@@ -927,5 +927,8 @@
   "Open page": "Open page",
   "Unsupported file type: {name}": "Unsupported file type: {name}",
   "Adding files to the canvas…": "Adding files to the canvas…",
-  "Loading channels…": "Loading channels…"
+  "Loading channels…": "Loading channels…",
+  "Learn from my browsing": "Learn from my browsing",
+  "Off by default. When a browser task succeeds, the agent can remember how that site works and use it on later visits. Only changes this device.": "Off by default. When a browser task succeeds, the agent can remember how that site works and use it on later visits. Only changes this device.",
+  "Mark unread": "Mark unread"
 }
