@@ -78,6 +78,25 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "waitingOnYou" => crate::chat::waiting_on_you::list(
+            &b["rows"].as_array().cloned().unwrap_or_default(),
+            crate::store::now_ms(),
+            usize::try_from(b["limit"].as_u64().unwrap_or(100)).unwrap_or(100),
+        ),
+        "approvalOrder" => json!({"order": crate::chat::approval_order::line(
+            &b["requests"].as_array().cloned().unwrap_or_default()
+        )}),
+        "approvalMayRun" => json!({"allowed": crate::chat::approval_order::may_run(
+            &b["requests"].as_array().cloned().unwrap_or_default(),
+            str_arg(&b, "runId")?,
+        )}),
+        "sight" => crate::chat::sight::sight(
+            b["visible"].as_bool().unwrap_or(true),
+            b["focused"].as_bool().unwrap_or(true),
+            b["pointerOver"].as_bool().unwrap_or(false),
+            b["lastInput"].as_i64().unwrap_or(crate::store::now_ms()),
+            crate::store::now_ms(),
+        ),
         "outageNotice" => crate::chat::outage_notice::notice(
             str_arg(&b, "computer")?,
             usize::try_from(b["runs"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),

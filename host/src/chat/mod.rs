@@ -3,6 +3,7 @@
 
 pub mod agent_request;
 pub mod agent_tombstone;
+pub mod approval_order;
 pub mod approvals_level;
 pub mod apps;
 pub mod artifacts;
@@ -62,6 +63,7 @@ pub mod resourceful;
 pub mod scratchpad;
 pub mod setup;
 pub mod shared_setup;
+pub mod sight;
 pub mod signin_method;
 pub mod skill_proposals;
 pub mod skills;
@@ -75,3 +77,4 @@ pub mod ui_action;
 pub mod uploads;
 pub mod vault;
 pub mod voice;
+pub mod waiting_on_you;

@@ -82,6 +82,10 @@ routine offered when connecting an app, **0243** one bounded /tmp memory pool wi
 told everywhere. They live in `chat/{improvement,outage_notice,connect_routine,tmp_budget,
 message_origin,os_permission}.rs`.
 
+A third pass added **0172** "waiting on you" as a view of the inbox (not a second list), **0182**
+approvals running in the order asked, and **0228** one "anyone looking" state for quiet work. They
+live in `chat/{waiting_on_you,approval_order,sight}.rs`.
+
 ## In B and C, fully brought in
 
 - **ADR 0089 (stretches)** is wired into `routines::runner::begin`: a routine's chain of unattended runs stops at the caps (10 unattended / 50 interactive) and the run is cancelled, so the agent never runs forever on its own.
