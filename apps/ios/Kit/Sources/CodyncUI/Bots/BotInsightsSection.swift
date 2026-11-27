@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let noai = insights.noai
+                    Text(noai.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("State")): \(noai.state)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Brain")): \(noai.brain)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let devices = insights.devices
                     Text(devices.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("All")): \(devices.all)").font(.footnote).foregroundStyle(Palette.secondary)

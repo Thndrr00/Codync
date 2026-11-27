@@ -80,6 +80,7 @@ public struct BotInsights: Decodable, Sendable {
     public let toolreplay: InsightToolReplay
     public let vault: InsightVault
     public let devices: InsightDevices
+    public let noai: InsightNoAi
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -109,6 +110,40 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed no-AI card.
+public struct InsightNoAiCard: Decodable, Sendable {
+    public let agentId: String
+    public let forUserId: String?
+    public let intent: String
+    public let provider: String?
+    public let autoOpen: Bool?
+    public let own: String?
+    public let signedOut: Bool?
+    public let planLine: String?
+    public let model: String?
+    public let why: String?
+    public let missing: String?
+    public let held: Bool?
+}
+
+/// A host-computed no-AI summary.
+public struct InsightNoAi: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let card: InsightNoAiCard
+    public let line: String
+    public let state: String
+    public let passes: Bool
+    public let opens: Bool
+    public let brain: String
+    public let kind: String
+    public let choices: Int
+    public let firstChoice: String
+    public let autoOpen: Bool?
     public let summary: [InsightSummaryRow]
 }
 

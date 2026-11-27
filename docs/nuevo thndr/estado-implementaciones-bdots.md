@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Sin IA (30 adiciones + UI en 4 clientes)
+
+`bdots_no_ai.rs` añade 21 helpers puros y 9 constantes portados de `no-ai.ts` de **agentes-chat
+0.7.5**: tarjetas `noAi`, estado de mensajes retenidos, líneas de plan, intents de conexión,
+mapas plan↔CLI, elecciones del picker y claves de presentación. Reutiliza `bdots_textfmt` y
+`bdots_desk`. El endpoint `botInsights` añade el campo `noai`; la sección «No AI» se muestra en los
+cuatro clientes.
+
 ## Dispositivos (30 adiciones + UI en 4 clientes)
 
 `bdots_devices.rs` añade 24 helpers puros y 6 constantes portados de `devices.ts` de **agentes-chat

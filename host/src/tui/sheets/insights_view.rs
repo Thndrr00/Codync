@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let noai = &data["noai"];
+    if noai.is_object() {
+        line(buf, &mut y, tr("No AI").into_owned(), t.bold.patch(t.panel));
+        let headline = noai["headline"].as_str().unwrap_or("");
+        let state = noai["state"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {state}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let devices = &data["devices"];
     if devices.is_object() {
         line(buf, &mut y, tr("Devices").into_owned(), t.bold.patch(t.panel));

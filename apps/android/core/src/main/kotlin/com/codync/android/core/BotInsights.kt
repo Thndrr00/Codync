@@ -83,9 +83,30 @@ data class BotInsights(
     val toolreplay: InsightToolReplay = InsightToolReplay(),
     val vault: InsightVault = InsightVault(),
     val devices: InsightDevices = InsightDevices(),
+    val noai: InsightNoAi = InsightNoAi(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed no-AI card. */
+@Serializable
+data class InsightNoAiCard(
+    val agentId: String = "", val forUserId: String? = null, val intent: String = "",
+    val provider: String? = null, val autoOpen: Boolean? = null, val own: String? = null,
+    val signedOut: Boolean? = null, val planLine: String? = null, val model: String? = null,
+    val why: String? = null, val missing: String? = null, val held: Boolean? = null,
+)
+
+/** A host-computed no-AI summary. */
+@Serializable
+data class InsightNoAi(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val card: InsightNoAiCard = InsightNoAiCard(), val line: String = "",
+    val state: String = "", val passes: Boolean = false, val opens: Boolean = false,
+    val brain: String = "", val kind: String = "", val choices: Int = 0,
+    val firstChoice: String = "", val autoOpen: Boolean? = null,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed device portrait. */

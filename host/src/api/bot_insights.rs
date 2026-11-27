@@ -2486,6 +2486,31 @@ fn devices_view() -> Value {
     })
 }
 
+/// No-AI cards and plan choices from agentes-chat.
+fn no_ai_view() -> Value {
+    use crate::bdots_no_ai as n;
+
+    let meta = serde_json::json!({"noAi":{"agentId":"a1","intent":"api_key","reason":"plan_hold","autoOpen":true}});
+    let card = n::no_ai_card_of(Some(&meta));
+    let line = n::no_ai_line_key(None, true, None);
+    json!({
+        "headline": format!("{} · {} · {}", n::NO_AI, n::plan_choice_label("chatgpt"), n::count_label(n::PLAN_CHOICES.len())),
+        "tone": if card["held"] == true { "attention" } else { "good" },
+        "icon": "brain",
+        "card": card,
+        "line": line,
+        "state": n::kept_card_state(true, false, true),
+        "passes": n::plan_line_passes(Some("computer_away")),
+        "opens": n::opens_by_itself(Some("api_key"), true),
+        "brain": n::brain_of_plan("chatgpt"),
+        "kind": n::kind_of_choice("zen"),
+        "choices": n::PLAN_CHOICES.len(),
+        "firstChoice": n::plan_choice_label(n::PLAN_CHOICES[0]),
+        "autoOpen": card["autoOpen"],
+        "summary": n::summary(n::RIGHT_HAND_PLAN_LINES.len(), n::PLAN_CHOICES.len(), true, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2620,6 +2645,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "toolreplay": toolreplay_view(),
         "vault": vault_view(),
         "devices": devices_view(),
+        "noai": no_ai_view(),
         "description": description,
         "model": model,
         "provider": provider,

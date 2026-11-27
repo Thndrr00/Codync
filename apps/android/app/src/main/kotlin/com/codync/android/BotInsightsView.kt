@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val noai = insights.noai
+            CardSection("No AI") {
+                row { Text(noai.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("State", noai.state) }
+                row { ValueRow("Brain", noai.brain) }
+                row { ValueRow("Choices", noai.choices.toString()) }
+            }
             val devices = insights.devices
             CardSection("Devices") {
                 row { Text(devices.headline, style = Type.subheadline.semibold, color = Palette.text) }
