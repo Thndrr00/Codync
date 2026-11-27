@@ -1,6 +1,23 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightModelPrefs {
+  headline: string
+  tone: string
+  icon: string
+  levels: string[]
+  openaiLevels: string[]
+  anthropicLevels: string[]
+  modelDefault: string
+  chat: string | null
+  adaptive: boolean
+  label: string
+  humanized: string
+  openrouter: boolean
+  prefs: number
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightRouter {
   headline: string
   tone: string
@@ -1291,6 +1308,7 @@ export interface BotInsights {
   missions: InsightMissions
   cmdpolicy: InsightCmdPolicy
   router: InsightRouter
+  modelprefs: InsightModelPrefs
   routines: InsightRoutine[]
   usage: {
     used: number

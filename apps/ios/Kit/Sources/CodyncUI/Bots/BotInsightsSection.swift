@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let modelprefs = insights.modelprefs
+                    Text(modelprefs.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Default")): \(modelprefs.modelDefault)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Levels")): \(modelprefs.levels.joined(separator: " · "))").font(.footnote).foregroundStyle(Palette.tertiary)
                     let router = insights.router
                     Text(router.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Selected")): \(router.selected.joined(separator: ", "))").font(.footnote).foregroundStyle(Palette.secondary)

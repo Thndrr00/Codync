@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val modelprefs = insights.modelprefs
+            CardSection("Model preferences") {
+                row { Text(modelprefs.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Default", modelprefs.modelDefault) }
+                row { ValueRow("Chat", modelprefs.chat ?: "—") }
+                row { ValueRow("Levels", modelprefs.levels.joinToString(" · ")) }
+            }
             val router = insights.router
             CardSection("Router") {
                 row { Text(router.headline, style = Type.subheadline.semibold, color = Palette.text) }

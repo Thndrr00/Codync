@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let modelprefs = &data["modelprefs"];
+    if modelprefs.is_object() {
+        line(buf, &mut y, tr("Model preferences").into_owned(), t.bold.patch(t.panel));
+        let headline = modelprefs["headline"].as_str().unwrap_or("");
+        let default = modelprefs["modelDefault"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {default}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let router = &data["router"];
     if router.is_object() {
         line(buf, &mut y, tr("Router").into_owned(), t.bold.patch(t.panel));

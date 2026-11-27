@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Preferencias de modelo (30 adiciones + UI en 4 clientes)
+
+`bdots_model_prefs.rs` añade 24 helpers puros y 6 constantes portados de `model-prefs.ts` de
+**mercury-agent 2.7.0**: refs de modelo, niveles de razonamiento, preferencias por modelo y por chat,
+opciones de Anthropic/OpenRouter, nombres legibles y agrupación por proveedor. Reutiliza
+`bdots_desk`. El endpoint `botInsights` añade el campo `modelprefs`; la sección «Model preferences»
+se muestra en los cuatro clientes.
+
 ## Router (30 adiciones + UI en 4 clientes)
 
 `bdots_router.rs` añade 24 helpers puros y 6 constantes portados de `router.ts` de **agentes-chat

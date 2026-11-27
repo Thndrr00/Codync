@@ -84,6 +84,7 @@ public struct BotInsights: Decodable, Sendable {
     public let missions: InsightMissions
     public let cmdpolicy: InsightCmdPolicy
     public let router: InsightRouter
+    public let modelprefs: InsightModelPrefs
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -113,6 +114,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed model preferences summary.
+public struct InsightModelPrefs: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let levels: [String]
+    public let openaiLevels: [String]
+    public let anthropicLevels: [String]
+    public let modelDefault: String
+    public let chat: String?
+    public let adaptive: Bool
+    public let label: String
+    public let humanized: String
+    public let openrouter: Bool
+    public let prefs: Int
     public let summary: [InsightSummaryRow]
 }
 

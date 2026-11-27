@@ -2605,6 +2605,32 @@ fn router_view() -> Value {
     })
 }
 
+/// Model preferences and reasoning levels from mercury-agent.
+fn modelprefs_view() -> Value {
+    use crate::bdots_model_prefs as m;
+
+    let prefs = serde_json::json!({"openai::gpt-5":{"label":"My GPT","reasoning":"high"}});
+    let model = "gpt-5";
+    let levels = m::reasoning_levels_for("openai", Some(model));
+    let effort = m::effort_for("openai", model, &prefs, Some("medium"));
+    json!({
+        "headline": format!("{} · {} · {}", m::reasoning_label("xhigh"), m::count_label(levels.len()), m::model_group_label("openai", model)),
+        "tone": if effort["chatUnsupported"] == true { "attention" } else { "good" },
+        "icon": "brain",
+        "levels": levels,
+        "openaiLevels": m::reasoning_levels_for("openai", Some("gpt-5")),
+        "anthropicLevels": m::reasoning_levels_for("anthropic", Some("claude-opus-5")),
+        "modelDefault": effort["modelDefault"],
+        "chat": effort["chat"],
+        "adaptive": m::claude_thinking("claude-opus-5")["adaptive"],
+        "label": m::model_pref_of(&prefs, "openai", model)["label"],
+        "humanized": m::humanize_model_name("gpt-oss-120b"),
+        "openrouter": m::is_openrouter_url(Some("https://openrouter.ai/api/v1")),
+        "prefs": m::sanitize_prefs(&prefs).as_object().map_or(0, |map| map.len()),
+        "summary": m::summary(levels.len(), m::PROVIDER_LABELS.len(), true, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2743,6 +2769,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "missions": missions_view(),
         "cmdpolicy": cmdpolicy_view(),
         "router": router_view(),
+        "modelprefs": modelprefs_view(),
         "description": description,
         "model": model,
         "provider": provider,

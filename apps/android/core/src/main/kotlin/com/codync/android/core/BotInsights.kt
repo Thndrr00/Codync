@@ -87,9 +87,21 @@ data class BotInsights(
     val missions: InsightMissions = InsightMissions(),
     val cmdpolicy: InsightCmdPolicy = InsightCmdPolicy(),
     val router: InsightRouter = InsightRouter(),
+    val modelprefs: InsightModelPrefs = InsightModelPrefs(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed model preferences summary. */
+@Serializable
+data class InsightModelPrefs(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val levels: List<String> = emptyList(), val openaiLevels: List<String> = emptyList(),
+    val anthropicLevels: List<String> = emptyList(), val modelDefault: String = "",
+    val chat: String? = null, val adaptive: Boolean = false, val label: String = "",
+    val humanized: String = "", val openrouter: Boolean = false, val prefs: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed router threshold. */
