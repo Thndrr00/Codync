@@ -75,6 +75,13 @@ one-line intent before slow work, **0254/0256** time per ask by kind and by stag
 maintenance words instead of a bare "Offline". They live in `chat/{approvals_level,keep_running,
 intent_line,ask_metrics,computer_maintenance}.rs`.
 
+A second pass over the newer ADRs added six more behaviors, also as host modules with tests and API
+methods: **0219** reviewed, undoable improvements, **0241** computer down/back notices, **0242** a
+routine offered when connecting an app, **0243** one bounded /tmp memory pool with pressure actions,
+**0250** message origin (only typed words are the person's own) and **0255** one OS-permission wait
+told everywhere. They live in `chat/{improvement,outage_notice,connect_routine,tmp_budget,
+message_origin,os_permission}.rs`.
+
 ## In B and C, fully brought in
 
 - **ADR 0089 (stretches)** is wired into `routines::runner::begin`: a routine's chain of unattended runs stops at the caps (10 unattended / 50 interactive) and the run is cancelled, so the agent never runs forever on its own.

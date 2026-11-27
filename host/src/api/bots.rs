@@ -78,6 +78,31 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "outageNotice" => crate::chat::outage_notice::notice(
+            str_arg(&b, "computer")?,
+            usize::try_from(b["runs"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),
+            usize::try_from(b["calls"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),
+            b["back"].as_bool().unwrap_or(false),
+        ),
+        "connectRoutine" => crate::chat::connect_routine::offer(str_arg(&b, "app")?, b["bot"].as_str().unwrap_or("")),
+        "tmpPressure" => crate::chat::tmp_budget::pressure(
+            b["freeRatio"].as_f64().unwrap_or(1.0),
+            b["idleTmpBytes"].as_u64().unwrap_or(0),
+            usize::try_from(b["idleDesktops"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),
+        ),
+        "messageOrigin" => crate::chat::message_origin::origin(b["origin"].as_str()),
+        "osPermissionWait" => crate::chat::os_permission::wait(
+            str_arg(&b, "permission")?,
+            b["agent"].as_str().unwrap_or("an agent"),
+            b["what"].as_str().unwrap_or("do the work"),
+            crate::store::now_ms(),
+        )
+        .map_err(|e| anyhow!(e))?,
+        "improvementApply" => crate::chat::improvement::apply(
+            str_arg(&b, "text")?,
+            b["by"].as_str().unwrap_or("owner"),
+            crate::store::now_ms(),
+        ),
         "askKind" => json!({
             "kind": crate::chat::ask_metrics::kind_from_work(
                 usize::try_from(b["toolCalls"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),
