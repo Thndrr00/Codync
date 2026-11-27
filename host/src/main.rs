@@ -35,6 +35,7 @@ mod bdots_context_pin;
 mod bdots_context_select;
 mod bdots_conversation;
 mod bdots_cron;
+mod bdots_csi;
 mod bdots_desk;
 mod bdots_devices;
 mod bdots_dictation;

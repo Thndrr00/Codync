@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val csiterm = insights.csiterm
+            CardSection("Terminal sequences") {
+                row { Text(csiterm.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Prefix", csiterm.prefix) }
+                row { ValueRow("Cursor style", csiterm.cursorStyle) }
+                row { ValueRow("Scroll", csiterm.scroll) }
+            }
             val promptactions = insights.promptactions
             CardSection("Prompt actions") {
                 row { Text(promptactions.headline, style = Type.subheadline.semibold, color = Palette.text) }

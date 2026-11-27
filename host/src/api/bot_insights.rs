@@ -2681,6 +2681,29 @@ fn promptactions_view() -> Value {
     })
 }
 
+/// CSI terminal control sequences from hermes-agent's TUI.
+fn csi_view() -> Value {
+    use crate::bdots_csi as c;
+
+    json!({
+        "headline": format!("{} CSI · {} · {}", c::count_label(6), c::cursor_style("block", true), c::erase_lines(2).len()),
+        "tone": "good",
+        "icon": "terminal.fill",
+        "prefix": c::CSI_PREFIX,
+        "cursorHome": c::CURSOR_HOME,
+        "eraseLine": c::ERASE_LINE,
+        "eraseScreen": c::ERASE_SCREEN,
+        "cursorStyle": c::cursor_style("bar", false),
+        "paramByte": c::is_csi_param(b'0'),
+        "intermediateByte": c::is_csi_intermediate(b' '),
+        "finalByte": c::is_csi_final(b'A'),
+        "move": c::cursor_move(-2, 3),
+        "eraseLines": c::erase_lines(2),
+        "scroll": c::set_scroll_region(1, 24),
+        "summary": c::summary(6, 24, true, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2822,6 +2845,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "modelprefs": modelprefs_view(),
         "botstore": botstore_view(),
         "promptactions": promptactions_view(),
+        "csiterm": csi_view(),
         "description": description,
         "model": model,
         "provider": provider,

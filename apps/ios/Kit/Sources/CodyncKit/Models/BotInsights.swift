@@ -87,6 +87,7 @@ public struct BotInsights: Decodable, Sendable {
     public let modelprefs: InsightModelPrefs
     public let botstore: InsightBotStore
     public let promptactions: InsightPromptActions
+    public let csiterm: InsightCsiTerm
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -116,6 +117,25 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed CSI terminal summary.
+public struct InsightCsiTerm: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let prefix: String
+    public let cursorHome: String
+    public let eraseLine: String
+    public let eraseScreen: String
+    public let cursorStyle: String
+    public let paramByte: Bool
+    public let intermediateByte: Bool
+    public let finalByte: Bool
+    public let move: String
+    public let eraseLines: String
+    public let scroll: String
     public let summary: [InsightSummaryRow]
 }
 

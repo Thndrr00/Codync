@@ -1,6 +1,24 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightCsiTerm {
+  headline: string
+  tone: string
+  icon: string
+  prefix: string
+  cursorHome: string
+  eraseLine: string
+  eraseScreen: string
+  cursorStyle: string
+  paramByte: boolean
+  intermediateByte: boolean
+  finalByte: boolean
+  move: string
+  eraseLines: string
+  scroll: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightPromptActions {
   headline: string
   tone: string
@@ -1344,6 +1362,7 @@ export interface BotInsights {
   modelprefs: InsightModelPrefs
   botstore: InsightBotStore
   promptactions: InsightPromptActions
+  csiterm: InsightCsiTerm
   routines: InsightRoutine[]
   usage: {
     used: number

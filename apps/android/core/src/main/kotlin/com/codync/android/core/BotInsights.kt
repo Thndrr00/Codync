@@ -90,9 +90,21 @@ data class BotInsights(
     val modelprefs: InsightModelPrefs = InsightModelPrefs(),
     val botstore: InsightBotStore = InsightBotStore(),
     val promptactions: InsightPromptActions = InsightPromptActions(),
+    val csiterm: InsightCsiTerm = InsightCsiTerm(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed CSI terminal summary. */
+@Serializable
+data class InsightCsiTerm(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val prefix: String = "", val cursorHome: String = "", val eraseLine: String = "",
+    val eraseScreen: String = "", val cursorStyle: String = "", val paramByte: Boolean = false,
+    val intermediateByte: Boolean = false, val finalByte: Boolean = false,
+    val move: String = "", val eraseLines: String = "", val scroll: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed prompt action summary. */

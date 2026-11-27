@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let csiterm = &data["csiterm"];
+    if csiterm.is_object() {
+        line(buf, &mut y, tr("Terminal sequences").into_owned(), t.bold.patch(t.panel));
+        let headline = csiterm["headline"].as_str().unwrap_or("");
+        let scroll = csiterm["scroll"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {scroll}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let promptactions = &data["promptactions"];
     if promptactions.is_object() {
         line(buf, &mut y, tr("Prompt actions").into_owned(), t.bold.patch(t.panel));

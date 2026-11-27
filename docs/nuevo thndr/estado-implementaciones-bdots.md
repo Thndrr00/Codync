@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Secuencias CSI (30 adiciones + UI en 4 clientes)
+
+`bdots_csi.rs` añade 24 helpers puros y 6 constantes portados de `csi.ts` del TUI de
+**hermes-agent 3.14**: rangos de bytes CSI, construcción de secuencias, movimiento de cursor,
+borrado, scroll, estilos de cursor y regiones. Reutiliza `bdots_desk`. El endpoint `botInsights`
+añade el campo `csiterm`; la sección «Terminal sequences» se muestra en los cuatro clientes.
+
 ## Acciones de prompt (29 adiciones + UI en 4 clientes)
 
 `bdots_prompt_actions.rs` añade 23 helpers puros y 6 constantes portados de `use-prompt-actions/utils.ts`

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let csiterm = insights.csiterm
+                    Text(csiterm.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Prefix")): \(csiterm.prefix.debugDescription)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Scroll")): \(csiterm.scroll.debugDescription)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let promptactions = insights.promptactions
                     Text(promptactions.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Surface")): \(promptactions.surface ?? "—")").font(.footnote).foregroundStyle(Palette.secondary)
