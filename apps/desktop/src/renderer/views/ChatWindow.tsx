@@ -56,6 +56,7 @@ import { OpenVoiceSettings } from './call/CallView'
 import { AccountPanelLayer, ProfileAvatar } from './PanelMenus'
 import { DesktopActionMenu } from './DesktopActionMenu'
 import { moveToSectionItems, sectionHeaderItems } from './section-menus'
+import { unreadAction, unreadEntryId } from './roster-unread'
 import { makeLeadItems, offersDelete, voiceTarget } from './lead-menus'
 import { NameDialog, type Naming } from './NameDialog'
 import { useTraySummary } from './tray-summary'
@@ -446,26 +447,30 @@ function ChatSplitView() {
   }
 
   // One plain list. The lead stays in sight: no hide.
-  const botActions = (bot: Bot, store: BotStore): MenuItem[] => [
-    { title: BOT_STATUS_DETAIL_TITLE, icon: 'info.circle', action: () => setStatusBot({ bot, store }) },
-    { title: bot.pinned ? 'Unpin' : 'Pin', icon: 'pin', action: () => store.setPinned(bot, !bot.pinned) },
-    ...moveToSectionItems(bot, store, setNaming),
-    { title: 'Threads', icon: 'checklist', action: () => setTasksBot({ bot, store }) },
-    { title: 'Agent tasks…', icon: 'square.stack.3d.up', action: () => setAgentTasksBot({ bot, store }) },
-    { title: 'Files', icon: 'folder', action: () => setFilesBot({ bot, store }) },
-    ...(bot.kind === 'group' ? [] : [{ title: 'Duplicate', icon: 'square.on.square', action: () => void store.duplicateBot(bot) }]),
-    { title: 'Mark as Read', icon: 'bell.badge', action: () => store.markAllRead(bot.id) },
-    {
-      title: bot.notify === false ? 'Unmute agent' : 'Mute agent',
-      icon: bot.notify === false ? 'bell' : 'bell.slash',
-      action: () => store.setMuted(bot, bot.notify !== false),
-    },
-    { title: 'Edit Profile…', icon: 'square.and.pencil', action: () => setEditing({ id: crypto.randomUUID(), draft: draftOf(bot), store }) },
-    { title: 'Copy conversation ID', icon: 'square.on.square', action: () => window.codync.app.copy(bot.id) },
-    ...makeLeadItems(bot, store),
-    ...(bot.lead ? [] : [{ title: 'Hide from sidebar', icon: 'eye.slash', action: () => store.setHidden(bot, true) }]),
-    ...(offersDelete(bot, store) ? [{ title: 'Delete', icon: 'trash', destructive: true, action: () => setConfirmDelete({ bot, store }) }] : []),
-  ]
+  const botActions = (bot: Bot, store: BotStore): MenuItem[] => {
+    const unread = unreadAction(unreadEntryId(store.allEntries(bot.id)))
+    return [
+      { title: BOT_STATUS_DETAIL_TITLE, icon: 'info.circle', action: () => setStatusBot({ bot, store }) },
+      { title: bot.pinned ? 'Unpin' : 'Pin', icon: 'pin', action: () => store.setPinned(bot, !bot.pinned) },
+      ...moveToSectionItems(bot, store, setNaming),
+      { title: 'Threads', icon: 'checklist', action: () => setTasksBot({ bot, store }) },
+      { title: 'Agent tasks…', icon: 'square.stack.3d.up', action: () => setAgentTasksBot({ bot, store }) },
+      { title: 'Files', icon: 'folder', action: () => setFilesBot({ bot, store }) },
+      ...(bot.kind === 'group' ? [] : [{ title: 'Duplicate', icon: 'square.on.square', action: () => void store.duplicateBot(bot) }]),
+      { title: 'Mark as Read', icon: 'bell.badge', action: () => store.markAllRead(bot.id) },
+      ...(unread ? [{ title: 'Mark unread', icon: 'envelope.fill', action: () => store.markUnread(bot.id, unread.entryId) }] : []),
+      {
+        title: bot.notify === false ? 'Unmute agent' : 'Mute agent',
+        icon: bot.notify === false ? 'bell' : 'bell.slash',
+        action: () => store.setMuted(bot, bot.notify !== false),
+      },
+      { title: 'Edit Profile…', icon: 'square.and.pencil', action: () => setEditing({ id: crypto.randomUUID(), draft: draftOf(bot), store }) },
+      { title: 'Copy conversation ID', icon: 'square.on.square', action: () => window.codync.app.copy(bot.id) },
+      ...makeLeadItems(bot, store),
+      ...(bot.lead ? [] : [{ title: 'Hide from sidebar', icon: 'eye.slash', action: () => store.setHidden(bot, true) }]),
+      ...(offersDelete(bot, store) ? [{ title: 'Delete', icon: 'trash', destructive: true, action: () => setConfirmDelete({ bot, store }) }] : []),
+    ]
+  }
 
   // ↑/↓ in the roster move the selection; Alt+↑/↓ moves the selected bot itself.
   const onListKey = (e: React.KeyboardEvent) => {

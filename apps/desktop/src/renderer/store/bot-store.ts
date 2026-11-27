@@ -579,6 +579,11 @@ export class BotStore extends BotSync {
     this.perform((c) => c.call('markRead', { botId }), true)
   }
 
+  /** The roster's "Mark unread": a message and everything after it, until the chat is opened. */
+  markUnread(botId: string, entryId: string) {
+    this.perform((c) => c.call('markUnread', { botId, entryId }), true)
+  }
+
   private patchBot(bot: Bot, change: Partial<BotDraft>) {
     const current = this.bots.get(bot.id)
     if (current) this.bots.set(bot.id, { ...current, ...change } as Bot)
