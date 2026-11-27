@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val accounts = insights.accounts
+            CardSection("Accounts") {
+                row { Text(accounts.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("State", accounts.state) }
+                row { ValueRow("Action", accounts.action) }
+                row { ValueRow("Title", accounts.title) }
+            }
             val engine = insights.engine
             CardSection("Engine") {
                 row { Text(engine.headline, style = Type.subheadline.semibold, color = Palette.text) }

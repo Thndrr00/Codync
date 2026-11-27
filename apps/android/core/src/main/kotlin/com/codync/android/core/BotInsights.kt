@@ -75,9 +75,20 @@ data class BotInsights(
     val approvalrules: InsightApprovalRules = InsightApprovalRules(),
     val brainpicker: InsightBrainPicker = InsightBrainPicker(),
     val engine: InsightEngine = InsightEngine(),
+    val accounts: InsightAccounts = InsightAccounts(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed AI accounts summary. */
+@Serializable
+data class InsightAccounts(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val accounts: Int = 0, val plans: Int = 0, val state: String = "",
+    val offersAgain: Boolean = false, val title: String = "", val action: String = "",
+    val actionIcon: String = "", val lendable: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed brain engine summary. */

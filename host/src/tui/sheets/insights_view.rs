@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let accounts = &data["accounts"];
+    if accounts.is_object() {
+        line(buf, &mut y, tr("Accounts").into_owned(), t.bold.patch(t.panel));
+        let headline = accounts["headline"].as_str().unwrap_or("");
+        let state = accounts["state"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {state}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let engine = &data["engine"];
     if engine.is_object() {
         line(buf, &mut y, tr("Engine").into_owned(), t.bold.patch(t.panel));

@@ -2284,6 +2284,32 @@ fn engine_view() -> Value {
     })
 }
 
+/// AI account grouping and sign-in state from agentes-chat.
+fn accounts_view() -> Value {
+    use crate::bdots_accounts as a;
+
+    let rows = vec![
+        serde_json::json!({"id":"1","status":"active","statusKnown":true,"kind":"codex","email":"a@x.com","usedBy":["bot"]}),
+        serde_json::json!({"id":"2","status":"signed_out","statusKnown":true,"kind":"codex","email":"a@x.com","usedBy":[]}),
+    ];
+    let groups = a::group_plans(&rows);
+    let state = a::sign_in_of("signed_out", true);
+    json!({
+        "headline": format!("{} accounts · {} plans · {}", a::count_label(rows.len()), groups.len(), a::sign_in_label(state)),
+        "tone": a::sign_in_tone(state),
+        "icon": a::sign_in_icon(state),
+        "accounts": rows.len(),
+        "plans": groups.len(),
+        "state": a::sign_in_label(state),
+        "offersAgain": a::offers_sign_in_again("signed_out"),
+        "title": a::account_title("Codex", Some("pro")),
+        "action": a::existing_action(false, false, true),
+        "actionIcon": a::action_icon("again"),
+        "lendable": a::lendable("active", false, 0, "bot"),
+        "summary": a::summary(rows.len(), groups.len(), 1, 0),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2410,6 +2436,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "approvalrules": approvalrules_view(),
         "brainpicker": brainpicker_view(),
         "engine": engine_view(),
+        "accounts": accounts_view(),
         "description": description,
         "model": model,
         "provider": provider,
