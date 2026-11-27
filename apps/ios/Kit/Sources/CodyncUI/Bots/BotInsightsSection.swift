@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let approvalrules = insights.approvalrules
+                    Text(approvalrules.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Tool")): \(approvalrules.tool)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Rules")): \(approvalrules.rules)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let iteration = insights.iteration
                     Text(iteration.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Ghosts")): \(iteration.ghosts)").font(.footnote).foregroundStyle(Palette.secondary)

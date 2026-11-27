@@ -69,6 +69,7 @@ public struct BotInsights: Decodable, Sendable {
     public let autofill: InsightAutofill
     public let rrule: InsightRrule
     public let iteration: InsightIteration
+    public let approvalrules: InsightApprovalRules
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -98,6 +99,21 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed approval rules summary.
+public struct InsightApprovalRules: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let tool: String
+    public let sqlRead: Bool
+    public let target: String
+    public let command: Bool
+    public let maxActions: Int
+    public let actions: Int
+    public let rules: Int
     public let summary: [InsightSummaryRow]
 }
 

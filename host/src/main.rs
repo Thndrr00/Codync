@@ -17,6 +17,7 @@ mod bdots_agent;
 mod bdots_agenteschat;
 mod bdots_apierror;
 mod bdots_appearance;
+mod bdots_approval_rules;
 mod bdots_approvals;
 mod bdots_autofill;
 mod bdots_blocks;

@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val approvalrules = insights.approvalrules
+            CardSection("Approval rules") {
+                row { Text(approvalrules.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Tool", approvalrules.tool) }
+                row { ValueRow("SQL read", approvalrules.sqlRead.toString()) }
+                row { ValueRow("Rules", approvalrules.rules.toString()) }
+            }
             val iteration = insights.iteration
             CardSection("Iteration") {
                 row { Text(iteration.headline, style = Type.subheadline.semibold, color = Palette.text) }

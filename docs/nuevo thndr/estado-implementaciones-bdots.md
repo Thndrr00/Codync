@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Reglas de aprobación (24 adiciones + UI en 4 clientes)
+
+`bdots_approval_rules.rs` añade 18 helpers puros y 6 constantes portados de `approval-rules.ts` de
+**agentes-chat 0.7.5**: nombres de acciones, kinds recordados, reglas de comando, targets de lectura
+SQL, scopes, cobertura de acciones, decisión de aprobación y presentación. Reutiliza `bdots_more`,
+`bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade el campo `approvalrules`; la sección
+«Approval rules» se muestra en los cuatro clientes.
+
 ## Iteraciones (21 adiciones + UI en 4 clientes)
 
 `bdots_iteration.rs` añade 16 helpers puros y 5 constantes portados de `turn_iteration_prep.py` de

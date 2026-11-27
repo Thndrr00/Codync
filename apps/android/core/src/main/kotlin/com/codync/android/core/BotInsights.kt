@@ -72,9 +72,20 @@ data class BotInsights(
     val autofill: InsightAutofill = InsightAutofill(),
     val rrule: InsightRrule = InsightRrule(),
     val iteration: InsightIteration = InsightIteration(),
+    val approvalrules: InsightApprovalRules = InsightApprovalRules(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed approval rules summary. */
+@Serializable
+data class InsightApprovalRules(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val tool: String = "", val sqlRead: Boolean = false, val target: String = "",
+    val command: Boolean = false, val maxActions: Int = 0, val actions: Int = 0,
+    val rules: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed iteration bookkeeping summary. */

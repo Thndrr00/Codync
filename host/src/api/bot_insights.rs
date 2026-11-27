@@ -2211,6 +2211,30 @@ fn iteration_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Approval rule kinds from agentes-chat's approval rules module.
+fn approvalrules_view() -> Value {
+    use crate::bdots_approval_rules as a;
+
+    let tool = a::COMMAND_RULE_TOOL;
+    let target = a::sql_read_action("project=abc · schema=public");
+    let sql_read = a::is_sql_read(&target);
+    let command = a::is_command_rule(None, tool);
+    let rules = 3;
+    json!({
+        "headline": format!("{} actions · {} rules · {}", rules, rules, if command { "command" } else { "tool" }),
+        "tone": if rules > 0 { "good" } else { "secondary" },
+        "icon": a::rule_icon(rules > 0),
+        "tool": tool,
+        "sqlRead": sql_read,
+        "target": target,
+        "command": command,
+        "maxActions": a::MAX_OWN_ACTIONS,
+        "actions": rules,
+        "rules": rules,
+        "summary": a::summary(rules, rules, sql_read, command),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2334,6 +2358,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "autofill": autofill_view(hub, bot),
         "rrule": rrule_view(),
         "iteration": iteration_view(hub, bot),
+        "approvalrules": approvalrules_view(),
         "description": description,
         "model": model,
         "provider": provider,

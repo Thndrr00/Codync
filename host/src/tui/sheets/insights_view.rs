@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let approvalrules = &data["approvalrules"];
+    if approvalrules.is_object() {
+        line(buf, &mut y, tr("Approval rules").into_owned(), t.bold.patch(t.panel));
+        let headline = approvalrules["headline"].as_str().unwrap_or("");
+        let tool = approvalrules["tool"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {tool}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let iteration = &data["iteration"];
     if iteration.is_object() {
         line(buf, &mut y, tr("Iteration").into_owned(), t.bold.patch(t.panel));
