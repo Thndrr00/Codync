@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let devices = insights.devices
+                    Text(devices.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("All")): \(devices.all)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Look")): \(devices.look)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let vault = insights.vault
                     Text(vault.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Title")): \(vault.title)").font(.footnote).foregroundStyle(Palette.secondary)

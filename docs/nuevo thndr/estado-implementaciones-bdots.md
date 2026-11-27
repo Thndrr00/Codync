@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Dispositivos (30 adiciones + UI en 4 clientes)
+
+`bdots_devices.rs` añade 24 helpers puros y 6 constantes portados de `devices.ts` de **agentes-chat
+0.7.5**: estados y pills, portraits, nombres y líneas, audiencias, orden y filas de la lista, enlaces
+de conexión, etapas y checklist de Android y emparejamiento Wi-Fi. Reutiliza `bdots_desk`. El endpoint
+`botInsights` añade el campo `devices`; la sección «Devices» se muestra en los cuatro clientes.
+
 ## Bóveda de secretos (30 adiciones + UI en 4 clientes)
 
 `bdots_vault.rs` añade 23 helpers puros y 7 constantes portados de `bot-secrets.ts` de **rakazo

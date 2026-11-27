@@ -79,6 +79,7 @@ public struct BotInsights: Decodable, Sendable {
     public let secretcleanup: InsightSecretCleanup
     public let toolreplay: InsightToolReplay
     public let vault: InsightVault
+    public let devices: InsightDevices
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -108,6 +109,50 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed device portrait.
+public struct InsightPortrait: Decodable, Sendable {
+    public let kind: String
+    public let state: String
+}
+
+/// A host-computed device stub in a connect stage.
+public struct InsightDeviceStub: Decodable, Sendable {
+    public let id: String?
+    public let name: String?
+}
+
+/// A host-computed Android connect stage.
+public struct InsightDeviceStage: Decodable, Sendable {
+    public let kind: String
+    public let phone: InsightDeviceStub?
+}
+
+/// A host-computed Android cable guide.
+public struct InsightDeviceSteps: Decodable, Sendable {
+    public let states: [String: String]
+    public let now: String
+    public let open: String
+    public let byHand: [String]
+}
+
+/// A host-computed devices summary.
+public struct InsightDevices: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let devices: Int
+    public let phones: Int
+    public let all: Int
+    public let look: String
+    public let portrait: InsightPortrait
+    public let line: String
+    public let rows: Int
+    public let link: String
+    public let stage: InsightDeviceStage
+    public let steps: InsightDeviceSteps
     public let summary: [InsightSummaryRow]
 }
 

@@ -34,6 +34,7 @@ mod bdots_context_select;
 mod bdots_conversation;
 mod bdots_cron;
 mod bdots_desk;
+mod bdots_devices;
 mod bdots_dictation;
 mod bdots_digest;
 mod bdots_directory;

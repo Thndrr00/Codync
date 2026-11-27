@@ -2457,6 +2457,35 @@ fn vault_view() -> Value {
     })
 }
 
+/// Device status and list shaping from agentes-chat.
+fn devices_view() -> Value {
+    use crate::bdots_devices as d;
+
+    let hosts = vec![
+        serde_json::json!({"id":"1","name":"Mac","os":"darwin","status":{"kind":"ready"},
+            "phones":[{"id":"p1","name":"iPhone","model":"15","platform":"ios","phoneKind":"device","transport":"usb"}]}),
+        serde_json::json!({"id":"2","name":"Cloud","machineKind":"managed","os":"linux","status":{"kind":"offline"},"phones":[]}),
+    ];
+    let counts = d::device_counts(&hosts);
+    let look = d::status_look("needs_you");
+    json!({
+        "headline": format!("{} · {} · {}", d::count_label(counts["all"].as_u64().unwrap_or(0) as usize), d::os_name("darwin"), d::status_icon(look)),
+        "tone": d::status_tone(look),
+        "icon": d::status_icon(look),
+        "devices": counts["computers"],
+        "phones": counts["phones"],
+        "all": counts["all"],
+        "look": look,
+        "portrait": d::portrait_of(&hosts[0]),
+        "line": d::computer_line(&hosts[0]),
+        "rows": d::device_rows(&hosts, "all", "").len(),
+        "link": d::link_phase(Some("waiting"), 100, 200),
+        "stage": d::android_stage(&hosts[0], &[]),
+        "steps": d::android_steps("looking", &[], None),
+        "summary": d::summary(hosts.len(), counts["phones"].as_u64().unwrap_or(0) as usize, 1, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2590,6 +2619,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "secretcleanup": secretcleanup_view(),
         "toolreplay": toolreplay_view(),
         "vault": vault_view(),
+        "devices": devices_view(),
         "description": description,
         "model": model,
         "provider": provider,

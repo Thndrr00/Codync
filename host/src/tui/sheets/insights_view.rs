@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let devices = &data["devices"];
+    if devices.is_object() {
+        line(buf, &mut y, tr("Devices").into_owned(), t.bold.patch(t.panel));
+        let headline = devices["headline"].as_str().unwrap_or("");
+        let look = devices["look"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {look}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let vault = &data["vault"];
     if vault.is_object() {
         line(buf, &mut y, tr("Vault").into_owned(), t.bold.patch(t.panel));

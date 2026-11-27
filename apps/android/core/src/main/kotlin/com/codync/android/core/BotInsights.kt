@@ -82,9 +82,40 @@ data class BotInsights(
     val secretcleanup: InsightSecretCleanup = InsightSecretCleanup(),
     val toolreplay: InsightToolReplay = InsightToolReplay(),
     val vault: InsightVault = InsightVault(),
+    val devices: InsightDevices = InsightDevices(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed device portrait. */
+@Serializable
+data class InsightPortrait(val kind: String = "", val state: String = "")
+
+/** A host-computed device stub in a connect stage. */
+@Serializable
+data class InsightDeviceStub(val id: String? = null, val name: String? = null)
+
+/** A host-computed Android connect stage. */
+@Serializable
+data class InsightDeviceStage(val kind: String = "", val phone: InsightDeviceStub? = null)
+
+/** A host-computed Android cable guide. */
+@Serializable
+data class InsightDeviceSteps(
+    val states: Map<String, String> = emptyMap(), val now: String = "",
+    val open: String = "", val byHand: List<String> = emptyList(),
+)
+
+/** A host-computed devices summary. */
+@Serializable
+data class InsightDevices(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val devices: Int = 0, val phones: Int = 0, val all: Int = 0, val look: String = "",
+    val portrait: InsightPortrait = InsightPortrait(), val line: String = "",
+    val rows: Int = 0, val link: String = "", val stage: InsightDeviceStage = InsightDeviceStage(),
+    val steps: InsightDeviceSteps = InsightDeviceSteps(),
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed card summary inside the vault. */
