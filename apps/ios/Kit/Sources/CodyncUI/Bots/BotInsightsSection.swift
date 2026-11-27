@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let promptactions = insights.promptactions
+                    Text(promptactions.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Surface")): \(promptactions.surface ?? "—")").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("In flight")): \(promptactions.inFlight)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let botstore = insights.botstore
                     Text(botstore.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Valid")): \(botstore.valid)").font(.footnote).foregroundStyle(Palette.secondary)

@@ -2658,6 +2658,29 @@ fn botstore_view() -> Value {
     })
 }
 
+/// Prompt action guards and gateway errors from hermes-agent.
+fn promptactions_view() -> Value {
+    use crate::bdots_prompt_actions as p;
+
+    let refusal = serde_json::json!({"data":{"reason":"SESSION_NOT_OWNED"}});
+    let surface = p::ownership_error_surface(&refusal);
+    json!({
+        "headline": format!("{} · {} · {}", p::count_label(p::SUBMIT_IN_FLIGHT_TTL_MS as usize / 1000), p::SESSION_BUSY_RETRY_TIMEOUT_MS, p::GATEWAY_DEEP_TRUNCATE_REFUSED_CODE),
+        "tone": if surface.is_null() { "good" } else { "attention" },
+        "icon": "paperplane.fill",
+        "idCandidate": p::is_session_id_candidate("20261010_143012_a1b2c3"),
+        "busyRetryMs": p::SESSION_BUSY_RETRY_TIMEOUT_MS,
+        "retryIntervalMs": p::SESSION_BUSY_RETRY_INTERVAL_MS,
+        "ttlMs": p::SUBMIT_IN_FLIGHT_TTL_MS,
+        "timeout": p::is_gateway_timeout_error(&serde_json::json!({"message":"request timed out: prompt.submit"})),
+        "notOwned": p::is_session_not_owned_error(&refusal),
+        "surface": surface["code"],
+        "forwarded": p::is_forwarded_receipt(true, &serde_json::json!({"forwarded":true,"status":"queued"})),
+        "inFlight": p::is_submit_in_flight(Some(1000), 2000),
+        "summary": p::summary(3, 1, false, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2798,6 +2821,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "router": router_view(),
         "modelprefs": modelprefs_view(),
         "botstore": botstore_view(),
+        "promptactions": promptactions_view(),
         "description": description,
         "model": model,
         "provider": provider,

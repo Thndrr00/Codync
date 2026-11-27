@@ -89,9 +89,20 @@ data class BotInsights(
     val router: InsightRouter = InsightRouter(),
     val modelprefs: InsightModelPrefs = InsightModelPrefs(),
     val botstore: InsightBotStore = InsightBotStore(),
+    val promptactions: InsightPromptActions = InsightPromptActions(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed prompt action summary. */
+@Serializable
+data class InsightPromptActions(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val idCandidate: Boolean = false, val busyRetryMs: Int = 0, val retryIntervalMs: Int = 0,
+    val ttlMs: Int = 0, val timeout: Boolean = false, val notOwned: Boolean = false,
+    val surface: String? = null, val forwarded: Boolean = false, val inFlight: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed bot store summary. */

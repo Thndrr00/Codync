@@ -86,6 +86,7 @@ public struct BotInsights: Decodable, Sendable {
     public let router: InsightRouter
     public let modelprefs: InsightModelPrefs
     public let botstore: InsightBotStore
+    public let promptactions: InsightPromptActions
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -115,6 +116,23 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed prompt action summary.
+public struct InsightPromptActions: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let idCandidate: Bool
+    public let busyRetryMs: Int
+    public let retryIntervalMs: Int
+    public let ttlMs: Int
+    public let timeout: Bool
+    public let notOwned: Bool
+    public let surface: String?
+    public let forwarded: Bool
+    public let inFlight: Bool
     public let summary: [InsightSummaryRow]
 }
 

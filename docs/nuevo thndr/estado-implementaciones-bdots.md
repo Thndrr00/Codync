@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Acciones de prompt (29 adiciones + UI en 4 clientes)
+
+`bdots_prompt_actions.rs` añade 23 helpers puros y 6 constantes portados de `use-prompt-actions/utils.ts`
+de **hermes-agent 3.14**: ids de sesión, clasificación de errores del gateway, superficies de
+propiedad, guards de envío en vuelo, recibos y nombres de imágenes. Reutiliza `bdots_desk`. El
+endpoint `botInsights` añade el campo `promptactions`; la sección «Prompt actions» se muestra en los
+cuatro clientes.
+
 ## Almacén de bots (30 adiciones + UI en 4 clientes)
 
 `bdots_bot_store.rs` añade 24 helpers puros y 6 constantes portados de `bots/store.ts` de

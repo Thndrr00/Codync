@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let promptactions = &data["promptactions"];
+    if promptactions.is_object() {
+        line(buf, &mut y, tr("Prompt actions").into_owned(), t.bold.patch(t.panel));
+        let headline = promptactions["headline"].as_str().unwrap_or("");
+        let surface = promptactions["surface"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {surface}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let botstore = &data["botstore"];
     if botstore.is_object() {
         line(buf, &mut y, tr("Bot store").into_owned(), t.bold.patch(t.panel));

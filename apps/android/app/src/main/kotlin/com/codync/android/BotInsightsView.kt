@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val promptactions = insights.promptactions
+            CardSection("Prompt actions") {
+                row { Text(promptactions.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Timeout", promptactions.timeout.toString()) }
+                row { ValueRow("Surface", promptactions.surface ?: "—") }
+                row { ValueRow("In flight", promptactions.inFlight.toString()) }
+            }
             val botstore = insights.botstore
             CardSection("Bot store") {
                 row { Text(botstore.headline, style = Type.subheadline.semibold, color = Palette.text) }
