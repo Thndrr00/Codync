@@ -92,9 +92,21 @@ data class BotInsights(
     val promptactions: InsightPromptActions = InsightPromptActions(),
     val csiterm: InsightCsiTerm = InsightCsiTerm(),
     val plugins: InsightPlugins = InsightPlugins(),
+    val service: InsightService = InsightService(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed service launch summary. */
+@Serializable
+data class InsightService(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val taskName: String = "", val runKey: String = "", val unit: String = "",
+    val modes: Int = 0, val platforms: String = "", val parsed: List<String> = emptyList(),
+    val pathMac: String = "", val pathLinux: String = "", val drift: Boolean = false,
+    val quote: String = "", val running: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed plugin store summary. */

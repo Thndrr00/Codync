@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val service = insights.service
+            CardSection("Service") {
+                row { Text(service.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Unit", service.unit) }
+                row { ValueRow("Drift", service.drift.toString()) }
+                row { ValueRow("Running", service.running) }
+            }
             val plugins = insights.plugins
             CardSection("Plugins") {
                 row { Text(plugins.headline, style = Type.subheadline.semibold, color = Palette.text) }

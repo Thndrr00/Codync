@@ -89,6 +89,7 @@ public struct BotInsights: Decodable, Sendable {
     public let promptactions: InsightPromptActions
     public let csiterm: InsightCsiTerm
     public let plugins: InsightPlugins
+    public let service: InsightService
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -118,6 +119,25 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed service launch summary.
+public struct InsightService: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let taskName: String
+    public let runKey: String
+    public let unit: String
+    public let modes: Int
+    public let platforms: String
+    public let parsed: [String]
+    public let pathMac: String
+    public let pathLinux: String
+    public let drift: Bool
+    public let quote: String
+    public let running: String
     public let summary: [InsightSummaryRow]
 }
 

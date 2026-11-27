@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Servicio de arranque (30 adiciones + UI en 4 clientes)
+
+`bdots_service.rs` añade 24 helpers puros y 6 constantes portados de `cli/service.ts` de
+**mercury-agent 2.7.0**: parseo de plist/systemd/Task XML/reg query, comillas de Windows, rutas de
+servicio, plists y units generados y detección de deriva. Reutiliza `bdots_desk`. El endpoint
+`botInsights` añade el campo `service`; la sección «Service» se muestra en los cuatro clientes.
+
 ## Plugins (29 adiciones + UI en 4 clientes)
 
 `bdots_plugins.rs` añade 23 helpers puros y 6 constantes portados de `plugins/store.ts` y

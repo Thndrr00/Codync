@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let service = insights.service
+                    Text(service.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Unit")): \(service.unit)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Running")): \(service.running)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let plugins = insights.plugins
                     Text(plugins.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Root")): \(plugins.root)").font(.footnote).foregroundStyle(Palette.secondary)

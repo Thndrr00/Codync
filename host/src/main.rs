@@ -86,6 +86,7 @@ mod bdots_rrule;
 mod bdots_search;
 mod bdots_search_extra;
 mod bdots_secret_cleanup;
+mod bdots_service;
 mod bdots_session;
 mod bdots_shortcuts;
 mod bdots_spend;

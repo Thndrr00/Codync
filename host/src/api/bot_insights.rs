@@ -2733,6 +2733,33 @@ fn plugins_view() -> Value {
     })
 }
 
+/// Service launch parsing and building from mercury-agent.
+fn service_view() -> Value {
+    use crate::bdots_service as s;
+
+    let args = vec!["/usr/bin/node".to_owned(), "/opt/app/index.js".to_owned(), "--up".to_owned()];
+    let unit = s::systemd_unit(&args, "/home/me");
+    let parsed = s::parse_systemd_exec_start(&unit);
+    let drift = s::service_drift(&parsed, &args);
+    json!({
+        "headline": format!("{} · {} · {}", s::count_label(parsed.len()), s::LAUNCH_AGENT_LABEL, s::SERVICE_UNIT),
+        "tone": if drift.is_null() { "good" } else { "attention" },
+        "icon": "gearshape.fill",
+        "taskName": s::WIN_TASK_NAME,
+        "runKey": s::WIN_RUN_KEY,
+        "unit": s::SERVICE_UNIT,
+        "modes": 2,
+        "platforms": s::count_label(4),
+        "parsed": parsed,
+        "pathMac": s::service_file_path("darwin", "/home/me"),
+        "pathLinux": s::service_file_path("linux", "/home/me"),
+        "drift": !drift.is_null(),
+        "quote": s::quote_windows_arg("C:\\Program Files\\node.exe"),
+        "running": s::service_line("linux", Some("task"), true),
+        "summary": s::summary(4, 2, false, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2876,6 +2903,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "promptactions": promptactions_view(),
         "csiterm": csi_view(),
         "plugins": plugins_view(),
+        "service": service_view(),
         "description": description,
         "model": model,
         "provider": provider,
