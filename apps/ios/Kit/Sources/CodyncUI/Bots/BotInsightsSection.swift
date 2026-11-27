@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let vault = insights.vault
+                    Text(vault.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Title")): \(vault.title)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Policy")): \(vault.policy)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let toolreplay = insights.toolreplay
                     Text(toolreplay.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Kept")): \(toolreplay.kept)").font(.footnote).foregroundStyle(Palette.secondary)

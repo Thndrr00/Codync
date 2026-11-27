@@ -81,9 +81,32 @@ data class BotInsights(
     val avatar: InsightAvatar = InsightAvatar(),
     val secretcleanup: InsightSecretCleanup = InsightSecretCleanup(),
     val toolreplay: InsightToolReplay = InsightToolReplay(),
+    val vault: InsightVault = InsightVault(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed card summary inside the vault. */
+@Serializable
+data class InsightCardSummary(
+    val brand: String = "", val last4: String = "", val expMonth: Int = 0,
+    val expYear: Int = 0, val name: String? = null,
+)
+
+/** A host-computed parsed card expiry. */
+@Serializable
+data class InsightCardExpiry(val expMonth: Int = 0, val expYear: Int = 0)
+
+/** A host-computed bot vault summary. */
+@Serializable
+data class InsightVault(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val authTypes: Int = 0, val siteless: Boolean = false, val variable: String = "",
+    val problem: String? = null, val code: String? = null, val identifier: Boolean = false,
+    val otp: Boolean = false, val card: InsightCardSummary = InsightCardSummary(),
+    val title: String = "", val expiry: InsightCardExpiry? = null, val policy: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed tool replay summary. */

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let vault = &data["vault"];
+    if vault.is_object() {
+        line(buf, &mut y, tr("Vault").into_owned(), t.bold.patch(t.panel));
+        let headline = vault["headline"].as_str().unwrap_or("");
+        let title = vault["title"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {title}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let toolreplay = &data["toolreplay"];
     if toolreplay.is_object() {
         line(buf, &mut y, tr("Tool replay").into_owned(), t.bold.patch(t.panel));

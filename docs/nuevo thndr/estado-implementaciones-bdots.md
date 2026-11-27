@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Bóveda de secretos (30 adiciones + UI en 4 clientes)
+
+`bdots_vault.rs` añade 23 helpers puros y 7 constantes portados de `bot-secrets.ts` de **rakazo
+v0.14.0**: tipos de autenticación, variables de comando y nombres reservados, códigos de un solo
+uso, campos de login, claves de autenticador y otpauth, etiquetas de identificador, marcas de tarjeta,
+Luhn, resúmenes, vencimientos y presentación. Reutiliza `bdots_textfmt`, `bdots_desk` y `bdots_more`.
+El endpoint `botInsights` añade el campo `vault`; la sección «Vault» se muestra en los cuatro clientes.
+
 ## Replay de herramientas (28 adiciones + UI en 4 clientes)
 
 `bdots_tool_replay.rs` añade 21 helpers puros y 7 constantes portados de `tool-step-calls.ts` de

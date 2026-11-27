@@ -1,6 +1,24 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightVault {
+  headline: string
+  tone: string
+  icon: string
+  authTypes: number
+  siteless: boolean
+  variable: string
+  problem: string | null
+  code: string | null
+  identifier: boolean
+  otp: boolean
+  card: { brand: string; last4: string; expMonth: number; expYear: number; name?: string }
+  title: string
+  expiry: { expMonth: number; expYear: number } | null
+  policy: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightToolReplay {
   headline: string
   tone: string
@@ -1171,6 +1189,7 @@ export interface BotInsights {
   avatar: InsightAvatar
   secretcleanup: InsightSecretCleanup
   toolreplay: InsightToolReplay
+  vault: InsightVault
   routines: InsightRoutine[]
   usage: {
     used: number

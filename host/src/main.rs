@@ -86,6 +86,7 @@ mod bdots_timezone;
 mod bdots_tool_replay;
 mod bdots_trust;
 mod bdots_tuning;
+mod bdots_vault;
 mod bdots_verify;
 mod bdots_week;
 mod bdots_workspace;

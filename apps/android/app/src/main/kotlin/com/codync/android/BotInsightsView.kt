@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val vault = insights.vault
+            CardSection("Vault") {
+                row { Text(vault.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Title", vault.title) }
+                row { ValueRow("Policy", vault.policy) }
+                row { ValueRow("Last 4", vault.card.last4) }
+            }
             val toolreplay = insights.toolreplay
             CardSection("Tool replay") {
                 row { Text(toolreplay.headline, style = Type.subheadline.semibold, color = Palette.text) }

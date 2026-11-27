@@ -2433,6 +2433,30 @@ fn toolreplay_view() -> Value {
     })
 }
 
+/// Bot secret vault shaping from rakazo.
+fn vault_view() -> Value {
+    use crate::bdots_vault as v;
+
+    let card = v::card_summary("4242424242424242", 8, 2028, None);
+    json!({
+        "headline": format!("{} · {} · {}", v::card_brand("4242424242424242"), v::card_expiry(8, 2028), v::AUTH_TYPES.len()),
+        "tone": if v::luhn_valid("4242424242424242") { "good" } else { "attention" },
+        "icon": "key.fill",
+        "authTypes": v::AUTH_TYPES.len(),
+        "siteless": v::is_siteless_auth("command"),
+        "variable": v::command_variable_name("netbird-setup-key"),
+        "problem": v::command_variable_problem("PATH"),
+        "code": v::normalize_one_time_code("123 456"),
+        "identifier": v::is_identifier_label("Phone number"),
+        "otp": v::authenticator_key("JBSWY3DPEHPK3PXP").is_some(),
+        "card": card,
+        "title": v::card_title("Visa", "4242"),
+        "expiry": v::parse_card_expiry("08/28"),
+        "policy": v::VAULT_POLICIES[2],
+        "summary": v::summary("card", 2, 1, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2565,6 +2589,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "avatar": avatar_view(),
         "secretcleanup": secretcleanup_view(),
         "toolreplay": toolreplay_view(),
+        "vault": vault_view(),
         "description": description,
         "model": model,
         "provider": provider,

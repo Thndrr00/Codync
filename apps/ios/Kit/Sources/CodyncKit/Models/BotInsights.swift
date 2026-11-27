@@ -78,6 +78,7 @@ public struct BotInsights: Decodable, Sendable {
     public let avatar: InsightAvatar
     public let secretcleanup: InsightSecretCleanup
     public let toolreplay: InsightToolReplay
+    public let vault: InsightVault
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -107,6 +108,40 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed card summary inside the vault.
+public struct InsightCardSummary: Decodable, Sendable {
+    public let brand: String
+    public let last4: String
+    public let expMonth: Int
+    public let expYear: Int
+    public let name: String?
+}
+
+/// A host-computed parsed card expiry.
+public struct InsightCardExpiry: Decodable, Sendable {
+    public let expMonth: Int
+    public let expYear: Int
+}
+
+/// A host-computed bot vault summary.
+public struct InsightVault: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let authTypes: Int
+    public let siteless: Bool
+    public let variable: String
+    public let problem: String?
+    public let code: String?
+    public let identifier: Bool
+    public let otp: Bool
+    public let card: InsightCardSummary
+    public let title: String
+    public let expiry: InsightCardExpiry?
+    public let policy: String
     public let summary: [InsightSummaryRow]
 }
 
