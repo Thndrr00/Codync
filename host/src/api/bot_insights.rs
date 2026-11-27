@@ -2631,6 +2631,33 @@ fn modelprefs_view() -> Value {
     })
 }
 
+/// Bot store ids, deliverables and manifest validation from mercury-agent.
+fn botstore_view() -> Value {
+    use crate::bdots_bot_store as b;
+
+    let manifest = serde_json::json!({
+        "id": "research-bot", "name": "Research",
+        "schedules": [{"name":"daily","prompt":"run","cron":"0 9 * * *"}],
+    });
+    let summary = b::manifest_summary(&manifest);
+    json!({
+        "headline": format!("{} · {} · {}", summary["name"], summary["id"], b::count_label(summary["schedules"].as_u64().unwrap_or(0) as usize)),
+        "tone": if summary["ok"] == true { "good" } else { "attention" },
+        "icon": "shippingbox.fill",
+        "id": summary["id"],
+        "name": summary["name"],
+        "folder": b::deliverables_folder_name("Research", "research-bot"),
+        "deliverable": b::deliverable_file_name("Oxide Series D", ".md", "2026-11-27"),
+        "valid": summary["ok"],
+        "errors": summary["errors"],
+        "schedules": summary["schedules"],
+        "fleet": b::fleet_depth_ok(2),
+        "dangerous": b::is_dangerous_tool("git_push"),
+        "dangerousTools": b::BOT_DANGEROUS_TOOLS.len(),
+        "summary": b::summary(1, summary["schedules"].as_u64().unwrap_or(0) as usize, summary["errors"].as_array().map_or(0, Vec::len), true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2770,6 +2797,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "cmdpolicy": cmdpolicy_view(),
         "router": router_view(),
         "modelprefs": modelprefs_view(),
+        "botstore": botstore_view(),
         "description": description,
         "model": model,
         "provider": provider,

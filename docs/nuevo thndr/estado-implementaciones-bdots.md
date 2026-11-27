@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Almacén de bots (30 adiciones + UI en 4 clientes)
+
+`bdots_bot_store.rs` añade 24 helpers puros y 6 constantes portados de `bots/store.ts` de
+**mercury-agent 2.7.0**: ids de bot, nombres de entregables, validación de manifiestos, jerarquía de
+flota, herramientas peligrosas y plantillas de persona. Reutiliza `bdots_textfmt` y `bdots_desk`.
+El endpoint `botInsights` añade el campo `botstore`; la sección «Bot store» se muestra en los cuatro
+clientes.
+
 ## Preferencias de modelo (30 adiciones + UI en 4 clientes)
 
 `bdots_model_prefs.rs` añade 24 helpers puros y 6 constantes portados de `model-prefs.ts` de

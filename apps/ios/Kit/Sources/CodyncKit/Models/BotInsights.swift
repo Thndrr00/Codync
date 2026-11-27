@@ -85,6 +85,7 @@ public struct BotInsights: Decodable, Sendable {
     public let cmdpolicy: InsightCmdPolicy
     public let router: InsightRouter
     public let modelprefs: InsightModelPrefs
+    public let botstore: InsightBotStore
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -114,6 +115,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed bot store summary.
+public struct InsightBotStore: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let id: String
+    public let name: String
+    public let folder: String
+    public let deliverable: String
+    public let valid: Bool
+    public let errors: [String]
+    public let schedules: Int
+    public let fleet: Bool
+    public let dangerous: Bool
+    public let dangerousTools: Int
     public let summary: [InsightSummaryRow]
 }
 

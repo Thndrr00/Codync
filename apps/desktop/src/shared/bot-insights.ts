@@ -1,6 +1,23 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightBotStore {
+  headline: string
+  tone: string
+  icon: string
+  id: string
+  name: string
+  folder: string
+  deliverable: string
+  valid: boolean
+  errors: string[]
+  schedules: number
+  fleet: boolean
+  dangerous: boolean
+  dangerousTools: number
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightModelPrefs {
   headline: string
   tone: string
@@ -1309,6 +1326,7 @@ export interface BotInsights {
   cmdpolicy: InsightCmdPolicy
   router: InsightRouter
   modelprefs: InsightModelPrefs
+  botstore: InsightBotStore
   routines: InsightRoutine[]
   usage: {
     used: number

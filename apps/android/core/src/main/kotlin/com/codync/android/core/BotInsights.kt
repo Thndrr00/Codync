@@ -88,9 +88,20 @@ data class BotInsights(
     val cmdpolicy: InsightCmdPolicy = InsightCmdPolicy(),
     val router: InsightRouter = InsightRouter(),
     val modelprefs: InsightModelPrefs = InsightModelPrefs(),
+    val botstore: InsightBotStore = InsightBotStore(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed bot store summary. */
+@Serializable
+data class InsightBotStore(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val id: String = "", val name: String = "", val folder: String = "",
+    val deliverable: String = "", val valid: Boolean = false, val errors: List<String> = emptyList(),
+    val schedules: Int = 0, val fleet: Boolean = false, val dangerous: Boolean = false,
+    val dangerousTools: Int = 0, val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed model preferences summary. */

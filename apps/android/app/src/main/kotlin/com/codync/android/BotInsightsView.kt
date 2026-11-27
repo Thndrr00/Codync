@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val botstore = insights.botstore
+            CardSection("Bot store") {
+                row { Text(botstore.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Valid", botstore.valid.toString()) }
+                row { ValueRow("Folder", botstore.folder) }
+                row { ValueRow("Deliverable", botstore.deliverable) }
+            }
             val modelprefs = insights.modelprefs
             CardSection("Model preferences") {
                 row { Text(modelprefs.headline, style = Type.subheadline.semibold, color = Palette.text) }

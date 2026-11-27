@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let botstore = insights.botstore
+                    Text(botstore.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Valid")): \(botstore.valid)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Folder")): \(botstore.folder)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let modelprefs = insights.modelprefs
                     Text(modelprefs.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Default")): \(modelprefs.modelDefault)").font(.footnote).foregroundStyle(Palette.secondary)

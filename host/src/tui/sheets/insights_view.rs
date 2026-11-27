@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let botstore = &data["botstore"];
+    if botstore.is_object() {
+        line(buf, &mut y, tr("Bot store").into_owned(), t.bold.patch(t.panel));
+        let headline = botstore["headline"].as_str().unwrap_or("");
+        let folder = botstore["folder"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {folder}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let modelprefs = &data["modelprefs"];
     if modelprefs.is_object() {
         line(buf, &mut y, tr("Model preferences").into_owned(), t.bold.patch(t.panel));
