@@ -82,6 +82,7 @@ public struct BotInsights: Decodable, Sendable {
     public let devices: InsightDevices
     public let noai: InsightNoAi
     public let missions: InsightMissions
+    public let cmdpolicy: InsightCmdPolicy
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -111,6 +112,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed command policy summary.
+public struct InsightCmdPolicy: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let words: Int
+    public let commands: Int
+    public let verdict: String
+    public let denied: Bool
+    public let secretPath: Bool
+    public let readOnly: Bool
+    public let repo: String?
+    public let pushes: Int
+    public let inline: Bool
+    public let denyKinds: Int
     public let summary: [InsightSummaryRow]
 }
 

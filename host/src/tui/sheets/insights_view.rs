@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let cmdpolicy = &data["cmdpolicy"];
+    if cmdpolicy.is_object() {
+        line(buf, &mut y, tr("Command policy").into_owned(), t.bold.patch(t.panel));
+        let headline = cmdpolicy["headline"].as_str().unwrap_or("");
+        let verdict = cmdpolicy["verdict"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {verdict}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let missions = &data["missions"];
     if missions.is_object() {
         line(buf, &mut y, tr("Missions").into_owned(), t.bold.patch(t.panel));

@@ -85,9 +85,20 @@ data class BotInsights(
     val devices: InsightDevices = InsightDevices(),
     val noai: InsightNoAi = InsightNoAi(),
     val missions: InsightMissions = InsightMissions(),
+    val cmdpolicy: InsightCmdPolicy = InsightCmdPolicy(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed command policy summary. */
+@Serializable
+data class InsightCmdPolicy(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val words: Int = 0, val commands: Int = 0, val verdict: String = "",
+    val denied: Boolean = false, val secretPath: Boolean = false, val readOnly: Boolean = false,
+    val repo: String? = null, val pushes: Int = 0, val inline: Boolean = false,
+    val denyKinds: Int = 0, val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed mission counts summary. */

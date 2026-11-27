@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let cmdpolicy = insights.cmdpolicy
+                    Text(cmdpolicy.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Verdict")): \(cmdpolicy.verdict)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Read only")): \(cmdpolicy.readOnly)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let missions = insights.missions
                     Text(missions.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Cells")): \(missions.cells.joined(separator: " · "))").font(.footnote).foregroundStyle(Palette.secondary)

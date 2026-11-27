@@ -2538,6 +2538,31 @@ fn missions_view() -> Value {
     })
 }
 
+/// Deterministic command policy from agentes-chat.
+fn cmdpolicy_view() -> Value {
+    use crate::bdots_cmd_policy as c;
+
+    let command = "git status && echo hi | cat";
+    let words = c::shell_words(command).map_or(0, Vec::len);
+    let commands = c::simple_commands(command).map_or(0, Vec::len);
+    json!({
+        "headline": format!("{} words · {} commands · {}", c::count_label(words), c::count_label(commands), c::local_verdict(command)),
+        "tone": if c::denied_in_missions("Bash", command) { "attention" } else { "good" },
+        "icon": "shield.fill",
+        "words": words,
+        "commands": commands,
+        "verdict": c::local_verdict(command),
+        "denied": c::denied_in_missions("Bash", "git merge feature"),
+        "secretPath": c::is_secret_read("/home/ana/.ssh/id_rsa"),
+        "readOnly": c::read_only_call("Read", "/work/mission/a.txt"),
+        "repo": c::github_repo("https://github.com/o/r.git"),
+        "pushes": c::git_pushes("git push origin main").map_or(0, Vec::len),
+        "inline": c::inline_code_call("Bash", "python3 -c 'x'"),
+        "denyKinds": c::DENY_KINDS.len(),
+        "summary": c::summary(words, commands, 1, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2674,6 +2699,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "devices": devices_view(),
         "noai": no_ai_view(),
         "missions": missions_view(),
+        "cmdpolicy": cmdpolicy_view(),
         "description": description,
         "model": model,
         "provider": provider,

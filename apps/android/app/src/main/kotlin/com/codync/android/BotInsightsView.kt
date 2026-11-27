@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val cmdpolicy = insights.cmdpolicy
+            CardSection("Command policy") {
+                row { Text(cmdpolicy.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Verdict", cmdpolicy.verdict) }
+                row { ValueRow("Denied", cmdpolicy.denied.toString()) }
+                row { ValueRow("Read only", cmdpolicy.readOnly.toString()) }
+            }
             val missions = insights.missions
             CardSection("Missions") {
                 row { Text(missions.headline, style = Type.subheadline.semibold, color = Palette.text) }
