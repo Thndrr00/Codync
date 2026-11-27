@@ -1,6 +1,21 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightRrule {
+  headline: string
+  tone: string
+  freq: string
+  interval: number
+  times: string[]
+  weekdays: string[]
+  cron: string | null
+  cronCompatible: boolean
+  workdays: boolean
+  error: string
+  timezone: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightAutofill {
   headline: string
   tone: string
@@ -988,6 +1003,7 @@ export interface BotInsights {
   contextpin: InsightContextPin
   verify: InsightVerify
   autofill: InsightAutofill
+  rrule: InsightRrule
   routines: InsightRoutine[]
   usage: {
     used: number

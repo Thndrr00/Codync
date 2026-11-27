@@ -70,9 +70,20 @@ data class BotInsights(
     val contextpin: InsightContextPin = InsightContextPin(),
     val verify: InsightVerify = InsightVerify(),
     val autofill: InsightAutofill = InsightAutofill(),
+    val rrule: InsightRrule = InsightRrule(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed recurrence rule summary. */
+@Serializable
+data class InsightRrule(
+    val headline: String = "", val tone: String = "", val freq: String = "",
+    val interval: Int = 0, val times: List<String> = emptyList(), val weekdays: List<String> = emptyList(),
+    val cron: String? = null, val cronCompatible: Boolean = false, val workdays: Boolean = false,
+    val error: String = "", val timezone: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed autofill classification summary. */

@@ -2159,6 +2159,29 @@ fn autofill_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Recurrence rule helpers from agentes-chat's RRULE module.
+fn rrule_view() -> Value {
+    use crate::bdots_rrule as r;
+
+    let rule = serde_json::json!({"freq":"weekly","byWeekday":["MO","FR"],"time":"09:00","timezone":"UTC"});
+    let error = r::validation_error(&rule);
+    let cron = r::rule_to_cron(&rule);
+    json!({
+        "headline": format!("{} · {}", r::describe_rule(&rule), r::freq_label("weekly")),
+        "tone": if error.is_empty() { "good" } else { "attention" },
+        "freq": r::freq_label("weekly"),
+        "interval": r::interval_of(&rule),
+        "times": r::times_of(&rule),
+        "weekdays": r::weekday_names(&rule),
+        "cron": cron,
+        "cronCompatible": r::is_cron_compatible(&rule),
+        "workdays": r::is_workdays(&rule),
+        "error": error,
+        "timezone": r::timezone_name("UTC"),
+        "summary": r::summary("weekly", r::interval_of(&rule), r::times_of(&rule).len(), cron.is_some()),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2280,6 +2303,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "contextpin": contextpin_view(),
         "verify": verify_view(hub, bot),
         "autofill": autofill_view(hub, bot),
+        "rrule": rrule_view(),
         "description": description,
         "model": model,
         "provider": provider,

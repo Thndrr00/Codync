@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let rrule = insights.rrule
+                    Text(rrule.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Cron")): \(rrule.cron ?? "—")").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Timezone")): \(rrule.timezone)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let autofill = insights.autofill
                     Text(autofill.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("OTP")): \(autofill.otp)").font(.footnote).foregroundStyle(Palette.secondary)

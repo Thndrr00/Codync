@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val rrule = insights.rrule
+            CardSection("Recurrence") {
+                row { Text(rrule.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Cron", rrule.cron ?: "—") }
+                row { ValueRow("Weekdays", rrule.weekdays.joinToString(", ")) }
+                row { ValueRow("Timezone", rrule.timezone) }
+            }
             val autofill = insights.autofill
             CardSection("Autofill") {
                 row { Text(autofill.headline, style = Type.subheadline.semibold, color = Palette.text) }

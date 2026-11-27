@@ -67,6 +67,7 @@ public struct BotInsights: Decodable, Sendable {
     public let contextpin: InsightContextPin
     public let verify: InsightVerify
     public let autofill: InsightAutofill
+    public let rrule: InsightRrule
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -96,6 +97,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed recurrence rule summary.
+public struct InsightRrule: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let freq: String
+    public let interval: Int
+    public let times: [String]
+    public let weekdays: [String]
+    public let cron: String?
+    public let cronCompatible: Bool
+    public let workdays: Bool
+    public let error: String
+    public let timezone: String
     public let summary: [InsightSummaryRow]
 }
 

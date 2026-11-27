@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Recurrencia (23 adiciones + UI en 4 clientes)
+
+`bdots_rrule.rs` añade 18 helpers puros y 5 constantes portados de `rrule.ts` de **agentes-chat
+0.7.5**: frecuencias, validación de weekdays/horas/fechas, intervalos, setpos, conversión a cron,
+nombres de weekdays, descripciones y zonas horarias. Reutiliza `bdots_i18n`, `bdots_textfmt` y
+`bdots_desk`. El endpoint `botInsights` añade el campo `rrule`; la sección «Recurrence» se muestra
+en los cuatro clientes.
+
 ## Autocompletado (26 adiciones + UI en 4 clientes)
 
 `bdots_autofill.rs` añade 20 helpers puros y 6 constantes portados de `vault_login_classifier.py`

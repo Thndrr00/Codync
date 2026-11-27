@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let rrule = &data["rrule"];
+    if rrule.is_object() {
+        line(buf, &mut y, tr("Recurrence").into_owned(), t.bold.patch(t.panel));
+        let headline = rrule["headline"].as_str().unwrap_or("");
+        let freq = rrule["freq"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {freq}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let autofill = &data["autofill"];
     if autofill.is_object() {
         line(buf, &mut y, tr("Autofill").into_owned(), t.bold.patch(t.panel));
