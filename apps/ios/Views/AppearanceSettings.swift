@@ -9,6 +9,7 @@ struct AppearanceSettings: View {
     @AppStorage(YourBubbleStyle.storageKey) private var yourBubbles = YourBubbleStyle.solid
     @AppStorage(MotionPreference.backgroundBlurKey) private var backgroundBlur = true
     @AppStorage(MotionPreference.movingAgentFacesKey) private var movingAgentFaces = true
+    @AppStorage(SearchMotionStyle.storageKey) private var searchMotion = SearchMotionStyle.fade
 
     var body: some View {
         CardSection("Appearance", footer: "Only changes appearance on this device.") {
@@ -27,6 +28,9 @@ struct AppearanceSettings: View {
             AgentLogosToggle()
         }
         CardSection("Motion", footer: "Only changes appearance on this device.") {
+            ValueRow(SearchMotionStyle.title) {
+                ChoicePicker(selection: $searchMotion, options: searchMotionOptions())
+            }
             HStack {
                 Text(L10n.tr("Background blur")).foregroundStyle(Palette.text)
                 Spacer()

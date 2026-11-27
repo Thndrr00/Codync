@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { QUOTE_LIMIT, quote_text, visual_reply } from './visual-reply.ts'
+import { QUOTE_LIMIT, published_visual_reply, quote_text, visual_reply } from './visual-reply.ts'
 
 test('an HTML artifact becomes a bounded visual reply', () => {
   assert.equal(visual_reply(null, 100), null)
@@ -32,4 +32,11 @@ test('a selection becomes one bounded quote chip', () => {
   assert.equal([...long].length, QUOTE_LIMIT + 1)
   assert.ok(long.endsWith('…'))
   assert.equal(quote_text(null, QUOTE_LIMIT), '')
+})
+
+test('only an agent-published HTML card becomes a visual reply above the words', () => {
+  assert.equal(published_visual_reply(true, '<h1>Hi</h1>'), true)
+  assert.equal(published_visual_reply(true, null), false)
+  assert.equal(published_visual_reply(true, 'just words'), false)
+  assert.equal(published_visual_reply(false, '<h1>Hi</h1>'), false, 'a page with no card is not this reply')
 })

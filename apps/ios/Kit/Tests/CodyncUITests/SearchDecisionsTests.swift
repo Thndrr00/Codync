@@ -32,3 +32,10 @@ import Testing
     #expect(SearchMotionStyle.allCases.map(\.label) == ["Blur", "Fade", "None"])
     #expect(SearchMotionStyle.allCases.map(\.rawValue) == ["blur", "fade", "none"])
 }
+
+@Test func theSettingsRowOffersThreeOptionsInOrder() {
+    let options = searchMotionOptions()
+    #expect(options.map(\.id) == [.blur, .fade, .none])
+    #expect(options.map(\.label) == ["Blur", "Fade", "None"])
+    #expect(SearchMotionStyle.storageKey == "codync.animateSearchResults")
+}

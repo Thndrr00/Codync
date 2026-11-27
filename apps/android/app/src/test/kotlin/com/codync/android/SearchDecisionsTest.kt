@@ -35,4 +35,10 @@ class SearchDecisionsTest {
         assertEquals(listOf("Blur", "Fade", "None"), SearchMotionStyle.entries.map { it.label })
         assertEquals(listOf("blur", "fade", "none"), SearchMotionStyle.entries.map { it.wire })
     }
+
+    @Test fun `the settings row offers three named options in order`() {
+        assertEquals(listOf(SearchMotionStyle.Blur, SearchMotionStyle.Fade, SearchMotionStyle.None),
+            searchMotionOptions().map { it.first })
+        assertEquals(listOf("Blur", "Fade", "None"), searchMotionOptions().map { it.second })
+    }
 }

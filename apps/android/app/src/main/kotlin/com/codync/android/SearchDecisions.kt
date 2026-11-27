@@ -9,6 +9,10 @@ internal enum class SearchMotionStyle(val wire: String, val label: String) {
     }
 }
 
+/** The three rows Settings shows for the device's search animation, in a stable order. */
+internal fun searchMotionOptions(): List<Pair<SearchMotionStyle, String>> =
+    SearchMotionStyle.entries.map { it to it.label }
+
 /** What a search row actually animates with: blur is an iOS veil, so Android only fades. */
 internal enum class SearchMotion { Fade, None }
 

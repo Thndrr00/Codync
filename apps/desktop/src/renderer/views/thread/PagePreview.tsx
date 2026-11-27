@@ -73,8 +73,10 @@ export function VisualReply({ html, title, height = 360, onQuote }: {
  * `allow-scripts`), and the HTML is sanitized so it cannot fetch anything either. The Open action
  * hands the page to the app's real artifact viewer; the preview itself does nothing.
  */
-export function PagePreviewSheet({ html, title, open, close, published = false, onQuote }: {
+export function PagePreviewSheet({ html, visualHtml = html, title, open, close, published = false, onQuote }: {
   html: string | null
+  /** The card's page, kept on screen even while the tap-to-open sheet is closed. */
+  visualHtml?: string | null
   title: string
   open: () => void
   close: () => void
@@ -86,7 +88,7 @@ export function PagePreviewSheet({ html, title, open, close, published = false, 
   const srcDoc = useMemo(() => (html ? safePageHtml(html) : ''), [html])
   return (
     <>
-    {published ? <VisualReply html={html} title={title} onQuote={onQuote} /> : null}
+    {published ? <VisualReply html={visualHtml} title={title} onQuote={onQuote} /> : null}
     <Sheet open={html !== null} onClose={close} width={880} maxHeight="82vh" dismissOnDim>
       {html !== null ? (
         <SheetPage>

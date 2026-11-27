@@ -76,6 +76,8 @@ interface Props {
   onRenameStep: (nodeKey: string, name: string) => void
   /** The canvas search; a node that doesn't match is dimmed. */
   query: string
+  /** Reports the pan/zoom and viewport size so a node added outside the canvas lands in sight. */
+  onViewChange?: (view: View, box: { width: number; height: number }) => void
   /** The composer under the selected media card, wired by the view that owns the host calls. */
   composer: {
     busy: boolean
@@ -141,7 +143,7 @@ function MiniMap({ nodes, view, box, onCenter }: {
 }
 
 /** The canvas: routine and bot nodes, their edges, groups, pan, zoom (wheel and buttons) and gestures. */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onDelete, onTidy, onUndoTidy, onRun, onStop, menuItems, onRenameStep, query, composer, workflow }: Props) {
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onDelete, onTidy, onUndoTidy, onRun, onStop, menuItems, onRenameStep, query, onViewChange, composer, workflow }: Props) {
   const tr = useTr()
   const groups = groupsOf(canvas)
   const nodes = useMemo(() => groupedNodes(canvas), [canvas])
@@ -174,6 +176,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  useEffect(() => { onViewChange?.(view, box) }, [view, box, onViewChange])
 
   const size = () => viewport.current?.getBoundingClientRect() ?? new DOMRect(0, 0, 800, 500)
   /** Where pasted steps land: the middle of what the person is looking at, never a far-off saved spot. */

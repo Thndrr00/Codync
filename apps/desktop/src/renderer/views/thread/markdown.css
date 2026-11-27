@@ -214,6 +214,20 @@
 .md-strong {
   font-weight: 600;
 }
+/* Formulas keep the characters the agent wrote: escaped text in this class, never HTML, a font
+   download or a remote renderer. An unmatched dollar is still ordinary text (OpenBot 0.70.0). */
+.md-math {
+  font-family: var(--mono);
+  font-style: italic;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.md-math-block {
+  display: block;
+  padding: 4px 0;
+  font-size: calc(12px * var(--md-scale));
+}
 .md-rule {
   margin: 4px 0;
 }

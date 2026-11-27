@@ -26,6 +26,11 @@ public func searchMotion(_ style: SearchMotionStyle, reduce: Bool) -> SearchMoti
     return style == .blur ? .blur : .fade
 }
 
+/// Pure: the three rows Settings shows for the device's search animation, in their stable order.
+public func searchMotionOptions() -> [(id: SearchMotionStyle, label: String)] {
+    SearchMotionStyle.allCases.map { (id: $0, label: $0.label) }
+}
+
 /// Pure: the Searching spinner appears only after the host has had `delayMs` to answer.
 public func showSpinner(startedAt: Date?, now: Date = .now, delayMs: TimeInterval = 0.2) -> Bool {
     guard let startedAt else { return false }

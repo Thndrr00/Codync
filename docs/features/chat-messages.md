@@ -42,6 +42,22 @@ it has no pointer tooltip or link-opening action.
   still has content (OpenBot 0.72.0). The arrows follow the scroll position; narrow blocks show
   neither. Wrapped code stays wrapped and needs no arrow.
 
+## Formulas in a reply
+
+`$inline$` and `$$block$$` formulas keep exactly the characters the agent wrote, in a monospace
+italic CSS class (OpenBot 0.70.0). The pure `math_blocks(text)` in `views/thread/markdown-blocks.ts`
+splits literal text from math parts; `Markdown.tsx` renders them as escaped React text. There is no
+KaTeX dependency, generated HTML, font download or network request, so a formula cannot run a script
+or load anything. A missing close, empty content, a newline inside an inline formula, a dollar sign
+inside one, and a price like `$5 and $10` (whose "content" ends in a space) stay plain text. A
+`$$…$$` paragraph becomes its own block that scrolls with the reply; an unclosed one stays text.
+
+The iPhone and Android renderers already show these characters literally — iOS
+`AttributedString(markdown:)` and Android's CommonMark `inline()` treat `$` as ordinary text — which
+is the required fallback. Neither has a sandboxed math surface: giving them one would mean adding a
+WebView/KaTeX bundle (a network-capable HTML renderer) where the renderer is a native attributed
+string, so the phone clients keep the text fallback rather than show half a formula.
+
 ## Visual replies and quote chips
 
 An HTML artifact a bot publishes can be shown above its words as a visual reply (OpenBot `html_render`,
@@ -51,13 +67,18 @@ outside resources stripped, so the page cannot touch the app's storage or the ne
 `visual_reply(html, limit)` decision in `lib/visual-reply.ts` says whether an artifact is a page and
 bounds it without leaving a half-written tag; the surface is client-side only and backed by the
 artifact/file the chat already carries, with no new service, tool or artifact type. The frame keeps a
-stable height so the messages below it do not jump, and a shortened page says so.
+stable height so the messages below it do not jump, and a shortened page says so. The pure
+`published_visual_reply(hasCard, html)` says when an agent's artifact card is that page;
+`AgentBubble` in `views/thread/ChatRows.tsx` passes it and `onQuote` through `PagePreviewSheet` to
+`VisualReply`, so the card stays above the words even while the tap-to-open sheet is closed.
 
 Text selected on that surface can become a quote chip. `quote_text(selection, limit)` collapses
 whitespace, bounds the passage and never makes an empty chip; the chip copies the quote when tapped.
 An inert frame with an opaque origin keeps its own selection private, so where the browser does not
 share it the chip falls back to text selected in the renderer-owned parts of the visual reply.
-Reduced motion turns off the chip's fade. Other clients keep their existing artifact cards: this is
+Reduced motion turns off the chip's fade. A selected passage is appended to that conversation's
+draft by the row, just like quoting a whole message. Other clients keep their existing artifact
+cards: their native chat surfaces have no sandboxed HTML preview to place above a reply, so this is
 the desktop preview only, and nothing about the page or the quote is added to analytics.
 
 ## A page the agent needs you on

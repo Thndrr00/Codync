@@ -121,6 +121,12 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
     if (reply) field.current?.focus()
   }, [reply])
 
+  // A new thread's composer takes the caret as soon as it mounts. `Composer` keys this component by
+  // destination, so opening a thread remounts the field instead of reusing the old chat's focus.
+  useEffect(() => {
+    if (thread) field.current?.focus()
+  }, [thread])
+
   // Measure a separate, wrapping copy: collapsing the live textarea to zero breaks its
   // height transition, caret scroll and IME composition. Observe font/width changes too.
   useLayoutEffect(() => {

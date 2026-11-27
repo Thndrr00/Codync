@@ -8,9 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.codync.android.design.AppearanceSettings
 import com.codync.android.design.Palette
@@ -40,6 +45,8 @@ import com.codync.android.design.semibold
 @Composable internal fun AppearanceSection() {
     val prefs = LocalAppearancePreferences.current ?: rememberAppearancePreferences()
     val settings = prefs.settings
+    val context = LocalContext.current
+    var searchMotion by remember { mutableStateOf(SearchMotionPreference.read(context)) }
     CardSection(
         title = "Appearance",
         footer = "Saved on this phone. Chat text size applies on top of Android's system font scale.",
@@ -126,6 +133,19 @@ import com.codync.android.design.semibold
         }
         row {
             Text(tr("Motion"), style = Type.caption.semibold, color = Palette.secondary)
+        }
+        row {
+            ValueRow(SearchMotionStyle.TITLE) {
+                ChoicePicker(
+                    selection = searchMotion,
+                    options = searchMotionOptions(),
+                    select = { style ->
+                        searchMotion = style
+                        SearchMotionPreference.write(context, style)
+                    },
+                    label = SearchMotionStyle.TITLE,
+                )
+            }
         }
         row {
             SwitchRow(

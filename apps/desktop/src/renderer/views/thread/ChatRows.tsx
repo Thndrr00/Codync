@@ -11,6 +11,7 @@ import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { messagePreview } from '../../lib/message-preview'
 import { selectionActions } from '../../lib/selection-actions'
+import { published_visual_reply } from '../../lib/visual-reply'
 import { messageLink } from './message-link'
 import { MemberQuestionCard } from './MemberQuestionCard'
 import { useTr } from '../../lib/use-language'
@@ -33,13 +34,18 @@ export function reactionPick(store: BotStore, entry: Entry): ReactionPick {
   return { emoji: QUICK_REACTIONS, chosen: entry.data.reactions ?? [], toggle: (e) => store.react(entry, e) }
 }
 
+/** Quotes a passage into its conversation's draft: a whole message or a visual reply's selection. */
+function appendQuoteDraft(store: BotStore, botId: string, threadId: string | null, text: string) {
+  const quoted = quoteText(text)
+  if (!quoted) return
+  const key = threadId ? `${botId}/${threadId}` : botId
+  const current = store.composerDrafts.get(key)
+  store.composerDrafts.set(key, current ? `${current}\n${quoted}\n\n` : `${quoted}\n\n`)
+}
+
 /** Quotes a whole message into its conversation's draft (idea 34's fallback when there is no selection). */
 export function quoteEntry(store: BotStore, entry: Entry) {
-  const text = entry.data.text ?? ''
-  if (!text) return
-  const current = store.composerDrafts.get(entry.botId)
-  const quoted = quoteText(text)
-  store.composerDrafts.set(entry.botId, current ? `${current}\n${quoted}\n\n` : `${quoted}\n\n`)
+  appendQuoteDraft(store, entry.botId, entry.threadId ?? null, entry.data.text ?? '')
 }
 
 /**
@@ -506,6 +512,10 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
   const html = card ? store.artifacts.html.get(card.id) : null
   const pageHtml = useMemo(() => (html ? new TextDecoder().decode(html.bytes) : null), [html])
   const pageTitle = (card && store.artifacts.byId.get(card.id)?.title) || card?.title || ''
+  // The page this agent published in this turn sits above its words; quoting its text goes into the
+  // same conversation draft as quoting a whole message.
+  const published = published_visual_reply(!!card, pageHtml)
+  const quoteSelection = (text: string) => appendQuoteDraft(store, entry.botId, entry.threadId ?? null, text)
   return (
     <div className="message agent" title={fullDate.format(entry.createdAt)} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
       <div className="message-body">
@@ -546,9 +556,12 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
         <MessageActions className="trailing" visible={hovering} reactions={reactionPick(store, entry)} reply={reply} trace={openTrace} copy={copy} copyLink={copyLink} />
         <PagePreviewSheet
           html={previewing ? pageHtml : null}
+          visualHtml={published ? pageHtml : null}
           title={pageTitle}
           open={() => card && openArtifact?.(card.id)}
           close={() => setPreviewing(false)}
+          published={published}
+          onQuote={quoteSelection}
         />
       </div>
     </div>

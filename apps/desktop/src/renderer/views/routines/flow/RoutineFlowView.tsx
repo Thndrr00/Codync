@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MediaKind } from '@shared/media'
 import { draftOf, isGroup, type Bot } from '@shared/models'
 import { Button, ChoicePicker, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
@@ -12,9 +12,9 @@ import {
   GRAPH_PROBLEM_TEXT, NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasGraph, canvasRunning,
   connectProblem, fieldsForStep, graphEdgeProblem, isFlowPaused, isFlowReadOnly, layoutNodes, mediaBatch,
   mediaEnd, mediaKey, mediaTitle, nextRunCursor, problemsForStep, specKeyOf, specText, stepNameOf,
-  tidyLayout, unknownSettings, workflowFileBytes,
+  tidyLayout, unknownSettings, visible_spot, workflowFileBytes,
   type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard,
-  type FlowStep, type SettingProblem, type WorkflowFolderAction, type WorkflowFields, type WorkflowGitHubHistory,
+  type FlowStep, type SettingProblem, type View, type WorkflowFolderAction, type WorkflowFields, type WorkflowGitHubHistory,
   type WorkflowGraph, type WorkflowHistoryStep, type WorkflowNode, type WorkflowNodeSize, type WorkflowRunPage,
   type WorkflowStepSource, type WorkflowStroke, type WorkflowVersion,
 } from '../../../lib/routine-flow.ts'
@@ -48,12 +48,6 @@ type Mode = 'canvas' | 'list'
 
 /** The bots a routine flow can hand work to: agents of their own, not hidden. */
 const canTakeWork = (bot: Bot) => !bot.hidden && !isGroup(bot) && bot.backend !== 'external'
-
-/** Where a bot added by hand lands: right of everything on the canvas. */
-function freeSpot(canvas: FlowCanvas) {
-  const nodes = layoutNodes(canvas)
-  return { x: Math.max(0, ...nodes.map((n) => n.x + NODE_WIDTH + 90)), y: Math.min(0, ...nodes.map((n) => n.y)) }
-}
 
 /** One saved piece of a step's settings, with a copy button and Show more for long text. */
 function SettingsText({ label, value }: { label: string; value: string }) {
@@ -177,6 +171,11 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [detailSettings, setDetailSettings] = useState<{ stepId: string; value: unknown } | null>(null)
   const offline = store.isOffline
   const rev = store.flowRev(activeId)
+  /** Where a node added by hand lands: the last pan/zoom the canvas reported, not a saved position. */
+  const visibleSpot = useRef(visible_spot({ x: 0, y: 0, scale: 1 }, { width: 800, height: 500 }))
+  const rememberView = useCallback((view: View, box: { width: number; height: number }) => {
+    visibleSpot.current = visible_spot(view, box)
+  }, [])
 
   useEffect(() => {
     flow.resume()
@@ -556,7 +555,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const onCanvas = new Set(canvasBotIds(canvas))
   const addable = roster.filter((bot) => !onCanvas.has(bot.id))
   const addBot = (bot: Bot) => {
-    const spot = freeSpot(canvas)
+    const spot = visibleSpot.current
     void flow.place(bot.id, spot.x, spot.y)
   }
   const saveLink = (link: FlowLink, text: string, model: string | null, modelOptions: Record<string, string>) => {
@@ -902,6 +901,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 menuItems={menuItems}
                 onRenameStep={renameStep}
                 query={query}
+                onViewChange={rememberView}
                 composer={{
                   busy: model.busy,
                   offline,

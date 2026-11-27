@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  NODE_WIDTH, answerResultRows, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
+  NODE_HEIGHT, NODE_WIDTH, answerResultRows, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
   fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, graphEdgeProblem, groupMediaResults, historyStatus, insertFieldToken,
   isFlowPaused, isFlowReadOnly, isAnnotationKind, nodeEditable, nodeTitle, nextRunCursor, problemsForStep, qualifiedFieldName, runSummary,
   stepMarks, strokePath, triggerFields,
   isNewerSetting, layoutNodes, matchingFields, mediaBatch, mediaKey, mediaRetryLabel, mediaRunLabel, mediaStepsFor,
   mediaTitle, mediaTotalCredits, mediaUnitPrice, missingMediaModel, nodeAt, parseAnswerSpec, parseWorkflowFile, portCarry,
   routineKey, specKeyOf, specText, statusLabel, stepNameOf, stepProgress, tidyLayout, unknownSettings, unavailableMediaModel,
-  availableMediaModels, workflowFileBytes, workflowsInFolder, zoomAt,
+  availableMediaModels, visible_spot, workflowFileBytes, workflowsInFolder, zoomAt,
   type FieldMatch, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowMediaCatalog, type FlowNode,
   type FlowNodeRegistry, type FlowStep, type WorkflowFoldersSnapshot, type WorkflowNode, type WorkflowRun,
 } from './routine-flow.ts'
@@ -203,6 +203,19 @@ test('the canvas centre follows pan and zoom, so paste lands where the person lo
   assert.deepEqual(canvasCenter({ x: 0, y: 0, scale: 1 }, 800, 600), { x: 400, y: 300 })
   assert.deepEqual(canvasCenter({ x: -100, y: -50, scale: 2 }, 800, 600), { x: 250, y: 175 })
   assert.deepEqual(canvasCenter({ x: 40, y: 10, scale: 0.5 }, 200, 100), { x: 120, y: 80 })
+})
+
+test('a node added by hand lands wholly in the visible canvas after pan and zoom', () => {
+  assert.deepEqual(visible_spot({ x: 0, y: 0, scale: 1 }, { width: 800, height: 600 }),
+    { x: 400 - NODE_WIDTH / 2, y: 300 - NODE_HEIGHT / 2 })
+  assert.deepEqual(visible_spot({ x: -100, y: -50, scale: 2 }, { width: 800, height: 600 }),
+    { x: Math.round(250 - NODE_WIDTH / 2), y: Math.round(175 - NODE_HEIGHT / 2) })
+  // Panning right moves the visible spot left in canvas coordinates; zooming out widens it.
+  const before = visible_spot({ x: 0, y: 0, scale: 1 }, { width: 800, height: 600 })
+  const panned = visible_spot({ x: 100, y: 0, scale: 1 }, { width: 800, height: 600 })
+  assert.ok(panned.x < before.x)
+  assert.equal(panned.y, before.y)
+  assert.ok(visible_spot({ x: 0, y: 0, scale: 0.5 }, { width: 800, height: 600 }).x > before.x)
 })
 
 test('a workflow sits in one folder and the unfiled list is the rest, in order', () => {

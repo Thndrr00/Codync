@@ -1,5 +1,5 @@
 import { createContext, memo, useContext, useState, type MouseEvent, type ReactNode } from 'react'
-import { parseMarkdown, type Block } from './markdown-blocks.ts'
+import { math_blocks, parseMarkdown, type Block } from './markdown-blocks.ts'
 import { Hairline } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
@@ -52,7 +52,20 @@ export function inline(text: string, key = 'i', knownPaths: readonly string[] = 
       out.push(file
         ? <FileAnchor key={`${key}${i}`} path={file.path} href={file.href} label={code} />
         : <code key={`${key}${i}`} className="md-code-span">{code}</code>)
-    } else if (part) out.push(...emphasis(part, `${key}${i}-`, knownPaths))
+    } else if (part) out.push(...withMath(part, `${key}${i}-`, knownPaths))
+  })
+  return out
+}
+
+/** A formula is escaped text in a CSS class: no KaTeX, no HTML injection and no network lookup. */
+function withMath(text: string, key: string, knownPaths: readonly string[]): ReactNode[] {
+  const out: ReactNode[] = []
+  math_blocks(text).forEach((part, i) => {
+    const k = `${key}${i}`
+    if (part.kind === 'text') out.push(...emphasis(part.text, `${k}-`, knownPaths))
+    else out.push(
+      <span key={k} className={part.kind === 'block' ? 'md-math md-math-block' : 'md-math'} role="math">{part.text}</span>,
+    )
   })
   return out
 }
@@ -145,6 +158,8 @@ const MarkdownBlock = memo(function MarkdownBlock({ block, knownPaths }: { block
     }
     case 'quote':
       return <div className="md-text md-spaced md-body md-quote" dir="auto">{inline(block.text, 'i', knownPaths)}</div>
+    case 'math':
+      return <div className="md-math md-math-block md-spaced" dir="auto" role="math">{block.text}</div>
     case 'code':
       return <CodeBlock text={block.text} language={block.language} />
   }

@@ -717,6 +717,16 @@ export function canvasCenter(view: View, width: number, height: number): { x: nu
   return { x: (width / 2 - view.x) / view.scale, y: (height / 2 - view.y) / view.scale }
 }
 
+/**
+ * Where a node added from outside the canvas lands: the middle of what the person is looking at,
+ * with its own box subtracted so the whole card is on screen. The view's pan and zoom decide it,
+ * never a saved position from a different workflow (OpenBot 0.70 workflow node fix).
+ */
+export function visible_spot(view: View, box: { width: number; height: number }): { x: number; y: number } {
+  const center = canvasCenter(view, box.width, box.height)
+  return { x: Math.round(center.x - NODE_WIDTH / 2), y: Math.round(center.y - NODE_HEIGHT / 2) }
+}
+
 /** A workflow's folder id, or null when it is unfiled or the folder has gone. */
 export function folderOf(snapshot: WorkflowFoldersSnapshot | null, workflowId: string): string | null {
   const folderId = snapshot?.placement[workflowId]

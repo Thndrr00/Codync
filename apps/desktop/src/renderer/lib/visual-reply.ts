@@ -32,6 +32,14 @@ export function visual_reply(html: string | null | undefined, limit: number): Vi
   return { html: cut, truncated: true }
 }
 
+/**
+ * An artifact card on an agent's entry is the page that agent published above its words. Only a
+ * real HTML page (as `visual_reply` decides) gets the card; files and plain text keep their rows.
+ */
+export function published_visual_reply(hasCard: boolean, html: string | null | undefined): boolean {
+  return hasCard && visual_reply(html, VISUAL_REPLY_LIMIT) !== null
+}
+
 /** A selected passage as one quote chip: whitespace collapsed, bounded, never an empty chip. */
 export function quote_text(selection: string | null | undefined, limit: number): string {
   const text = (selection ?? '').replace(/\s+/g, ' ').trim()
