@@ -62,12 +62,12 @@ visible-spot placement plus composer focus (`visibleSpot`).
 
 ## Still open, in the final close-out
 
-- **12 - mark a chat unread from the sidebar**: host method exists; wiring the client menus.
-- **14 - opt-in "Learn from my browsing"**: device pref plus site facts in the existing memory store.
-- **26 - recreate shared tables after deletion**: no shared-tables tool exists in Codync; a narrow
-  file-recreate helper is being added instead of inventing a tool surface.
-- **28 - read online videos**: no bundled downloader; a bounded link/metadata contract is being
-  added instead of fetching arbitrary URLs outside egress pinning.
+- **12 - mark a chat unread from the sidebar**: DONE - desktop, iOS and Android menus call the host method.
+- **14 - opt-in "Learn from my browsing"**: DONE - host pref, site facts in the existing memory store and a desktop Settings row.
+- **26 - recreate shared tables after deletion**: DONE - `Store::table_rows` recreates a missing or corrupt kv table as `[]`.
+- **28 - read online videos**: DONE as a bounded contract - known hosts are recognised and get a plain
+  browser-tool hint; no arbitrary fetch outside egress pinning. Full playback of a canvas audio/video
+  step still needs a byte path by file id, which Codync does not expose without new host I/O.
 
 ## Out of scope (unchanged)
 
