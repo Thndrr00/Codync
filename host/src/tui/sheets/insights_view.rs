@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let autofill = &data["autofill"];
+    if autofill.is_object() {
+        line(buf, &mut y, tr("Autofill").into_owned(), t.bold.patch(t.panel));
+        let headline = autofill["headline"].as_str().unwrap_or("");
+        let best = autofill["best"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {best}", tr("Best")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let verify = &data["verify"];
     if verify.is_object() {
         line(buf, &mut y, tr("Verification").into_owned(), t.bold.patch(t.panel));

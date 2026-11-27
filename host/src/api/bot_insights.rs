@@ -2119,6 +2119,46 @@ fn verify_view(hub: &Arc<Hub>, bot: &str) -> Value {
     })
 }
 
+/// Login/checkout autofill classification from hermes-agent's vault classifier.
+fn autofill_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_autofill as a;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let mut controls: Vec<(u32, &'static str, usize)> = Vec::new();
+    let mut otp = 0;
+    let mut checkout = 0;
+    for (index, e) in entries.iter().enumerate() {
+        let name = e.data["name"].as_str().unwrap_or("");
+        let label = e.data["label"].as_str().unwrap_or("");
+        let kind = e.data["type"].as_str().unwrap_or("text");
+        let autocomplete = e.data["autocomplete"].as_str().unwrap_or("");
+        if let Some((score, token)) = a::classify_login(autocomplete, kind, name, label) {
+            controls.push((score, token, index));
+        }
+        if a::classify_otp(autocomplete, kind, name, label).is_some() {
+            otp += 1;
+        }
+        if a::checkout_token(autocomplete).is_some() || a::checkout_heuristic(name, label).is_some() {
+            checkout += 1;
+        }
+    }
+    let best = a::best_password(&controls).map_or("", |(_, token, _)| *token);
+    json!({
+        "headline": format!("{} controls · {} otp · {}", a::count_label(controls.len()), otp, a::token_label(best)),
+        "tone": if best.is_empty() { "secondary" } else { "good" },
+        "icon": a::token_icon(best),
+        "controls": controls.len(),
+        "otp": otp,
+        "checkout": checkout,
+        "best": a::token_label(best),
+        "tokens": a::LOGIN_TOKENS.len(),
+        "paymentTokens": a::PAYMENT_TOKENS.len(),
+        "addressTokens": a::ADDRESS_TOKENS.len(),
+        "password": !best.is_empty(),
+        "summary": a::summary(controls.len(), otp, checkout, !best.is_empty()),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2239,6 +2279,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "mdtables": md_tables_view(hub, bot),
         "contextpin": contextpin_view(),
         "verify": verify_view(hub, bot),
+        "autofill": autofill_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

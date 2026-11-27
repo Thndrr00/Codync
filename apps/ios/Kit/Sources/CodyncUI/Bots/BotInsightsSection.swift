@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let autofill = insights.autofill
+                    Text(autofill.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("OTP")): \(autofill.otp)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Best")): \(autofill.best)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let verify = insights.verify
                     Text(verify.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Evidence")): \(verify.evidence)").font(.footnote).foregroundStyle(Palette.secondary)

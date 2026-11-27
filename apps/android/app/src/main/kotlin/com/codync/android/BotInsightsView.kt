@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val autofill = insights.autofill
+            CardSection("Autofill") {
+                row { Text(autofill.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("OTP", autofill.otp.toString()) }
+                row { ValueRow("Checkout", autofill.checkout.toString()) }
+                row { ValueRow("Best", autofill.best) }
+            }
             val verify = insights.verify
             CardSection("Verification") {
                 row { Text(verify.headline, style = Type.subheadline.semibold, color = Palette.text) }

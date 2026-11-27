@@ -66,6 +66,7 @@ public struct BotInsights: Decodable, Sendable {
     public let mdtables: InsightMdTables
     public let contextpin: InsightContextPin
     public let verify: InsightVerify
+    public let autofill: InsightAutofill
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -95,6 +96,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed autofill classification summary.
+public struct InsightAutofill: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let controls: Int
+    public let otp: Int
+    public let checkout: Int
+    public let best: String
+    public let tokens: Int
+    public let paymentTokens: Int
+    public let addressTokens: Int
+    public let password: Bool
     public let summary: [InsightSummaryRow]
 }
 

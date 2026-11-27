@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Autocompletado (26 adiciones + UI en 4 clientes)
+
+`bdots_autofill.rs` añade 20 helpers puros y 6 constantes portados de `vault_login_classifier.py`
+de **hermes-agent**: normalización de texto, tokens de autocomplete, clasificación de controles de
+login, detección de OTP, selección del mejor campo de contraseña, clasificación de checkout y
+presentación. Reutiliza `bdots_textfmt`, `bdots_desk` e `bdots_i18n`. El endpoint `botInsights`
+añade el campo `autofill`; la sección «Autofill» se muestra en los cuatro clientes.
+
 ## Verificación al terminar (25 adiciones + UI en 4 clientes)
 
 `bdots_verify.rs` añade 19 helpers puros y 6 constantes portados de `verification_stop.py` de

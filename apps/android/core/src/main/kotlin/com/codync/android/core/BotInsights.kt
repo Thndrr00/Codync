@@ -69,9 +69,20 @@ data class BotInsights(
     val mdtables: InsightMdTables = InsightMdTables(),
     val contextpin: InsightContextPin = InsightContextPin(),
     val verify: InsightVerify = InsightVerify(),
+    val autofill: InsightAutofill = InsightAutofill(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed autofill classification summary. */
+@Serializable
+data class InsightAutofill(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val controls: Int = 0, val otp: Int = 0, val checkout: Int = 0, val best: String = "",
+    val tokens: Int = 0, val paymentTokens: Int = 0, val addressTokens: Int = 0,
+    val password: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed verification-on-stop summary. */
