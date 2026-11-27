@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let verify = &data["verify"];
+    if verify.is_object() {
+        line(buf, &mut y, tr("Verification").into_owned(), t.bold.patch(t.panel));
+        let headline = verify["headline"].as_str().unwrap_or("");
+        let evidence = verify["evidence"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {}: {evidence}", tr("Evidence")), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let contextpin = &data["contextpin"];
     if contextpin.is_object() {
         line(buf, &mut y, tr("Window pin").into_owned(), t.bold.patch(t.panel));

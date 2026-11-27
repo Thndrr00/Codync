@@ -65,6 +65,7 @@ public struct BotInsights: Decodable, Sendable {
     public let contextselect: InsightContextSelect
     public let mdtables: InsightMdTables
     public let contextpin: InsightContextPin
+    public let verify: InsightVerify
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -94,6 +95,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed verification-on-stop summary.
+public struct InsightVerify: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let paths: Int
+    public let dirs: Int
+    public let proseOnly: Bool
+    public let enabled: Bool
+    public let evidence: String
+    public let nudge: Bool
+    public let nudgeLabel: String
+    public let maxPaths: Int
     public let summary: [InsightSummaryRow]
 }
 

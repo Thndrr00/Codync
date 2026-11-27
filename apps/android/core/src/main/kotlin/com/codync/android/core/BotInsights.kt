@@ -68,9 +68,20 @@ data class BotInsights(
     val contextselect: InsightContextSelect = InsightContextSelect(),
     val mdtables: InsightMdTables = InsightMdTables(),
     val contextpin: InsightContextPin = InsightContextPin(),
+    val verify: InsightVerify = InsightVerify(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed verification-on-stop summary. */
+@Serializable
+data class InsightVerify(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val paths: Int = 0, val dirs: Int = 0, val proseOnly: Boolean = false,
+    val enabled: Boolean = false, val evidence: String = "", val nudge: Boolean = false,
+    val nudgeLabel: String = "", val maxPaths: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed context window pin summary. */

@@ -1,6 +1,21 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightVerify {
+  headline: string
+  tone: string
+  icon: string
+  paths: number
+  dirs: number
+  proseOnly: boolean
+  enabled: boolean
+  evidence: string
+  nudge: boolean
+  nudgeLabel: string
+  maxPaths: number
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightContextPin {
   headline: string
   tone: string
@@ -956,6 +971,7 @@ export interface BotInsights {
   contextselect: InsightContextSelect
   mdtables: InsightMdTables
   contextpin: InsightContextPin
+  verify: InsightVerify
   routines: InsightRoutine[]
   usage: {
     used: number

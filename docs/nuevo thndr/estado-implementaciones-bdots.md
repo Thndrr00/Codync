@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Verificación al terminar (25 adiciones + UI en 4 clientes)
+
+`bdots_verify.rs` añade 19 helpers puros y 6 constantes portados de `verification_stop.py` de
+**hermes-agent**: política de verificación, tokens de configuración, clasificación de rutas de
+código/prosa, directorios candidatos, formato acotado de rutas y estados, evidencia y decisión de
+recordatorio. Reutiliza `bdots_more`, `bdots_desk` y `bdots_textfmt`. El endpoint `botInsights`
+añade el campo `verify`; la sección «Verification» se muestra en los cuatro clientes.
+
 ## Pin de ventana de contexto (20 adiciones + UI en 4 clientes)
 
 `bdots_context_pin.rs` añade 18 helpers puros y 2 constantes portados de `context_pin.py` de

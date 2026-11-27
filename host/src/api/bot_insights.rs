@@ -2091,6 +2091,34 @@ fn contextpin_view() -> Value {
     })
 }
 
+/// Verification-on-stop policy from hermes-agent's turn-end guard.
+fn verify_view(hub: &Arc<Hub>, bot: &str) -> Value {
+    use crate::bdots_verify as v;
+
+    let entries = hub.store.history(bot, i64::MAX, 40).unwrap_or_default();
+    let paths: Vec<String> = entries.iter().filter_map(|e| e.data["path"].as_str().map(str::to_owned)).collect();
+    let dirs = v::candidate_dirs(&paths);
+    let prose_only = v::all_non_code(&paths);
+    let enabled = v::token_enabled(Some("auto"), false);
+    let status = if entries.iter().any(|e| e.data["failed"] == true) { "failed" } else { "passed" };
+    let state = v::evidence_state(status);
+    let nudge = v::should_nudge(enabled, prose_only, state);
+    json!({
+        "headline": format!("{} · {} · {}", v::nudge_label(nudge), v::count_label(paths.len()), v::evidence_icon(state)),
+        "tone": v::evidence_tone(state),
+        "icon": v::evidence_icon(state),
+        "paths": paths.len(),
+        "dirs": dirs.len(),
+        "proseOnly": prose_only,
+        "enabled": enabled,
+        "evidence": state,
+        "nudge": nudge,
+        "nudgeLabel": v::nudge_label(nudge),
+        "maxPaths": v::MAX_CHANGED_PATHS,
+        "summary": v::summary(paths.len(), dirs.len(), state, nudge),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2210,6 +2238,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "contextselect": contextselect_view(hub, bot),
         "mdtables": md_tables_view(hub, bot),
         "contextpin": contextpin_view(),
+        "verify": verify_view(hub, bot),
         "description": description,
         "model": model,
         "provider": provider,

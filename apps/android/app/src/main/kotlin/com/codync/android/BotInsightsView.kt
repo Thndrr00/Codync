@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val verify = insights.verify
+            CardSection("Verification") {
+                row { Text(verify.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Evidence", verify.evidence) }
+                row { ValueRow("Paths", verify.paths.toString()) }
+                row { ValueRow("Action", verify.nudgeLabel) }
+            }
             val contextpin = insights.contextpin
             CardSection("Window pin") {
                 row { Text(contextpin.headline, style = Type.subheadline.semibold, color = Palette.text) }

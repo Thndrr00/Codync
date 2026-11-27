@@ -74,6 +74,7 @@ mod bdots_textfmt;
 mod bdots_timezone;
 mod bdots_trust;
 mod bdots_tuning;
+mod bdots_verify;
 mod bdots_week;
 mod bdots_workspace;
 mod browser;

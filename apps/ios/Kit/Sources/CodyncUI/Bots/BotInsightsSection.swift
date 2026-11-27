@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let verify = insights.verify
+                    Text(verify.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Evidence")): \(verify.evidence)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Action")): \(verify.nudgeLabel)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let contextpin = insights.contextpin
                     Text(contextpin.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Marker")): \(contextpin.marker)").font(.footnote).foregroundStyle(Palette.secondary)
