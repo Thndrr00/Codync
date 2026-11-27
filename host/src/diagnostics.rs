@@ -36,6 +36,14 @@ fn tail(path: &Path, lines: usize) -> Vec<String> {
     all[start..].iter().map(|line| redact(line)).collect()
 }
 
+/// Whether a `name=value` field is a credential. Matching is on whole name segments, so a public
+/// header like `X-Portkey-Provider` or a word like `monkey` keeps its value (OpenBot 0.80).
+fn secret_field(name: &str) -> bool {
+    name.to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|part| matches!(part, "key" | "apikey" | "token" | "secret" | "password" | "authorization"))
+}
+
 /// Takes out anything that looks like a credential: what follows `Bearer`, a `token=`/`key=`/`secret=` value, a
 /// provider key, or a long unbroken random-looking run.
 fn redact(line: &str) -> String {
@@ -53,9 +61,10 @@ fn redact(line: &str) -> String {
             continue;
         }
         if let Some((name, _)) = word.split_once('=') {
-            let name = name.to_ascii_lowercase();
-            if name.contains("token") || name.contains("secret") || name.contains("key") || name.contains("password") {
-                out.push(format!("{}=[redacted]", word.split_once('=').map_or("", |(name, _)| name)));
+            // OpenBot 0.80: only a real credential field hides its value. A substring such as
+            // `monkey` or the public header `X-Portkey-Provider` must keep its value.
+            if secret_field(name) {
+                out.push(format!("{name}=[redacted]"));
                 continue;
             }
         }
@@ -81,6 +90,17 @@ mod tests {
         assert_eq!(redact("api_key=abcd"), "api_key=[redacted]");
         assert_eq!(redact("key sk-1234567890"), "key [redacted]");
         assert_eq!(redact("id 9f8e7d6c5b4a39281706f5e4d3c2b1a0"), "id [redacted]");
+    }
+
+    #[test]
+    fn a_public_header_or_word_with_key_in_its_name_keeps_its_value() {
+        assert_eq!(secret_field("api_key"), true);
+        assert_eq!(secret_field("token"), true);
+        assert_eq!(secret_field("monkey"), false);
+        assert_eq!(secret_field("X-Portkey-Provider"), false);
+        assert_eq!(redact("header X-Portkey-Provider=anthropic"), "header X-Portkey-Provider=anthropic");
+        assert_eq!(redact("note monkey=banana"), "note monkey=banana");
+        assert_eq!(redact("api_key=abcd"), "api_key=[redacted]");
     }
 
     #[test]
