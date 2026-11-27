@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let brainpicker = insights.brainpicker
+                    Text(brainpicker.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Groups")): \(brainpicker.groups.joined(separator: ", "))").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Free")): \(brainpicker.free)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let approvalrules = insights.approvalrules
                     Text(approvalrules.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Tool")): \(approvalrules.tool)").font(.footnote).foregroundStyle(Palette.secondary)

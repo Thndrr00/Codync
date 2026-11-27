@@ -22,6 +22,7 @@ mod bdots_approvals;
 mod bdots_autofill;
 mod bdots_blocks;
 mod bdots_blueprint;
+mod bdots_brain_picker;
 mod bdots_connectors;
 mod bdots_connstate;
 mod bdots_connstate_extra;

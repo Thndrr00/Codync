@@ -70,6 +70,7 @@ public struct BotInsights: Decodable, Sendable {
     public let rrule: InsightRrule
     public let iteration: InsightIteration
     public let approvalrules: InsightApprovalRules
+    public let brainpicker: InsightBrainPicker
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -99,6 +100,20 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed brain picker summary.
+public struct InsightBrainPicker: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let description: String
+    public let groups: [String]
+    public let free: Int
+    public let keywords: String
+    public let auto: Bool
+    public let connect: Bool
+    public let label: String
     public let summary: [InsightSummaryRow]
 }
 

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let brainpicker = &data["brainpicker"];
+    if brainpicker.is_object() {
+        line(buf, &mut y, tr("Brain picker").into_owned(), t.bold.patch(t.panel));
+        let headline = brainpicker["headline"].as_str().unwrap_or("");
+        let description = brainpicker["description"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {description}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let approvalrules = &data["approvalrules"];
     if approvalrules.is_object() {
         line(buf, &mut y, tr("Approval rules").into_owned(), t.bold.patch(t.panel));

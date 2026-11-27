@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val brainpicker = insights.brainpicker
+            CardSection("Brain picker") {
+                row { Text(brainpicker.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Groups", brainpicker.groups.joinToString(", ")) }
+                row { ValueRow("Free", brainpicker.free.toString()) }
+                row { ValueRow("Keywords", brainpicker.keywords) }
+            }
             val approvalrules = insights.approvalrules
             CardSection("Approval rules") {
                 row { Text(approvalrules.headline, style = Type.subheadline.semibold, color = Palette.text) }

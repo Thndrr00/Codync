@@ -2235,6 +2235,31 @@ fn approvalrules_view() -> Value {
     })
 }
 
+/// Brain picker shaping from agentes-chat's picker helpers.
+fn brainpicker_view() -> Value {
+    use crate::bdots_brain_picker as b;
+
+    let options = vec![
+        serde_json::json!({"label":"Writer","value":"sonnet","group":"anthropic","available":true,"free":false}),
+        serde_json::json!({"label":"Fallback","value":"auto","group":"auto","available":true,"free":true}),
+    ];
+    let groups = b::pick_groups(&options);
+    let free = options.iter().filter(|row| b::free_keywords(row["free"] == true) == "free").count();
+    let description = b::model_description("claude-sonnet-4", "anthropic", 3.0, 15.0, "en");
+    json!({
+        "headline": format!("{} options · {} groups · {}", b::count_label(options.len()), groups.len(), description),
+        "tone": "good",
+        "description": description,
+        "groups": groups,
+        "free": free,
+        "keywords": b::pick_keywords(true, true),
+        "auto": b::is_auto("auto"),
+        "connect": b::is_connect_pick("connect"),
+        "label": b::provider_label("anthropic"),
+        "summary": b::summary(options.len(), groups.len(), free, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2359,6 +2384,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "rrule": rrule_view(),
         "iteration": iteration_view(hub, bot),
         "approvalrules": approvalrules_view(),
+        "brainpicker": brainpicker_view(),
         "description": description,
         "model": model,
         "provider": provider,
