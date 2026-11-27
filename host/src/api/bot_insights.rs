@@ -2511,6 +2511,33 @@ fn no_ai_view() -> Value {
     })
 }
 
+/// Mission plan strips and task shaping from agentes-chat.
+fn missions_view() -> Value {
+    use crate::bdots_missions as m;
+
+    let items = vec![
+        serde_json::json!({"status":"done","title":"one"}),
+        serde_json::json!({"status":"doing","title":"two"}),
+        serde_json::json!({"status":"waiting_you","title":"three"}),
+    ];
+    let cells = m::plan_cells(&items, false);
+    json!({
+        "headline": format!("{} · {} · {}", m::count_label(cells.len()), m::format_span(5_100), m::PLAN_CELLS.len()),
+        "tone": "good",
+        "icon": "checklist",
+        "cells": cells,
+        "counts": m::plan_counts(&items),
+        "open": m::is_open_mission("active"),
+        "waiting": m::waiting_parts(&serde_json::json!({"canAct":true,"pending":{"decisions":2,"reviews":1}})),
+        "tick": m::tick_for(120),
+        "command": m::parse_mission_command("/mission build it"),
+        "pr": m::pr_of(Some("PR #431")),
+        "span": m::format_span(5_100),
+        "commands": m::MISSION_COMMANDS.len(),
+        "summary": m::summary(cells.len(), 1, true, 2),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2646,6 +2673,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "vault": vault_view(),
         "devices": devices_view(),
         "noai": no_ai_view(),
+        "missions": missions_view(),
         "description": description,
         "model": model,
         "provider": provider,

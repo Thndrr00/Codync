@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let missions = &data["missions"];
+    if missions.is_object() {
+        line(buf, &mut y, tr("Missions").into_owned(), t.bold.patch(t.panel));
+        let headline = missions["headline"].as_str().unwrap_or("");
+        let span = missions["span"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {span}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let noai = &data["noai"];
     if noai.is_object() {
         line(buf, &mut y, tr("No AI").into_owned(), t.bold.patch(t.panel));

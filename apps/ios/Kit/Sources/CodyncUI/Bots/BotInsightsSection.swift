@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let missions = insights.missions
+                    Text(missions.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Cells")): \(missions.cells.joined(separator: " · "))").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Span")): \(missions.span)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let noai = insights.noai
                     Text(noai.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("State")): \(noai.state)").font(.footnote).foregroundStyle(Palette.secondary)

@@ -59,6 +59,7 @@ mod bdots_markdown;
 mod bdots_md_tables;
 mod bdots_memory;
 mod bdots_memoryctx;
+mod bdots_missions;
 mod bdots_more;
 mod bdots_no_ai;
 mod bdots_notify;

@@ -81,6 +81,7 @@ public struct BotInsights: Decodable, Sendable {
     public let vault: InsightVault
     public let devices: InsightDevices
     public let noai: InsightNoAi
+    public let missions: InsightMissions
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -110,6 +111,49 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed mission counts summary.
+public struct InsightMissionCounts: Decodable, Sendable {
+    public let total: Int
+    public let done: Int
+    public let doing: Int
+    public let waiting: Int
+}
+
+/// A host-computed mission waiting part.
+public struct InsightMissionWaiting: Decodable, Sendable {
+    public let key: String
+    public let count: Int
+}
+
+/// A host-computed mission composer command.
+public struct InsightMissionCommand: Decodable, Sendable {
+    public let command: String
+    public let arg: String
+}
+
+/// A host-computed mission pull request.
+public struct InsightMissionPr: Decodable, Sendable {
+    public let number: String
+    public let url: String?
+}
+
+/// A host-computed missions summary.
+public struct InsightMissions: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let cells: [String]
+    public let counts: InsightMissionCounts
+    public let open: Bool
+    public let waiting: [InsightMissionWaiting]
+    public let tick: Int
+    public let command: InsightMissionCommand?
+    public let pr: InsightMissionPr?
+    public let span: String
+    public let commands: Int
     public let summary: [InsightSummaryRow]
 }
 

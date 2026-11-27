@@ -84,9 +84,39 @@ data class BotInsights(
     val vault: InsightVault = InsightVault(),
     val devices: InsightDevices = InsightDevices(),
     val noai: InsightNoAi = InsightNoAi(),
+    val missions: InsightMissions = InsightMissions(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed mission counts summary. */
+@Serializable
+data class InsightMissionCounts(
+    val total: Int = 0, val done: Int = 0, val doing: Int = 0, val waiting: Int = 0,
+)
+
+/** A host-computed mission waiting part. */
+@Serializable
+data class InsightMissionWaiting(val key: String = "", val count: Int = 0)
+
+/** A host-computed mission composer command. */
+@Serializable
+data class InsightMissionCommand(val command: String = "", val arg: String = "")
+
+/** A host-computed mission pull request. */
+@Serializable
+data class InsightMissionPr(val number: String = "", val url: String? = null)
+
+/** A host-computed missions summary. */
+@Serializable
+data class InsightMissions(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val cells: List<String> = emptyList(), val counts: InsightMissionCounts = InsightMissionCounts(),
+    val open: Boolean = false, val waiting: List<InsightMissionWaiting> = emptyList(),
+    val tick: Int = 0, val command: InsightMissionCommand? = null, val pr: InsightMissionPr? = null,
+    val span: String = "", val commands: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed no-AI card. */
