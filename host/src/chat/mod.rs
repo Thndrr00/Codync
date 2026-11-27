@@ -3,12 +3,15 @@
 
 pub mod agent_request;
 pub mod agent_tombstone;
+pub mod approvals_level;
 pub mod apps;
 pub mod artifacts;
+pub mod ask_metrics;
 pub mod burst;
 pub mod calls;
 pub mod catchup_check;
 pub mod choices;
+pub mod computer_maintenance;
 pub mod connector_accounts;
 pub mod context;
 pub mod context_window;
@@ -22,6 +25,8 @@ pub mod group;
 pub mod handback;
 pub mod handoff;
 pub mod instruction_history;
+pub mod intent_line;
+pub mod keep_running;
 pub mod latest;
 pub mod lead;
 pub mod library;

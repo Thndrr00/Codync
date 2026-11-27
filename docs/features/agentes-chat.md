@@ -66,6 +66,15 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | Agents start UI actions (ADR 0129) | An app action is also a host tool, named as a host call, through `uiAction` | `chat/ui_action.rs`, `api/bots.rs` |
 | Personal mode (ADR 0159) | One member hides team surfaces without adding a team model, through `personalMode` | `chat/personal_mode.rs`, `api/bots.rs` |
 
+## Newer ADRs brought from the updated repo
+
+After fetching the reference repo (it was 12,427 commits behind), these newer behaviors were added
+as host modules with unit tests and API methods, reusing their rules rather than copying code:
+**0173** approvals level per bot (always/risky/never), **0176** `keep_running` holds, **0207** the
+one-line intent before slow work, **0254/0256** time per ask by kind and by stage, and **0257**
+maintenance words instead of a bare "Offline". They live in `chat/{approvals_level,keep_running,
+intent_line,ask_metrics,computer_maintenance}.rs`.
+
 ## In B and C, fully brought in
 
 - **ADR 0089 (stretches)** is wired into `routines::runner::begin`: a routine's chain of unattended runs stops at the caps (10 unattended / 50 interactive) and the run is cancelled, so the agent never runs forever on its own.

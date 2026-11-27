@@ -78,6 +78,43 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "askKind" => json!({
+            "kind": crate::chat::ask_metrics::kind_from_work(
+                usize::try_from(b["toolCalls"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),
+                usize::try_from(b["replyChars"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX),
+            ),
+        }),
+        "askSpeed" => json!({"index": crate::chat::ask_metrics::speed_index(
+            b["kind"].as_str().unwrap_or("chat"),
+            b["firstReplyMs"].as_i64().unwrap_or(0),
+        )}),
+        "runStages" => crate::chat::ask_metrics::stages(
+            b["waitMs"].as_i64().unwrap_or(0),
+            b["modelMs"].as_i64().unwrap_or(0),
+            b["toolsMs"].as_i64().unwrap_or(0),
+        ),
+        "approvalsLevel" => match b["level"].as_str() {
+            Some(level) => crate::chat::approvals_level::level(Some(level)),
+            None => crate::chat::approvals_level::level(None),
+        },
+        "approvalAsks" => json!({"asks": crate::chat::approvals_level::asks(
+            b["level"].as_str().unwrap_or("risky"),
+            b["sensitive"].as_bool().unwrap_or(false),
+        )}),
+        "keepRunning" => crate::chat::keep_running::hold(
+            str_arg(&b, "what")?,
+            b["why"].as_str().unwrap_or(""),
+            b["until"].as_i64().unwrap_or(0),
+            crate::store::now_ms(),
+        )
+        .map_err(|e| anyhow!(e))?,
+        "agentIntent" => crate::chat::intent_line::intent(str_arg(&b, "text")?).map_err(|e| anyhow!(e))?,
+        "computerMaintenance" => crate::chat::computer_maintenance::state(
+            b["kind"].as_str(),
+            b["since"].as_i64().unwrap_or(0),
+            b["eta"].as_i64(),
+            crate::store::now_ms(),
+        ),
         "proposedAgent" => crate::chat::proposed_agent::proposal(
             str_arg(&b, "by")?,
             str_arg(&b, "name")?,
