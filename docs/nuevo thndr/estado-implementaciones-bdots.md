@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Replay de herramientas (28 adiciones + UI en 4 clientes)
+
+`bdots_tool_replay.rs` añade 21 helpers puros y 7 constantes portados de `tool-step-calls.ts` de
+**rakazo v0.14.0**: acotación de texto conservando inicio y fin, redacción de secretos y campos de
+credenciales, recorte recursivo de argumentos, resultados retenidos, permiso de replay por trigger
+y presupuesto de caracteres. Reutiliza `bdots_more`, `bdots_textfmt` y `bdots_desk`. El endpoint
+`botInsights` añade el campo `toolreplay`; la sección «Tool replay» se muestra en los cuatro clientes.
+
 ## Limpieza de secretos (27 adiciones + UI en 4 clientes)
 
 `bdots_secret_cleanup.rs` añade 20 helpers puros y 6 constantes portados de `secret-cleanup.ts` de

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let toolreplay = &data["toolreplay"];
+    if toolreplay.is_object() {
+        line(buf, &mut y, tr("Tool replay").into_owned(), t.bold.patch(t.panel));
+        let headline = toolreplay["headline"].as_str().unwrap_or("");
+        let outcome = toolreplay["outcome"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {outcome}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let secretcleanup = &data["secretcleanup"];
     if secretcleanup.is_object() {
         line(buf, &mut y, tr("Secret cleanup").into_owned(), t.bold.patch(t.panel));

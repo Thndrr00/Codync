@@ -77,6 +77,7 @@ public struct BotInsights: Decodable, Sendable {
     public let providers: InsightProviders
     public let avatar: InsightAvatar
     public let secretcleanup: InsightSecretCleanup
+    public let toolreplay: InsightToolReplay
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -106,6 +107,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed tool replay summary.
+public struct InsightToolReplay: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let calls: Int
+    public let kept: Int
+    public let budget: Int
+    public let left: Int
+    public let replay: Bool
+    public let followUp: Bool
+    public let credentialField: Bool
+    public let secretTool: Bool
+    public let outcome: String
+    public let sample: String
     public let summary: [InsightSummaryRow]
 }
 

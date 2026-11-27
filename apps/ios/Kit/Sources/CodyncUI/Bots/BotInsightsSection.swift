@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let toolreplay = insights.toolreplay
+                    Text(toolreplay.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Kept")): \(toolreplay.kept)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Outcome")): \(toolreplay.outcome)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let secretcleanup = insights.secretcleanup
                     Text(secretcleanup.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Kind")): \(secretcleanup.kind)").font(.footnote).foregroundStyle(Palette.secondary)

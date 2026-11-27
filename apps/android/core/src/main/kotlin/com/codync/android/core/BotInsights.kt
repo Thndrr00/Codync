@@ -80,9 +80,21 @@ data class BotInsights(
     val providers: InsightProviders = InsightProviders(),
     val avatar: InsightAvatar = InsightAvatar(),
     val secretcleanup: InsightSecretCleanup = InsightSecretCleanup(),
+    val toolreplay: InsightToolReplay = InsightToolReplay(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed tool replay summary. */
+@Serializable
+data class InsightToolReplay(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val calls: Int = 0, val kept: Int = 0, val budget: Int = 0, val left: Int = 0,
+    val replay: Boolean = false, val followUp: Boolean = false,
+    val credentialField: Boolean = false, val secretTool: Boolean = false,
+    val outcome: String = "", val sample: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed secret cleanup summary. */

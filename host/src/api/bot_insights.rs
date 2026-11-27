@@ -2408,6 +2408,31 @@ fn secretcleanup_view() -> Value {
     })
 }
 
+/// Tool result bounding and replay permission from rakazo.
+fn toolreplay_view() -> Value {
+    use crate::bdots_tool_replay as t;
+
+    let calls = 3_usize;
+    let kept = t::result_limit(0, t::TOOL_REPLY_RESULTS_MAX_CHARS);
+    let outcome = t::completion_outcome(None, Some(0));
+    json!({
+        "headline": format!("{} calls · {} kept · {}", t::count_label(calls), t::count_label(kept), t::outcome_icon(outcome)),
+        "tone": if outcome == "failed" { "attention" } else { "good" },
+        "icon": t::outcome_icon(outcome),
+        "calls": calls,
+        "kept": kept,
+        "budget": t::TOOL_REPLY_RESULTS_MAX_CHARS,
+        "left": t::result_budget_left(kept, t::TOOL_REPLY_RESULTS_MAX_CHARS),
+        "replay": t::run_replays_tool_history("user", false, false),
+        "followUp": t::run_replays_tool_history("follow_up", true, false),
+        "credentialField": t::is_credential_field("api_key"),
+        "secretTool": t::is_secret_tool("read_secret"),
+        "outcome": outcome,
+        "sample": t::kept_tool_arguments(&serde_json::json!({"api_key":"abc123","message":"hello"}), &[]),
+        "summary": t::summary(calls, kept, true, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2539,6 +2564,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "providers": providers_view(),
         "avatar": avatar_view(),
         "secretcleanup": secretcleanup_view(),
+        "toolreplay": toolreplay_view(),
         "description": description,
         "model": model,
         "provider": provider,
