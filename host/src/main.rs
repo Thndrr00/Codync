@@ -35,6 +35,7 @@ mod bdots_desk;
 mod bdots_dictation;
 mod bdots_digest;
 mod bdots_directory;
+mod bdots_engine;
 mod bdots_eval;
 mod bdots_eval_extra;
 mod bdots_extra;

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let engine = &data["engine"];
+    if engine.is_object() {
+        line(buf, &mut y, tr("Engine").into_owned(), t.bold.patch(t.panel));
+        let headline = engine["headline"].as_str().unwrap_or("");
+        let state = engine["state"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {state}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let brainpicker = &data["brainpicker"];
     if brainpicker.is_object() {
         line(buf, &mut y, tr("Brain picker").into_owned(), t.bold.patch(t.panel));

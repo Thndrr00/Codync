@@ -2260,6 +2260,30 @@ fn brainpicker_view() -> Value {
     })
 }
 
+/// Brain engine and "what thinks" shaping from agentes-chat.
+fn engine_view() -> Value {
+    use crate::bdots_engine as e;
+
+    let brain = "codex";
+    let kind = e::engine_of_brain(Some(brain));
+    let state = e::engine_state(Some(brain), true, None);
+    let computers = e::distinct_computers(&["mac".to_owned(), "mac".to_owned(), "pc".to_owned()]);
+    json!({
+        "headline": format!("{} · {} · {}", e::engine_label(kind), e::state_label(state), e::count_label(computers.len())),
+        "tone": e::state_tone(state),
+        "icon": e::engine_icon(kind),
+        "engine": e::engine_label(kind),
+        "state": e::state_label(state),
+        "off": e::is_off(state),
+        "executor": e::engine_label(e::engine_of_executor(Some("claude"))),
+        "line": e::thinks_with("claude", Some("sonnet"), None),
+        "modelBrain": e::is_model_brain(Some(brain)),
+        "auto": e::is_auto(Some("auto")),
+        "computers": computers,
+        "summary": e::summary(brain, state, computers.len(), false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2385,6 +2409,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "iteration": iteration_view(hub, bot),
         "approvalrules": approvalrules_view(),
         "brainpicker": brainpicker_view(),
+        "engine": engine_view(),
         "description": description,
         "model": model,
         "provider": provider,

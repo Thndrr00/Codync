@@ -74,9 +74,20 @@ data class BotInsights(
     val iteration: InsightIteration = InsightIteration(),
     val approvalrules: InsightApprovalRules = InsightApprovalRules(),
     val brainpicker: InsightBrainPicker = InsightBrainPicker(),
+    val engine: InsightEngine = InsightEngine(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed brain engine summary. */
+@Serializable
+data class InsightEngine(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val engine: String = "", val state: String = "", val off: Boolean = false,
+    val executor: String = "", val line: String = "", val modelBrain: Boolean = false,
+    val auto: Boolean = false, val computers: List<String> = emptyList(),
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed brain picker summary. */

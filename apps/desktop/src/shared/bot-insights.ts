@@ -1,6 +1,21 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightEngine {
+  headline: string
+  tone: string
+  icon: string
+  engine: string
+  state: string
+  off: boolean
+  executor: string
+  line: string
+  modelBrain: boolean
+  auto: boolean
+  computers: string[]
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightBrainPicker {
   headline: string
   tone: string
@@ -1051,6 +1066,7 @@ export interface BotInsights {
   iteration: InsightIteration
   approvalrules: InsightApprovalRules
   brainpicker: InsightBrainPicker
+  engine: InsightEngine
   routines: InsightRoutine[]
   usage: {
     used: number

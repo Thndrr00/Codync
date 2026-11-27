@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Motor de cerebro (23 adiciones + UI en 4 clientes)
+
+`bdots_engine.rs` añade 19 helpers puros y 4 constantes portados de `brain.ts` de **agentes-chat
+0.7.5**: clases de motor y estado, resolución de brain/executor, estados de opción, líneas «what
+thinks», modelos automáticos, nombres de computadora y presentación. Reutiliza `bdots_i18n`,
+`bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade el campo `engine`; la sección
+«Engine» se muestra en los cuatro clientes.
+
 ## Selector de cerebro (23 adiciones + UI en 4 clientes)
 
 `bdots_brain_picker.rs` añade 19 helpers puros y 4 constantes portados de `brain-picker.ts` de

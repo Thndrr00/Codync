@@ -71,6 +71,7 @@ public struct BotInsights: Decodable, Sendable {
     public let iteration: InsightIteration
     public let approvalrules: InsightApprovalRules
     public let brainpicker: InsightBrainPicker
+    public let engine: InsightEngine
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -100,6 +101,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed brain engine summary.
+public struct InsightEngine: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let engine: String
+    public let state: String
+    public let off: Bool
+    public let executor: String
+    public let line: String
+    public let modelBrain: Bool
+    public let auto: Bool
+    public let computers: [String]
     public let summary: [InsightSummaryRow]
 }
 

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let engine = insights.engine
+                    Text(engine.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Engine")): \(engine.engine)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("State")): \(engine.state)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let brainpicker = insights.brainpicker
                     Text(brainpicker.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Groups")): \(brainpicker.groups.joined(separator: ", "))").font(.footnote).foregroundStyle(Palette.secondary)
