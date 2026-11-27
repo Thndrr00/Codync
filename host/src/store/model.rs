@@ -441,14 +441,41 @@ pub struct Entry {
 }
 
 /// A message's text, or the names of its files when it has none.
+/// OpenBot v0.77.0: an agent's file-only answer stores its files under `files`, not `attachments`;
+/// a Windows path shows only its file name. Both shapes preview as the file's name.
 pub fn message_text(data: &Value) -> String {
     match data["text"].as_str().unwrap_or_default() {
         "" => {
-            let names: Vec<&str> =
+            let mut names: Vec<&str> =
                 data["attachments"].as_array().into_iter().flatten().filter_map(|a| a["name"].as_str()).collect();
+            names.extend(
+                data["files"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|f| f["name"].as_str())
+                    .map(|name| name.rsplit(['\\', '/']).next().unwrap_or(name)),
+            );
             names.join(", ")
         }
         text => text.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod message_text_tests {
+    use super::*;
+
+    #[test]
+    fn a_file_only_answer_previews_as_its_file_name() {
+        assert_eq!(
+            message_text(&serde_json::json!({"text": "", "files": [{"name": "C:\\work\\brief.md"}]})),
+            "brief.md"
+        );
+        let both =
+            serde_json::json!({"text": "", "attachments": [{"name": "one.png"}], "files": [{"name": "/tmp/two.mp4"}]});
+        assert_eq!(message_text(&both), "one.png, two.mp4");
+        assert_eq!(message_text(&serde_json::json!({"text": "hello"})), "hello");
     }
 }
 

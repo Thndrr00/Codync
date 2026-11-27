@@ -362,6 +362,31 @@ impl Routines {
         self.hooks_rev.subscribe()
     }
 
+    /// OpenBot v0.78.0: a correction to a belief that a routine's instruction quotes also updates that
+    /// routine, so its next run does not repeat the old path, account or deadline. Pure and bounded.
+    pub fn apply_belief(&self, store: &Store, old: &str, new: &str) -> Result<usize> {
+        let (old, new) = (old.trim(), new.trim());
+        if old.is_empty() || new.is_empty() || old == new {
+            return Ok(0);
+        }
+        let mut changed = 0;
+        let ids: Vec<String> = self.state.locked().routines.iter().map(|r| r.id.clone()).collect();
+        for id in ids {
+            let next = self.change(store, |state| {
+                let Some(routine) = state.routines.iter_mut().find(|r| r.id == id) else { return Ok(false) };
+                if !routine.instruction.contains(old) {
+                    return Ok(false);
+                }
+                routine.instruction = routine.instruction.replace(old, new);
+                Ok(true)
+            })?;
+            if next {
+                changed += 1;
+            }
+        }
+        Ok(changed)
+    }
+
     fn change<T>(&self, store: &Store, update: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
         let mut guard = self.state.locked();
         let mut next = guard.clone();

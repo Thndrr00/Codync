@@ -94,6 +94,23 @@ pub(crate) fn open_regular(path: &Path) -> Result<File> {
     Ok(file)
 }
 
+/// OpenBot 0.79.0: a zero-byte file is never a valid attachment; a named non-empty one is.
+pub fn attachment_ok(size: u64, name: &str) -> bool {
+    size > 0 && !name.trim().is_empty()
+}
+
+#[cfg(test)]
+mod attachment_tests {
+    use super::attachment_ok;
+
+    #[test]
+    fn an_empty_file_is_not_an_attachment() {
+        assert!(!attachment_ok(0, "empty.txt"));
+        assert!(!attachment_ok(12, "  "));
+        assert!(attachment_ok(12, "report.md"));
+    }
+}
+
 /// Blocking, bounded-memory copy. Call on a blocking worker, never the bot actor.
 pub fn snapshot(
     root: &Path,
@@ -110,6 +127,8 @@ pub fn snapshot(
     };
     let mut input = open_regular(&source)?;
     let before = input.metadata()?;
+    // OpenBot 0.79.0: an empty file is not a valid attachment.
+    ensure!(attachment_ok(before.len(), &display), "cannot attach an empty file");
     ensure!(before.len() <= MAX_FILE, "file exceeds 100 MiB");
     std::fs::create_dir_all(root).context("creating the shared file folder")?;
     let id = uuid::Uuid::new_v4().to_string();

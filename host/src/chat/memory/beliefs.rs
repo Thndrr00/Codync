@@ -19,6 +19,11 @@ use std::sync::Arc;
 const QUESTION_EVERY_MS: i64 = 24 * 60 * 60 * 1000;
 const VERSIONS_SHOWN: usize = 20;
 
+/// The belief's value lines, without the front matter, used to find the value a routine quotes.
+fn kept_text(content: &str) -> String {
+    content.lines().filter(|l| !l.starts_with("---")).collect::<Vec<_>>().join("\n")
+}
+
 pub async fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
     let (hub, method, b) = (hub.clone(), method.to_owned(), b.clone());
     tokio::task::spawn_blocking(move || dispatch(&hub, &method, &b)).await?
@@ -165,11 +170,14 @@ pub fn tool(hub: &Hub, cfg: &BotConfig, name: &str, args: &Value) -> Result<Valu
             let fixed =
                 belief::stamp(content, &Belief { confidence: Confidence::High, confirmed: Some(today()), ..kept });
             let version = write(hub, cfg, layer.as_deref(), file, Some(&fixed), By::Bot, Cause::Edit)?;
+            // OpenBot v0.78.0: a corrected path, account or deadline also updates the routines that
+            // quote the old value, so the next run does not repeat it.
+            let routines_changed = hub.routines.apply_belief(&hub.store, &kept_text(&content), &kept_text(&fixed))?;
             let summary = args["summary"].as_str().unwrap_or("something about you changed");
             announce(hub, cfg, summary, file, layer.is_none(), earlier, version.id);
             let question = args["question"].as_str().map(|q| ask(hub, cfg, q)).transpose()?;
             Ok(
-                json!({"status": "corrected", "file": file, "question": question.map(|asked| if asked { "asked" } else { "skipped: a question was asked in the last 24 hours" })}),
+                json!({"status": "corrected", "file": file, "routinesChanged": routines_changed, "question": question.map(|asked| if asked { "asked" } else { "skipped: a question was asked in the last 24 hours" })}),
             )
         }
         "forget_memory" => {

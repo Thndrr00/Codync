@@ -30,6 +30,25 @@
     return best;
   }
   // end password_field
+  // OpenBot 0.78: an authenticator code field may name itself in its label or placeholder when
+  // the page does not set `autocomplete=one-time-code`. Descriptors carry no field values.
+  // begin code_field
+  function code_field(fields) {
+    let best = -1;
+    let score = -1;
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      if (!f || !f.visible || f.disabled || f.readOnly || f.hidden || f.inert) continue;
+      if (!['text', 'password', 'tel', 'number'].includes(f.type)) continue;
+      const words = `${f.autocomplete || ''} ${f.label || ''} ${f.placeholder || ''}`.toLowerCase();
+      const rank = (f.autocomplete === 'one-time-code' ? 4 : 0) +
+        (/(authenticator|verification|one[- ]time|2fa|otp)/.test(words) ? 2 : 0) +
+        (/(pin|code|passcode)/.test(words) ? 1 : 0);
+      if (rank > score) { score = rank; best = i; }
+    }
+    return score >= 1 ? best : -1;
+  }
+  // end code_field
 
   // A password may be filled only into an input of the focused field's own form; a decoy outside
   // that form can never point the secret at an unrelated credential field.
@@ -51,7 +70,8 @@
     };
   };
   const descriptors = candidates.map(describe);
-  const chosen = kind === 'password' ? password_field(descriptors) : 0;
+  const chosen = kind === 'password' ? password_field(descriptors)
+    : kind === 'code' ? code_field(descriptors) : 0;
   const target = chosen >= 0 ? candidates[chosen] : null;
   // The host probes this exact remote node BEFORE sending a secret to its execution context.
   const ready = !!view && view.top === view && doc.location.protocol === 'https:' &&
@@ -60,7 +80,7 @@
       ? !!form && target.closest('form') === form
       : doc.activeElement === field && field === target && field.isConnected && !field.disabled &&
         !field.readOnly && !marked(field) && !inHiddenTree && field.getClientRects().length > 0 &&
-        field.autocomplete === 'one-time-code' && ['text', 'password', 'tel', 'number'].includes(field.type)) &&
+        (kind !== 'code' || chosen >= 0) && ['text', 'password', 'tel', 'number'].includes(field.type)) &&
     !marked(target) && !(target.closest && target.closest('[hidden],[inert]')) &&
     !target.disabled && !target.readOnly && target.isConnected && target.getClientRects().length > 0;
   if (arguments.length < 3) return { ready, origin: doc ? doc.location.origin : null, fields: descriptors, chosen };
