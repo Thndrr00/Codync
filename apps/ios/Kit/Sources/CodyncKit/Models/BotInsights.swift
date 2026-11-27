@@ -75,6 +75,7 @@ public struct BotInsights: Decodable, Sendable {
     public let accounts: InsightAccounts
     public let plans: InsightPlans
     public let providers: InsightProviders
+    public let avatar: InsightAvatar
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -104,6 +105,23 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed avatar color summary.
+public struct InsightAvatar: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let color: String
+    public let hex: String
+    public let rgb: String
+    public let eye: String
+    public let ink: String
+    public let bucket: String
+    public let contrast: String
+    public let invites: Int
+    public let initials: String
+    public let background: String
     public let summary: [InsightSummaryRow]
 }
 

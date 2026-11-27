@@ -78,9 +78,20 @@ data class BotInsights(
     val accounts: InsightAccounts = InsightAccounts(),
     val plans: InsightPlans = InsightPlans(),
     val providers: InsightProviders = InsightProviders(),
+    val avatar: InsightAvatar = InsightAvatar(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed avatar color summary. */
+@Serializable
+data class InsightAvatar(
+    val headline: String = "", val tone: String = "", val color: String = "",
+    val hex: String = "", val rgb: String = "", val eye: String = "",
+    val ink: String = "", val bucket: String = "", val contrast: String = "",
+    val invites: Int = 0, val initials: String = "", val background: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed model provider summary. */

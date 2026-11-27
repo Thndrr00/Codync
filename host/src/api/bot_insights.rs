@@ -18,7 +18,7 @@ fn routine_view(r: &crate::routines::Routine, now: i64) -> Value {
                 crate::bdots_cron::parse_cron(expression)
                     .and_then(|cron| crate::bdots_cron::describe_cron(&cron))
                     .unwrap_or_else(|| trigger.description())
-                    + &format!(" Â· {time_zone}")
+                    + &format!(" Ã‚Â· {time_zone}")
             }
             other => other.description(),
         })
@@ -813,8 +813,8 @@ fn timezone_view(routines: &[Value]) -> Value {
                 .as_array()
                 .map_or(Vec::new(), |a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect::<Vec<_>>())
         })
-        .filter(|s| s.contains(" Â· "))
-        .map(|s| s.split(" Â· ").nth(1).unwrap_or("").trim().to_owned())
+        .filter(|s| s.contains(" Ã‚Â· "))
+        .map(|s| s.split(" Ã‚Â· ").nth(1).unwrap_or("").trim().to_owned())
         .collect();
 
     json!({
@@ -1211,7 +1211,7 @@ fn context_view(hub: &Arc<Hub>, bot: &str) -> Value {
     }
     let keep = c::default_screenshot_keep();
     json!({
-        "headline": format!("{} page states Â· {} screenshots", c::count_label(page), c::count_label(screenshots)),
+        "headline": format!("{} page states Ã‚Â· {} screenshots", c::count_label(page), c::count_label(screenshots)),
         "page": c::count_label(page),
         "screenshots": c::count_label(screenshots),
         "pageKeep": c::default_page_keep(),
@@ -1235,7 +1235,7 @@ fn opendots_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let internal = entries.iter().filter(|e| o::is_internal(&crate::store::message_text(&e.data))).count();
 
     json!({
-        "headline": format!("Learning {} Â· {} internal", if o::valid_container(container) { "ready" } else { "not set" }, internal),
+        "headline": format!("Learning {} Ã‚Â· {} internal", if o::valid_container(container) { "ready" } else { "not set" }, internal),
         "container": container.unwrap_or("none"),
         "valid": o::valid_container(container),
         "delivery": delivery,
@@ -1321,7 +1321,7 @@ fn textfmt_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value 
     let name = &row.config.name;
     let slug = t::slugify(name);
     json!({
-        "headline": format!("{} Â· {} emails Â· {} hidden", slug, t::count_label(valid + invalid), hidden),
+        "headline": format!("{} Ã‚Â· {} emails Ã‚Â· {} hidden", slug, t::count_label(valid + invalid), hidden),
         "tone": t::hygiene_tone(valid, invalid, hidden),
         "slug": slug,
         "handle": t::handle_from(name),
@@ -1384,7 +1384,7 @@ fn markdown_view(hub: &Arc<Hub>, bot: &str) -> Value {
         }
     }
     json!({
-        "headline": format!("{} Â· {} links Â· {} mentions", m::count_label(blocks), links, mentions),
+        "headline": format!("{} Ã‚Â· {} links Ã‚Â· {} mentions", m::count_label(blocks), links, mentions),
         "tone": if wide { "accent" } else { "good" },
         "preview": preview,
         "blocks": blocks,
@@ -1451,7 +1451,7 @@ fn mailtext_view(row: &crate::store::BotRow, hub: &Arc<Hub>, bot: &str) -> Value
     let (table, shown, cut) = t::format_rows(&columns, &rows);
     let inbox = "insights@codync.local";
     json!({
-        "headline": format!("{} rows Â· {} addresses Â· {} keys", shown, addresses, keys),
+        "headline": format!("{} rows Ã‚Â· {} addresses Ã‚Â· {} keys", shown, addresses, keys),
         "tone": if keys > 0 { "attention" } else { "good" },
         "address": t::format_address(Some(&row.config.name), inbox),
         "mailbox": t::mailbox_of(inbox),
@@ -1486,7 +1486,7 @@ fn connstate_view(hub: &Arc<Hub>, bot: &str, now: i64) -> Value {
     let selected =
         mine.first().map_or_else(|| "default".to_owned(), |r| c::channel_label(r["channel"].as_str().unwrap_or("")));
     json!({
-        "headline": format!("{} Â· {} connected Â· {} stale", selected, connected, stale),
+        "headline": format!("{} Ã‚Â· {} connected Ã‚Â· {} stale", selected, connected, stale),
         "tone": c::state_tone(state),
         "selected": selected,
         "state": c::state_label(state).to_owned(),
@@ -1509,9 +1509,9 @@ fn eval_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let score = e::average(&scores);
     let threshold = e::threshold_for("normal");
     let verdict = if scores.is_empty() { "pending" } else { e::verdict(score, threshold) };
-    let grade = if scores.is_empty() { "â€”" } else { e::grade(score) };
+    let grade = if scores.is_empty() { "Ã¢â‚¬â€" } else { e::grade(score) };
     json!({
-        "headline": if scores.is_empty() { "No eval samples".to_owned() } else { format!("{} Â· {} Â· {}", verdict, grade, score) },
+        "headline": if scores.is_empty() { "No eval samples".to_owned() } else { format!("{} Ã‚Â· {} Ã‚Â· {}", verdict, grade, score) },
         "tone": e::verdict_tone(verdict),
         "score": score,
         "verdict": verdict.to_owned(),
@@ -1537,7 +1537,7 @@ fn search_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let score = rows.first().map_or(0, |r| s::relevance_score(r["title"].as_str().unwrap_or(""), &terms));
     let empty = s::is_empty_query(&query) || hits == 0;
     json!({
-        "headline": format!("{} Â· {} hits", s::hit_label(hits), query),
+        "headline": format!("{} Ã‚Â· {} hits", s::hit_label(hits), query),
         "tone": s::search_tone(empty),
         "query": query,
         "hits": hits,
@@ -1557,7 +1557,7 @@ fn appearance_view() -> Value {
     let appearance = a::resolve_appearance(preference, "light");
     let (background, text, accent) = a::tokens_for_appearance(appearance);
     json!({
-        "headline": format!("{} Â· {} Â· {} pt body", a::appearance_label(preference), crate::bdots_textfmt::upper_first(appearance), a::type_size("body")),
+        "headline": format!("{} Ã‚Â· {} Ã‚Â· {} pt body", a::appearance_label(preference), crate::bdots_textfmt::upper_first(appearance), a::type_size("body")),
         "tone": if a::is_dark(appearance) { "accent" } else { "good" },
         "preference": a::appearance_label(preference),
         "appearance": crate::bdots_textfmt::upper_first(appearance),
@@ -1654,7 +1654,7 @@ fn stream_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let streamed = s::chunk_text(&interim, 40).into_iter().next().unwrap_or_default();
     let remaining = s::visible_text(&streamed, &interim);
     json!({
-        "headline": format!("{} Â· {} held Â· {} live", s::count_label(chunks), held, consumers),
+        "headline": format!("{} Ã‚Â· {} held Ã‚Â· {} live", s::count_label(chunks), held, consumers),
         "tone": if held > 0 { "attention" } else { "good" },
         "held": held,
         "consumers": consumers,
@@ -1704,7 +1704,7 @@ fn review_view() -> Value {
     pending.insert("session-a".to_owned(), 970.0);
     let dispatchable = r::dispatchable_sessions(&pending, now, max_age, settled, r::is_deferred(mode, true));
     json!({
-        "headline": format!("{} Â· {} queued Â· {}", r::review_mode_label(mode), pending.len(), r::idle_label(settled)),
+        "headline": format!("{} Ã‚Â· {} queued Ã‚Â· {}", r::review_mode_label(mode), pending.len(), r::idle_label(settled)),
         "tone": r::idle_tone(settled),
         "mode": r::review_mode_label(mode),
         "modeIcon": r::review_mode_icon(mode),
@@ -1734,7 +1734,7 @@ fn history_view(hub: &Arc<Hub>, bot: &str) -> Value {
         .map(|row| h::visible_commentary(&h::flatten_message_text(&row["content"])))
         .unwrap_or_default();
     json!({
-        "headline": format!("{} Â· {} commentary Â· {} final", h::count_label(messages.len()), commentary, finals),
+        "headline": format!("{} Ã‚Â· {} commentary Ã‚Â· {} final", h::count_label(messages.len()), commentary, finals),
         "tone": if withheld > 0 { "attention" } else { "good" },
         "messages": messages.len(),
         "commentary": commentary,
@@ -1767,7 +1767,7 @@ fn apierror_view(hub: &Arc<Hub>, bot: &str) -> Value {
     }
     let class = a::error_class(status, &text);
     json!({
-        "headline": format!("{} Â· {}", a::class_label(class), a::status_label(status)),
+        "headline": format!("{} Ã‚Â· {}", a::class_label(class), a::status_label(status)),
         "tone": a::class_tone(class),
         "icon": a::class_icon(class),
         "class": class,
@@ -1808,7 +1808,7 @@ fn memoryctx_view(hub: &Arc<Hub>, bot: &str) -> Value {
         }
     }
     json!({
-        "headline": format!("{} fenced Â· {} hidden", fenced, hidden),
+        "headline": format!("{} fenced Ã‚Â· {} hidden", fenced, hidden),
         "tone": m::context_tone(fenced > 0, hidden),
         "icon": m::context_icon(fenced > 0),
         "fenced": fenced,
@@ -1832,7 +1832,7 @@ fn searchextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let summary = s::search_summary(&query, total, returned, score);
     let matched = entries.iter().filter(|e| s::matches_words(&crate::store::message_text(&e.data), &query)).count();
     json!({
-        "headline": format!("{} Â· {} matched Â· {:.3}", summary["totalLabel"].as_str().unwrap_or("0"), matched, score),
+        "headline": format!("{} Ã‚Â· {} matched Ã‚Â· {:.3}", summary["totalLabel"].as_str().unwrap_or("0"), matched, score),
         "tone": if summary["empty"] == true { "secondary" } else { "good" },
         "query": summary["query"],
         "terms": summary["terms"],
@@ -1862,7 +1862,7 @@ fn evalextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let source = entries.first().map(|e| crate::store::message_text(&e.data)).unwrap_or_default();
     let lines = [100_u64, 1_500, 2_500];
     json!({
-        "headline": format!("{} lines Â· {} median Â· {} over 1k", e::source_line_count(&source), e::median_file_lines(&lines), e::count_gt(&lines, 1_000)),
+        "headline": format!("{} lines Ã‚Â· {} median Ã‚Â· {} over 1k", e::source_line_count(&source), e::median_file_lines(&lines), e::count_gt(&lines, 1_000)),
         "tone": if e::count_gt(&lines, 2_000) > 0 { "attention" } else { "good" },
         "lines": e::source_line_count(&source),
         "code": e::code_line_count(&source),
@@ -1894,7 +1894,7 @@ fn connextra_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let channels = c::connected_channels(&rows);
     let providers = c::connected_providers(&rows);
     json!({
-        "headline": format!("{} channels Â· {} providers", channels.len(), providers.len()),
+        "headline": format!("{} channels Ã‚Â· {} providers", channels.len(), providers.len()),
         "tone": if channels.is_empty() { "attention" } else { "good" },
         "channels": channels,
         "providers": providers,
@@ -1930,9 +1930,9 @@ fn shortcuts_view() -> Value {
         })
         .collect();
     json!({
-        "headline": format!("{} shortcuts · {}", k::count_label(commands.len()), k::quote_shortcut_label(host)),
+        "headline": format!("{} shortcuts Â· {}", k::count_label(commands.len()), k::quote_shortcut_label(host)),
         "tone": "good",
-        "modifier": if host.apple { "⌘" } else { "Ctrl" },
+        "modifier": if host.apple { "âŒ˜" } else { "Ctrl" },
         "quote": k::quote_shortcut_label(host),
         "commandMenu": k::shell_shortcut("k", keys, host),
         "primary": k::primary_modifier(keys, host.apple),
@@ -1961,7 +1961,7 @@ fn palette_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let filtered = p::filter_bots(&bots, needle);
     let ranked = p::rank_rows(&filtered, needle, "name");
     json!({
-        "headline": format!("{} · {} results · {}", p::command_class_label(command), ranked.len(), p::palette_modifier(false)),
+        "headline": format!("{} Â· {} results Â· {}", p::command_class_label(command), ranked.len(), p::palette_modifier(false)),
         "tone": p::command_class_tone(command),
         "icon": p::command_class_icon(command),
         "command": p::command_class_label(command),
@@ -1983,7 +1983,7 @@ fn picker_view() -> Value {
     let models = vec!["writer".to_owned(), "reviewer".to_owned(), "planner".to_owned()];
     let featured = vec!["planner".to_owned()];
     json!({
-        "headline": format!("{} · {} · {}", p::gauge_label("week"), p::format_percent_used(used), p::gauge_style(left)),
+        "headline": format!("{} Â· {} Â· {}", p::gauge_label("week"), p::format_percent_used(used), p::gauge_style(left)),
         "tone": p::gauge_style(left),
         "bar": p::render_bar(used, p::BAR_WIDTH),
         "used": p::format_percent_used(used),
@@ -2013,7 +2013,7 @@ fn contextselect_view(hub: &Arc<Hub>, bot: &str) -> Value {
         entries.iter().map(|e| x::estimate_text_tokens(&crate::store::message_text(&e.data))).collect();
     let kept = x::fit_history(&scores, available);
     json!({
-        "headline": format!("{} / {} · {} kept", x::count_label(estimate as usize), x::count_label(available as usize), kept),
+        "headline": format!("{} / {} Â· {} kept", x::count_label(estimate as usize), x::count_label(available as usize), kept),
         "tone": if x::fits_budget(estimate, available) { "good" } else { "attention" },
         "estimate": estimate,
         "available": available,
@@ -2052,7 +2052,7 @@ fn md_tables_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let wide = rows.iter().map(|row| row.iter().map(|cell| m::display_width(cell)).sum::<usize>()).max().unwrap_or(0);
     let narrow = m::too_wide(&rows, 40);
     json!({
-        "headline": format!("{} rows · {} cols · {} cells", m::count_label(rows.len()), cols, m::count_label(wide)),
+        "headline": format!("{} rows Â· {} cols Â· {} cells", m::count_label(rows.len()), cols, m::count_label(wide)),
         "tone": if rows.is_empty() { "secondary" } else { "good" },
         "rows": rows.len(),
         "cols": cols,
@@ -2074,7 +2074,7 @@ fn contextpin_view() -> Value {
     let model = "claude-sonnet";
     let marker = p::context_marker(window, pin, model, None);
     json!({
-        "headline": format!("{} · {}{}", p::window_label(window), p::marker_label(marker), p::context_suffix(marker)),
+        "headline": format!("{} Â· {}{}", p::window_label(window), p::marker_label(marker), p::context_suffix(marker)),
         "tone": p::marker_tone(marker),
         "icon": p::marker_icon(marker),
         "window": window,
@@ -2104,7 +2104,7 @@ fn verify_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let state = v::evidence_state(status);
     let nudge = v::should_nudge(enabled, prose_only, state);
     json!({
-        "headline": format!("{} · {} · {}", v::nudge_label(nudge), v::count_label(paths.len()), v::evidence_icon(state)),
+        "headline": format!("{} Â· {} Â· {}", v::nudge_label(nudge), v::count_label(paths.len()), v::evidence_icon(state)),
         "tone": v::evidence_tone(state),
         "icon": v::evidence_icon(state),
         "paths": paths.len(),
@@ -2144,7 +2144,7 @@ fn autofill_view(hub: &Arc<Hub>, bot: &str) -> Value {
     }
     let best = a::best_password(&controls).map_or("", |(_, token, _)| *token);
     json!({
-        "headline": format!("{} controls · {} otp · {}", a::count_label(controls.len()), otp, a::token_label(best)),
+        "headline": format!("{} controls Â· {} otp Â· {}", a::count_label(controls.len()), otp, a::token_label(best)),
         "tone": if best.is_empty() { "secondary" } else { "good" },
         "icon": a::token_icon(best),
         "controls": controls.len(),
@@ -2167,7 +2167,7 @@ fn rrule_view() -> Value {
     let error = r::validation_error(&rule);
     let cron = r::rule_to_cron(&rule);
     json!({
-        "headline": format!("{} · {}", r::describe_rule(&rule), r::freq_label("weekly")),
+        "headline": format!("{} Â· {}", r::describe_rule(&rule), r::freq_label("weekly")),
         "tone": if error.is_empty() { "good" } else { "attention" },
         "freq": r::freq_label("weekly"),
         "interval": r::interval_of(&rule),
@@ -2194,7 +2194,7 @@ fn iteration_view(hub: &Arc<Hub>, bot: &str) -> Value {
     let max = 10;
     let warn = i::should_warn(used, max, None, false);
     json!({
-        "headline": format!("{} / {} · {} ghosts · {} tools", used, max, ghosts, tools),
+        "headline": format!("{} / {} Â· {} ghosts Â· {} tools", used, max, ghosts, tools),
         "tone": if ghosts > 0 { "attention" } else { "good" },
         "used": used,
         "max": max,
@@ -2216,12 +2216,12 @@ fn approvalrules_view() -> Value {
     use crate::bdots_approval_rules as a;
 
     let tool = a::COMMAND_RULE_TOOL;
-    let target = a::sql_read_action("project=abc · schema=public");
+    let target = a::sql_read_action("project=abc Â· schema=public");
     let sql_read = a::is_sql_read(&target);
     let command = a::is_command_rule(None, tool);
     let rules = 3;
     json!({
-        "headline": format!("{} actions · {} rules · {}", rules, rules, if command { "command" } else { "tool" }),
+        "headline": format!("{} actions Â· {} rules Â· {}", rules, rules, if command { "command" } else { "tool" }),
         "tone": if rules > 0 { "good" } else { "secondary" },
         "icon": a::rule_icon(rules > 0),
         "tool": tool,
@@ -2247,7 +2247,7 @@ fn brainpicker_view() -> Value {
     let free = options.iter().filter(|row| b::free_keywords(row["free"] == true) == "free").count();
     let description = b::model_description("claude-sonnet-4", "anthropic", 3.0, 15.0, "en");
     json!({
-        "headline": format!("{} options · {} groups · {}", b::count_label(options.len()), groups.len(), description),
+        "headline": format!("{} options Â· {} groups Â· {}", b::count_label(options.len()), groups.len(), description),
         "tone": "good",
         "description": description,
         "groups": groups,
@@ -2269,7 +2269,7 @@ fn engine_view() -> Value {
     let state = e::engine_state(Some(brain), true, None);
     let computers = e::distinct_computers(&["mac".to_owned(), "mac".to_owned(), "pc".to_owned()]);
     json!({
-        "headline": format!("{} · {} · {}", e::engine_label(kind), e::state_label(state), e::count_label(computers.len())),
+        "headline": format!("{} Â· {} Â· {}", e::engine_label(kind), e::state_label(state), e::count_label(computers.len())),
         "tone": e::state_tone(state),
         "icon": e::engine_icon(kind),
         "engine": e::engine_label(kind),
@@ -2295,7 +2295,7 @@ fn accounts_view() -> Value {
     let groups = a::group_plans(&rows);
     let state = a::sign_in_of("signed_out", true);
     json!({
-        "headline": format!("{} accounts · {} plans · {}", a::count_label(rows.len()), groups.len(), a::sign_in_label(state)),
+        "headline": format!("{} accounts Â· {} plans Â· {}", a::count_label(rows.len()), groups.len(), a::sign_in_label(state)),
         "tone": a::sign_in_tone(state),
         "icon": a::sign_in_icon(state),
         "accounts": rows.len(),
@@ -2317,7 +2317,7 @@ fn plans_view() -> Value {
     let plan = "claude";
     let models = p::brain_model_choices(Some(plan), &[], None);
     json!({
-        "headline": format!("{} · {} models · {}", p::plan_label(plan), p::count_label(models.len()), p::plan_icon(plan)),
+        "headline": format!("{} Â· {} models Â· {}", p::plan_label(plan), p::count_label(models.len()), p::plan_icon(plan)),
         "tone": p::plan_tone(plan),
         "icon": p::plan_icon(plan),
         "plan": p::plan_label(plan),
@@ -2341,7 +2341,7 @@ fn providers_view() -> Value {
     let credentials = vec![serde_json::json!({"provider":"openai"})];
     let choices = p::model_choices(&models, &credentials);
     json!({
-        "headline": format!("{} providers · {} keys · {}", p::PROVIDER_IDS.len(), credentials.len(), p::count_label(choices.len())),
+        "headline": format!("{} providers Â· {} keys Â· {}", p::PROVIDER_IDS.len(), credentials.len(), p::count_label(choices.len())),
         "tone": "good",
         "icon": p::key_icon(!credentials.is_empty()),
         "providers": p::PROVIDER_IDS.len(),
@@ -2355,6 +2355,31 @@ fn providers_view() -> Value {
         "billing": p::needs_billing("gemini"),
         "privacy": p::has_privacy_notice("openrouter"),
         "summary": p::summary(p::PROVIDER_IDS.len(), credentials.len(), choices.len(), true),
+    })
+}
+
+/// Avatar color and contrast shaping from rakazo's avatar helpers.
+fn avatar_view() -> Value {
+    use crate::bdots_avatar as a;
+
+    let identity = "insights";
+    let (name, color) = a::resolve_persona_color(identity, None);
+    let tone = a::eye_tone(color);
+    let ratio = a::contrast_ratio(color, a::LIGHT_TEXT);
+    json!({
+        "headline": format!("{} Â· {} Â· {:.1}:1", a::initials(name), crate::bdots_textfmt::upper_first(name), ratio),
+        "tone": if ratio >= a::BUBBLE_CONTRAST { "good" } else { "attention" },
+        "color": crate::bdots_textfmt::upper_first(name),
+        "hex": color,
+        "rgb": a::rgb_string(color),
+        "eye": tone,
+        "ink": a::eye_ink(color, "#FFFFFF"),
+        "bucket": a::brightness_bucket(color),
+        "contrast": format!("{ratio:.1}"),
+        "invites": a::INVITE_COLOR_IDS.len(),
+        "initials": a::initials("Codync Insights"),
+        "background": a::bubble_background(color),
+        "summary": a::summary(name, tone, ratio, a::INVITE_COLOR_IDS.len()),
     })
 }
 
@@ -2487,6 +2512,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "accounts": accounts_view(),
         "plans": plans_view(),
         "providers": providers_view(),
+        "avatar": avatar_view(),
         "description": description,
         "model": model,
         "provider": provider,

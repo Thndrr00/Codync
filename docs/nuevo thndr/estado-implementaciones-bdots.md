@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Avatar de bot (22 adiciones + UI en 4 clientes)
+
+`bdots_avatar.rs` añade 17 helpers puros y 5 constantes portados de `bot-avatar-colors.ts` de
+**rakazo v0.14.0**: hash FNV-1a y PRNG determinista, expansión/canales hex, luminancia y contraste
+WCAG, resolución de color de persona, tono e tinta del ojo,墨水 de burbuja e iniciales. Reutiliza
+`bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade el campo `avatar`; la sección
+«Avatar» se muestra en los cuatro clientes.
+
 ## Proveedores de modelos (26 adiciones + UI en 4 clientes)
 
 `bdots_providers.rs` añade 22 helpers puros y 4 constantes portados de `providers.ts` de

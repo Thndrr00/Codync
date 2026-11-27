@@ -21,6 +21,7 @@ mod bdots_appearance;
 mod bdots_approval_rules;
 mod bdots_approvals;
 mod bdots_autofill;
+mod bdots_avatar;
 mod bdots_blocks;
 mod bdots_blueprint;
 mod bdots_brain_picker;

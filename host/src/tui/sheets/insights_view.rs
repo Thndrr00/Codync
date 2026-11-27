@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let avatar = &data["avatar"];
+    if avatar.is_object() {
+        line(buf, &mut y, tr("Avatar").into_owned(), t.bold.patch(t.panel));
+        let headline = avatar["headline"].as_str().unwrap_or("");
+        let hex = avatar["hex"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {hex}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let providers = &data["providers"];
     if providers.is_object() {
         line(buf, &mut y, tr("Providers").into_owned(), t.bold.patch(t.panel));
