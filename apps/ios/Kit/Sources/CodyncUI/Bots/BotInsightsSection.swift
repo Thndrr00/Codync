@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let secretcleanup = insights.secretcleanup
+                    Text(secretcleanup.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Kind")): \(secretcleanup.kind)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Retry due")): \(secretcleanup.retryDue)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let avatar = insights.avatar
                     Text(avatar.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Hex")): \(avatar.hex)").font(.footnote).foregroundStyle(Palette.secondary)

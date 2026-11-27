@@ -76,6 +76,7 @@ public struct BotInsights: Decodable, Sendable {
     public let plans: InsightPlans
     public let providers: InsightProviders
     public let avatar: InsightAvatar
+    public let secretcleanup: InsightSecretCleanup
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -105,6 +106,25 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed secret cleanup summary.
+public struct InsightSecretCleanup: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let reference: String
+    public let kind: String
+    public let prefix: String?
+    public let known: Bool
+    public let attemptMs: Int
+    public let backupMs: Int
+    public let storeMs: Int
+    public let providerMs: Int
+    public let retryDue: Int
+    public let backupDue: Int
+    public let expired: Bool
     public let summary: [InsightSummaryRow]
 }
 

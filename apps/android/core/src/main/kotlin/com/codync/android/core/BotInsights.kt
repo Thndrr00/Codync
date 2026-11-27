@@ -79,9 +79,21 @@ data class BotInsights(
     val plans: InsightPlans = InsightPlans(),
     val providers: InsightProviders = InsightProviders(),
     val avatar: InsightAvatar = InsightAvatar(),
+    val secretcleanup: InsightSecretCleanup = InsightSecretCleanup(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed secret cleanup summary. */
+@Serializable
+data class InsightSecretCleanup(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val reference: String = "", val kind: String = "", val prefix: String? = null,
+    val known: Boolean = false, val attemptMs: Int = 0, val backupMs: Int = 0,
+    val storeMs: Int = 0, val providerMs: Int = 0, val retryDue: Int = 0,
+    val backupDue: Int = 0, val expired: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed avatar color summary. */

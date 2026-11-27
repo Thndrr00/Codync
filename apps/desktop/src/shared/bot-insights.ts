@@ -1,6 +1,24 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightSecretCleanup {
+  headline: string
+  tone: string
+  icon: string
+  reference: string
+  kind: string
+  prefix: string | null
+  known: boolean
+  attemptMs: number
+  backupMs: number
+  storeMs: number
+  providerMs: number
+  retryDue: number
+  backupDue: number
+  expired: boolean
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightAvatar {
   headline: string
   tone: string
@@ -1134,6 +1152,7 @@ export interface BotInsights {
   plans: InsightPlans
   providers: InsightProviders
   avatar: InsightAvatar
+  secretcleanup: InsightSecretCleanup
   routines: InsightRoutine[]
   usage: {
     used: number

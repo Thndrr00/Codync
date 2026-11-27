@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val secretcleanup = insights.secretcleanup
+            CardSection("Secret cleanup") {
+                row { Text(secretcleanup.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Kind", secretcleanup.kind) }
+                row { ValueRow("Retry due", secretcleanup.retryDue.toString()) }
+                row { ValueRow("Backup due", secretcleanup.backupDue.toString()) }
+            }
             val avatar = insights.avatar
             CardSection("Avatar") {
                 row { Text(avatar.headline, style = Type.subheadline.semibold, color = Palette.text) }

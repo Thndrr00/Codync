@@ -2383,6 +2383,31 @@ fn avatar_view() -> Value {
     })
 }
 
+/// Secret cleanup references and timing from rakazo.
+fn secretcleanup_view() -> Value {
+    use crate::bdots_secret_cleanup as s;
+
+    let reference = s::purchase_token_record_id("insights");
+    let kind = s::cleanup_kind(&reference);
+    json!({
+        "headline": format!("{} · {} · {}", s::reference_id(reference), s::cleanup_job_key(&reference), kind),
+        "tone": s::cleanup_tone(kind),
+        "icon": s::cleanup_icon(kind),
+        "reference": reference,
+        "kind": kind,
+        "prefix": s::reference_prefix(&reference),
+        "known": s::is_known_reference(&reference),
+        "attemptMs": s::ATTEMPT_MS,
+        "backupMs": s::BACKUP_MS,
+        "storeMs": s::STORE_WRITE_MS,
+        "providerMs": s::PROVIDER_BEFORE_SAVE_MS,
+        "retryDue": s::retry_due(1000),
+        "backupDue": s::backup_due(1000),
+        "expired": s::write_expired(31_000),
+        "summary": s::summary(1, s::PREFIXES.len(), 4, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2513,6 +2538,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "plans": plans_view(),
         "providers": providers_view(),
         "avatar": avatar_view(),
+        "secretcleanup": secretcleanup_view(),
         "description": description,
         "model": model,
         "provider": provider,

@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Limpieza de secretos (27 adiciones + UI en 4 clientes)
+
+`bdots_secret_cleanup.rs` añade 20 helpers puros y 6 constantes portados de `secret-cleanup.ts` de
+**rakazo v0.14.0**: ids de registro de secretos, claves de trabajo de limpieza, prefijos y tipos de
+referencia, validación de columnas de titular, ventanas de tiempo y presentación. Reutiliza
+`bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade el campo `secretcleanup`; la sección
+«Secret cleanup» se muestra en los cuatro clientes.
+
 ## Avatar de bot (22 adiciones + UI en 4 clientes)
 
 `bdots_avatar.rs` añade 17 helpers puros y 5 constantes portados de `bot-avatar-colors.ts` de
