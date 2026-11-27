@@ -11,6 +11,31 @@ import { isActiveRun, type Routine, type RoutineRun } from '../views/routines/ro
 
 export type StepStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'
 
+// MARK: canvas media files (OpenBot t3-speed-up-canvas-media)
+
+/** What a file dropped on a workflow canvas is, decided from its own name alone. */
+export type CanvasMediaKind = 'image' | 'video' | 'audio'
+
+const CANVAS_MEDIA_EXTENSIONS: Record<string, CanvasMediaKind> = {
+  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', avif: 'image', heic: 'image', svg: 'image',
+  mp4: 'video', mov: 'video', m4v: 'video', webm: 'video',
+  mp3: 'audio', m4a: 'audio', wav: 'audio', aac: 'audio', ogg: 'audio', flac: 'audio',
+}
+
+/** The media kind of a dropped or pasted file, or null when the canvas cannot show it. Pure. */
+export function canvas_media_kind(name: string): CanvasMediaKind | null {
+  const extension = name.trim().split('.').at(-1)?.toLocaleLowerCase() ?? ''
+  return CANVAS_MEDIA_EXTENSIONS[extension] ?? null
+}
+
+/**
+ * The note shown for a file the canvas cannot take, or null when it can. Pure: the label is kept
+ * here so the drop path and its test agree on the words without a host or a DOM.
+ */
+export function unsupported_media(name: string): string | null {
+  return canvas_media_kind(name) ? null : `Unsupported file type: ${name}`
+}
+
 export interface FlowLink {
   id: string
   routineId: string

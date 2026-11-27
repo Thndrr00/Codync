@@ -1,6 +1,18 @@
 import type { WhatsAppState } from '../../../shared/models'
 import type { DiscordStatus, SlackStatus, TelegramBotStatus } from '../../../shared/channels'
 
+/**
+ * What a channel page shows while its first page is read. Cached rows stay on screen on a reopen;
+ * the loader only says something when there is nothing to keep (channel-history-loading,
+ * fix-channel-keep-cached-page). Pure, so wording and cache rules can be tested without a host.
+ */
+export type ChannelPageState = 'loading' | 'cached' | 'empty'
+
+export function channel_page_state(loading: boolean, cached: readonly unknown[]): ChannelPageState {
+  if (cached.length > 0) return 'cached'
+  return loading ? 'loading' : 'empty'
+}
+
 /** The four messaging channels a computer can host, as the Marketplace lists them. */
 export type ChannelProvider = 'whatsapp' | 'telegram' | 'slack' | 'discord'
 

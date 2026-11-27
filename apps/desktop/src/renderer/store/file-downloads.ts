@@ -2,6 +2,7 @@ import type { SharedFile } from '@shared/models'
 import { decodeFileChunk, validateSharedFile } from '../../shared/files.ts'
 import type { HostClient } from '../client/host-client'
 import { trNow } from '../lib/l10n.ts'
+import { pdf_save_name } from '../views/thread/pdf-save-name.ts'
 
 export type DownloadState = { kind: 'downloading'; received: number } | { kind: 'saved' } | { kind: 'failed'; message: string }
 interface Job { cancelled: boolean; handle: string | null }
@@ -36,7 +37,9 @@ export class FileDownloads {
     try {
       validateSharedFile(file)
       if (!client) throw new Error(trNow('Connect to this computer to download the file'))
-      job.handle = await window.codync.files.begin(file)
+      // OpenBot 0.79: a PDF opened from a chat keeps its readable name in the Save dialog.
+      const saveMeta = { ...file, name: pdf_save_name(file, file.name) }
+      job.handle = await window.codync.files.begin(saveMeta)
       if (!job.handle || !alive()) return
       let offset = 0
       // The empty file still performs an authenticated read and verifies its digest.

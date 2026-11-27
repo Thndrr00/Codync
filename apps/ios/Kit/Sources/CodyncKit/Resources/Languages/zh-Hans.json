@@ -2949,5 +2949,8 @@
   "Hide Help": "Hide Help",
   "Show Help": "Show Help",
   "The agent opened a page": "The agent opened a page",
-  "Open page": "Open page"
+  "Open page": "Open page",
+  "Unsupported file type: {name}": "Unsupported file type: {name}",
+  "Adding files to the canvas…": "Adding files to the canvas…",
+  "Loading channels…": "Loading channels…"
 }

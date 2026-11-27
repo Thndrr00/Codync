@@ -10,9 +10,9 @@ import { useModel } from '../../../lib/observable'
 import { prefs, usePref } from '../../../lib/prefs'
 import {
   GRAPH_PROBLEM_TEXT, NODE_HEIGHT, NODE_WIDTH, botKey, canvasBotIds, canvasGraph, canvasRunning,
-  connectProblem, fieldsForStep, graphEdgeProblem, isFlowPaused, isFlowReadOnly, layoutNodes, mediaBatch,
+  canvas_media_kind, connectProblem, fieldsForStep, graphEdgeProblem, isFlowPaused, isFlowReadOnly, layoutNodes, mediaBatch,
   mediaEnd, mediaKey, mediaTitle, nextRunCursor, problemsForStep, specKeyOf, specText, stepNameOf,
-  tidyLayout, unknownSettings, visible_spot, workflowFileBytes,
+  tidyLayout, unknownSettings, unsupported_media, visible_spot, workflowFileBytes,
   type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowPosition, type FlowRoutineCard,
   type FlowStep, type SettingProblem, type View, type WorkflowFolderAction, type WorkflowFields, type WorkflowGitHubHistory,
   type WorkflowGraph, type WorkflowHistoryStep, type WorkflowNode, type WorkflowNodeSize, type WorkflowRunPage,
@@ -137,6 +137,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [mode, setMode] = useState<Mode>('canvas')
   const [selection, setSelection] = useState<FlowSelection>(null)
   const [note, setNote] = useState<string | null>(null)
+  /** Files dropped or pasted on the canvas are still being turned into steps. */
+  const [uploadingFiles, setUploadingFiles] = useState(false)
   /** Someone else's edit was folded into ours without a choice being needed. */
   const [mergeNote, setMergeNote] = useState(false)
   /** A save found fields both people changed: the merged document and the choices still needed. */
@@ -686,7 +688,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }
     await saveGroups(groupsOf(canvas).map((g) => (g.id === id ? { ...g, x, y } : g)))
   }
-  /** A paste or drop of two or more files makes one picture step per file, all in one group in the middle of the view. */
+  /** A paste or drop of two or more files makes one media step per file, all in one group in the middle of the view. */
   const addFiles = async (files: { name: string }[], at: { x: number; y: number }) => {
     if (!canvas || offline) return
     const routine = canvas.routines.find((r) => r.routine.botId === activeId) ?? canvas.routines[0]
@@ -695,19 +697,31 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       return
     }
     const members: string[] = []
-    for (const file of files) {
-      const media = await flow.addMedia(routine.routine.id, 'image')
-      if (!media) return
-      await flow.updateMedia(media.id, { prompt: file.name })
-      members.push(mediaKey(media.id))
+    setUploadingFiles(true)
+    try {
+      for (const file of files) {
+        const kind = canvas_media_kind(file.name)
+        if (!kind) {
+          setNote(tr(unsupported_media(file.name) ?? ''))
+          continue
+        }
+        // The host's media steps are pictures or clips; a sound or a clip takes the clip step and
+        // keeps its own name, so the composer can show which file it stands for.
+        const media = await flow.addMedia(routine.routine.id, kind === 'image' ? 'image' : 'video')
+        if (!media) return
+        await flow.updateMedia(media.id, { prompt: file.name })
+        members.push(mediaKey(media.id))
+      }
+      if (members.length < 2) return
+      // The paste point is the middle of the visible canvas, not a saved position from another
+      // workflow that might be far off screen (OpenBot 0.70 workflow paste fix).
+      const spot = { x: Math.round(at.x - NODE_WIDTH / 2), y: Math.round(at.y - NODE_HEIGHT / 2) }
+      await saveGroups([...groupsOf(canvas), {
+        id: newGroupId(groupsOf(canvas)), name: tr('New group'), members, collapsed: false, x: spot.x, y: spot.y,
+      }])
+    } finally {
+      setUploadingFiles(false)
     }
-    if (members.length < 2) return
-    // The paste point is the middle of the visible canvas, not a saved position from another
-    // workflow that might be far off screen (OpenBot 0.70 workflow paste fix).
-    const spot = { x: Math.round(at.x - NODE_WIDTH / 2), y: Math.round(at.y - NODE_HEIGHT / 2) }
-    await saveGroups([...groupsOf(canvas), {
-      id: newGroupId(groupsOf(canvas)), name: tr('New group'), members, collapsed: false, x: spot.x, y: spot.y,
-    }])
   }
 
   /** The newest step a canvas node left in a run, and the routine it belongs to. */
@@ -877,6 +891,9 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       {readOnly ? <Text size="caption" tone="attention">{tr('This workflow uses a setting from a newer version of Codync. Update Codync to change it; a manual run still works.')}</Text> : null}
       {model.error ? <Text size="caption" tone="danger">{model.error}</Text> : null}
       {note ? <Text size="caption" tone="danger">{note}</Text> : null}
+      {uploadingFiles ? (
+        <HStack gap={6} align="center"><Spinner size={12} /><Text size="caption" tone="secondary">{tr('Adding files to the canvas…')}</Text></HStack>
+      ) : null}
       {mergeNote ? <Text size="caption" tone="attention" className="flow-merge-note">{tr('Someone else edited this flow; their changes were merged in.')}</Text> : null}
       <HStack gap={8} align="stretch" className="flow-body">
         <div className="flow-main">

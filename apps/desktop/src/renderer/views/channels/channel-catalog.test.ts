@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildChannelCatalog, matchChannels, stateOf } from './channel-catalog.ts'
+import { buildChannelCatalog, channel_page_state, matchChannels, stateOf } from './channel-catalog.ts'
 
 const telegramBot = {
   name: 'home',
@@ -12,6 +12,13 @@ const telegramBot = {
   lastReceivedAt: 1_700_000_000_000,
   pairingExpiresAt: null,
 }
+
+test('a channel page says it is loading only when it has no cached rows to keep', () => {
+  assert.equal(channel_page_state(true, []), 'loading')
+  assert.equal(channel_page_state(true, ['old message']), 'cached')
+  assert.equal(channel_page_state(false, ['old message']), 'cached')
+  assert.equal(channel_page_state(false, []), 'empty')
+})
 
 test('a connected Telegram bot is one channel with its people and bot', () => {
   const [whatsapp, telegram] = buildChannelCatalog({ whatsapp: null, telegram: [telegramBot], slack: null, discord: null })

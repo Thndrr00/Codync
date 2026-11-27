@@ -2949,5 +2949,8 @@
   "Hide Help": "Ocultar Ayuda",
   "Show Help": "Mostrar Ayuda",
   "The agent opened a page": "El bot abrió una página",
-  "Open page": "Abrir página"
+  "Open page": "Abrir página",
+  "Unsupported file type: {name}": "Tipo de archivo no compatible: {name}",
+  "Adding files to the canvas…": "Añadiendo archivos al lienzo…",
+  "Loading channels…": "Cargando canales…"
 }

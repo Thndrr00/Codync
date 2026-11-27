@@ -11,7 +11,7 @@ import { ChannelIconPicker } from '../settings/ChannelIconPicker'
 import { ChannelMemory } from '../settings/ChannelMemory'
 import { DiscordChannel } from '../settings/DiscordChannel'
 import { AddTelegram } from '../settings/ChannelsSection'
-import type { ChannelItem, ChannelProviderEntry } from './channel-catalog'
+import { channel_page_state, type ChannelItem, type ChannelProviderEntry } from './channel-catalog'
 import { ChannelNotes } from './ChannelNotes'
 import { ChannelRoutines } from './ChannelRoutines'
 
@@ -97,6 +97,9 @@ export function ChannelSheet({ entry, store, whatsapp, bots, onConnect, onClose 
   const [removing, setRemoving] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const canPair = entry.id === 'whatsapp'
+  // A reopen shows what was already read while the host refreshes the three statuses in parallel;
+  // only the very first page, with no cached rows, needs a loading line.
+  const page = channel_page_state(store.loading, entry.items)
   return (
     <FormSheet open onClose={onClose} width={640} height={720}>
       <SheetPage>
@@ -113,6 +116,10 @@ export function ChannelSheet({ entry, store, whatsapp, bots, onConnect, onClose 
             <Text size="caption" tone="secondary" grow>{entry.summary}</Text>
             <Text size="caption" tone="tertiary">{tr(entry.connected ? 'Connected' : 'Not connected')}</Text>
           </HStack>
+
+          {page === 'loading' ? (
+            <Text size="caption" tone="secondary" role="status">{tr('Loading channels…')}</Text>
+          ) : null}
 
           {entry.items.map((item) => (
             <ItemCard key={item.key} entry={entry} item={item} store={store}

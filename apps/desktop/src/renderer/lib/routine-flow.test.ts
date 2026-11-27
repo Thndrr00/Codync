@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  NODE_HEIGHT, NODE_WIDTH, answerResultRows, botKey, canvasCenter, canvasRunning, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
+  NODE_HEIGHT, NODE_WIDTH, answerResultRows, botKey, canvasCenter, canvasRunning, canvas_media_kind, chipBefore, connectProblem, depths, edgePath, fieldTokens, fieldTrigger,
   fieldsForStep, fitView, flowEdges, flowRows, folderOf, formatAnswerSpec, graphEdgeProblem, groupMediaResults, historyStatus, insertFieldToken,
   isFlowPaused, isFlowReadOnly, isAnnotationKind, nodeEditable, nodeTitle, nextRunCursor, problemsForStep, qualifiedFieldName, runSummary,
   stepMarks, strokePath, triggerFields,
   isNewerSetting, layoutNodes, matchingFields, mediaBatch, mediaKey, mediaRetryLabel, mediaRunLabel, mediaStepsFor,
   mediaTitle, mediaTotalCredits, mediaUnitPrice, missingMediaModel, nodeAt, parseAnswerSpec, parseWorkflowFile, portCarry,
   routineKey, specKeyOf, specText, statusLabel, stepNameOf, stepProgress, tidyLayout, unknownSettings, unavailableMediaModel,
+  unsupported_media,
   availableMediaModels, visible_spot, workflowFileBytes, workflowsInFolder, zoomAt,
   type FieldMatch, type FlowCanvas, type FlowField, type FlowLink, type FlowMedia, type FlowMediaCatalog, type FlowNode,
   type FlowNodeRegistry, type FlowStep, type WorkflowFoldersSnapshot, type WorkflowNode, type WorkflowRun,
@@ -27,6 +28,16 @@ function canvas(links: FlowLink[], extra: Partial<FlowCanvas> = {}, steps: FlowS
   const routine = { id: 'r', botId: 'a', name: 'Digest', instruction: '', triggers: [], enabled: true, createdAt: 0, updatedAt: 0, triggerDescriptions: [] }
   return { botId: 'a', rev: 1, routines: [{ routine, recentRuns: [], upcomingRuns: [], steps }], links, positions: [], placedBotIds: [], mediaNodes: [], ...extra }
 }
+
+test('canvas media kinds come from the file name and unsupported files say why', () => {
+  assert.equal(canvas_media_kind('photo.PNG'), 'image')
+  assert.equal(canvas_media_kind('clip.MOV'), 'video')
+  assert.equal(canvas_media_kind('voice note.m4a'), 'audio')
+  assert.equal(canvas_media_kind('notes.pdf'), null)
+  assert.equal(canvas_media_kind('no-extension'), null)
+  assert.equal(unsupported_media('clip.mp4'), null)
+  assert.equal(unsupported_media('notes.pdf'), 'Unsupported file type: notes.pdf')
+})
 
 test('depth is the longest path from the routine bot, and a bot not reached is absent', () => {
   const d = depths('a', [link('a', 'b'), link('b', 'c'), link('a', 'c'), link('x', 'y')])
