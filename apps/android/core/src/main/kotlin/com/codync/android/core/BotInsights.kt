@@ -76,9 +76,20 @@ data class BotInsights(
     val brainpicker: InsightBrainPicker = InsightBrainPicker(),
     val engine: InsightEngine = InsightEngine(),
     val accounts: InsightAccounts = InsightAccounts(),
+    val plans: InsightPlans = InsightPlans(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed coding plan summary. */
+@Serializable
+data class InsightPlans(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val plan: String = "", val providerPlan: String? = null, val models: Int = 0,
+    val choice: String = "", val freeHint: Boolean = false, val keyPlan: Boolean = false,
+    val placeholder: String = "", val geminiPersonal: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed AI accounts summary. */

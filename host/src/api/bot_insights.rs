@@ -2310,6 +2310,28 @@ fn accounts_view() -> Value {
     })
 }
 
+/// Coding plan shaping from agentes-chat's plans module.
+fn plans_view() -> Value {
+    use crate::bdots_plans as p;
+
+    let plan = "claude";
+    let models = p::brain_model_choices(Some(plan), &[], None);
+    json!({
+        "headline": format!("{} · {} models · {}", p::plan_label(plan), p::count_label(models.len()), p::plan_icon(plan)),
+        "tone": p::plan_tone(plan),
+        "icon": p::plan_icon(plan),
+        "plan": p::plan_label(plan),
+        "providerPlan": p::plan_of(Some("claude_code")),
+        "models": models.len(),
+        "choice": p::brain_model_choice("claude_code", Some(plan), "sonnet"),
+        "freeHint": p::has_free_hint(Some(plan)),
+        "keyPlan": p::is_key_plan(plan),
+        "placeholder": p::key_placeholder("cursor"),
+        "geminiPersonal": p::gemini_personal(Some(&serde_json::json!({"provider":"gemini"}))),
+        "summary": p::summary(plan, models.len(), false, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2437,6 +2459,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "brainpicker": brainpicker_view(),
         "engine": engine_view(),
         "accounts": accounts_view(),
+        "plans": plans_view(),
         "description": description,
         "model": model,
         "provider": provider,

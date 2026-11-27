@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Planes de código (23 adiciones + UI en 4 clientes)
+
+`bdots_plans.rs` añade 19 helpers puros y 4 constantes portados de `plans.ts` de **agentes-chat
+0.7.5**: resolución de planes por proveedor, modelos OpenCode Go, claves y patrones, sign-in,
+Gemini personal, alias de modelos y presentación. Reutiliza `bdots_textfmt` y `bdots_desk`. El
+endpoint `botInsights` añade el campo `plans`; la sección «Coding plans» se muestra en los cuatro
+clientes.
+
 ## Cuentas de IA (25 adiciones + UI en 4 clientes)
 
 `bdots_accounts.rs` añade 21 helpers puros y 4 constantes portados de `ai-accounts.ts` de

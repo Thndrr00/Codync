@@ -73,6 +73,7 @@ public struct BotInsights: Decodable, Sendable {
     public let brainpicker: InsightBrainPicker
     public let engine: InsightEngine
     public let accounts: InsightAccounts
+    public let plans: InsightPlans
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -102,6 +103,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed coding plan summary.
+public struct InsightPlans: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let plan: String
+    public let providerPlan: String?
+    public let models: Int
+    public let choice: String
+    public let freeHint: Bool
+    public let keyPlan: Bool
+    public let placeholder: String
+    public let geminiPersonal: Bool
     public let summary: [InsightSummaryRow]
 }
 

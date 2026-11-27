@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let plans = &data["plans"];
+    if plans.is_object() {
+        line(buf, &mut y, tr("Coding plans").into_owned(), t.bold.patch(t.panel));
+        let headline = plans["headline"].as_str().unwrap_or("");
+        let choice = plans["choice"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {choice}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let accounts = &data["accounts"];
     if accounts.is_object() {
         line(buf, &mut y, tr("Accounts").into_owned(), t.bold.patch(t.panel));
