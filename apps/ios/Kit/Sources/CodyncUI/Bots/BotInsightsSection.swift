@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let router = insights.router
+                    Text(router.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Selected")): \(router.selected.joined(separator: ", "))").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Strategy")): \(router.strategy)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let cmdpolicy = insights.cmdpolicy
                     Text(cmdpolicy.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Verdict")): \(cmdpolicy.verdict)").font(.footnote).foregroundStyle(Palette.secondary)

@@ -86,9 +86,25 @@ data class BotInsights(
     val noai: InsightNoAi = InsightNoAi(),
     val missions: InsightMissions = InsightMissions(),
     val cmdpolicy: InsightCmdPolicy = InsightCmdPolicy(),
+    val router: InsightRouter = InsightRouter(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed router threshold. */
+@Serializable
+data class InsightRouterThreshold(val name: String = "", val value: Double = 0.0)
+
+/** A host-computed router summary. */
+@Serializable
+data class InsightRouter(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val thresholds: List<InsightRouterThreshold> = emptyList(), val quietMs: Int = 0,
+    val addressee: Boolean = false, val selected: List<String> = emptyList(),
+    val everyone: Boolean = false, val answered: Boolean = false,
+    val scores: List<String> = emptyList(), val social: String? = null,
+    val strategy: String = "", val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed command policy summary. */

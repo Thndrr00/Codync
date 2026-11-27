@@ -2563,6 +2563,48 @@ fn cmdpolicy_view() -> Value {
     })
 }
 
+/// Router thresholds, addressee shaping and strategy from agentes-chat.
+fn router_view() -> Value {
+    use crate::bdots_router as r;
+
+    let candidates =
+        vec![serde_json::json!({"agentId":"a","handle":"Ada"}), serde_json::json!({"agentId":"b","handle":"Theo"})];
+    let result = serde_json::json!({
+        "agents": [{"agentId":"a","score":0.9},{"agentId":"b","score":0.6}],
+        "needsAgent": 0.8,
+        "forEveryone": 0.0,
+    });
+    let policy = serde_json::json!({
+        "minScore": 0.5, "maxAgents": 4, "clearPickScore": 0.8,
+        "continuityMinScore": 0.3, "singleAgentMinScore": 0.35,
+    });
+    let selected = r::select_agents(&candidates, &result, &policy, None);
+    let thresholds = vec![
+        serde_json::json!({"name":"alreadyAnswered","value":r::ALREADY_ANSWERED_THRESHOLD}),
+        serde_json::json!({"name":"forEveryone","value":r::FOR_EVERYONE_THRESHOLD}),
+        serde_json::json!({"name":"spokenTo","value":r::SPOKEN_TO_THRESHOLD}),
+    ];
+    let scores: Vec<String> = result["agents"]
+        .as_array()
+        .map(|agents| agents.iter().filter_map(|entry| entry["agentId"].as_str().map(str::to_owned)).collect())
+        .unwrap_or_default();
+    json!({
+        "headline": format!("{} · {} · {}", r::count_label(candidates.len()), r::count_label(selected.len()), r::strategy_name(Some(r::DEFAULT_STRATEGY))),
+        "tone": if selected.is_empty() { "secondary" } else { "good" },
+        "icon": "arrow.triangle.branch",
+        "thresholds": thresholds,
+        "quietMs": 2500,
+        "addressee": r::asks_addressee(candidates.len(), true),
+        "selected": selected,
+        "everyone": r::is_for_everyone(result["forEveryone"].as_f64()),
+        "answered": r::is_answered_enough(Some(0.2)),
+        "scores": scores,
+        "social": r::social_choice("👋"),
+        "strategy": r::strategy_name(Some(r::DEFAULT_STRATEGY)),
+        "summary": r::summary(candidates.len(), selected.len(), false, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2700,6 +2742,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "noai": no_ai_view(),
         "missions": missions_view(),
         "cmdpolicy": cmdpolicy_view(),
+        "router": router_view(),
         "description": description,
         "model": model,
         "provider": provider,

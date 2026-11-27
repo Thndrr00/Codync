@@ -83,6 +83,7 @@ public struct BotInsights: Decodable, Sendable {
     public let noai: InsightNoAi
     public let missions: InsightMissions
     public let cmdpolicy: InsightCmdPolicy
+    public let router: InsightRouter
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -112,6 +113,29 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed router threshold.
+public struct InsightRouterThreshold: Decodable, Sendable {
+    public let name: String
+    public let value: Double
+}
+
+/// A host-computed router summary.
+public struct InsightRouter: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let thresholds: [InsightRouterThreshold]
+    public let quietMs: Int
+    public let addressee: Bool
+    public let selected: [String]
+    public let everyone: Bool
+    public let answered: Bool
+    public let scores: [String]
+    public let social: String?
+    public let strategy: String
     public let summary: [InsightSummaryRow]
 }
 

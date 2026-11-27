@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val router = insights.router
+            CardSection("Router") {
+                row { Text(router.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Selected", router.selected.joinToString(", ")) }
+                row { ValueRow("Everyone", router.everyone.toString()) }
+                row { ValueRow("Strategy", router.strategy) }
+            }
             val cmdpolicy = insights.cmdpolicy
             CardSection("Command policy") {
                 row { Text(cmdpolicy.headline, style = Type.subheadline.semibold, color = Palette.text) }

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let router = &data["router"];
+    if router.is_object() {
+        line(buf, &mut y, tr("Router").into_owned(), t.bold.patch(t.panel));
+        let headline = router["headline"].as_str().unwrap_or("");
+        let strategy = router["strategy"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {strategy}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let cmdpolicy = &data["cmdpolicy"];
     if cmdpolicy.is_object() {
         line(buf, &mut y, tr("Command policy").into_owned(), t.bold.patch(t.panel));

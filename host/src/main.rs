@@ -75,6 +75,7 @@ mod bdots_providers;
 mod bdots_pure;
 mod bdots_quota;
 mod bdots_review;
+mod bdots_router;
 mod bdots_routines;
 mod bdots_rrule;
 mod bdots_search;
