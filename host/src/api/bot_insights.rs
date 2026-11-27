@@ -2332,6 +2332,32 @@ fn plans_view() -> Value {
     })
 }
 
+/// Model provider catalog and key detection from agentes-chat.
+fn providers_view() -> Value {
+    use crate::bdots_providers as p;
+
+    let models =
+        vec![serde_json::json!({"id":"m1","provider":"openai"}), serde_json::json!({"id":"m2","provider":"gemini"})];
+    let credentials = vec![serde_json::json!({"provider":"openai"})];
+    let choices = p::model_choices(&models, &credentials);
+    json!({
+        "headline": format!("{} providers · {} keys · {}", p::PROVIDER_IDS.len(), credentials.len(), p::count_label(choices.len())),
+        "tone": "good",
+        "icon": p::key_icon(!credentials.is_empty()),
+        "providers": p::PROVIDER_IDS.len(),
+        "keys": credentials.len(),
+        "models": choices.len(),
+        "usable": p::usable_model_count(&choices),
+        "guess": p::provider_guess(Some("sk-ant-1234567890123456"), None),
+        "label": p::provider_label("openai"),
+        "site": p::provider_site("anthropic"),
+        "hasPlans": p::has_plans("zai"),
+        "billing": p::needs_billing("gemini"),
+        "privacy": p::has_privacy_notice("openrouter"),
+        "summary": p::summary(p::PROVIDER_IDS.len(), credentials.len(), choices.len(), true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2460,6 +2486,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "engine": engine_view(),
         "accounts": accounts_view(),
         "plans": plans_view(),
+        "providers": providers_view(),
         "description": description,
         "model": model,
         "provider": provider,

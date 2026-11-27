@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val providers = insights.providers
+            CardSection("Providers") {
+                row { Text(providers.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Keys", providers.keys.toString()) }
+                row { ValueRow("Usable models", providers.usable.toString()) }
+                row { ValueRow("Guess", providers.guess) }
+            }
             val plans = insights.plans
             CardSection("Coding plans") {
                 row { Text(plans.headline, style = Type.subheadline.semibold, color = Palette.text) }

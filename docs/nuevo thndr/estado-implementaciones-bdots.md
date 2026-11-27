@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Proveedores de modelos (26 adiciones + UI en 4 clientes)
+
+`bdots_providers.rs` añade 22 helpers puros y 4 constantes portados de `providers.ts` de
+**agentes-chat 0.7.5**: catálogo de proveedores, detección de claves por prefijo, guess de
+proveedor, placeholders, sitios de keys, flags de plan/billing/privacidad, model choices y
+presentación. Reutiliza `bdots_textfmt` y `bdots_desk`. El endpoint `botInsights` añade el campo
+`providers`; la sección «Providers» se muestra en los cuatro clientes.
+
 ## Planes de código (23 adiciones + UI en 4 clientes)
 
 `bdots_plans.rs` añade 19 helpers puros y 4 constantes portados de `plans.ts` de **agentes-chat

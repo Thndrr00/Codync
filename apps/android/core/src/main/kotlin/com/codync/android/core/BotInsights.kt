@@ -77,9 +77,20 @@ data class BotInsights(
     val engine: InsightEngine = InsightEngine(),
     val accounts: InsightAccounts = InsightAccounts(),
     val plans: InsightPlans = InsightPlans(),
+    val providers: InsightProviders = InsightProviders(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed model provider summary. */
+@Serializable
+data class InsightProviders(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val providers: Int = 0, val keys: Int = 0, val models: Int = 0, val usable: Int = 0,
+    val guess: String = "", val label: String = "", val site: String = "",
+    val hasPlans: Boolean = false, val billing: Boolean = false, val privacy: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed coding plan summary. */

@@ -66,6 +66,7 @@ mod bdots_picker;
 mod bdots_plans;
 mod bdots_profile;
 mod bdots_prompts;
+mod bdots_providers;
 mod bdots_pure;
 mod bdots_quota;
 mod bdots_review;

@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let providers = &data["providers"];
+    if providers.is_object() {
+        line(buf, &mut y, tr("Providers").into_owned(), t.bold.patch(t.panel));
+        let headline = providers["headline"].as_str().unwrap_or("");
+        let guess = providers["guess"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {guess}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let plans = &data["plans"];
     if plans.is_object() {
         line(buf, &mut y, tr("Coding plans").into_owned(), t.bold.patch(t.panel));
