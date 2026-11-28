@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Layout del island (29 adiciones + UI en 4 clientes)
+
+`bdots_island_layout.rs` añade 12 helpers puros y 17 constantes portados de `core/layout.ts` de
+**coucou**: tamaños del island, colocación del bot, colores de brillo, colores de proyecto y washes.
+El endpoint `botInsights` añade el campo `islandlayout`; la sección «Island layout» se muestra en los
+cuatro clientes. Reutiliza `bdots_desk`.
+
 ## Atajos de coucou (19 adiciones + UI en 4 clientes)
 
 `bdots_shortcuts_coucou.rs` añade 14 helpers puros y 5 constantes portados de `core/shortcuts.ts` de

@@ -106,6 +106,7 @@ public struct BotInsights: Decodable, Sendable {
     public let coucoumail: InsightCoucouMail
     public let pills: InsightPills
     public let coucoushortcuts: InsightCoucouShortcuts
+    public let islandlayout: InsightIslandLayout
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -135,6 +136,25 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed island layout summary.
+public struct InsightIslandLayout: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let modes: Int
+    public let states: Int
+    public let emotes: Int
+    public let panel: String
+    public let notch: String
+    public let corner: Int
+    public let glow: String
+    public let opacity: Double
+    public let project: String
+    public let wash: String
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 

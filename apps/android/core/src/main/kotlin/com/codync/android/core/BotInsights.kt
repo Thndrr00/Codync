@@ -109,9 +109,21 @@ data class BotInsights(
     val coucoumail: InsightCoucouMail = InsightCoucouMail(),
     val pills: InsightPills = InsightPills(),
     val coucoushortcuts: InsightCoucouShortcuts = InsightCoucouShortcuts(),
+    val islandlayout: InsightIslandLayout = InsightIslandLayout(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed island layout summary. */
+@Serializable
+data class InsightIslandLayout(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val modes: Int = 0, val states: Int = 0, val emotes: Int = 0,
+    val panel: String = "", val notch: String = "", val corner: Int = 0,
+    val glow: String = "", val opacity: Double = 0.0, val project: String = "",
+    val wash: String = "", val line: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed shortcuts summary. */

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let islandlayout = insights.islandlayout
+                    Text(islandlayout.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Panel")): \(islandlayout.panel)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Glow")): \(islandlayout.glow)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let coucoushortcuts = insights.coucoushortcuts
                     Text(coucoushortcuts.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Keys")): \(coucoushortcuts.keys)").font(.footnote).foregroundStyle(Palette.secondary)

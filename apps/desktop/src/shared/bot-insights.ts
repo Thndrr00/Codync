@@ -1,6 +1,24 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightIslandLayout {
+  headline: string
+  tone: string
+  icon: string
+  modes: number
+  states: number
+  emotes: number
+  panel: string
+  notch: string
+  corner: number
+  glow: string
+  opacity: number
+  project: string
+  wash: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightCoucouShortcuts {
   headline: string
   tone: string
@@ -1664,6 +1682,7 @@ export interface BotInsights {
   coucoumail: InsightCoucouMail
   pills: InsightPills
   coucoushortcuts: InsightCoucouShortcuts
+  islandlayout: InsightIslandLayout
   routines: InsightRoutine[]
   usage: {
     used: number

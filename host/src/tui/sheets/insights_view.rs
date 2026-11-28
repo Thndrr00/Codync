@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let islandlayout = &data["islandlayout"];
+    if islandlayout.is_object() {
+        line(buf, &mut y, tr("Island layout").into_owned(), t.bold.patch(t.panel));
+        let headline = islandlayout["headline"].as_str().unwrap_or("");
+        let panel = islandlayout["panel"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {panel}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let coucoushortcuts = &data["coucoushortcuts"];
     if coucoushortcuts.is_object() {
         line(buf, &mut y, tr("Shortcuts").into_owned(), t.bold.patch(t.panel));

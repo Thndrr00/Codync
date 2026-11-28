@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val islandlayout = insights.islandlayout
+            CardSection("Island layout") {
+                row { Text(islandlayout.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Panel", islandlayout.panel) }
+                row { ValueRow("Glow", islandlayout.glow) }
+                row { ValueRow("Corner", islandlayout.corner.toString()) }
+            }
             val coucoushortcuts = insights.coucoushortcuts
             CardSection("Shortcuts") {
                 row { Text(coucoushortcuts.headline, style = Type.subheadline.semibold, color = Palette.text) }

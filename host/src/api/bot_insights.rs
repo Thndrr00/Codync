@@ -3142,6 +3142,30 @@ fn coucoushortcuts_view() -> Value {
     })
 }
 
+/// Island layout from coucou.
+fn islandlayout_view() -> Value {
+    use crate::bdots_island_layout as i;
+
+    let size = i::island_size("expanded", "chat", 1);
+    json!({
+        "headline": format!("{} · {}×{} · {}", i::ISLAND_MODES.len(), size["w"], size["h"], i::EXPANDED_W),
+        "tone": if i::island_corner("expanded") == i::EXPANDED_CORNER { "good" } else { "secondary" },
+        "icon": "rectangle.topthird.inset.fill",
+        "modes": i::ISLAND_MODES.len(),
+        "states": i::BOT_STATES.len(),
+        "emotes": i::BOT_EMOTES.len(),
+        "panel": format!("{}×{}", i::PANEL_W, i::PANEL_H),
+        "notch": format!("{}×{}", i::NOTCH_W, i::NOTCH_H),
+        "corner": i::island_corner("expanded"),
+        "glow": i::bot_glow_color("working"),
+        "opacity": i::bot_glow_opacity("working"),
+        "project": i::color_for_project("Codync"),
+        "wash": i::wash_rgba("cyan"),
+        "line": i::island_line("compact", "chat", "idle"),
+        "summary": i::summary(i::ISLAND_MODES.len(), i::BOT_STATES.len(), i::BOT_EMOTES.len(), true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3302,6 +3326,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "coucoumail": coucoumail_view(),
         "pills": pills_view(),
         "coucoushortcuts": coucoushortcuts_view(),
+        "islandlayout": islandlayout_view(),
         "description": description,
         "model": model,
         "provider": provider,
