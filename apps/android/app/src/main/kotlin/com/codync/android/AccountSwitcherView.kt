@@ -126,6 +126,7 @@ import com.kyant.shapes.RoundedRectangle
 @Composable internal fun AccountAvatar(state: AppState, size: Dp) {
     val current = state.account.accounts.firstOrNull { it.userId == state.account.userId }
     AccountAvatar(current?.avatar, current?.email, size)
+}
 @Composable internal fun AccountAvatar(state: AccountContext, size: Dp) {
     val current = state.account.current
     if (!state.account.ready || "session" in state.busy) {

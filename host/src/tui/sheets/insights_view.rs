@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let anim = &data["anim"];
+    if anim.is_object() {
+        line(buf, &mut y, tr("Animation").into_owned(), t.bold.patch(t.panel));
+        let headline = anim["headline"].as_str().unwrap_or("");
+        let line_text = anim["line"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {line_text}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let spotify = &data["spotify"];
     if spotify.is_object() {
         line(buf, &mut y, tr("Spotify").into_owned(), t.bold.patch(t.panel));

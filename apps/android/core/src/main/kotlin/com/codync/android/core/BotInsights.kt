@@ -114,9 +114,20 @@ data class BotInsights(
     val whatsnew: InsightWhatsNew = InsightWhatsNew(),
     val mochidesktop: InsightMochiDesktop = InsightMochiDesktop(),
     val spotify: InsightSpotify = InsightSpotify(),
+    val anim: InsightAnim = InsightAnim(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed animation summary. */
+@Serializable
+data class InsightAnim(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val eases: Int = 0, val modes: Int = 0, val closeMs: Int = 0,
+    val curve: String = "", val spring: String = "", val response: Double = 0.0,
+    val damping: Double = 0.0, val line: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed Spotify summary. */

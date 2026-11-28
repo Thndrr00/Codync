@@ -111,6 +111,7 @@ public struct BotInsights: Decodable, Sendable {
     public let whatsnew: InsightWhatsNew
     public let mochidesktop: InsightMochiDesktop
     public let spotify: InsightSpotify
+    public let anim: InsightAnim
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -140,6 +141,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed animation summary.
+public struct InsightAnim: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let eases: Int
+    public let modes: Int
+    public let closeMs: Int
+    public let curve: String
+    public let spring: String
+    public let response: Double
+    public let damping: Double
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 
@@ -1468,10 +1485,16 @@ public struct InsightOpenDots: Decodable, Sendable {
     public let deliveryError: String
     public let learningIcon: String
     public let learningTone: String
-    public let internal: Int
+    public let internalCount: Int
     public let scheduledLabel: String
     public let voiceLabel: String
     public let summary: [InsightSummaryRow]
+
+    private enum CodingKeys: String, CodingKey {
+        case headline, container, valid, delivery, deliveryError, learningIcon, learningTone
+        case internalCount = "internal"
+        case scheduledLabel, voiceLabel, summary
+    }
 }
 
 /// A host-computed context pruning summary.

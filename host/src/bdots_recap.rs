@@ -225,7 +225,7 @@ pub fn summarize(turns: &[Value], week_start: &str) -> Value {
 
 /// One line describing a recap week (recapLine).
 pub fn recap_line(start: &str, turns: usize, minutes: i64) -> String {
-    format!("{} · {} turns · {}", week_range_label(start, &add_days(start, 6)), format_duration(minutes))
+    format!("{} · {} turns · {}", week_range_label(start, &add_days(start, 6)), turns, format_duration(minutes))
 }
 
 /// Compact count label, reusing the shared formatter.

@@ -1007,6 +1007,18 @@ fn fresh_view(row: &crate::store::BotRow, routines: usize) -> Value {
         ("language", f::language_model(c.model.as_deref())),
         ("routines", f::turn_context_len(routines)),
     ];
+    let resources = ["scripts/", "references/", "assets/"]
+        .iter()
+        .map(|p| {
+            json!({
+                "path": p,
+                "kind": f::resource_kind(p),
+                "script": f::is_script_path(p),
+                "reference": f::is_reference_path(p),
+                "asset": f::is_asset_path(p),
+            })
+        })
+        .collect::<Vec<_>>();
     json!({
         "agent": f::model_with_provider(model),
         "deployment": f::deployment_label(c.model.as_deref()),
@@ -1018,13 +1030,7 @@ fn fresh_view(row: &crate::store::BotRow, routines: usize) -> Value {
             "exec": f::ask_title("exec", &serde_json::json!({"command":"npm test"})),
             "write": f::ask_title("write", &serde_json::json!({"path":"/workspace/a.rs"})),
         }),
-        "resources": ["scripts/", "references/", "assets/"].iter().map(|p| json!({
-            "path": p,
-            "kind": f::resource_kind(p),
-            "script": f::is_script_path(p),
-            "reference": f::is_reference_path(p),
-            "asset": f::is_asset_path(p),
-        })).collect::<Vec<_>>(),
+        "resources": resources,
     })
 }
 
@@ -3267,6 +3273,28 @@ fn spotify_view() -> Value {
     })
 }
 
+/// Animation easing from coucou.
+fn anim_view() -> Value {
+    use crate::bdots_anim as a;
+
+    let (value, velocity) =
+        a::spring_step(0.0, 1.0, 0.0, a::spring_omega(a::DEFAULT_RESPONSE), a::DEFAULT_DAMPING, 1.0 / 60.0);
+    json!({
+        "headline": format!("{} · {} · {}", a::EASE_NAMES.len(), a::duration_label(a::CLOSE_DURATION_MS), a::TRACKED_MODES.len()),
+        "tone": if a::spring_settled(value, 1.0, velocity) { "secondary" } else { "good" },
+        "icon": "waveform.path",
+        "eases": a::EASE_NAMES.len(),
+        "modes": a::TRACKED_MODES.len(),
+        "closeMs": a::CLOSE_DURATION_MS,
+        "curve": format!("{:.2}", a::close_curve(0.5)),
+        "spring": format!("{:.2}", value),
+        "response": a::DEFAULT_RESPONSE,
+        "damping": a::DEFAULT_DAMPING,
+        "line": a::anim_line("out", a::CLOSE_DURATION_MS, false),
+        "summary": a::summary(a::EASE_NAMES.len(), a::TRACKED_MODES.len(), 12, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3432,6 +3460,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "whatsnew": whatsnew_view(),
         "mochidesktop": mochidesktop_view(),
         "spotify": spotify_view(),
+        "anim": anim_view(),
         "description": description,
         "model": model,
         "provider": provider,

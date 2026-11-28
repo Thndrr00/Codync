@@ -61,7 +61,7 @@ class VoiceChoices(private val read: (String) -> String?, private val write: (St
         get() = read("callWakePhrase") == "true"
         set(value) = write("callWakePhrase", if (value) "true" else null)
 
-    /** Push to talk (default) or the open microphone that sends at a pause; kept on this phone. */
+    /** The open microphone that sends at a pause (default), or push to talk; kept on this phone. */
     var inputMode: VoiceInputMode
         get() = VoiceInputMode.of(read("inputMode"))
         set(value) = write("inputMode", value.id)

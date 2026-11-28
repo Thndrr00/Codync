@@ -124,6 +124,16 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Animación (28 adiciones + UI en 4 clientes)
+
+`bdots_anim.rs` añade 22 helpers puros y 6 constantes portados de `core/anim.ts` de **coucou**:
+easing, bezier, integración de resortes y curvas temporizadas. El endpoint `botInsights` añade el
+campo `anim`; la sección «Animation» se muestra en los cuatro clientes. Reutiliza `bdots_desk`.
+
+Además se restaura CI: se corrige el `json!` y el límite de recursión del host, el `format!` de
+`bdots_recap`/`bdots_memoryctx`, la palabra reservada `internal` en Swift, el glob del workflow de
+Linux, las llaves perdidas por merges en 15 archivos Kotlin y el valor por defecto de entrada de voz.
+
 ## Spotify (26 adiciones + UI en 4 clientes)
 
 `bdots_spotify.rs` añade 20 helpers puros y 6 constantes portados de `core/spotify.ts` de **coucou**:

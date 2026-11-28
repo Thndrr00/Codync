@@ -77,8 +77,6 @@ private enum class ComputerOS { Mac, Windows, Linux }
  */
 @Composable internal fun PairingView(state: AppState, store: AppStore, inModal: Boolean = false, onSkip: () -> Unit = {},
     leading: @Composable RowScope.() -> Unit = {}) {
-@Composable internal fun PairingView(state: AccountContext, store: AccountStore, inModal: Boolean = false, onSkip: () -> Unit = {},
-    onContinue: () -> Unit = {}, leading: @Composable RowScope.() -> Unit = {}) {
     var step by rememberSaveable { mutableStateOf(Step.Install) }
     var os by rememberSaveable { mutableStateOf(ComputerOS.Mac) }
     val dismiss = LocalDismissModal.current
@@ -98,7 +96,7 @@ private enum class ComputerOS { Mac, Windows, Linux }
         }, label = "Pairing step") { shown ->
             when (shown) {
                 Step.Install -> InstallPage(os, { os = it }, state.account.current?.address) {
-                    onContinue(); step = Step.Scan
+                    step = Step.Scan
                 }
                 Step.Scan -> ScanPage(state, store, os) { if (inModal) dismiss() }
             }
@@ -191,8 +189,6 @@ private enum class ComputerOS { Mac, Windows, Linux }
 /** A small label above a `CommandBlock`. */
 @Composable private fun Hint(text: String) = Text(text, style = Type.footnote, color = Palette.secondary)
 
-/** A terminal command with a copy button. */
-@Composable private fun CommandBlock(command: String) {
 /** Whether [text] was just copied, and what copies it; copying counts as opening [records]. */
 @Composable private fun rememberCopy(text: String, records: OutboundLink?): Pair<Boolean, () -> Unit> {
     val clipboard = LocalClipboard.current
@@ -217,12 +213,6 @@ private enum class ComputerOS { Mac, Windows, Linux }
             Text(command, style = Type.footnote.monospaced, color = Palette.text)
         }
         Crossfade(copied, animationSpec = Motion.morph(), label = "Copy") { done ->
-            IconButton(if (done) "Copied" else "Copy", if (done) "checkmark" else "doc.on.doc") {
-                scope.launch {
-                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Command", command)))
-                    copied = true; delay(1500); copied = false
-                }
-            }
             IconButton(if (done) "Copied" else "Copy", if (done) "checkmark" else "doc.on.doc", action = copy)
         }
     }

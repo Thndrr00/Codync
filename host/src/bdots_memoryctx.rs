@@ -150,7 +150,8 @@ impl ScrubState {
 
 /// Wrap prefetched recall in a fenced, data-only block (buildMemoryContextBlock).
 pub fn build_memory_context_block(raw: &str) -> String {
-    format!("{BLOCK_NOTE}\n{FENCE_OPEN}\n{sanitize_context(raw)}\n{FENCE_CLOSE}")
+    let body = sanitize_context(raw);
+    format!("{BLOCK_NOTE}\n{FENCE_OPEN}\n{body}\n{FENCE_CLOSE}")
 }
 
 /// Whether a line is a self-contained recalled bullet (_RECALL_BULLET_RE).

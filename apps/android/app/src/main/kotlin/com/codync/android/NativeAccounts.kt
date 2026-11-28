@@ -25,7 +25,6 @@ data class SavedAccount(val userId: String, val sessionId: String, val email: St
 }
 data class AccountState(val ready: Boolean = false, val configured: Boolean = NativeAccounts.configured,
     val userId: String? = null, val accounts: List<SavedAccount> = emptyList(),
-    val multiple: Boolean = false, val error: String? = null)
     val multiple: Boolean = false, val error: String? = null) {
     /** Clerk is still restoring the saved sign-in: the launch layer and the root wait, rather than show the welcome. */
     val restoring: Boolean get() = configured && !ready && error == null

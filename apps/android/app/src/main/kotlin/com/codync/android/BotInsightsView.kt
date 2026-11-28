@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val anim = insights.anim
+            CardSection("Animation") {
+                row { Text(anim.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Curve", anim.curve) }
+                row { ValueRow("Spring", anim.spring) }
+                row { ValueRow("Line", anim.line) }
+            }
             val spotify = insights.spotify
             CardSection("Spotify") {
                 row { Text(spotify.headline, style = Type.subheadline.semibold, color = Palette.text) }

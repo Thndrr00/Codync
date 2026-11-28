@@ -4,12 +4,12 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 
-/** How a call starts an utterance: hold to talk (default) or the open microphone that sends at a pause. */
+/** How a call starts an utterance: the open microphone (default) that sends at a pause, or hold to talk. */
 enum class VoiceInputMode(val id: String) {
     PushToTalk("pushToTalk"), OpenMic("openMic");
 
     companion object {
-        fun of(id: String?): VoiceInputMode = entries.firstOrNull { it.id == id } ?: PushToTalk
+        fun of(id: String?): VoiceInputMode = entries.firstOrNull { it.id == id } ?: OpenMic
     }
 }
 

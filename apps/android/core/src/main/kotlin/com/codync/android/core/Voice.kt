@@ -73,7 +73,7 @@ object VoiceRates {
 }
 
 data class VoiceSettings(val pauseMillis: Long = 1_500, val rate: Float = 1f,
-    val inputMode: VoiceInputMode = VoiceInputMode.PushToTalk) {
+    val inputMode: VoiceInputMode = VoiceInputMode.OpenMic) {
     init { require(pauseMillis in VoicePause.MIN..VoicePause.MAX); require(rate in .5f..2f) }
 }
 data class VoiceState(val phase: VoicePhase = VoicePhase.Starting, val muted: Boolean = false,

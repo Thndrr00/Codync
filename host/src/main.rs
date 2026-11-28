@@ -1,6 +1,7 @@
 //! `codync-host`: runs coding-agent bots over ACP and serves the Codync apps.
 
 #![allow(dead_code, reason = "some host code is reached from clients and each other")]
+#![recursion_limit = "512"]
 
 mod agent;
 mod analytics;
@@ -16,6 +17,7 @@ mod bdots_activity;
 mod bdots_advice;
 mod bdots_agent;
 mod bdots_agenteschat;
+mod bdots_anim;
 mod bdots_apierror;
 mod bdots_appearance;
 mod bdots_approval_rules;
