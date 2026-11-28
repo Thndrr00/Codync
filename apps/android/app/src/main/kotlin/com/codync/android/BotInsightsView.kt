@@ -42,6 +42,34 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val notices = insights.notices
+            CardSection("Notices") {
+                row { Text(notices.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Text", notices.text) }
+                row { ValueRow("Publish", notices.publish.toString()) }
+                row { ValueRow("Priority", notices.priority.toString()) }
+            }
+            val replypolicy = insights.replypolicy
+            CardSection("Reply policy") {
+                row { Text(replypolicy.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Verdict", replypolicy.verdict) }
+                row { ValueRow("Visible", replypolicy.visible) }
+                row { ValueRow("Reason", replypolicy.reason) }
+            }
+            val media = insights.media
+            CardSection("Media") {
+                row { Text(media.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Stickers", media.stickers) }
+                row { ValueRow("Rating", media.rating) }
+                row { ValueRow("Line", media.line) }
+            }
+            val mail = insights.mail
+            CardSection("Mail") {
+                row { Text(mail.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Choice", mail.choice) }
+                row { ValueRow("Level", mail.level) }
+                row { ValueRow("Cap", mail.cap.toString()) }
+            }
             val toollabels = insights.toollabels
             CardSection("Tool labels") {
                 row { Text(toollabels.headline, style = Type.subheadline.semibold, color = Palette.text) }

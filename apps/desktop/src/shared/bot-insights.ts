@@ -1,6 +1,63 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightMail {
+  headline: string
+  tone: string
+  icon: string
+  choice: string
+  addresses: string[]
+  valid: string[]
+  level: string
+  cap: number
+  auto: boolean
+  errors: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMedia {
+  headline: string
+  tone: string
+  icon: string
+  moods: number
+  agentMoods: number
+  categories: string[]
+  tool: boolean
+  rating: string
+  stickers: string
+  after: boolean
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightReplyPolicy {
+  headline: string
+  tone: string
+  icon: string
+  verdict: string
+  silent: boolean
+  mustAnswer: boolean
+  sentinel: boolean
+  visible: string
+  reason: string
+  lead: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightNotices {
+  headline: string
+  tone: string
+  icon: string
+  kinds: number
+  quiet: number
+  agentOnly: number
+  text: string
+  publish: boolean
+  priority: number
+  handoff: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightToolLabels {
   headline: string
   tone: string
@@ -1504,6 +1561,10 @@ export interface BotInsights {
   work: InsightWork
   contextblocks: InsightContextBlocks
   toollabels: InsightToolLabels
+  mail: InsightMail
+  media: InsightMedia
+  replypolicy: InsightReplyPolicy
+  notices: InsightNotices
   routines: InsightRoutine[]
   usage: {
     used: number

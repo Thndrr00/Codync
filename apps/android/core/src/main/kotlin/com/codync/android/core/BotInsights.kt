@@ -99,9 +99,50 @@ data class BotInsights(
     val work: InsightWork = InsightWork(),
     val contextblocks: InsightContextBlocks = InsightContextBlocks(),
     val toollabels: InsightToolLabels = InsightToolLabels(),
+    val mail: InsightMail = InsightMail(),
+    val media: InsightMedia = InsightMedia(),
+    val replypolicy: InsightReplyPolicy = InsightReplyPolicy(),
+    val notices: InsightNotices = InsightNotices(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed mail summary. */
+@Serializable
+data class InsightMail(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val choice: String = "", val addresses: List<String> = emptyList(), val valid: List<String> = emptyList(),
+    val level: String = "", val cap: Int = 0, val auto: Boolean = false, val errors: Int = 0,
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed media summary. */
+@Serializable
+data class InsightMedia(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val moods: Int = 0, val agentMoods: Int = 0, val categories: List<String> = emptyList(),
+    val tool: Boolean = false, val rating: String = "", val stickers: String = "",
+    val after: Boolean = false, val line: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed reply policy summary. */
+@Serializable
+data class InsightReplyPolicy(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val verdict: String = "", val silent: Boolean = false, val mustAnswer: Boolean = false,
+    val sentinel: Boolean = false, val visible: String = "", val reason: String = "",
+    val lead: Int = 0, val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed notices summary. */
+@Serializable
+data class InsightNotices(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val kinds: Int = 0, val quiet: Int = 0, val agentOnly: Int = 0, val text: String = "",
+    val publish: Boolean = false, val priority: Int = 0, val handoff: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed tool labels summary. */

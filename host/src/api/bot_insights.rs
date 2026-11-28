@@ -2926,6 +2926,87 @@ fn toollabels_view() -> Value {
     })
 }
 
+/// Mailboxes, addresses and policies from agentes-chat.
+fn mail_view() -> Value {
+    use crate::bdots_mail as m;
+
+    let account = json!({"provider":"gmail","address":"ana@x.com","aliases":["ana@work.com"],"ownerUserId":"u1"});
+    json!({
+        "headline": format!("{} · {} · {}", m::brand_name("gmail"), m::count_label(m::MAIL_CHOICES.len()), m::DEFAULT_DAILY_CAP),
+        "tone": if m::is_address("ana@x.com") { "good" } else { "attention" },
+        "icon": "envelope.fill",
+        "choice": m::choice_of(&account),
+        "addresses": m::mailbox_addresses(&account),
+        "valid": m::split_addresses("ana@x.com @y.com bad")["valid"],
+        "level": m::to_mail_level("write"),
+        "cap": m::DEFAULT_DAILY_CAP,
+        "auto": m::can_send_without_asking(&json!({"allowedRecipients":["a@x.com"],"sendWithoutAsking":true})),
+        "errors": m::MAIL_ERRORS.len(),
+        "summary": m::summary(1, 1, 1, true),
+    })
+}
+
+/// Media tools and settings from agentes-chat.
+fn media_view() -> Value {
+    use crate::bdots_media as m;
+
+    let settings = m::media_settings_from(Some(&json!({"stickers":"often"})));
+    json!({
+        "headline": format!("{} · {} · {}", m::count_label(m::STICKER_MOODS.len()), m::count_label(m::gif_category_ids().len()), m::SEND_GIF_TOOL),
+        "tone": "good",
+        "icon": "sparkles",
+        "moods": m::STICKER_MOODS.len(),
+        "agentMoods": m::AGENT_STICKER_MOODS.len(),
+        "categories": m::gif_category_ids(),
+        "tool": m::is_media_tool("send_sticker"),
+        "rating": settings["rating"],
+        "stickers": settings["stickers"],
+        "after": m::is_media_after_reply(Some(&json!({"mediaAfter":true}))),
+        "line": m::media_line("image", "m1", true),
+        "summary": m::summary(m::STICKER_MOODS.len(), m::gif_category_ids().len(), true, true),
+    })
+}
+
+/// Reply sentinel and verdict helpers from agentes-chat.
+fn replypolicy_view() -> Value {
+    use crate::bdots_reply_policy as r;
+
+    let verdict = r::reply_verdict("NO_REPLY", false, false);
+    json!({
+        "headline": format!("{} · {} · {}", r::count_label(r::VERDICTS.len()), r::NO_REPLY, verdict),
+        "tone": if r::is_silent(verdict) { "secondary" } else { "good" },
+        "icon": "arrowshape.turn.up.left.fill",
+        "verdict": verdict,
+        "silent": r::is_silent(verdict),
+        "mustAnswer": r::must_answer(r::reply_verdict("hi", true, false)),
+        "sentinel": r::is_sentinel_only("__NO_REPLY__"),
+        "visible": r::visible_text("hi\nNO_REPLY\nthere", true),
+        "reason": r::why_you_were_called(false, false, true),
+        "lead": r::PAUSE_LEAD_MIN_CHARS,
+        "summary": r::summary(3, r::VERDICTS.len(), true, false),
+    })
+}
+
+/// Notice kinds and guidance from agentes-chat.
+fn notices_view() -> Value {
+    use crate::bdots_notices as n;
+
+    let kind = "result";
+    json!({
+        "headline": format!("{} · {} · {}", n::count_label(n::NOTICE_KINDS.len()), n::notice_text(kind, true), n::notice_priority(kind)),
+        "tone": if n::should_publish_notice(Some(&json!({"kind":"result"}))) { "good" } else { "secondary" },
+        "icon": "bell.fill",
+        "kinds": n::NOTICE_KINDS.len(),
+        "quiet": n::QUIET_NOTICES.len(),
+        "agentOnly": n::AGENT_ONLY_NOTICES.len(),
+        "text": n::notice_text(kind, false),
+        "publish": n::should_publish_notice(Some(&json!({"kind":"result"}))),
+        "priority": n::notice_priority(kind),
+        "handoff": n::handoff_guidance(Some("done"), true),
+        "summary": n::summary(n::NOTICE_KINDS.len(), 3, 5, 3),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3076,6 +3157,10 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "work": work_view(),
         "contextblocks": contextblocks_view(),
         "toollabels": toollabels_view(),
+        "mail": mail_view(),
+        "media": media_view(),
+        "replypolicy": replypolicy_view(),
+        "notices": notices_view(),
         "description": description,
         "model": model,
         "provider": provider,

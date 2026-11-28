@@ -30,6 +30,19 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let notices = insights.notices
+                    Text(notices.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Text")): \(notices.text)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Priority")): \(notices.priority)").font(.footnote).foregroundStyle(Palette.tertiary)
+                    let replypolicy = insights.replypolicy
+                    Text(replypolicy.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Verdict")): \(replypolicy.verdict)").font(.footnote).foregroundStyle(Palette.secondary)
+                    let media = insights.media
+                    Text(media.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Stickers")): \(media.stickers)").font(.footnote).foregroundStyle(Palette.secondary)
+                    let mail = insights.mail
+                    Text(mail.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Choice")): \(mail.choice)").font(.footnote).foregroundStyle(Palette.secondary)
                     let toollabels = insights.toollabels
                     Text(toollabels.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Key")): \(toollabels.key)").font(.footnote).foregroundStyle(Palette.secondary)

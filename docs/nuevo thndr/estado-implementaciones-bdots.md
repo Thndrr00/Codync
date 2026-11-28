@@ -124,6 +124,20 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Pasada final: correo, media, respuestas y avisos (94 adiciones + UI en 4 clientes)
+
+Investigación de lo que faltaba en los repos de referencia: cuatro áreas puras sin portar, todas
+cerradas en una sola pasada.
+
+- `bdots_mail.rs` (27): direcciones, choix de buzón, niveles y políticas de correo, de `client/lib/mail.ts`.
+- `bdots_media.rs` (24): moods de stickers, categorías GIF, metadata y ajustes, de `engine/media.ts`.
+- `bdots_reply_policy.rs` (23): centinelas, texto visible y veredictos, de `engine/reply-policy.ts`.
+- `bdots_notices.rs` (20): clases de aviso, silencio, guiado de handoff, de `engine/notices.ts`.
+
+El endpoint `botInsights` añade los campos `mail`, `media`, `replypolicy` y `notices`, con sección en
+Desktop, iOS, Android y TUI. Reutilizan `bdots_desk`. Checks: `rustfmt --check` y `npm run typecheck`
+limpios; sin compilaciones, según la regla.
+
 ## Etiquetas de herramientas (27 adiciones + UI en 4 clientes)
 
 `bdots_tool_labels.rs` añade 21 helpers puros y 6 constantes portados de `tool-labels.ts` y

@@ -66,6 +66,22 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    for field in ["mail", "media", "replypolicy", "notices"] {
+        let section = &data[field];
+        if section.is_object() {
+            let title = match field {
+                "mail" => "Mail",
+                "media" => "Media",
+                "replypolicy" => "Reply policy",
+                _ => "Notices",
+            };
+            line(buf, &mut y, tr(title).into_owned(), t.bold.patch(t.panel));
+            let headline = section["headline"].as_str().unwrap_or("");
+            line(buf, &mut y, headline.to_owned(), t.text.patch(t.panel));
+            y += 1;
+        }
+    }
+
     let toollabels = &data["toollabels"];
     if toollabels.is_object() {
         line(buf, &mut y, tr("Tool labels").into_owned(), t.bold.patch(t.panel));

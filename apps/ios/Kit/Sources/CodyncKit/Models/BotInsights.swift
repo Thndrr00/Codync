@@ -96,6 +96,10 @@ public struct BotInsights: Decodable, Sendable {
     public let work: InsightWork
     public let contextblocks: InsightContextBlocks
     public let toollabels: InsightToolLabels
+    public let mail: InsightMail
+    public let media: InsightMedia
+    public let replypolicy: InsightReplyPolicy
+    public let notices: InsightNotices
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -125,6 +129,67 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed mail summary.
+public struct InsightMail: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let choice: String
+    public let addresses: [String]
+    public let valid: [String]
+    public let level: String
+    public let cap: Int
+    public let auto: Bool
+    public let errors: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed media summary.
+public struct InsightMedia: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let moods: Int
+    public let agentMoods: Int
+    public let categories: [String]
+    public let tool: Bool
+    public let rating: String
+    public let stickers: String
+    public let after: Bool
+    public let line: String
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed reply policy summary.
+public struct InsightReplyPolicy: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let verdict: String
+    public let silent: Bool
+    public let mustAnswer: Bool
+    public let sentinel: Bool
+    public let visible: String
+    public let reason: String
+    public let lead: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed notices summary.
+public struct InsightNotices: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let kinds: Int
+    public let quiet: Int
+    public let agentOnly: Int
+    public let text: String
+    public let publish: Bool
+    public let priority: Int
+    public let handoff: String
     public let summary: [InsightSummaryRow]
 }
 

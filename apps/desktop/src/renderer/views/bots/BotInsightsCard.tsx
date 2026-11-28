@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx, searchextra, evalextra, connextra, shortcuts, palette, picker, contextselect, mdtables, contextpin, verify, autofill, rrule, iteration, approvalrules, brainpicker, engine, accounts, plans, providers, avatar, secretcleanup, toolreplay, vault, devices, noai, missions, cmdpolicy, router, modelprefs, botstore, promptactions, csiterm, plugins, service, draftstash, layout, channelaccess, work, contextblocks, toollabels } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx, searchextra, evalextra, connextra, shortcuts, palette, picker, contextselect, mdtables, contextpin, verify, autofill, rrule, iteration, approvalrules, brainpicker, engine, accounts, plans, providers, avatar, secretcleanup, toolreplay, vault, devices, noai, missions, cmdpolicy, router, modelprefs, botstore, promptactions, csiterm, plugins, service, draftstash, layout, channelaccess, work, contextblocks, toollabels, mail, media, replypolicy, notices } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,34 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Notices')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(notices.tone)}>{notices.headline}</Text>
+        <ValueRow label={tr('Text')}>{notices.text}</ValueRow>
+        <ValueRow label={tr('Publish')}>{notices.publish ? tr('Yes') : tr('No')}</ValueRow>
+        <ValueRow label={tr('Priority')}>{String(notices.priority)}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Reply policy')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(replypolicy.tone)}>{replypolicy.headline}</Text>
+        <ValueRow label={tr('Verdict')}>{replypolicy.verdict}</ValueRow>
+        <ValueRow label={tr('Visible')}>{replypolicy.visible}</ValueRow>
+        <ValueRow label={tr('Reason')}>{replypolicy.reason}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Media')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(media.tone)}>{media.headline}</Text>
+        <ValueRow label={tr('Stickers')}>{media.stickers}</ValueRow>
+        <ValueRow label={tr('Rating')}>{media.rating}</ValueRow>
+        <ValueRow label={tr('Line')}>{media.line}</ValueRow>
+      </CardSection>
+
+      <CardSection title={tr('Mail')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(mail.tone)}>{mail.headline}</Text>
+        <ValueRow label={tr('Choice')}>{mail.choice}</ValueRow>
+        <ValueRow label={tr('Level')}>{mail.level}</ValueRow>
+        <ValueRow label={tr('Cap')}>{String(mail.cap)}</ValueRow>
+      </CardSection>
+
       <CardSection title={tr('Tool labels')}>
         <Text size="subheadline" weight="semibold" tone={toneOf(toollabels.tone)}>{toollabels.headline}</Text>
         <ValueRow label={tr('Key')}>{toollabels.key}</ValueRow>
