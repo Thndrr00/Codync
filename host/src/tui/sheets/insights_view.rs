@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let draftstash = &data["draftstash"];
+    if draftstash.is_object() {
+        line(buf, &mut y, tr("Draft stash").into_owned(), t.bold.patch(t.panel));
+        let headline = draftstash["headline"].as_str().unwrap_or("");
+        let title = draftstash["title"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {title}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let service = &data["service"];
     if service.is_object() {
         line(buf, &mut y, tr("Service").into_owned(), t.bold.patch(t.panel));

@@ -2760,6 +2760,33 @@ fn service_view() -> Value {
     })
 }
 
+/// Composer draft stash from hermes-agent.
+fn draftstash_view() -> Value {
+    use crate::bdots_draft_stash as d;
+
+    let local = serde_json::json!({"s1":{"at":100,"text":"new"},"s2":{"at":60,"text":null}});
+    let remote = serde_json::json!({"s1":{"at":90,"text":"old"},"s3":{"at":110,"text":"fresh"}});
+    let merged = d::merge_stashes(&local, &remote);
+    let entries = merged.as_object().map_or(0, |map| map.len());
+    let drafts = merged.as_object().map_or(0, |map| map.values().filter(|entry| entry["text"].is_string()).count());
+    json!({
+        "headline": format!("{} · {} · {}", d::count_label(entries), d::count_label(drafts), d::NEW_SESSION_DRAFT_KEY),
+        "tone": if drafts > 0 { "good" } else { "secondary" },
+        "icon": "doc.text.fill",
+        "key": d::DRAFT_STASH_STORAGE_KEY,
+        "newKey": d::NEW_SESSION_DRAFT_KEY,
+        "stamp": d::next_stash_stamp(&merged, 50),
+        "entries": entries,
+        "drafts": drafts,
+        "cleared": d::count_label(entries.saturating_sub(drafts)),
+        "merged": d::newer_entry(Some(&remote["s3"]), Some(&local["s1"])),
+        "title": d::derive_draft_title("\n  Review the launch plan \nsoon"),
+        "compacted": d::compact_draft_stash(&merged, 2, 200).as_object().map_or(0, |map| map.len()),
+        "legacy": d::parse_legacy_drafts(Some("{\"s1\":\"old\"}")).is_some(),
+        "summary": d::summary(entries, drafts, entries.saturating_sub(drafts), false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2904,6 +2931,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "csiterm": csi_view(),
         "plugins": plugins_view(),
         "service": service_view(),
+        "draftstash": draftstash_view(),
         "description": description,
         "model": model,
         "provider": provider,

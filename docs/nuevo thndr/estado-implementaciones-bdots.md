@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Stash de borradores (27 adiciones + UI en 4 clientes)
+
+`bdots_draft_stash.rs` añade 21 helpers puros y 6 constantes portados de `composer-draft-stash.ts`
+y `draft-title.ts` de **hermes-agent 3.14**: timestamps, fusión por entry más reciente, compactación,
+adopción legacy, hashes de mirror y títulos derivados. Reutiliza `bdots_desk`. El endpoint
+`botInsights` añade el campo `draftstash`; la sección «Draft stash» se muestra en los cuatro clientes.
+
 ## Servicio de arranque (30 adiciones + UI en 4 clientes)
 
 `bdots_service.rs` añade 24 helpers puros y 6 constantes portados de `cli/service.ts` de

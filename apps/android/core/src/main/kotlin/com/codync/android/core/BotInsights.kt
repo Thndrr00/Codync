@@ -93,9 +93,20 @@ data class BotInsights(
     val csiterm: InsightCsiTerm = InsightCsiTerm(),
     val plugins: InsightPlugins = InsightPlugins(),
     val service: InsightService = InsightService(),
+    val draftstash: InsightDraftStash = InsightDraftStash(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed composer draft stash summary. */
+@Serializable
+data class InsightDraftStash(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val key: String = "", val newKey: String = "", val stamp: Int = 0,
+    val entries: Int = 0, val drafts: Int = 0, val cleared: String = "",
+    val merged: Boolean = false, val title: String = "", val compacted: Int = 0,
+    val legacy: Boolean = false, val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed service launch summary. */

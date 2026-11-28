@@ -90,6 +90,7 @@ public struct BotInsights: Decodable, Sendable {
     public let csiterm: InsightCsiTerm
     public let plugins: InsightPlugins
     public let service: InsightService
+    public let draftstash: InsightDraftStash
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -119,6 +120,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed composer draft stash summary.
+public struct InsightDraftStash: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let key: String
+    public let newKey: String
+    public let stamp: Int
+    public let entries: Int
+    public let drafts: Int
+    public let cleared: String
+    public let merged: Bool
+    public let title: String
+    public let compacted: Int
+    public let legacy: Bool
     public let summary: [InsightSummaryRow]
 }
 
