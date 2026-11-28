@@ -81,6 +81,19 @@ pub fn may_end_session(e: &anyhow::Error) -> bool {
     e.chain().filter_map(|c| c.downcast_ref::<RpcError>()).any(|r| r.code == INTERNAL_ERROR && r.kind.is_none())
 }
 
+/// Whether a session-open error says the agent's saved session is damaged rather than merely busy:
+/// a damaged, corrupt or missing session file cannot be reopened, so a fresh one must take its place
+/// (OpenBot 0.70). Pure: only the error's words are read, never a path or its contents.
+pub(crate) fn damaged_session(error: &str) -> bool {
+    let lower = error.to_ascii_lowercase();
+    lower.contains("damaged")
+        || lower.contains("corrupt")
+        || lower.contains("invalid session file")
+        || lower.contains("session not found")
+        || lower.contains("session does not exist")
+        || lower.contains("no such session")
+}
+
 /// A way an agent fails that the host itself recognizes, kept as a type so usage
 /// analytics can count it (`turn_finished.error`) without its text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -16,6 +16,11 @@ use tokio::sync::mpsc;
 /// Leads a `<bot-profile>` sent again after a compaction, so the agent drops an older copy it may still hold.
 const PROFILE_AGAIN: &str = "Your context was summarized. This is your full, current profile and memory; it replaces any earlier bot profile in this conversation.";
 
+/// OpenBot 0.70: the fixed reason a turn fails with when the model wrote its actions as text
+/// (`<execute>`) instead of doing them with a tool.
+const WRITTEN_EXECUTE_FAILED: &str =
+    "The model wrote its actions as text and did not do them. Try again, or choose another model.";
+
 impl Actor {
     /// This session's frozen instructions (reads memory files when re-rendering).
     pub(super) async fn snapshot(&self, session: &str) -> Result<Snapshot> {
@@ -453,10 +458,18 @@ impl Actor {
             Ok(v) => v["stopReason"].as_str().unwrap_or("end_turn").to_owned(),
             Err(_) => "error".into(),
         };
-        let verdict = super::verdict::TurnVerdict::of(&stop_reason);
         // triage-15547: a reply that only says it did the work, with no tool behind it, is not a
         // finished turn. It earns the same bounded check as a tool-using turn.
         let tool_calls = self.watchdog.tool_calls() > 0;
+        // OpenBot 0.70: writing actions out as `<execute>` text is not doing them. Fail that turn
+        // with a fixed reason instead of letting an `end_turn` verdict call it finished.
+        let written_execute = !stopped
+            && done.is_ok()
+            && final_text
+                .as_deref()
+                .is_some_and(|text| super::self_check::written_execute_failed(text, usize::from(tool_calls)));
+        let stop_reason = if written_execute { super::verify::FAILED.to_owned() } else { stop_reason };
+        let verdict = super::verdict::TurnVerdict::of(&stop_reason);
         let narrated = final_text
             .as_deref()
             .is_some_and(|text| super::self_check::narrated_actions(text, usize::from(tool_calls)));
@@ -526,6 +539,9 @@ impl Actor {
                     self.notice(text, NoticeStyle::Error);
                 }
             }
+            _ if written_execute => {
+                self.notice(WRITTEN_EXECUTE_FAILED, NoticeStyle::Error);
+            }
             (Err(e), _) if !self.stop_requested => {
                 let tail = self.exit_tail.take().filter(|t| !t.is_empty());
                 awaiting_sign_in = self.invite_sign_in(e);
@@ -555,7 +571,7 @@ impl Actor {
             _ => {}
         }
         let failure = done.as_ref().err().filter(|_| !self.stop_requested);
-        let failed = failure.is_some();
+        let failed = failure.is_some() || written_execute;
         let completion = if awaiting_sign_in {
             "waitingForSignIn"
         } else if stopped {

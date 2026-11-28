@@ -116,6 +116,23 @@ async fn a_stopped_agent_that_exits_cleanly_does_not_hold_the_host_for_the_grace
 }
 
 #[test]
+fn a_damaged_saved_session_is_named_in_the_open_error() {
+    for error in [
+        "The session file is damaged",
+        "corrupt session state",
+        "Invalid session file: abc.json",
+        "session not found: abc",
+        "Session does not exist",
+        "no such session",
+    ] {
+        assert!(damaged_session(error), "{error}");
+    }
+    for error in ["", "network timeout", "agent stopped", "authentication required", "session is busy"] {
+        assert!(!damaged_session(error), "{error}");
+    }
+}
+
+#[test]
 fn content_text_flattens_blocks() {
     let v = json!([
         {"type": "content", "content": {"type": "text", "text": "a"}},

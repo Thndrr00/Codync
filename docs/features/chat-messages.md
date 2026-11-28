@@ -308,3 +308,5 @@ once the turn ends, its last message's `↳ N steps` line counts them the same w
   as do the deleted bot's own chat entries that `deleteBot` already cleared (OpenBot
   triage-15916). `own_channel_entry` in `host/src/store/entries.rs` is the pure decision, and
   the purge runs just after the bot row is deleted in `host/src/hub/bots.rs`.
+- **Font lists:** reopening Settings › Appearance shows the last installed-font list immediately
+  from a device pref while a fresh read replaces it (OpenBot 0.80.0).

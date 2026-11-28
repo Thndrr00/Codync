@@ -35,6 +35,25 @@ fn a_procedure_has_one_fingerprint_whatever_the_order_and_the_case() {
 }
 
 #[test]
+fn a_draft_follows_the_dominant_script_of_the_request() {
+    for (text, expected) in [
+        ("请修复这个 bug，谢谢", "Chinese"),
+        ("このバグを修正してください", "Japanese"),
+        ("이 버그를 고쳐 주세요", "Korean"),
+        ("Исправь этот баг, пожалуйста", "Russian"),
+        ("يرجى إصلاح هذه المشكلة من فضلك", "Arabic"),
+        ("תקן את הבאג הזה בבקשה", "Hebrew"),
+        ("กรุณาแก้ไขบักนี้", "Thai"),
+    ] {
+        assert_eq!(suggestion_language(text, "English"), expected, "{text}");
+    }
+    for text in ["", "Fix the bug please", "please fix 中文", "🙂🙂🙂"] {
+        assert_eq!(suggestion_language(text, "English"), "English", "{text}");
+    }
+    assert_eq!(suggestion_language("请修复 bug", "Español"), "Chinese", "a tie favours the non-ASCII script");
+}
+
+#[test]
 fn a_draft_is_read_from_the_models_reply_and_cut_to_the_limits() {
     let reply = "Sure!\n```json\n{\"name\": \"Ship a release\", \"when\": \"The user asks to publish a version.\", \"steps\": [\"Run the tests\", \" Tag it \", \"\"]}\n```";
     let (name, description, instructions) = parse_draft(reply).expect("a draft");

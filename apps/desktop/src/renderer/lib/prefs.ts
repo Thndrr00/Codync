@@ -117,6 +117,8 @@ export const prefs = {
   backgroundBlur: pref('backgroundBlur', true),
   /** A transparent window or a chat backdrop: the Threads composer needs a fill behind it. */
   transparentWindow: pref('transparentWindow', false),
+  /** v0.80: the last installed-font list, so reopening Appearance shows fonts at once. */
+  installedFontsCache: pref<string[]>('installedFontsCache', []),
   /** Bot faces blink, look around and breathe; off keeps their still frame. */
   movingAgentFaces: pref('movingAgentFaces', true),
   /** The opening agent pile; off shows one agent with bouncing dots while a computer opens or connects. */

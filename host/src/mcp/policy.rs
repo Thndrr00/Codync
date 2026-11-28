@@ -73,6 +73,20 @@ pub(crate) fn insufficient_scope(error: &str) -> bool {
     missing && !lower.contains("policy")
 }
 
+/// The card for a tool call refused because the server needs a key (OpenBot 0.70). The notice is
+/// fixed: no error text, tool output or key value is shown. Pure.
+pub(crate) fn key_request_notice(error: &str) -> Option<&'static str> {
+    const NOTICE: &str = "This server needs a key. Sign in or add its key in Marketplace, Apps.";
+    let lower = error.to_ascii_lowercase();
+    let no_key = lower.contains("api key")
+        || lower.contains("api_key")
+        || lower.contains("missing key")
+        || lower.contains("no key")
+        || lower.contains("needs a key")
+        || lower.contains("key is required");
+    no_key.then_some(NOTICE)
+}
+
 /// Mark one server as needing sign-in without touching any tool's allow/ask/deny policy, so the
 /// server's other tools stay usable. The fixed label comes from the shared MCP wording.
 fn mark_sign_in_needed(hub: &Hub, connector: &str) -> Result<String> {
@@ -319,7 +333,12 @@ pub async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, body: Value) ->
             // no tool policy changes, so its other tools stay usable.
             if let Some(error) = body["denial"].as_str().filter(|e| insufficient_scope(e)) {
                 let notice = mark_sign_in_needed(hub, connector)?;
-                return Ok(json!({"signInNeeded":true,"notice":notice}));
+                let mut result = json!({"signInNeeded":true,"notice":notice});
+                // A refusal that says the key is missing gets the Marketplace, Apps card too.
+                if let Some(text) = key_request_notice(error) {
+                    result["keyNotice"] = text.into();
+                }
+                return Ok(result);
             }
             ensure_fingerprint(hub, connector, &body)?;
             notice_failed_server(hub, bot, connector);
@@ -531,6 +550,22 @@ mod tests {
             "HTTP 403 Forbidden",
         ] {
             assert!(!insufficient_scope(error), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_missing_key_gets_the_marketplace_apps_card() {
+        const CARD: &str = "This server needs a key. Sign in or add its key in Marketplace, Apps.";
+        for error in [
+            "missing API key",
+            "No api_key was provided",
+            "insufficient_scope: api key is required",
+            "the server needs a key",
+        ] {
+            assert_eq!(key_request_notice(error), Some(CARD), "{error}");
+        }
+        for error in ["", "insufficient_scope: token lacks scope", "tool disabled by policy", "network timeout"] {
+            assert_eq!(key_request_notice(error), None, "{error}");
         }
     }
 

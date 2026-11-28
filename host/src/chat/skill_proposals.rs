@@ -90,6 +90,64 @@ pub fn worth_a_skill(tools: &BTreeSet<String>) -> bool {
     tools.len() >= MIN_TOOLS
 }
 
+/// The language a draft should be written in: the dominant non-ASCII script of the person's request, or `fallback`.
+/// A couple of foreign characters in an otherwise Latin request don't change the language. Kana and Hangul name
+/// Japanese and Korean within CJK; bare Han names Chinese. Pure so the language of a draft has a test.
+pub(crate) fn suggestion_language(chat_text: &str, fallback: &str) -> String {
+    let mut latin = 0usize;
+    let (mut han, mut kana, mut hangul) = (0usize, 0usize, 0usize);
+    let (mut cyrillic, mut arabic, mut hebrew, mut thai) = (0usize, 0usize, 0usize, 0usize);
+    for ch in chat_text.chars() {
+        let c = ch as u32;
+        if ch.is_ascii() {
+            if ch.is_ascii_alphabetic() {
+                latin += 1;
+            }
+        } else if (0x3040..=0x30ff).contains(&c) {
+            kana += 1;
+        } else if (0xac00..=0xd7af).contains(&c) || (0x1100..=0x11ff).contains(&c) || (0x3130..=0x318f).contains(&c) {
+            hangul += 1;
+        } else if (0x3400..=0x4dbf).contains(&c) || (0x4e00..=0x9fff).contains(&c) || (0xf900..=0xfaff).contains(&c) {
+            han += 1;
+        } else if (0x0400..=0x052f).contains(&c) {
+            cyrillic += 1;
+        } else if (0x0590..=0x05ff).contains(&c) {
+            hebrew += 1;
+        } else if (0x0600..=0x06ff).contains(&c) || (0x0750..=0x077f).contains(&c) || (0x08a0..=0x08ff).contains(&c) {
+            arabic += 1;
+        } else if (0x0e00..=0x0e7f).contains(&c) {
+            thai += 1;
+        } else if ch.is_alphabetic() {
+            latin += 1;
+        }
+    }
+    let cjk = han + kana + hangul;
+    let best = cjk.max(cyrillic).max(arabic).max(hebrew).max(thai);
+    if best < 2 || best < latin {
+        return fallback.to_owned();
+    }
+    if cjk == best {
+        return if kana > 0 {
+            "Japanese"
+        } else if hangul > 0 {
+            "Korean"
+        } else {
+            "Chinese"
+        }
+        .to_owned();
+    }
+    (if cyrillic == best {
+        "Russian"
+    } else if arabic == best {
+        "Arabic"
+    } else if hebrew == best {
+        "Hebrew"
+    } else {
+        "Thai"
+    })
+    .to_owned()
+}
+
 /// The same procedure for the same kind of request gives the same fingerprint, whatever the order of the steps.
 pub fn fingerprint(tools: &BTreeSet<String>, request: &str) -> String {
     let words: Vec<String> = request.split_whitespace().take(8).map(str::to_lowercase).collect();
@@ -197,7 +255,12 @@ async fn try_consider(hub: &Arc<Hub>, cfg: &BotConfig, turn: i64, request: &str)
     hub.store.kv_set(&last_key, &now.to_string())?;
     let steps: Vec<String> =
         rows.iter().map(|(kind, title)| format!("- {kind}: {}", crate::agent::acp::truncate(title, 120))).collect();
-    let user = format!("Request: {}\n\nSteps taken:\n{}", crate::agent::acp::truncate(request, 600), steps.join("\n"));
+    let language = suggestion_language(request, "English");
+    let user = format!(
+        "Request: {}\n\nSteps taken:\n{}\n\nWrite the suggestion in {language}.",
+        crate::agent::acp::truncate(request, 600),
+        steps.join("\n")
+    );
     let reply = super::oneshot::one_shot(hub, cfg, SYSTEM, &user).await?;
     let Some((name, description, instructions)) = parse_draft(&reply) else { return Ok(()) };
     let mut list = pending(&hub.store, &cfg.id);

@@ -448,7 +448,11 @@ impl Actor {
                     return Ok(());
                 }
                 Err(e) => {
-                    tracing::warn!(bot = %self.cfg.id, method = reopen, error = format!("{e:#}"), "couldn't reopen the session; starting fresh");
+                    let error = format!("{e:#}");
+                    // OpenBot 0.70: a damaged saved session cannot be reopened at all, so the fresh
+                    // session replaces it; the flag also tells the log why this one was dropped.
+                    let damaged = acp::damaged_session(&error);
+                    tracing::warn!(bot = %self.cfg.id, method = reopen, error = %error, damaged, "couldn't reopen the session; starting fresh");
                 }
             }
         }

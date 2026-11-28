@@ -162,6 +162,13 @@ pub(super) fn narrated_actions(text: &str, tools: usize) -> bool {
     !ran_into && head.iter().any(|word| ACTIONS.contains(&word.as_str()))
 }
 
+/// OpenBot 0.70: some models answer by writing their actions out as a literal `<execute>` block in
+/// prose instead of calling a tool. With no tool behind it nothing was done, so the turn must fail
+/// rather than pass as finished. Pure, so the rule is tested without agent I/O.
+pub(super) fn written_execute_failed(text: &str, tools: usize) -> bool {
+    tools == 0 && text.contains("<execute>")
+}
+
 /// Whether a completion check may run now. Pure, so every stopping rule has a test without agent I/O.
 /// `promised` is the triage-14327 path: a short answer that promises work earns the check even
 /// though the turn used no tool (`plan_continuation::promises_work`).
@@ -283,6 +290,17 @@ mod tests {
             "Finished for now — let me know what you'd like next.",
         ] {
             assert!(!narrated_actions(text, 0), "{text}");
+        }
+    }
+
+    #[test]
+    fn an_execute_block_written_as_prose_is_not_a_done_turn() {
+        for text in ["<execute>\nls\n</execute>", "I ran it: <execute>echo hi</execute>", "<execute>"] {
+            assert!(written_execute_failed(text, 0), "{text}");
+            assert!(!written_execute_failed(text, 1), "a real tool call still did the work");
+        }
+        for text in ["I ran ls and it worked.", "The update is ready.", "", "<execution>"] {
+            assert!(!written_execute_failed(text, 0), "{text}");
         }
     }
 

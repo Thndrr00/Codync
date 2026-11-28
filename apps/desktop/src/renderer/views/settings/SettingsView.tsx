@@ -176,12 +176,16 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   const [textSize, setTextSize] = usePref(prefs.textSize)
   const [interfaceFont, setInterfaceFont] = usePref(prefs.interfaceFont)
   const [codeFont, setCodeFont] = usePref(prefs.codeFont)
-  const [installedFonts, setInstalledFonts] = useState<string[]>([])
+  // v0.80: show the cached fonts at once, then replace them with a fresh read.
+  const [installedFonts, setInstalledFonts] = useState<string[]>(() => prefs.installedFontsCache.get())
   const [fontQuery, setFontQuery] = useState('')
   const [codeFontQuery, setCodeFontQuery] = useState('')
   useEffect(() => {
     const installed = window.codync.app.installedFonts
-    if (installed) void installed().then(setInstalledFonts, () => setInstalledFonts([]))
+    if (installed) void installed().then((fonts) => {
+      prefs.installedFontsCache.set(fonts)
+      setInstalledFonts(fonts)
+    }, () => setInstalledFonts([]))
   }, [])
   const [language, setLanguage] = usePref(prefs.appLanguage)
   const systemLanguage = typeof navigator === 'undefined' ? 'en' : navigator.language

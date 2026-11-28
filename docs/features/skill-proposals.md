@@ -16,3 +16,6 @@ and the steps. The draft waits in an inbox. **A proposal is never an active skil
 - **Screens:** the inbox sits under the Memory tab of the bot's details on desktop and Android ("Proposed skills (n)", one card
   per proposal with Approve, Edit, Dismiss); in the terminal "Skills this bot proposes…" (`a` approve, `x` dismiss; editing
   is done on desktop or the phone). The count is in the inbox title. iPhone: not done.
+- **Language:** the suggestion prompt follows the dominant script of the request (Chinese, Japanese,
+  Korean, Russian, Arabic, Hebrew or Thai), not always English (OpenBot 0.80.0; pure
+  `suggestion_language`). A short foreign word in an otherwise Latin request keeps English.
