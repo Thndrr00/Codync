@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Isla cerrada (26 adiciones + UI en 4 clientes)
+
+`bdots_closed.rs` añade 20 helpers puros y 6 constantes portados de `core/closed.ts` de **coucou**:
+estilos de la isla cerrada, contenido (hora, fecha, plan de Claude, música), colores del medidor y
+anchura. El endpoint `botInsights` añade el campo `closed`; la sección «Closed island» se muestra en
+los cuatro clientes. Reutiliza `bdots_desk`.
+
 ## Animación (28 adiciones + UI en 4 clientes)
 
 `bdots_anim.rs` añade 22 helpers puros y 6 constantes portados de `core/anim.ts` de **coucou**:

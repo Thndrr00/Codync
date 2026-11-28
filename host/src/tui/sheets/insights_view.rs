@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let closed = &data["closed"];
+    if closed.is_object() {
+        line(buf, &mut y, tr("Closed island").into_owned(), t.bold.patch(t.panel));
+        let headline = closed["headline"].as_str().unwrap_or("");
+        let music = closed["music"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {music}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let anim = &data["anim"];
     if anim.is_object() {
         line(buf, &mut y, tr("Animation").into_owned(), t.bold.patch(t.panel));

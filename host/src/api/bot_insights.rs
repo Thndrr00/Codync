@@ -3295,6 +3295,30 @@ fn anim_view() -> Value {
     })
 }
 
+/// Closed island from coucou.
+fn closed_view() -> Value {
+    use crate::bdots_closed as c;
+
+    let claude = c::closed_content("claude", "10:42", "Fri, 27 Nov", Some(43.4), None, None);
+    let music = c::closed_content("music", "10:42", "Fri, 27 Nov", None, Some("Song"), Some("Band"));
+    json!({
+        "headline": format!("{} · {}px · {}", c::CLOSED_ISLANDS.len(), c::CLOSED_H, c::closed_island(Some("music"))),
+        "tone": if c::is_blank("music") { "secondary" } else { "good" },
+        "icon": "rectangle.topthird.inset.fill",
+        "styles": c::CLOSED_ISLANDS.len(),
+        "height": c::CLOSED_H,
+        "minWidth": c::CLOSED_MIN_W,
+        "maxWidth": c::CLOSED_MAX_W,
+        "dot": c::content_dot(&claude),
+        "claude": c::content_text(&claude),
+        "music": c::content_text(&music),
+        "note": c::has_note(&music),
+        "width": c::closed_width(200, 20),
+        "line": c::closed_line("music", c::closed_width(200, 20)),
+        "summary": c::summary(c::CLOSED_ISLANDS.len(), c::closed_width(200, 20), c::CLOSED_H, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3461,6 +3485,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "mochidesktop": mochidesktop_view(),
         "spotify": spotify_view(),
         "anim": anim_view(),
+        "closed": closed_view(),
         "description": description,
         "model": model,
         "provider": provider,

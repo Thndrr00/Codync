@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val closed = insights.closed
+            CardSection("Closed island") {
+                row { Text(closed.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Claude", closed.claude) }
+                row { ValueRow("Music", closed.music) }
+                row { ValueRow("Width", closed.width.toString()) }
+            }
             val anim = insights.anim
             CardSection("Animation") {
                 row { Text(anim.headline, style = Type.subheadline.semibold, color = Palette.text) }

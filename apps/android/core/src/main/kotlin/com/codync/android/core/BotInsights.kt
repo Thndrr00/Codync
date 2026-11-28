@@ -115,9 +115,20 @@ data class BotInsights(
     val mochidesktop: InsightMochiDesktop = InsightMochiDesktop(),
     val spotify: InsightSpotify = InsightSpotify(),
     val anim: InsightAnim = InsightAnim(),
+    val closed: InsightClosed = InsightClosed(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed closed-island summary. */
+@Serializable
+data class InsightClosed(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val styles: Int = 0, val height: Int = 0, val minWidth: Int = 0, val maxWidth: Int = 0,
+    val dot: String? = null, val claude: String = "", val music: String = "",
+    val note: Boolean = false, val width: Int = 0, val line: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed animation summary. */

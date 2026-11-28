@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let closed = insights.closed
+                    Text(closed.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Claude")): \(closed.claude)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Music")): \(closed.music)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let anim = insights.anim
                     Text(anim.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Curve")): \(anim.curve)").font(.footnote).foregroundStyle(Palette.secondary)

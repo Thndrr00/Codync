@@ -112,6 +112,7 @@ public struct BotInsights: Decodable, Sendable {
     public let mochidesktop: InsightMochiDesktop
     public let spotify: InsightSpotify
     public let anim: InsightAnim
+    public let closed: InsightClosed
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -141,6 +142,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed closed-island summary.
+public struct InsightClosed: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let styles: Int
+    public let height: Int
+    public let minWidth: Int
+    public let maxWidth: Int
+    public let dot: String?
+    public let claude: String
+    public let music: String
+    public let note: Bool
+    public let width: Int
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 
