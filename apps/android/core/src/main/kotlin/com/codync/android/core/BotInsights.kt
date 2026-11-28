@@ -96,9 +96,26 @@ data class BotInsights(
     val draftstash: InsightDraftStash = InsightDraftStash(),
     val layout: InsightLayout = InsightLayout(),
     val channelaccess: InsightChannelAccess = InsightChannelAccess(),
+    val work: InsightWork = InsightWork(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed work header summary. */
+@Serializable
+data class InsightWorkHeader(
+    val steps: String = "", val connectors: String? = null, val duration: String? = null,
+)
+
+/** A host-computed work summary. */
+@Serializable
+data class InsightWork(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val steps: Int = 0, val calls: Int = 0, val folded: Int = 0,
+    val duration: String = "", val state: String = "", val apps: Int = 0,
+    val quiet: Boolean = false, val header: InsightWorkHeader = InsightWorkHeader(),
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed channel access summary. */

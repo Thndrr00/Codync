@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val work = insights.work
+            CardSection("Work") {
+                row { Text(work.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Calls", work.calls.toString()) }
+                row { ValueRow("Duration", work.duration) }
+                row { ValueRow("State", work.state) }
+            }
             val channelaccess = insights.channelaccess
             CardSection("Channel access") {
                 row { Text(channelaccess.headline, style = Type.subheadline.semibold, color = Palette.text) }

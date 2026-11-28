@@ -93,6 +93,7 @@ public struct BotInsights: Decodable, Sendable {
     public let draftstash: InsightDraftStash
     public let layout: InsightLayout
     public let channelaccess: InsightChannelAccess
+    public let work: InsightWork
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -125,20 +126,26 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let summary: [InsightSummaryRow]
 }
 
-/// A host-computed channel access summary.
-public struct InsightChannelAccess: Decodable, Sendable {
+/// A host-computed work header summary.
+public struct InsightWorkHeader: Decodable, Sendable {
+    public let steps: String
+    public let connectors: String?
+    public let duration: String?
+}
+
+/// A host-computed work summary.
+public struct InsightWork: Decodable, Sendable {
     public let headline: String
     public let tone: String
     public let icon: String
-    public let channels: Int
-    public let summaryLine: String
-    public let hasAdmins: Bool
-    public let pairing: Bool
-    public let approved: Int
-    public let provider: String
-    public let creator: String
-    public let api: String
-    public let complete: Bool
+    public let steps: Int
+    public let calls: Int
+    public let folded: Int
+    public let duration: String
+    public let state: String
+    public let apps: Int
+    public let quiet: Bool
+    public let header: InsightWorkHeader
     public let summary: [InsightSummaryRow]
 }
 

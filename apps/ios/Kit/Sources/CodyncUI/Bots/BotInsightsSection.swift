@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let work = insights.work
+                    Text(work.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Calls")): \(work.calls)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Duration")): \(work.duration)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let channelaccess = insights.channelaccess
                     Text(channelaccess.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Summary")): \(channelaccess.summaryLine)").font(.footnote).foregroundStyle(Palette.secondary)

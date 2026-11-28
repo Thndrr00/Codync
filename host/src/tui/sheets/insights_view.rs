@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let work = &data["work"];
+    if work.is_object() {
+        line(buf, &mut y, tr("Work").into_owned(), t.bold.patch(t.panel));
+        let headline = work["headline"].as_str().unwrap_or("");
+        let duration = work["duration"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {duration}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let channelaccess = &data["channelaccess"];
     if channelaccess.is_object() {
         line(buf, &mut y, tr("Channel access").into_owned(), t.bold.patch(t.panel));

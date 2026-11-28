@@ -2844,6 +2844,35 @@ fn channelaccess_view() -> Value {
     })
 }
 
+/// Work and tool-call folding from agentes-chat.
+fn work_view() -> Value {
+    use crate::bdots_work as w;
+
+    let meta = serde_json::json!({"work":{"steps":8,"calls":[{"name":"read","n":2},{"name":"lookup","n":3}],"durationMs":42000}});
+    let work = w::work_meta(Some(&meta)).unwrap_or_else(|| json!({}));
+    let steps = vec![
+        json!({"text":"read","kind":"call"}),
+        json!({"text":"read","kind":"call"}),
+        json!({"text":"write","kind":"call"}),
+    ];
+    let folded = w::fold_steps(&steps);
+    let items = vec![json!({"count":1,"tool":"read","output":[]}), json!({"count":2,"tool":"write","output":[]})];
+    json!({
+        "headline": format!("{} · {} · {}", w::count_label(folded.len()), w::work_line(8, 3, 2, Some(42_000)), w::format_duration(42_000)),
+        "tone": if w::shows_activity(Some(&json!({"showActivity":true}))) { "good" } else { "secondary" },
+        "icon": "hammer.fill",
+        "steps": w::work_steps(&work, &[]),
+        "calls": w::tool_calls(&items),
+        "folded": folded.len(),
+        "duration": w::format_duration(42_000),
+        "state": w::step_state(false, false, false),
+        "apps": w::tool_apps(&[json!({"activity":{"kind":"consulting","app":"Drive"}})]).len(),
+        "quiet": w::quiet_work(&items),
+        "header": w::work_header(&json!({"steps":8,"connectors":["Drive"],"durationMs":42000})),
+        "summary": w::summary(8, 3, 2, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2991,6 +3020,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "draftstash": draftstash_view(),
         "layout": layout_view(),
         "channelaccess": channelaccess_view(),
+        "work": work_view(),
         "description": description,
         "model": model,
         "provider": provider,

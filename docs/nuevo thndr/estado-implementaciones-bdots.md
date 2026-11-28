@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Trabajo y herramientas (30 adiciones + UI en 4 clientes)
+
+`bdots_work.rs` añade 24 helpers puros y 6 constantes portados de `work.ts` de **agentes-chat
+0.7.5**: metadatos de trabajo, plegado de pasos y llamadas, agrupación de apps, duración, cabecera,
+cancelación y estados de herramientas. Reutiliza `bdots_desk`. El endpoint `botInsights` añade el
+campo `work`; la sección «Work» se muestra en los cuatro clientes.
+
 ## Acceso a canales (30 adiciones + UI en 4 clientes)
 
 `bdots_channel_access.rs` añade 24 helpers puros y 6 constantes portados de `utils/config.ts` de
