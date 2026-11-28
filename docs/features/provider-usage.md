@@ -1,5 +1,7 @@
 # Provider plan usage
 
+A provider check that reaches its time limit, or is still running when the host quits, has its whole child process tree stopped on macOS/Linux, not just the start script it was launched with. The decision is pure in `agent/process/stop.rs` and is used by the owned process's stop path, which ends every process group in the session. Likewise, every program in a downloaded ACP build gets the executable bit on Unix, not only the main command: a build with several programs would otherwise start the main one and fail the others with "Permission denied". That pure list is in `agent/acp/binaries.rs` and is applied where the archive is extracted.
+
 The host owns quota inspection; desktop, Android, iOS and TUI render its `usage`
 report. Percentages describe a provider's plan window, not task completion,
 context occupancy, token totals or a billed amount.

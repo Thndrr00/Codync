@@ -16,6 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::ChildStdin;
 use tokio::sync::{mpsc, oneshot};
 
+pub(crate) mod binaries;
 pub mod codebuddy;
 
 /// stderr lines kept to explain a crash.

@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 use tokio::sync::Notify;
 use tokio::time::Instant;
 pub(crate) mod output;
+pub(crate) mod stop;
 
 const REAP_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(100);
@@ -327,9 +328,22 @@ impl Process {
     /// Gives the leader and everything it started until `grace` runs out to finish by themselves,
     /// then ends what is left from its leaves up ([`Self::unwind`]). Returns as soon as nothing is left.
     pub(super) async fn stop_within(&mut self, grace: Duration) {
-        let deadline = Instant::now() + grace;
+        let started = Instant::now();
+        let deadline = started + grace;
         while !self.exited().unwrap_or(true) && Instant::now() < deadline {
             tokio::time::sleep(POLL).await;
+        }
+        // #14: a provider check that is still running at its deadline (or at quit) may have
+        // children the start script left behind on macOS/Linux. Skip the graceful unwind and go
+        // straight to the kill helper, which ends every process group in the owned session.
+        #[cfg(unix)]
+        let still_running = self.processes().await.is_ok_and(|left| !left.is_empty());
+        #[cfg(windows)]
+        let still_running = !self.exited().unwrap_or(true);
+        if stop::process_tree_stop(started.elapsed(), grace, still_running).stop_tree() {
+            tracing::debug!("a check is still running past its time limit; ending its whole process tree");
+            self.kill().await;
+            return;
         }
         self.unwind().await;
         #[cfg(unix)]

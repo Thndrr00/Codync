@@ -344,12 +344,33 @@ async fn install_binary(agent: &Value, target: &Value, cmd: &Path, progress: &im
     let file_name =
         url.rsplit('/').next().and_then(|f| f.split('?').next()).and_then(safe_component).unwrap_or("download");
     let (dir2, file_name, cmd) = (dir.clone(), file_name.to_owned(), cmd.to_owned());
+    // #15: a registry build may carry more than one program; every one of them needs the
+    // executable bit on Unix, not only the main `cmd` the agent is started with.
+    #[cfg(unix)]
+    let programs = {
+        let mut all = vec![cmd.clone()];
+        if let Some(list) = target["programs"].as_array() {
+            for entry in list {
+                if let Some(rel) = entry.as_str().or_else(|| entry["cmd"].as_str()).and_then(contained) {
+                    all.push(rel.to_path_buf());
+                }
+            }
+        }
+        all
+    };
     tokio::task::spawn_blocking(move || -> Result<()> {
         let _ = std::fs::remove_dir_all(&dir2);
         std::fs::create_dir_all(&dir2)?;
         let archive = dir2.join(file_name);
         std::fs::write(&archive, &bytes)?;
         extract(&archive, &dir2, &cmd)?;
+        #[cfg(unix)]
+        for program in crate::agent::acp::binaries::binaries_to_mark(&programs) {
+            let path = dir2.join(program);
+            if path.is_file() {
+                chmod_x(&path)?;
+            }
+        }
         std::fs::write(dir2.join(".installed"), "")?;
         remove_other_versions(&dir2);
         Ok(())
