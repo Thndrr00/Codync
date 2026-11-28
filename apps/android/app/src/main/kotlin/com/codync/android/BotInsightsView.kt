@@ -42,6 +42,27 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val aurora = insights.aurora
+            CardSection("Aurora background") {
+                row { Text(aurora.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Ground", aurora.ground) }
+                row { ValueRow("Brightness", aurora.brightness) }
+                row { ValueRow("Variable", aurora.variable) }
+            }
+            val aurora = insights.aurora
+            CardSection("Aurora background") {
+                row { Text(aurora.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Ground", aurora.ground) }
+                row { ValueRow("Brightness", aurora.brightness) }
+                row { ValueRow("Variable", aurora.fieldVar) }
+            }
+            val github = insights.github
+            CardSection("GitHub") {
+                row { Text(github.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("PRs", github.prs) }
+                row { ValueRow("CI", github.ci.value) }
+                row { ValueRow("Label", github.label) }
+            }
             val notices = insights.notices
             CardSection("Notices") {
                 row { Text(notices.headline, style = Type.subheadline.semibold, color = Palette.text) }

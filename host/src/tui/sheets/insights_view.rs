@@ -82,6 +82,24 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let aurora = &data["aurora"];
+    if aurora.is_object() {
+        line(buf, &mut y, tr("Aurora background").into_owned(), t.bold.patch(t.panel));
+        let headline = aurora["headline"].as_str().unwrap_or("");
+        let ground = aurora["ground"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {ground}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
+    let github = &data["github"];
+    if github.is_object() {
+        line(buf, &mut y, tr("GitHub").into_owned(), t.bold.patch(t.panel));
+        let headline = github["headline"].as_str().unwrap_or("");
+        let prs = github["prs"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {prs}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let toollabels = &data["toollabels"];
     if toollabels.is_object() {
         line(buf, &mut y, tr("Tool labels").into_owned(), t.bold.patch(t.panel));

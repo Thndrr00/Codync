@@ -103,9 +103,49 @@ data class BotInsights(
     val media: InsightMedia = InsightMedia(),
     val replypolicy: InsightReplyPolicy = InsightReplyPolicy(),
     val notices: InsightNotices = InsightNotices(),
+    val github: InsightGithub = InsightGithub(),
+    val aurora: InsightAurora = InsightAurora(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed aurora background summary. */
+@Serializable
+data class InsightAurora(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val ground: String = "", val palette: Int = 0, val pitch: Int = 0,
+    val rows: Int = 0, val brightness: String = "", val fallsRight: Boolean = false,
+    val bayer: Int = 0, val sample: String = "", val variable: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed aurora background summary. */
+@Serializable
+data class InsightAurora(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val ground: String = "", val palette: Int = 0, val pitch: Int = 0,
+    val rows: Int = 0, val brightness: String = "", val fallsRight: Boolean = false,
+    val bayer: Int = 0, val sample: String = "", val fieldVar: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
+)
+
+/** A host-computed GitHub CI summary. */
+@Serializable
+data class InsightGithubCi(val failing: Boolean = false, val color: String = "", val value: String = "")
+
+/** A host-computed GitHub alert. */
+@Serializable
+data class InsightGithubAlert(val kind: String = "", val text: String = "", val id: String = "")
+
+/** A host-computed GitHub pulse summary. */
+@Serializable
+data class InsightGithub(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val sections: Int = 0, val prs: String = "", val ci: InsightGithubCi = InsightGithubCi(),
+    val label: String = "", val repo: String = "", val url: String? = null,
+    val day: String = "", val alert: InsightGithubAlert? = null,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed mail summary. */

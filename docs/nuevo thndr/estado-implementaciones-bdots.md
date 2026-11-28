@@ -124,6 +124,15 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## GitHub y fondo aurora (54 adiciones + UI en 4 clientes)
+
+Del repo `coucou` (`windows/src/core/github.ts`) se portaron 30 helpers puros en `bdots_github.rs`:
+pull requests, CI, colores de contribuciones, enlaces seguros y cuadrícula. Del repo `OpenMausBot`
+(`src/lib/aurora-field.ts`) se portaron 24 helpers en `bdots_aurora_field.rs`: el fondo dinámico con
+una banda de luz que cruza la pantalla, dithering Bayer, campo de estrellas con semilla y variables
+CSS — el fondo dinámico e interactivo que se pidió integrar. El endpoint `botInsights` añade los
+campos `github` y `aurora`, con sección en los cuatro clientes. Ambos reutilizan `bdots_desk`.
+
 ## Pasada final: correo, media, respuestas y avisos (94 adiciones + UI en 4 clientes)
 
 Investigación de lo que faltaba en los repos de referencia: cuatro áreas puras sin portar, todas

@@ -1,6 +1,37 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightAurora {
+  headline: string
+  tone: string
+  icon: string
+  ground: string
+  palette: number
+  pitch: number
+  rows: number
+  brightness: string
+  fallsRight: boolean
+  bayer: number
+  sample: string
+  var: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightGithub {
+  headline: string
+  tone: string
+  icon: string
+  sections: number
+  prs: string
+  ci: { failing: boolean; color: string; value: string }
+  label: string
+  repo: string
+  url: string | null
+  day: string
+  alert: { kind: string; text: string; id: string } | null
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightMail {
   headline: string
   tone: string
@@ -1565,6 +1596,8 @@ export interface BotInsights {
   media: InsightMedia
   replypolicy: InsightReplyPolicy
   notices: InsightNotices
+  github: InsightGithub
+  aurora: InsightAurora
   routines: InsightRoutine[]
   usage: {
     used: number

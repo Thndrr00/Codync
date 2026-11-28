@@ -30,6 +30,14 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let aurora = insights.aurora
+                    Text(aurora.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Ground")): \(aurora.ground)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Brightness")): \(aurora.brightness)").font(.footnote).foregroundStyle(Palette.tertiary)
+                    let github = insights.github
+                    Text(github.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("PRs")): \(github.prs)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("CI")): \(github.ci.value)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let notices = insights.notices
                     Text(notices.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Text")): \(notices.text)").font(.footnote).foregroundStyle(Palette.secondary)

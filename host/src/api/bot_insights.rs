@@ -3007,6 +3007,51 @@ fn notices_view() -> Value {
     })
 }
 
+/// GitHub pulse card from coucou.
+fn github_view() -> Value {
+    use crate::bdots_github as g;
+
+    let pulse = serde_json::json!({"pulse":{"myPRs":[{"ci":"failure"}],"toReview":[],"mainCI":[{"ci":"success"}]}});
+    json!({
+        "headline": format!("{} · {} · {}", g::section_title("myPRs"), g::my_prs_value(&pulse["pulse"]["myPRs"].as_array().cloned().unwrap_or_default()), g::format_count(1200)),
+        "tone": if g::worst_ci(&["success".to_owned()]) == "success" { "good" } else { "attention" },
+        "icon": "chevron.left.forwardslash.chevron.right",
+        "sections": g::GH_SECTIONS.len(),
+        "prs": g::my_prs_value(&pulse["pulse"]["myPRs"].as_array().cloned().unwrap_or_default()),
+        "ci": g::main_ci_summary(&pulse["pulse"]["mainCI"].as_array().cloned().unwrap_or_default()),
+        "label": g::contributions_label(1200),
+        "repo": g::short_repo("owner/repo"),
+        "url": g::safe_github_url("https://github.com/o/r"),
+        "day": g::day_label("2026-01-05"),
+        "alert": g::github_alert(&[serde_json::json!({"kind":"ciFailed","prId":"p1"})]),
+        "summary": g::summary(1, 1, 1, false),
+    })
+}
+
+/// Dynamic aurora background from OpenMausBot.
+fn aurora_view() -> Value {
+    use crate::bdots_aurora_field as a;
+
+    let (row, light) = a::brightest_row(900.0, 1874.0, 1162.0);
+    let mut random = a::seeded(a::FIELD_SEED);
+    let sample = random();
+    json!({
+        "headline": format!("{} · {} · {}", a::count_label(a::BAYER.len()), a::GROUND, a::PALETTE.len()),
+        "tone": if light > 1.5 { "good" } else { "secondary" },
+        "icon": "wand.and.stars",
+        "ground": a::GROUND,
+        "palette": a::PALETTE.len(),
+        "pitch": a::PITCH,
+        "rows": row,
+        "brightness": format!("{light:.2}"),
+        "fallsRight": a::falls_right(),
+        "bayer": a::BAYER.len(),
+        "sample": format!("{sample:.2}"),
+        "var": a::field_var(),
+        "summary": a::summary(a::BAYER.len(), a::LEVELS as usize, true, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3161,6 +3206,8 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "media": media_view(),
         "replypolicy": replypolicy_view(),
         "notices": notices_view(),
+        "github": github_view(),
+        "aurora": aurora_view(),
         "description": description,
         "model": model,
         "provider": provider,

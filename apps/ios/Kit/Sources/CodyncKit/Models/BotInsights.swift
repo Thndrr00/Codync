@@ -100,6 +100,8 @@ public struct BotInsights: Decodable, Sendable {
     public let media: InsightMedia
     public let replypolicy: InsightReplyPolicy
     public let notices: InsightNotices
+    public let github: InsightGithub
+    public let aurora: InsightAurora
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -129,6 +131,53 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed aurora background summary.
+public struct InsightAurora: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let ground: String
+    public let palette: Int
+    public let pitch: Int
+    public let rows: Int
+    public let brightness: String
+    public let fallsRight: Bool
+    public let bayer: Int
+    public let sample: String
+    public let `var`: String
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed GitHub CI summary.
+public struct InsightGithubCi: Decodable, Sendable {
+    public let failing: Bool
+    public let color: String
+    public let value: String
+}
+
+/// A host-computed GitHub alert.
+public struct InsightGithubAlert: Decodable, Sendable {
+    public let kind: String
+    public let text: String
+    public let id: String
+}
+
+/// A host-computed GitHub pulse summary.
+public struct InsightGithub: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let sections: Int
+    public let prs: String
+    public let ci: InsightGithubCi
+    public let label: String
+    public let repo: String
+    public let url: String?
+    public let day: String
+    public let alert: InsightGithubAlert?
     public let summary: [InsightSummaryRow]
 }
 
