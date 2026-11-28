@@ -111,9 +111,20 @@ data class BotInsights(
     val coucoushortcuts: InsightCoucouShortcuts = InsightCoucouShortcuts(),
     val islandlayout: InsightIslandLayout = InsightIslandLayout(),
     val recap: InsightRecap = InsightRecap(),
+    val whatsnew: InsightWhatsNew = InsightWhatsNew(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed what's-new summary. */
+@Serializable
+data class InsightWhatsNew(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val icons: Int = 0, val stats: Int = 0, val version: String = "",
+    val title: String = "", val items: Int = 0, val iconName: String = "",
+    val laterMs: Int = 0, val page: String = "", val hint: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed weekly recap summary. */

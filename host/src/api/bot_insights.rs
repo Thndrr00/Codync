@@ -3192,6 +3192,30 @@ fn recap_view() -> Value {
     })
 }
 
+/// What's new rules from coucou.
+fn whatsnew_view() -> Value {
+    use crate::bdots_whats_new as w;
+
+    let file =
+        json!({"releases":[{"version":"2.46.0","items":[{"title":{"en":"Aurora background","es":"Fondo aurora"}}]}]});
+    let release = w::release_for(Some(&file), "2.46.0");
+    json!({
+        "headline": format!("{} · {} · {}", w::count_label(w::ICON_NAMES.len()), w::compare_versions("2.46.0", "2.45.1"), w::STAT_KINDS.len()),
+        "tone": if w::compare_versions("2.46.0", "2.45.1") > 0 { "good" } else { "secondary" },
+        "icon": "bell.badge.fill",
+        "icons": w::ICON_NAMES.len(),
+        "stats": w::STAT_KINDS.len(),
+        "version": "2.46.0",
+        "title": w::release_title(&release, "es"),
+        "items": w::release_count(&release),
+        "iconName": w::icon_name("sparkles"),
+        "laterMs": w::LATER_MS,
+        "page": w::release_page("windows", "2.46.0"),
+        "hint": w::shows_update_hint(true, "working", false),
+        "summary": w::summary(w::ICON_NAMES.len(), w::STAT_KINDS.len(), 1, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3354,6 +3378,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "coucoushortcuts": coucoushortcuts_view(),
         "islandlayout": islandlayout_view(),
         "recap": recap_view(),
+        "whatsnew": whatsnew_view(),
         "description": description,
         "model": model,
         "provider": provider,

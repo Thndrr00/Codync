@@ -108,6 +108,7 @@ public struct BotInsights: Decodable, Sendable {
     public let coucoushortcuts: InsightCoucouShortcuts
     public let islandlayout: InsightIslandLayout
     public let recap: InsightRecap
+    public let whatsnew: InsightWhatsNew
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -137,6 +138,23 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed what's-new summary.
+public struct InsightWhatsNew: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let icons: Int
+    public let stats: Int
+    public let version: String
+    public let title: String
+    public let items: Int
+    public let iconName: String
+    public let laterMs: Int
+    public let page: String
+    public let hint: Bool
     public let summary: [InsightSummaryRow]
 }
 

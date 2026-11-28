@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let whatsnew = &data["whatsnew"];
+    if whatsnew.is_object() {
+        line(buf, &mut y, tr("What's new").into_owned(), t.bold.patch(t.panel));
+        let headline = whatsnew["headline"].as_str().unwrap_or("");
+        let version = whatsnew["version"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {version}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let recap = &data["recap"];
     if recap.is_object() {
         line(buf, &mut y, tr("Weekly recap").into_owned(), t.bold.patch(t.panel));

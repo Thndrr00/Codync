@@ -116,6 +116,7 @@ mod bdots_tuning;
 mod bdots_vault;
 mod bdots_verify;
 mod bdots_week;
+mod bdots_whats_new;
 mod bdots_whatsapp;
 mod bdots_work;
 mod bdots_workspace;

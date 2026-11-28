@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Novedades (21 adiciones + UI en 4 clientes)
+
+`bdots_whats_new.rs` añade 16 helpers puros y 5 constantes portados de `whats-new/whats-new.ts` de
+**coucou**: comparación de versiones, búsqueda de release, texto localizado, iconos, decisión de
+apertura y pistas de actualización. El endpoint `botInsights` añade el campo `whatsnew`; la sección
+«What's new» se muestra en los cuatro clientes. Reutiliza `bdots_desk`.
+
 ## Resumen semanal (21 adiciones + UI en 4 clientes)
 
 `bdots_recap.rs` añade 16 helpers puros y 5 constantes portados de `recap/summary.ts` de **coucou**:

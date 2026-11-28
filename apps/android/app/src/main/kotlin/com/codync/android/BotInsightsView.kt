@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val whatsnew = insights.whatsnew
+            CardSection("What's new") {
+                row { Text(whatsnew.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Version", whatsnew.version) }
+                row { ValueRow("Title", whatsnew.title) }
+                row { ValueRow("Items", whatsnew.items.toString()) }
+            }
             val recap = insights.recap
             CardSection("Weekly recap") {
                 row { Text(recap.headline, style = Type.subheadline.semibold, color = Palette.text) }

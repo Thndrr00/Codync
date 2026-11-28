@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let whatsnew = insights.whatsnew
+                    Text(whatsnew.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Version")): \(whatsnew.version)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Title")): \(whatsnew.title)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let recap = insights.recap
                     Text(recap.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Monday")): \(recap.monday)").font(.footnote).foregroundStyle(Palette.secondary)
