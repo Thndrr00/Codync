@@ -40,6 +40,16 @@ These were identified as real or uncertain gaps; the strongest are handled first
 14. A timed-out provider check stops its whole child process tree — `host/src/agent/process/**`.
 15. An ACP download with more than one program makes every binary executable — `host/src/agent/acp/**`.
 
+## Close-out (commits 237-239)
+
+All 15 candidates are resolved. #1 public-header redaction, #11 image-limit hint, #12 composer
+fill, #13 manual folder drop, #14 process tree stop and #15 all ACP binaries executable are
+implemented; #2 executed-as-text answer, #3 damaged ACP session and #4 MCP key card have pure
+decisions wired to the turn/session/denial paths; #5 skill suggestion language and #9 cached font
+list are wired in host and desktop. #6 needed no change: `market::custom` already keeps the full
+MCP address on import; #7 is covered by the tool-update size decision; #8 was already present;
+#10 popover name is wired in the desktop roster.
+
 ## Not portable (with reason)
 
 Credits/prices/packs/payments/NEAR wallet/VAT; Chrome Web Store and extension promos; joined servers
