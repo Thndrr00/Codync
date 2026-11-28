@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val diff = insights.diff
+            CardSection("File diffs") {
+                row { Text(diff.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Path", diff.path) }
+                row { ValueRow("Added", diff.added.toString()) }
+                row { ValueRow("Removed", diff.removed.toString()) }
+            }
             val plan = insights.plan
             CardSection("Plan usage") {
                 row { Text(plan.headline, style = Type.subheadline.semibold, color = Palette.text) }

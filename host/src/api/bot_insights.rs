@@ -3352,6 +3352,29 @@ fn plan_view() -> Value {
     })
 }
 
+/// File diffs from coucou.
+fn diff_view() -> Value {
+    use crate::bdots_diff as d;
+
+    let change = d::from_edit("a\nb", "a\nc", "src/main.rs");
+    let step = d::make_diff_step("main.rs", 1, 1, 7);
+    json!({
+        "headline": format!("{} · {} · {}", d::DIFF_KINDS.len(), d::DIFF_TOOLS.len(), d::file_name("a/b/main.rs")),
+        "tone": if change["tooLarge"] == true { "secondary" } else { "good" },
+        "icon": "doc.text.fill",
+        "kinds": d::DIFF_KINDS.len(),
+        "tools": d::DIFF_TOOLS.len(),
+        "path": d::file_name("a/b/main.rs"),
+        "added": change["added"],
+        "removed": change["removed"],
+        "step": step,
+        "parsed": d::parse_diff_step(&step)["diffId"],
+        "preview": d::to_one_line("one\ntwo", 200),
+        "line": d::diff_line("a/main.rs", 1, 1),
+        "summary": d::summary(d::DIFF_KINDS.len(), d::DIFF_TOOLS.len(), d::DIFF_MAX_LINES, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3520,6 +3543,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "anim": anim_view(),
         "closed": closed_view(),
         "plan": plan_view(),
+        "diff": diff_view(),
         "description": description,
         "model": model,
         "provider": provider,

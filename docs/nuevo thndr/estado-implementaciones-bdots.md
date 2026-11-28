@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Diffs de archivos (21 adiciones + UI en 4 clientes)
+
+`bdots_diff.rs` añade 16 helpers puros y 5 constantes portados de `core/diff.ts` de **coucou**:
+nombres de archivo, límites de tamaño, diffs de edición, pasos codificados y vistas de una línea.
+El endpoint `botInsights` añade el campo `diff`; la sección «File diffs» se muestra en los cuatro
+clientes. Reutiliza `bdots_desk`.
+
 ## Uso del plan (28 adiciones + UI en 4 clientes)
 
 `bdots_plan.rs` añade 22 helpers puros y 6 constantes portados de `core/plan.ts` de **coucou**:

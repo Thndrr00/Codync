@@ -114,6 +114,7 @@ public struct BotInsights: Decodable, Sendable {
     public let anim: InsightAnim
     public let closed: InsightClosed
     public let plan: InsightPlan
+    public let diff: InsightDiff
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -143,6 +144,23 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed file diff summary.
+public struct InsightDiff: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let kinds: Int
+    public let tools: Int
+    public let path: String
+    public let added: Int
+    public let removed: Int
+    public let step: String
+    public let parsed: Int
+    public let preview: String
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 

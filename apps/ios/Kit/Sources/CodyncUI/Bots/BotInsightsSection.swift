@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let diff = insights.diff
+                    Text(diff.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Added")): \(diff.added)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Removed")): \(diff.removed)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let plan = insights.plan
                     Text(plan.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Claude")): \(plan.claude)").font(.footnote).foregroundStyle(Palette.secondary)

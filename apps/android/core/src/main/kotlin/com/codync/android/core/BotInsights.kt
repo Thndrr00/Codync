@@ -117,9 +117,20 @@ data class BotInsights(
     val anim: InsightAnim = InsightAnim(),
     val closed: InsightClosed = InsightClosed(),
     val plan: InsightPlan = InsightPlan(),
+    val diff: InsightDiff = InsightDiff(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed file diff summary. */
+@Serializable
+data class InsightDiff(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val kinds: Int = 0, val tools: Int = 0, val path: String = "",
+    val added: Int = 0, val removed: Int = 0, val step: String = "",
+    val parsed: Int = 0, val preview: String = "", val line: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed plan usage summary. */

@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let diff = &data["diff"];
+    if diff.is_object() {
+        line(buf, &mut y, tr("File diffs").into_owned(), t.bold.patch(t.panel));
+        let headline = diff["headline"].as_str().unwrap_or("");
+        let path = diff["path"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {path}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let plan = &data["plan"];
     if plan.is_object() {
         line(buf, &mut y, tr("Plan usage").into_owned(), t.bold.patch(t.panel));

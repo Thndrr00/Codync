@@ -46,6 +46,7 @@ mod bdots_csi;
 mod bdots_desk;
 mod bdots_devices;
 mod bdots_dictation;
+mod bdots_diff;
 mod bdots_digest;
 mod bdots_directory;
 mod bdots_draft_stash;
