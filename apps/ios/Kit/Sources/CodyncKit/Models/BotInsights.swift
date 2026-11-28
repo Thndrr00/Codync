@@ -109,6 +109,7 @@ public struct BotInsights: Decodable, Sendable {
     public let islandlayout: InsightIslandLayout
     public let recap: InsightRecap
     public let whatsnew: InsightWhatsNew
+    public let mochidesktop: InsightMochiDesktop
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -138,6 +139,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed Mochi desktop summary.
+public struct InsightMochiDesktop: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let phases: Int
+    public let panel: Int
+    public let sleep: Int
+    public let distance: Int
+    public let gaze: String
+    public let alert: Bool
+    public let pointerMs: Int
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 

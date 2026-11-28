@@ -73,6 +73,7 @@ mod bdots_media;
 mod bdots_memory;
 mod bdots_memoryctx;
 mod bdots_missions;
+mod bdots_mochi_desktop;
 mod bdots_model_prefs;
 mod bdots_more;
 mod bdots_no_ai;

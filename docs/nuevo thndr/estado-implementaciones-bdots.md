@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Mochi desktop (25 adiciones + UI en 4 clientes)
+
+`bdots_mochi_desktop.rs` añade 15 helpers puros y 10 constantes portados de `mochi/desktop-logic.ts` de
+**coucou**: suspensión por inactividad, hit-testing del cuerpo redondo, mirada, alertas, distancia del
+puntero y geometría de arrastre. El endpoint `botInsights` añade el campo `mochidesktop`; la sección
+«Mochi desktop» se muestra en los cuatro clientes. Reutiliza `bdots_desk`.
+
 ## Novedades (21 adiciones + UI en 4 clientes)
 
 `bdots_whats_new.rs` añade 16 helpers puros y 5 constantes portados de `whats-new/whats-new.ts` de

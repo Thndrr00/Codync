@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let mochidesktop = &data["mochidesktop"];
+    if mochidesktop.is_object() {
+        line(buf, &mut y, tr("Mochi desktop").into_owned(), t.bold.patch(t.panel));
+        let headline = mochidesktop["headline"].as_str().unwrap_or("");
+        let line_text = mochidesktop["line"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {line_text}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let whatsnew = &data["whatsnew"];
     if whatsnew.is_object() {
         line(buf, &mut y, tr("What's new").into_owned(), t.bold.patch(t.panel));

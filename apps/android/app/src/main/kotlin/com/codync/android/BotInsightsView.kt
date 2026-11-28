@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val mochidesktop = insights.mochidesktop
+            CardSection("Mochi desktop") {
+                row { Text(mochidesktop.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Gaze", mochidesktop.gaze) }
+                row { ValueRow("Alert", mochidesktop.alert.toString()) }
+                row { ValueRow("Line", mochidesktop.line) }
+            }
             val whatsnew = insights.whatsnew
             CardSection("What's new") {
                 row { Text(whatsnew.headline, style = Type.subheadline.semibold, color = Palette.text) }

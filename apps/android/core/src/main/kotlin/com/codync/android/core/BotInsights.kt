@@ -112,9 +112,19 @@ data class BotInsights(
     val islandlayout: InsightIslandLayout = InsightIslandLayout(),
     val recap: InsightRecap = InsightRecap(),
     val whatsnew: InsightWhatsNew = InsightWhatsNew(),
+    val mochidesktop: InsightMochiDesktop = InsightMochiDesktop(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed Mochi desktop summary. */
+@Serializable
+data class InsightMochiDesktop(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val phases: Int = 0, val panel: Int = 0, val sleep: Int = 0, val distance: Int = 0,
+    val gaze: String = "", val alert: Boolean = false, val pointerMs: Int = 0,
+    val line: String = "", val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed what's-new summary. */

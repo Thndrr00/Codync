@@ -3216,6 +3216,27 @@ fn whatsnew_view() -> Value {
     })
 }
 
+/// Desktop Mochi geometry from coucou.
+fn mochidesktop_view() -> Value {
+    use crate::bdots_mochi_desktop as m;
+
+    let gaze = m::gaze(60.0, 60.0, 320.0, 60.0);
+    json!({
+        "headline": format!("{} · {} · {}", m::count_label(m::DESKTOP_PHASES.len()), m::PANEL_SIZE as u64, m::RETURN_DELAY_MS),
+        "tone": if m::agent_active("working") { "good" } else { "secondary" },
+        "icon": "face.smiling.fill",
+        "phases": m::DESKTOP_PHASES.len(),
+        "panel": m::PANEL_SIZE as u64,
+        "sleep": m::SLEEP_TIMEOUT as u64,
+        "distance": m::SLEEP_MOUSE_DISTANCE as u64,
+        "gaze": format!("{:.2}", gaze["lookX"].as_f64().unwrap_or(0.0)),
+        "alert": m::alert_active(false, &["question".to_owned()]),
+        "pointerMs": m::POINTER_MEMORY_MS,
+        "line": m::desktop_line("landed", false, true),
+        "summary": m::summary(m::PANEL_SIZE as u64, m::SLEEP_MOUSE_DISTANCE as u64, m::POINTER_MEMORY_MS, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3379,6 +3400,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "islandlayout": islandlayout_view(),
         "recap": recap_view(),
         "whatsnew": whatsnew_view(),
+        "mochidesktop": mochidesktop_view(),
         "description": description,
         "model": model,
         "provider": provider,

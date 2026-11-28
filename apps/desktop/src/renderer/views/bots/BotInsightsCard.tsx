@@ -31,7 +31,7 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   if (error) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Could not load insights.')}</Text></CardSection>
   if (!insights) return <CardSection title={tr('Insights')}><Text size="footnote" tone="secondary">{tr('Loading…')}</Text></CardSection>
 
-  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx, searchextra, evalextra, connextra, shortcuts, palette, picker, contextselect, mdtables, contextpin, verify, autofill, rrule, iteration, approvalrules, brainpicker, engine, accounts, plans, providers, avatar, secretcleanup, toolreplay, vault, devices, noai, missions, cmdpolicy, router, modelprefs, botstore, promptactions, csiterm, plugins, service, draftstash, layout, channelaccess, work, contextblocks, toollabels, mail, media, replypolicy, notices, github, aurora, whatsapp, coucoumail, pills, coucoushortcuts, islandlayout, recap, whatsnew } = insights
+  const { usage, skills, activity, health, profile, week, routineSummary, library, trust, resilience, identity, connectors, tuning, memory, workspace, session, advice, digest, timezone, approvals, failures, conversation, agent, fresh, prompts, directory, blocks, access, dictation, liveness, context, opendots, openbot, agenteschat, textfmt, localfmt, markdown, notify, mailtext, connstate, eval: evalResult, search, appearance, quota, i18n, stream, blueprint, review, history, apierror, memoryctx, searchextra, evalextra, connextra, shortcuts, palette, picker, contextselect, mdtables, contextpin, verify, autofill, rrule, iteration, approvalrules, brainpicker, engine, accounts, plans, providers, avatar, secretcleanup, toolreplay, vault, devices, noai, missions, cmdpolicy, router, modelprefs, botstore, promptactions, csiterm, plugins, service, draftstash, layout, channelaccess, work, contextblocks, toollabels, mail, media, replypolicy, notices, github, aurora, whatsapp, coucoumail, pills, coucoushortcuts, islandlayout, recap, whatsnew, mochidesktop } = insights
   const toneOf = (tone: string): 'text' | 'secondary' | 'tertiary' | 'danger' | 'attention' | 'accent' | 'added' | 'removed' => {
     if (tone === 'danger' || tone === 'error') return 'danger'
     if (tone === 'accent') return 'accent'
@@ -42,6 +42,13 @@ export function BotInsightsCard({ botId }: { botId: string }) {
   }
   return (
     <VStack gap={12}>
+      <CardSection title={tr('Mochi desktop')}>
+        <Text size="subheadline" weight="semibold" tone={toneOf(mochidesktop.tone)}>{mochidesktop.headline}</Text>
+        <ValueRow label={tr('Gaze')}>{mochidesktop.gaze}</ValueRow>
+        <ValueRow label={tr('Alert')}>{mochidesktop.alert ? tr('Yes') : tr('No')}</ValueRow>
+        <ValueRow label={tr('Line')}>{mochidesktop.line}</ValueRow>
+      </CardSection>
+
       <CardSection title={tr("What's new")}>
         <Text size="subheadline" weight="semibold" tone={toneOf(whatsnew.tone)}>{whatsnew.headline}</Text>
         <ValueRow label={tr('Version')}>{whatsnew.version}</ValueRow>
