@@ -2787,6 +2787,31 @@ fn draftstash_view() -> Value {
     })
 }
 
+/// Pane layout tree from hermes-agent's TUI.
+fn layout_view() -> Value {
+    use crate::bdots_layout_tree as l;
+
+    let chat = l::make_group(&["chat".to_owned(), "files".to_owned()], "g1", Some("files"), false);
+    let tree = l::make_group(&["tree".to_owned()], "g2", None, true);
+    let root = l::make_split(&[chat, tree], "row", "s1");
+    let normalized = l::normalize(&root);
+    json!({
+        "headline": format!("{} · {} · {}", l::count_label(l::pane_count(&root)), l::count_label(l::group_leaf_ids(&root).len()), l::tree_depth(&root)),
+        "tone": "good",
+        "icon": "rectangle.split.3x1.fill",
+        "panes": l::pane_count(&root),
+        "groups": l::group_leaf_ids(&root).len(),
+        "depth": l::tree_depth(&root),
+        "orientation": l::ORIENTATIONS[0],
+        "drop": l::drop_position_from_edge("left"),
+        "normalized": l::is_layout_node(&normalized),
+        "active": l::find_group(&root, "g1")["active"],
+        "ids": l::all_pane_ids(&root),
+        "weights": l::normalize_weights(&[], 2),
+        "summary": l::summary(l::pane_count(&root), l::group_leaf_ids(&root).len(), l::tree_depth(&root), true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2932,6 +2957,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "plugins": plugins_view(),
         "service": service_view(),
         "draftstash": draftstash_view(),
+        "layout": layout_view(),
         "description": description,
         "model": model,
         "provider": provider,

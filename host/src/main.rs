@@ -54,6 +54,7 @@ mod bdots_history;
 mod bdots_i18n;
 mod bdots_identity;
 mod bdots_iteration;
+mod bdots_layout_tree;
 mod bdots_library;
 mod bdots_links;
 mod bdots_liveness;

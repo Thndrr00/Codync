@@ -91,6 +91,7 @@ public struct BotInsights: Decodable, Sendable {
     public let plugins: InsightPlugins
     public let service: InsightService
     public let draftstash: InsightDraftStash
+    public let layout: InsightLayout
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -120,6 +121,23 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed pane layout summary.
+public struct InsightLayout: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let panes: Int
+    public let groups: Int
+    public let depth: Int
+    public let orientation: String
+    public let drop: String
+    public let normalized: Bool
+    public let active: String
+    public let ids: [String]
+    public let weights: [Double]
     public let summary: [InsightSummaryRow]
 }
 

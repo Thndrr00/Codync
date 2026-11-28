@@ -94,9 +94,20 @@ data class BotInsights(
     val plugins: InsightPlugins = InsightPlugins(),
     val service: InsightService = InsightService(),
     val draftstash: InsightDraftStash = InsightDraftStash(),
+    val layout: InsightLayout = InsightLayout(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed pane layout summary. */
+@Serializable
+data class InsightLayout(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val panes: Int = 0, val groups: Int = 0, val depth: Int = 0,
+    val orientation: String = "", val drop: String = "", val normalized: Boolean = false,
+    val active: String = "", val ids: List<String> = emptyList(),
+    val weights: List<Double> = emptyList(), val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed composer draft stash summary. */

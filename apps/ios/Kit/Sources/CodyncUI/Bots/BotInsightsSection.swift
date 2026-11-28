@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let layout = insights.layout
+                    Text(layout.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Panes")): \(layout.panes)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Active")): \(layout.active)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let draftstash = insights.draftstash
                     Text(draftstash.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Entries")): \(draftstash.entries)").font(.footnote).foregroundStyle(Palette.secondary)

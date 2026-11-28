@@ -1,6 +1,22 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightLayout {
+  headline: string
+  tone: string
+  icon: string
+  panes: number
+  groups: number
+  depth: number
+  orientation: string
+  drop: string
+  normalized: boolean
+  active: string
+  ids: string[]
+  weights: number[]
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightDraftStash {
   headline: string
   tone: string
@@ -1420,6 +1436,7 @@ export interface BotInsights {
   plugins: InsightPlugins
   service: InsightService
   draftstash: InsightDraftStash
+  layout: InsightLayout
   routines: InsightRoutine[]
   usage: {
     used: number

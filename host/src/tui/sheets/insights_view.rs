@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let layout = &data["layout"];
+    if layout.is_object() {
+        line(buf, &mut y, tr("Layout").into_owned(), t.bold.patch(t.panel));
+        let headline = layout["headline"].as_str().unwrap_or("");
+        let active = layout["active"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {active}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let draftstash = &data["draftstash"];
     if draftstash.is_object() {
         line(buf, &mut y, tr("Draft stash").into_owned(), t.bold.patch(t.panel));

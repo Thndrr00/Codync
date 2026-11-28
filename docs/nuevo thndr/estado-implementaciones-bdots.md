@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Árbol de layout (29 adiciones + UI en 4 clientes)
+
+`bdots_layout_tree.rs` añade 23 helpers puros y 6 constantes portados de `pane-shell/tree/model.ts`
+del TUI de **hermes-agent 3.14**: nodos split/group, búsqueda, recorridos, normalización, borrado de
+panes, pesos y migración. Reutiliza `bdots_desk`. El endpoint `botInsights` añade el campo `layout`;
+la sección «Layout» se muestra en los cuatro clientes.
+
 ## Stash de borradores (27 adiciones + UI en 4 clientes)
 
 `bdots_draft_stash.rs` añade 21 helpers puros y 6 constantes portados de `composer-draft-stash.ts`
