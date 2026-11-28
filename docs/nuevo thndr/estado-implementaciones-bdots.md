@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Correo de coucou (22 adiciones + UI en 4 clientes)
+
+`bdots_coucou_mail.rs` añade 15 helpers puros y 7 constantes portados de `core/mail.ts` de
+**coucou**: ids de mensaje, remitentes, filtros, reglas, razones de triage y bloques de plan. El
+endpoint `botInsights` añade el campo `coucoumail`; la sección «Mail» se muestra en los cuatro
+clientes. Reutiliza `bdots_desk`.
+
 ## WhatsApp (29 adiciones + UI en 4 clientes)
 
 `bdots_whatsapp.rs` añade 21 helpers puros y 8 constantes portados de `core/whatsapp.ts` de

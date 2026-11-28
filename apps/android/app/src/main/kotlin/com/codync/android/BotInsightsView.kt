@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val coucoumail = insights.coucoumail
+            CardSection("Mail") {
+                row { Text(coucoumail.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Name", coucoumail.name) }
+                row { ValueRow("Rule", coucoumail.rule) }
+                row { ValueRow("Reason", coucoumail.reason) }
+            }
             val whatsapp = insights.whatsapp
             CardSection("WhatsApp") {
                 row { Text(whatsapp.headline, style = Type.subheadline.semibold, color = Palette.text) }

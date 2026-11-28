@@ -37,6 +37,7 @@ mod bdots_context_blocks;
 mod bdots_context_pin;
 mod bdots_context_select;
 mod bdots_conversation;
+mod bdots_coucou_mail;
 mod bdots_cron;
 mod bdots_csi;
 mod bdots_desk;

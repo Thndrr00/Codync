@@ -106,9 +106,20 @@ data class BotInsights(
     val github: InsightGithub = InsightGithub(),
     val aurora: InsightAurora = InsightAurora(),
     val whatsapp: InsightWhatsapp = InsightWhatsapp(),
+    val coucoumail: InsightCoucouMail = InsightCoucouMail(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed Mail pill summary. */
+@Serializable
+data class InsightCoucouMail(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val id: String = "", val filters: Int = 0, val fields: Int = 0,
+    val name: String = "", val messageId: String = "", val rule: String = "",
+    val reason: String = "", val line: String = "", val plans: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed WhatsApp summary. */

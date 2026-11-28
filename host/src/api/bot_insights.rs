@@ -3074,6 +3074,30 @@ fn whatsapp_view() -> Value {
     })
 }
 
+/// Mail pill helpers from coucou.
+fn coucoumail_view() -> Value {
+    use crate::bdots_coucou_mail as m;
+
+    let message =
+        json!({"storeId":"inbox","entryId":"1","senderName":"","address":"ana@x.com","subject":"Hi","unread":true});
+    let rule = json!({"kind":"junk"});
+    json!({
+        "headline": format!("{} · {} · {}", m::MAIL_BLUE, m::sender_name(&message), m::filter_title("unread")),
+        "tone": if message["unread"] == true { "good" } else { "secondary" },
+        "icon": "envelope.fill",
+        "id": m::MAIL_ID,
+        "filters": m::MAIL_FILTERS.len(),
+        "fields": m::MAIL_FIELDS.len(),
+        "name": m::sender_name(&message),
+        "messageId": m::message_id(&message),
+        "rule": m::rule_line(&rule),
+        "reason": m::reason_line(&json!({"kind":"vip","value":"Ana"})),
+        "line": m::mail_line(&message),
+        "plans": m::split_plan("hi\n```coucou-mail\nplan\n```")["plan"],
+        "summary": m::summary(4, 2, 3, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3231,6 +3255,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "github": github_view(),
         "aurora": aurora_view(),
         "whatsapp": whatsapp_view(),
+        "coucoumail": coucoumail_view(),
         "description": description,
         "model": model,
         "provider": provider,

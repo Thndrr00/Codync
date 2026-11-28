@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let coucoumail = &data["coucoumail"];
+    if coucoumail.is_object() {
+        line(buf, &mut y, tr("Mail").into_owned(), t.bold.patch(t.panel));
+        let headline = coucoumail["headline"].as_str().unwrap_or("");
+        let rule = coucoumail["rule"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {rule}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let whatsapp = &data["whatsapp"];
     if whatsapp.is_object() {
         line(buf, &mut y, tr("WhatsApp").into_owned(), t.bold.patch(t.panel));
