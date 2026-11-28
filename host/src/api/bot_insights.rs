@@ -2902,6 +2902,30 @@ fn contextblocks_view() -> Value {
     })
 }
 
+/// Tool names and catalog labels from agentes-chat.
+fn toollabels_view() -> Value {
+    use crate::bdots_tool_labels as t;
+
+    let key = t::tool_key("github.merge_pull_request");
+    let match_result = t::match_tool("Read file", "get_file_contents", "get file");
+    json!({
+        "headline": format!("{} · {} · {}", t::count_label(t::catalog_size("en")), t::count_label(t::app_keys().len()), key["app"]),
+        "tone": if match_result["ok"] == true { "good" } else { "secondary" },
+        "icon": "hammer",
+        "key": key["key"],
+        "app": key["app"],
+        "label": t::catalog_label("get_file_contents", "en"),
+        "labelPt": t::catalog_label("get_file_contents", "pt-BR"),
+        "humanized": t::humanize("get_file_contents"),
+        "matched": match_result["ok"],
+        "technical": match_result["tech"],
+        "subject": t::subject_label("other"),
+        "phrases": t::tool_phrase("delete_file", "en", "fail"),
+        "line": t::tool_line("github.get_me", "en"),
+        "summary": t::summary(t::catalog_size("en"), t::app_keys().len(), 1, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3051,6 +3075,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "channelaccess": channelaccess_view(),
         "work": work_view(),
         "contextblocks": contextblocks_view(),
+        "toollabels": toollabels_view(),
         "description": description,
         "model": model,
         "provider": provider,

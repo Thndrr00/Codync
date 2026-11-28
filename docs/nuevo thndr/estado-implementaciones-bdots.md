@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Etiquetas de herramientas (27 adiciones + UI en 4 clientes)
+
+`bdots_tool_labels.rs` añade 21 helpers puros y 6 constantes portados de `tool-labels.ts` y
+`tool-review.ts` de **agentes-chat 0.7.5**: palabras de nombres, prefijos de apps, claves de catálogo,
+etiquetas en inglés y pt-BR, búsqueda y decisiones de revisión. Reutiliza `bdots_desk`. El endpoint
+`botInsights` añade el campo `toollabels`; la sección «Tool labels» se muestra en los cuatro clientes.
+
 ## Bloques de contexto (30 adiciones + UI en 4 clientes)
 
 `bdots_context_blocks.rs` añade 24 helpers puros y 6 constantes portados de `engine/context.ts` de

@@ -98,6 +98,7 @@ mod bdots_stream;
 mod bdots_text;
 mod bdots_textfmt;
 mod bdots_timezone;
+mod bdots_tool_labels;
 mod bdots_tool_replay;
 mod bdots_trust;
 mod bdots_tuning;

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let toollabels = insights.toollabels
+                    Text(toollabels.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Key")): \(toollabels.key)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Label")): \(toollabels.label ?? "—")").font(.footnote).foregroundStyle(Palette.tertiary)
                     let contextblocks = insights.contextblocks
                     Text(contextblocks.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Blocks")): \(contextblocks.blocks)").font(.footnote).foregroundStyle(Palette.secondary)

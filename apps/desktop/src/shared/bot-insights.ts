@@ -1,6 +1,23 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightToolLabels {
+  headline: string
+  tone: string
+  icon: string
+  key: string
+  app: string | null
+  label: string | null
+  labelPt: string | null
+  humanized: string
+  matched: boolean
+  technical: boolean
+  subject: string
+  phrases: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightContextBlocks {
   headline: string
   tone: string
@@ -1486,6 +1503,7 @@ export interface BotInsights {
   channelaccess: InsightChannelAccess
   work: InsightWork
   contextblocks: InsightContextBlocks
+  toollabels: InsightToolLabels
   routines: InsightRoutine[]
   usage: {
     used: number

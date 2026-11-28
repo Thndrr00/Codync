@@ -98,9 +98,20 @@ data class BotInsights(
     val channelaccess: InsightChannelAccess = InsightChannelAccess(),
     val work: InsightWork = InsightWork(),
     val contextblocks: InsightContextBlocks = InsightContextBlocks(),
+    val toollabels: InsightToolLabels = InsightToolLabels(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed tool labels summary. */
+@Serializable
+data class InsightToolLabels(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val key: String = "", val app: String? = null, val label: String? = null,
+    val labelPt: String? = null, val humanized: String = "", val matched: Boolean = false,
+    val technical: Boolean = false, val subject: String = "", val phrases: String = "",
+    val line: String = "", val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed context blocks summary. */

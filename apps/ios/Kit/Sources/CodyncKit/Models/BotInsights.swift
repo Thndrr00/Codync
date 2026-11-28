@@ -95,6 +95,7 @@ public struct BotInsights: Decodable, Sendable {
     public let channelaccess: InsightChannelAccess
     public let work: InsightWork
     public let contextblocks: InsightContextBlocks
+    public let toollabels: InsightToolLabels
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -124,6 +125,24 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed tool labels summary.
+public struct InsightToolLabels: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let key: String
+    public let app: String?
+    public let label: String?
+    public let labelPt: String?
+    public let humanized: String
+    public let matched: Bool
+    public let technical: Bool
+    public let subject: String
+    public let phrases: String
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 

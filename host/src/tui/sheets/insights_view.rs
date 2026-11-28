@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let toollabels = &data["toollabels"];
+    if toollabels.is_object() {
+        line(buf, &mut y, tr("Tool labels").into_owned(), t.bold.patch(t.panel));
+        let headline = toollabels["headline"].as_str().unwrap_or("");
+        let key = toollabels["key"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {key}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let contextblocks = &data["contextblocks"];
     if contextblocks.is_object() {
         line(buf, &mut y, tr("Context blocks").into_owned(), t.bold.patch(t.panel));
