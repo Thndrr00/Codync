@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Resumen semanal (21 adiciones + UI en 4 clientes)
+
+`bdots_recap.rs` añade 16 helpers puros y 5 constantes portados de `recap/summary.ts` de **coucou**:
+fechas de semana, auto-show del lunes, nombres de agentes, unión de intervalos y resúmenes semanales.
+El endpoint `botInsights` añade el campo `recap`; la sección «Weekly recap» se muestra en los cuatro
+clientes. Reutiliza `bdots_desk`.
+
 ## Layout del island (29 adiciones + UI en 4 clientes)
 
 `bdots_island_layout.rs` añade 12 helpers puros y 17 constantes portados de `core/layout.ts` de

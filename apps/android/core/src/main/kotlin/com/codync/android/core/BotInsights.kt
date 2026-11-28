@@ -110,9 +110,20 @@ data class BotInsights(
     val pills: InsightPills = InsightPills(),
     val coucoushortcuts: InsightCoucouShortcuts = InsightCoucouShortcuts(),
     val islandlayout: InsightIslandLayout = InsightIslandLayout(),
+    val recap: InsightRecap = InsightRecap(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed weekly recap summary. */
+@Serializable
+data class InsightRecap(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val hour: Int = 0, val monday: String = "", val previous: String = "",
+    val name: String = "", val seconds: Int = 0, val duration: String = "",
+    val range: String = "", val line: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed island layout summary. */

@@ -3166,6 +3166,32 @@ fn islandlayout_view() -> Value {
     })
 }
 
+/// Weekly recap from coucou.
+fn recap_view() -> Value {
+    use crate::bdots_recap as r;
+
+    let monday = r::monday_of("2026-11-27");
+    let turns = vec![
+        json!({"start":0,"end":60,"day":monday,"agent":"integration_claude","project":"coucou"}),
+        json!({"start":30,"end":120,"day":monday,"agent":"agent_codex","project":"codync"}),
+    ];
+    let week = r::summarize(&turns, &monday);
+    json!({
+        "headline": format!("{} · {} · {}", r::week_range_label(&monday, &r::add_days(&monday, 6)), r::count_label(week["turns"].as_u64().unwrap_or(0) as usize), r::RECAP_HOUR),
+        "tone": if r::should_auto_show("2026-11-23", 9, "2026-11-09") { "good" } else { "secondary" },
+        "icon": "calendar.badge.clock",
+        "hour": r::RECAP_HOUR,
+        "monday": monday,
+        "previous": r::previous_week_start("2026-11-27"),
+        "name": r::agent_name("integration_claude"),
+        "seconds": r::merged_seconds(&turns),
+        "duration": r::format_duration(135),
+        "range": r::week_range_label("2026-09-28", "2026-10-04"),
+        "line": r::recap_line(&monday, 2, 135),
+        "summary": r::summary(1, 2, 2, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3327,6 +3353,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "pills": pills_view(),
         "coucoushortcuts": coucoushortcuts_view(),
         "islandlayout": islandlayout_view(),
+        "recap": recap_view(),
         "description": description,
         "model": model,
         "provider": provider,

@@ -91,6 +91,7 @@ mod bdots_prompts;
 mod bdots_providers;
 mod bdots_pure;
 mod bdots_quota;
+mod bdots_recap;
 mod bdots_reply_policy;
 mod bdots_review;
 mod bdots_router;

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let recap = insights.recap
+                    Text(recap.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Monday")): \(recap.monday)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Duration")): \(recap.duration)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let islandlayout = insights.islandlayout
                     Text(islandlayout.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Panel")): \(islandlayout.panel)").font(.footnote).foregroundStyle(Palette.secondary)

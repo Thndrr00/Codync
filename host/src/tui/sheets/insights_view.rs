@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let recap = &data["recap"];
+    if recap.is_object() {
+        line(buf, &mut y, tr("Weekly recap").into_owned(), t.bold.patch(t.panel));
+        let headline = recap["headline"].as_str().unwrap_or("");
+        let duration = recap["duration"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {duration}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let islandlayout = &data["islandlayout"];
     if islandlayout.is_object() {
         line(buf, &mut y, tr("Island layout").into_owned(), t.bold.patch(t.panel));

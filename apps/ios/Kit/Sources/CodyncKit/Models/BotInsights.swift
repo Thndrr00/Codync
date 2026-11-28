@@ -107,6 +107,7 @@ public struct BotInsights: Decodable, Sendable {
     public let pills: InsightPills
     public let coucoushortcuts: InsightCoucouShortcuts
     public let islandlayout: InsightIslandLayout
+    public let recap: InsightRecap
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -136,6 +137,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed weekly recap summary.
+public struct InsightRecap: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let hour: Int
+    public let monday: String
+    public let previous: String
+    public let name: String
+    public let seconds: Int
+    public let duration: String
+    public let range: String
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 
