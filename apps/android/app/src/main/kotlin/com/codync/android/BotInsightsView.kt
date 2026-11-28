@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val contextblocks = insights.contextblocks
+            CardSection("Context blocks") {
+                row { Text(contextblocks.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Blocks", contextblocks.blocks.toString()) }
+                row { ValueRow("Turns", contextblocks.turns.toString()) }
+                row { ValueRow("No reply", contextblocks.noReply.toString()) }
+            }
             val work = insights.work
             CardSection("Work") {
                 row { Text(work.headline, style = Type.subheadline.semibold, color = Palette.text) }

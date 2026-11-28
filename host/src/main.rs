@@ -32,6 +32,7 @@ mod bdots_connectors;
 mod bdots_connstate;
 mod bdots_connstate_extra;
 mod bdots_context;
+mod bdots_context_blocks;
 mod bdots_context_pin;
 mod bdots_context_select;
 mod bdots_conversation;

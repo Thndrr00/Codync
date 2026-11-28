@@ -66,6 +66,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
     );
     y += 1;
 
+    let contextblocks = &data["contextblocks"];
+    if contextblocks.is_object() {
+        line(buf, &mut y, tr("Context blocks").into_owned(), t.bold.patch(t.panel));
+        let headline = contextblocks["headline"].as_str().unwrap_or("");
+        let turns = contextblocks["turns"].as_u64().unwrap_or(0);
+        line(buf, &mut y, format!("{headline} · {turns}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let work = &data["work"];
     if work.is_object() {
         line(buf, &mut y, tr("Work").into_owned(), t.bold.patch(t.panel));

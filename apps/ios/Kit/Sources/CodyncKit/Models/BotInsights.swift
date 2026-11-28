@@ -94,6 +94,7 @@ public struct BotInsights: Decodable, Sendable {
     public let layout: InsightLayout
     public let channelaccess: InsightChannelAccess
     public let work: InsightWork
+    public let contextblocks: InsightContextBlocks
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -123,6 +124,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed context blocks summary.
+public struct InsightContextBlocks: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let blocks: Int
+    public let turns: Int
+    public let found: Int
+    public let noReply: Bool
+    public let reaction: Bool
+    public let folded: [String]
+    public let conversation: String
+    public let stable: Bool
     public let summary: [InsightSummaryRow]
 }
 

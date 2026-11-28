@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let contextblocks = insights.contextblocks
+                    Text(contextblocks.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Blocks")): \(contextblocks.blocks)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("No reply")): \(contextblocks.noReply)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let work = insights.work
                     Text(work.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Calls")): \(work.calls)").font(.footnote).foregroundStyle(Palette.secondary)

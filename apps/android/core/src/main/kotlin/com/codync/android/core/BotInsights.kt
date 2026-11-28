@@ -97,9 +97,20 @@ data class BotInsights(
     val layout: InsightLayout = InsightLayout(),
     val channelaccess: InsightChannelAccess = InsightChannelAccess(),
     val work: InsightWork = InsightWork(),
+    val contextblocks: InsightContextBlocks = InsightContextBlocks(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed context blocks summary. */
+@Serializable
+data class InsightContextBlocks(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val blocks: Int = 0, val turns: Int = 0, val found: Int = 0,
+    val noReply: Boolean = false, val reaction: Boolean = false,
+    val folded: List<String> = emptyList(), val conversation: String = "",
+    val stable: Boolean = false, val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed work header summary. */

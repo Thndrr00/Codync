@@ -2873,6 +2873,35 @@ fn work_view() -> Value {
     })
 }
 
+/// Context block shaping from agentes-chat.
+fn contextblocks_view() -> Value {
+    use crate::bdots_context_blocks as c;
+
+    let blocks = vec![
+        serde_json::json!({"text":"# Stable","conversation":true}),
+        serde_json::json!({"text":"# Turn","turn":true}),
+        serde_json::json!({"text":"# Found","found":true}),
+    ];
+    let turns = blocks.iter().filter(|block| c::is_turn_block(block)).count();
+    let found = blocks.iter().filter(|block| block["found"] == true).count();
+    let repeats =
+        vec![serde_json::json!({"key":"read","line":"read"}), serde_json::json!({"key":"read","line":"read"})];
+    json!({
+        "headline": format!("{} · {} · {}", c::count_label(blocks.len()), c::count_label(turns), c::ROUTINE_NO_REPLY),
+        "tone": if turns > 0 { "good" } else { "secondary" },
+        "icon": "text.book.closed.fill",
+        "blocks": blocks.len(),
+        "turns": turns,
+        "found": found,
+        "noReply": c::is_no_reply("`NO_REPLY.`"),
+        "reaction": c::restates_reaction("Reagi com 👍"),
+        "folded": c::collapse_repeats(&repeats, 2),
+        "conversation": c::conversation_text(&blocks),
+        "stable": c::stable_first(&blocks)[0]["text"] == blocks[0]["text"],
+        "summary": c::summary(blocks.len(), turns, found, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3021,6 +3050,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "layout": layout_view(),
         "channelaccess": channelaccess_view(),
         "work": work_view(),
+        "contextblocks": contextblocks_view(),
         "description": description,
         "model": model,
         "provider": provider,
