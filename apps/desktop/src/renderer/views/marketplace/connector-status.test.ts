@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { connectorStatus, SIGN_IN_NEEDED, signInFieldsOnFailure, verifyOutcome } from './connector-status'
+import { connectorStatus, SIGN_IN_NEEDED, signInFieldsOnFailure, verifyOutcome } from './connector-status.ts'
 import type { InstalledConnector } from './market-models'
 
 function connector(patch: Partial<InstalledConnector> = {}): InstalledConnector {

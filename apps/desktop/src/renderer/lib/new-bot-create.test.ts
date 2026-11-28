@@ -20,6 +20,7 @@ test('creating a bot preserves an explicitly chosen unavailable agent and model'
     '../../components/Avatar': {}, '../../components/Controls': {}, '../../components/Overlay': {},
     '../../components/Stack': {}, '../../components/Text': {},
     '../../store/context': { useStore: () => store }, '../../lib/use-language': {},
+    '../../lib/v79.ts': { keepDraft: (saved: unknown, current: unknown) => current ?? saved ?? null },
     './drafts': {
       fillDefaults: () => ({ ...draft, backend: 'claude', model: null, modelOptions: {} }),
       newDraft: () => ({}),
