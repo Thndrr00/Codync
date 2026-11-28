@@ -35,6 +35,7 @@ import { DevServerTitle } from './DevServersSection'
 import { WorkingTransition } from './WorkingTransition'
 import { RoutineNotice } from './RoutineNotice'
 import { Composer } from './Composer'
+import { composer_fill } from '../../lib/composer-fill.ts'
 import { PresenceRow } from './PresenceRow'
 import { QueuedMessages } from './QueuedMessages'
 import { fill } from '../../lib/fill.ts'
@@ -348,7 +349,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         {/* An update card takes the composer's place, so there's nothing to reply with. */}
         <Transcript botId={botId} openTrace={openTrace} onReply={store.mismatch ? undefined : setReplyTo} openForward={store.mismatch ? undefined : openForward} openFile={openFile} openRoutine={presentRoutine} openAgent={presentAgent} openBotChat={setBotChat} openApp={setActiveApp} openArtifact={openArtifact} openCall={setCallLine} openThread={openThread} onBranch={store.mismatch ? undefined : openBranch} />
         <div className="composer-dock" ref={dock}>
-          <div className="composer-fade" />
+          {/* v0.80: fill behind the composer only while threads scroll under a transparent window. */}
+          <div className={composer_fill((prefs.openTabsByChat.get()[chatKey(chatRef)]?.tabs?.length ?? 0) > 1, prefs.transparentWindow.get()) ? 'composer-fade composer-fade-filled' : 'composer-fade'} />
           {store.mismatch ? (
             <div className="composer-update-needed">
               <UpdateNeededCard />

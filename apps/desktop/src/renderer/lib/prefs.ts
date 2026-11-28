@@ -115,6 +115,8 @@ export const prefs = {
   avatarStyle: pref<'plush' | 'flat'>('avatarStyle', 'plush'),
   /** Frosted layers keep their backdrop blur; off drops every one of them (a slower computer, sharper text). */
   backgroundBlur: pref('backgroundBlur', true),
+  /** A transparent window or a chat backdrop: the Threads composer needs a fill behind it. */
+  transparentWindow: pref('transparentWindow', false),
   /** Bot faces blink, look around and breathe; off keeps their still frame. */
   movingAgentFaces: pref('movingAgentFaces', true),
   /** The opening agent pile; off shows one agent with bouncing dots while a computer opens or connects. */

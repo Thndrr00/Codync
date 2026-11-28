@@ -2954,5 +2954,6 @@
   "Adding files to the canvas…": "Adding files to the canvas…",
   "Loading channels…": "Loading channels…",
   "Learn from my browsing": "Learn from my browsing",
-  "Off by default. When a browser task succeeds, the agent can remember how that site works and use it on later visits. Only changes this device.": "Off by default. When a browser task succeeds, the agent can remember how that site works and use it on later visits. Only changes this device."
+  "Off by default. When a browser task succeeds, the agent can remember how that site works and use it on later visits. Only changes this device.": "Off by default. When a browser task succeeds, the agent can remember how that site works and use it on later visits. Only changes this device.",
+  "Too many images. Start a new chat and ask the agent to open fewer images per step, or choose a model that reads files.": "Too many images. Start a new chat and ask the agent to open fewer images per step, or choose a model that reads files."
 }

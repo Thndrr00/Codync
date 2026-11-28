@@ -5,6 +5,7 @@ import { isGroup, type Bot, type ThreadInfo } from '@shared/models'
 import { Icon } from '../components/Icon'
 import { Sheet } from '../components/Overlay'
 import { moveInOrder } from '../lib/computer-roster'
+import { manual_drop_target } from '../lib/manual-drop-target.ts'
 import { pointerDrag, type Point } from '../lib/pointer-drag'
 import { prefs, usePref } from '../lib/prefs'
 import { sameRosterGroup, sectionDepth, sectionLeaf } from '../lib/roster-sections'
@@ -201,7 +202,12 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
     const current = drag.current
     if (!current) return endDrag()
     cancelAnimationFrame(edgeScroll.current)
-    if (current.ids.some((id, index) => id !== current.item.store.roster[index]?.id)) current.item.store.reorder(current.ids)
+    // v0.80: with manual sort the drop keeps the dragged chat's own folder; the helper bounds
+    // the insertion slot so a drop past the end or before the top stays in range.
+    const target = manual_drop_target(current.item.bot.id, current.ids.indexOf(current.item.bot.id))
+    const order = [...current.ids]
+    order.splice(target.position, 0, ...order.splice(order.indexOf(current.item.bot.id), 1))
+    if (order.some((id, index) => id !== current.item.store.roster[index]?.id)) current.item.store.reorder(order)
     const row = rowElement(current.item)
     for (const animation of row?.getAnimations() ?? []) animation.finish()
     settleInto(row)

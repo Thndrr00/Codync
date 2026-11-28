@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { folderName, isGroup, isWorking, needsInput, type Bot } from '@shared/models'
+import { popover_name } from '../lib/popover-name.ts'
 import { AvatarWithStatus } from '../components/Avatar'
 import { Icon } from '../components/Icon'
 import { HStack, VStack } from '../components/Stack'
@@ -18,8 +19,10 @@ export const BotRow = memo(function BotRow({ bot, store, compact, usingComputer,
   useModel(store)
   // Ported from OpenBot 0.72.0: with only the avatars showing, the pointer names the agent, its purpose and
   // what it said last, and a reader hears the same. A waiting line says what it needs.
+  // v0.80: the full name stays on one line; only a long Title badge is cut.
+  const popover = popover_name(bot.name, '')
   const compactLabel = compact
-    ? [bot.name, bot.description, bot.activity || messagePreview(bot.lastMessage ?? '')].filter((part) => part && part.trim()).join(' · ')
+    ? [popover.name, popover.title || bot.description, bot.activity || messagePreview(bot.lastMessage ?? '')].filter((part) => part && part.trim()).join(' · ')
     : undefined
   return (
     <HStack gap={compact ? 0 : 10} justify={compact ? 'center' : 'flex-start'} className="bot-row" title={compactLabel} aria-label={compactLabel}>

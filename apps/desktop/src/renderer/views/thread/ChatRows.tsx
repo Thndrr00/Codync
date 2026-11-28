@@ -10,6 +10,7 @@ import { AnchoredMenu, useContextMenu, type MenuItem, type ReactionPick } from '
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { messagePreview } from '../../lib/message-preview'
+import { image_limit_hint } from '../../lib/image-limit-hint.ts'
 import { selectionActions } from '../../lib/selection-actions'
 import { published_visual_reply } from '../../lib/visual-reply'
 import { messageLink } from './message-link'
@@ -594,6 +595,7 @@ export function NoticeRow({ entry, addFallback, undo }: { entry: Entry; addFallb
           <Icon name="exclamationmark.triangle.fill" size={10} color="var(--danger)" />
           <VStack gap={10} align="flex-start">
             <Text size="footnote" tone="text" className="selectable">{text}</Text>
+            {image_limit_hint(text) ? <Text size="footnote" tone="secondary">{tr(image_limit_hint(text)!)}</Text> : null}
             <Button kind="secondary" onClick={copyDetails}>{tr('Copy')}</Button>
             {addFallback ? <Button kind="secondary" onClick={addFallback}>{tr('Add a fallback')}</Button> : null}
             {undo ? <Button kind="secondary" onClick={undo}>Undo</Button> : null}
