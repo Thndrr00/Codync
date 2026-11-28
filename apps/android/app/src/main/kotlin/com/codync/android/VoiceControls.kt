@@ -69,6 +69,7 @@ internal fun openAppSettings(context: android.content.Context) =
 @Composable internal fun CallBar(call: VoiceCallViewState, state: AppState, store: AppStore) {
     val voice = call.state
     val bot = state.bots.firstOrNull { it.id == call.botId }
+    val color = bot?.let { AvatarPalette.tint(it.avatarColor) } ?: Palette.accent
     var settings by remember { mutableStateOf(false) }
     val speaking = voice.phase == VoicePhase.Speaking
     Column(Modifier.padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -84,8 +85,6 @@ internal fun openAppSettings(context: android.content.Context) =
             }
             CallLevelDots(voice.level, speaking, bot?.status == "working", voice.phase.connecting, color,
                 Modifier.weight(1f).height(20.dp).semantics { contentDescription = callStatusText(voice, bot?.status == "working") })
-            LevelDots(voice.level, speaking, bot?.status == "working", voice.phase.connecting,
-                Modifier.weight(1f).height(20.dp).semantics { contentDescription = statusText(voice, bot?.status == "working") })
             // Audio leaves the phone: say where.
             voice.provider?.let { provider ->
                 Text(provider.title, Modifier.semantics { contentDescription = "Voice by ${provider.title}" },
@@ -141,7 +140,6 @@ private const val CONNECTING_PERIOD = 2.4f
  * resting at the left with reduced motion), and fades back to the dots.
  */
 @Composable internal fun CallLevelDots(level: Float, speaking: Boolean, working: Boolean, connecting: Boolean, color: Color, modifier: Modifier) {
-@Composable internal fun LevelDots(level: Float, speaking: Boolean, working: Boolean, connecting: Boolean, modifier: Modifier) {
     val still = reduceMotion()
     var time by remember { mutableFloatStateOf(0f) }
     if (!still) LaunchedEffect(Unit) { while (true) withFrameNanos { time = it / 1e9f } }
@@ -161,7 +159,7 @@ private const val CONNECTING_PERIOD = 2.4f
                 else -> 0.08f
             }
             val height = 4.dp.toPx() + amount * (size.height - 4.dp.toPx())
-            drawRoundRect(accent.copy(alpha = (0.5f + 0.5f * amount) * (1 - mix)),
+            drawRoundRect((if (speaking) accent else color).copy(alpha = (0.5f + 0.5f * amount) * (1 - mix)),
                 Offset(i * spacing + spacing / 2 - width / 2, (size.height - height) / 2), Size(width, height), CornerRadius(width / 2))
         }
     }

@@ -20,7 +20,7 @@ import { composerEnter } from './composer-keyboard'
 import { CommandMenu, MentionMenu, useComposerMenu } from './ComposerMenu'
 import { ComposerAttachment } from './ComposerAttachment'
 import { QuoteRow } from './ChatRows'
-import { insertCodeBlock, wrapInCode, type ComposerEdit } from './composer-edits'
+import { draftAfterDissolve, insertCodeBlock, wrapInCode, type ComposerEdit } from './composer-edits'
 import { useDictation } from './dictation-platform'
 import { DictationEngineMenu } from './DictationEngineMenu'
 import { mentionSuggestions, returnMentions, withMention } from './mentions'
@@ -65,6 +65,23 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   const draftKey = thread ? `${botId}/${thread}` : about ? artifactDraftKey(about) : botId
   const draft = useSyncExternalStore(drafts.subscribe, () => drafts.get(draftKey))
   const setDraft = (text: string) => drafts.set(draftKey, text)
+  // Idea 28: let the outgoing text dissolve before the field empties.
+  const [dissolving, setDissolving] = useState(false)
+  const dissolveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearDraft = () => {
+    const outgoing = drafts.get(draftKey)
+    if (!outgoing) return
+    setDissolving(true)
+    if (dissolveTimer.current) clearTimeout(dissolveTimer.current)
+    dissolveTimer.current = setTimeout(() => {
+      drafts.set(draftKey, draftAfterDissolve(drafts.get(draftKey), outgoing))
+      setDissolving(false)
+      dissolveTimer.current = null
+    }, 180)
+  }
+  useEffect(() => () => {
+    if (dissolveTimer.current) clearTimeout(dissolveTimer.current)
+  }, [])
   const [files, setFiles] = useState<OutgoingFile[]>([])
   const [voiceSettings, setVoiceSettings] = useState(false)
   const dictation = useDictation((change) => drafts.set(draftKey, change(drafts.get(draftKey))), () => setVoiceSettings(true))
@@ -151,7 +168,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
         } else {
           store.setFastMode(bot, !bot.fastMode)
         }
-        setDraft('')
+        clearDraft()
         break
       case 'skill':
         setDraft(`/${command.action.id} `)
@@ -205,7 +222,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
     store.send(draft, botId, { files, pasted: pasted.current, replyTo: reply ? quoteOf(reply) : about && artifactQuote(about), thread })
     cancelReply?.()
     pasted.current = []
-    setDraft('')
+    clearDraft()
     setFiles([])
     field.current?.focus()
   }
@@ -268,7 +285,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
                 <Icon name="plus" size={13} weight="medium" color="var(--text)" />
               </DropdownMenu>
             ) : null}
-            <div className="composer-field">
+            <div className={`composer-field ${dissolving ? 'is-dissolving' : ''}`}>
               <div ref={measure} className="composer-measure" aria-hidden="true">{draft + '\u200b'}</div>
               <textarea
                 ref={field}

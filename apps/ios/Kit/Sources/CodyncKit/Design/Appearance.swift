@@ -1,3 +1,5 @@
+import Foundation
+
 /// A device preference; it does not change the host or another client's appearance.
 public enum Appearance: String, CaseIterable, Sendable {
     case system, light, dark

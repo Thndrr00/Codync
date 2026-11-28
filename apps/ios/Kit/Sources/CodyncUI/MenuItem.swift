@@ -42,6 +42,10 @@ public struct MenuItem {
     func shownTitle(_ translate: (String) -> String = { L10n.tr($0) }) -> String { verbatim ? title : translate(title) }
 }
 
+extension MenuItem: Identifiable {
+    public var id: String { "\(shownTitle())-\(icon ?? "")-\(selected.map(String.init) ?? "")" }
+}
+
 /// Rows are equal when they show the same thing; the action isn't part of it, since closures always differ.
 extension MenuItem: Equatable {
     public static func == (lhs: MenuItem, rhs: MenuItem) -> Bool {

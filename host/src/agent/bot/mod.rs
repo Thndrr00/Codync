@@ -50,6 +50,7 @@ mod stall;
 mod steer;
 mod tool_entry;
 mod turn;
+mod turn_budget;
 mod updates;
 mod user_input;
 mod verdict;
@@ -144,6 +145,7 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         applied_system: HashMap::new(),
         dreamer,
         turn_text: None,
+        turn_budget: turn_budget::TurnBudget::default(),
         turn_entries: Vec::new(),
         turn_call: None,
         turn_memory_revision: String::new(),
@@ -336,6 +338,8 @@ struct Actor {
     dreamer: mpsc::UnboundedSender<memory::DreamEvent>,
     /// The user's words for this turn (None for a hidden turn or one not from the user); feeds memory.
     turn_text: Option<String>,
+    /// How long this watched turn has run without a word to the person (bdots' `TurnBudget`).
+    turn_budget: turn_budget::TurnBudget,
     /// The user messages this turn answers (none when it isn't the user's).
     turn_entries: Vec<String>,
     /// The voice call this turn answers while it lasts: its replies carry it (`chat::calls`).
@@ -465,6 +469,12 @@ impl Actor {
                 Some(done) = done_rx.recv() => self.turn_ended(done, &done_tx).await,
                 _ = flush_tick.tick() => {
                     self.flush(false);
+                    if self.turn.is_some()
+                        && let Some(nudge) = self.turn_budget.check(Instant::now())
+                    {
+                        let text = nudge.note().to_owned();
+                        self.notice(&format!("⏱ {text}"), NoticeStyle::Info);
+                    }
                     self.expire_abandoned().await;
                     self.age_approvals().await;
                     if self.routine_completion.is_some() && self.retry_routine_completion() {

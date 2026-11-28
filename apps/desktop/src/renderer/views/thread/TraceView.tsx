@@ -13,7 +13,7 @@ import { MarkdownText } from './Markdown'
 import { CodeBox, DiffView } from './PermissionCard'
 import { filterCounts, matchesFilter, TRACE_FILTERS, type TraceFilterId } from './trace-filter'
 import { useFollowEnd } from './follow-end'
-import { runningTurn, traceTurns } from './trace-turns'
+import { groupWorkSteps, runningTurn, traceTurns } from './trace-turns'
 import './trace.css'
 import { useTr } from '../../lib/use-language'
 
@@ -48,9 +48,9 @@ export function TraceView({ botId, thread = null }: { botId: string; thread?: st
                 {entries.find((e) => e.kind === 'user')?.data.text ?? tr('Turn {turn}').replaceAll('{turn}', () => String(turn))}
               </Text>
               <CardSection>
-                {entries.map((e) => (
-                  <TraceRow key={e.id} entry={e} unfolded={turn === running} />
-                ))}
+                {groupWorkSteps(entries).map((slot) => slot.kind === 'work'
+                  ? <WorkSteps key={slot.entries[0]!.id} entries={slot.entries} />
+                  : <TraceRow key={slot.entry.id} entry={slot.entry} unfolded={turn === running} />)}
               </CardSection>
             </VStack>
           ))}
@@ -80,6 +80,21 @@ function Label({ icon, weight, tone, children }: { icon: React.ReactNode; weight
       <HStack as="span" className="trace-label-icon">{icon}</HStack>
       <Text size="caption" weight={weight} tone={tone} className="trace-label-text">{children}</Text>
     </HStack>
+  )
+}
+
+/** A run of tool steps reads as one folded "worked on N steps" line until opened. */
+function WorkSteps({ entries }: { entries: Entry[] }) {
+  const tr = useTr()
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <Disclosure
+      expanded={expanded}
+      onToggle={() => setExpanded((v) => !v)}
+      label={<Text size="caption" tone="secondary">{tr('Worked on {count} steps').replaceAll('{count}', () => String(entries.length))}</Text>}
+    >
+      {entries.map((e) => <TraceRow key={e.id} entry={e} unfolded={false} />)}
+    </Disclosure>
   )
 }
 

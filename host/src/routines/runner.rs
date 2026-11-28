@@ -17,14 +17,6 @@ pub struct Prepared {
 }
 
 impl Routines {
-    /// An enabled clock schedule keeps the local daemon's machine awake between
-    /// runs. Explicit system sleep or a closed laptop lid still suspends execution.
-    pub fn keeps_awake(&self) -> bool {
-        let s = self.state.locked();
-        s.routines.iter().any(|r| !r.deleted && r.enabled && r.next_runs.iter().any(Option::is_some))
-            || s.runs.iter().any(|r| r.status.active())
-    }
-
     /// A cloud computer may sleep only when no run is queued or going, and it wakes for the next one.
     pub fn sleep_window(&self) -> (bool, Option<i64>) {
         let s = self.state.locked();
@@ -32,6 +24,14 @@ impl Routines {
         let next =
             s.routines.iter().filter(|r| !r.deleted && r.enabled).flat_map(|r| r.next_runs.iter().flatten()).min();
         (active, next.copied())
+    }
+
+    /// An enabled clock schedule keeps the local daemon's machine awake between
+    /// runs. Explicit system sleep or a closed laptop lid still suspends execution.
+    pub fn keeps_awake(&self) -> bool {
+        let s = self.state.locked();
+        s.routines.iter().any(|r| !r.deleted && r.enabled && r.next_runs.iter().any(Option::is_some))
+            || s.runs.iter().any(|r| r.status.active())
     }
 
     pub async fn stop(&self) {
@@ -91,7 +91,6 @@ impl Routines {
             let Some(routine) = s.routines.iter().find(|r| r.id == run.routine_id && !r.deleted) else { cancel_run(run); return Ok(None); };
             if !may_run(routine, &run.event) || crate::chat::lead::check_in_waits(hub, &routine.id, &routine.bot_id, &run.event) { cancel_run(run); return Ok(None); }
             run.status = Status::Starting;
-            run.pin_outputs(&hub.store, &routine.outputs)?;
             // A routine that asks for a thread gets one per routine, kept across runs.
             let lane = if routine.thread {
                 let key = format!("routine.thread.{}", routine.id);
@@ -186,9 +185,6 @@ impl Routines {
                 if !s.runs[i].retryable {
                     s.runs[i].event = Value::Null;
                 }
-                if let Some(start) = &flow {
-                    s.pending_flows.push(start.clone());
-                }
             }
             Ok((s.runs[i].bot_id.clone(), withdrawn, flow))
         })?;
@@ -208,10 +204,6 @@ impl Routines {
         self.flows.cancel_bot(bot);
         let now = now_ms();
         self.change(store, |s| {
-            for routine in s.routines.iter().filter(|r| r.bot_id == bot) {
-                store.cancel_routine_outputs(&routine.id)?;
-            }
-            s.pending_flows.retain(|flow| flow.owner != bot);
             for r in s.runs.iter_mut().filter(|r| r.bot_id == bot && r.status == Status::Pending && !r.waiting(now)) {
                 cancel_run(r);
             }
@@ -260,7 +252,21 @@ impl Routines {
     fn publish(&self, hub: &Hub) -> Result<()> {
         let pending: Vec<_> = self.state.locked().runs.iter().filter(|r| r.report_pending).cloned().collect();
         for run in pending {
-            let (text, kind, added) = if let Some(text) = run.result {
+            // Idea 9: an unchanged result stays in the run history but doesn't notify twice.
+            // Failures never take this path, so a repeating failure is always reported.
+            if let Some(result) = &run.result
+                && super::dedup::already_reported(hub, &run.bot_id, &run.routine_id, result)
+            {
+                self.change(&hub.store, |s| {
+                    if let Some(r) = s.runs.iter_mut().find(|r| r.id == run.id) {
+                        r.report_pending = false;
+                        r.result = None;
+                    }
+                    Ok(())
+                })?;
+                continue;
+            }
+            let (text, kind, added) = if let Some(text) = run.result.clone() {
                 (text, Some(AlertKind::Done), true)
             } else {
                 let failure =
@@ -294,6 +300,11 @@ impl Routines {
                 && let Some(bot) = hub.store.bot(&run.bot_id)?.filter(|b| !b.deleted)
             {
                 crate::remote::push::notify(hub, &bot.config, None, &bot.config.name, &text, kind);
+                if kind == AlertKind::Done
+                    && let Some(result) = &run.result
+                {
+                    super::dedup::mark_reported(hub, &run.bot_id, &run.routine_id, result);
+                }
             }
         }
         Ok(())
@@ -302,6 +313,45 @@ impl Routines {
     /// The queued runs to start now: all but retries still waiting for their time.
     fn due(&self, now: i64) -> Vec<Run> {
         self.state.locked().runs.iter().filter(|r| r.status == Status::Pending && !r.waiting(now)).cloned().collect()
+    }
+
+    /// A due run whose bot has used up its daily token budget: `Some(true)` when the routine holds
+    /// it for the reset, `Some(false)` when it skips this run, `None` when it may run. The routine's
+    /// `limitPolicy` decides, so a job that must not be missed waits and one that repeats all day
+    /// doesn't spend the next day's budget catching up.
+    fn held_at_limit(&self, hub: &Hub, run: &Run, now: i64) -> Option<bool> {
+        // A run the person asked for now is the person at the keyboard, not unattended work.
+        if run.event["source"] == "test" {
+            return None;
+        }
+        if !hub.budget.exceeded(&run.bot_id, now) {
+            return None;
+        }
+        let policy = self
+            .state
+            .locked()
+            .routines
+            .iter()
+            .find(|r| r.id == run.routine_id)
+            .map_or_else(|| "wait".to_owned(), |r| r.limit_policy.clone());
+        Some(policy != "skip")
+    }
+
+    /// Holds a run for the reset, or records that its routine skipped it. Both leave the reason in
+    /// the run's history, so a quiet day is explained instead of mysterious.
+    fn hold_at_limit(&self, store: &Store, run: &Run, now: i64, wait: bool) -> Result<()> {
+        self.change(store, |s| {
+            let Some(queued) = s.runs.iter_mut().find(|r| r.id == run.id) else { return Ok(()) };
+            if wait {
+                queued.not_before = Some(crate::budget::next_day(now));
+            } else {
+                queued.status = Status::Cancelled;
+                queued.finished_at = Some(now);
+                queued.detail = Some("Skipped: the bot's daily token budget is used up".into());
+                queued.event = Value::Null;
+            }
+            Ok(())
+        })
     }
 
     /// Queues the runs whose time came; returns the `watch` checks that came due instead, which
@@ -394,7 +444,6 @@ pub(super) fn failure_code(status: Status, timed_out: bool, detail: Option<&str>
 }
 
 pub fn start(hub: &Arc<Hub>) {
-    super::delivery::resume_flows(hub);
     let weak = Arc::downgrade(hub);
     let task = tokio::spawn(async move {
         let mut clock = tokio::time::interval(Duration::from_secs(1));
@@ -415,9 +464,6 @@ pub fn start(hub: &Arc<Hub>) {
 
 fn tick(hub: &Arc<Hub>) -> Result<()> {
     hub.update_keep_awake();
-    if let Err(error) = super::delivery::dispatch(hub) {
-        tracing::error!(%error, "routine platform delivery queue needs attention");
-    }
     if let Err(error) = hub.routines.publish(hub) {
         tracing::error!(%error, "routine result publication will retry");
     }
@@ -431,6 +477,12 @@ fn tick(hub: &Arc<Hub>) -> Result<()> {
         }
         if hub.store.bot(&run.bot_id)?.is_none_or(|r| r.deleted) {
             hub.routines.disable_bot(&hub.store, &run.bot_id)?;
+            continue;
+        }
+        if let Some(wait) = hub.routines.held_at_limit(hub, &run, now) {
+            if let Err(error) = hub.routines.hold_at_limit(&hub.store, &run, now, wait) {
+                tracing::warn!(error = format!("{error:#}"), "couldn't hold a routine at the token limit");
+            }
             continue;
         }
         {
@@ -543,5 +595,119 @@ mod tests {
         let state = routines.state.locked();
         assert_eq!(state.runs[0].status, Status::Cancelled);
         assert_eq!(state.runs[1].status, Status::Pending);
+    }
+
+    #[test]
+    fn a_due_run_waits_or_skips_at_the_limit_and_a_test_run_never_does() {
+        let dir = std::env::temp_dir().join(format!("codync-budget-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let identity = crate::remote::identity::Identity::load_or_create(&dir).unwrap();
+        let hub = Hub::new(store, "h".into(), identity, "t".into(), 0);
+        let config = serde_json::from_value(json!({"id": "bot", "name": "B", "backend": "claude"})).unwrap();
+        hub.store.save_bot(&config).unwrap();
+        hub.budget.set_limit(&hub.store, "bot", Some(100)).unwrap();
+        hub.budget.record(&hub.store, "bot", now_ms(), 200);
+
+        let routines = Routines::default();
+        let mut wait = super::super::tests::routine();
+        wait.limit_policy = "wait".into();
+        let mut skip = super::super::tests::routine();
+        skip.id = "skip".into();
+        skip.limit_policy = "skip".into();
+        routines
+            .change(&hub.store, |s| {
+                s.routines.extend([wait.clone(), skip.clone()]);
+                Ok(())
+            })
+            .unwrap();
+
+        let now = now_ms();
+        assert_eq!(routines.held_at_limit(&hub, &new_run(&wait, Value::Null, None), now), Some(true));
+        assert_eq!(routines.held_at_limit(&hub, &new_run(&skip, Value::Null, None), now), Some(false));
+        let test = new_run(&wait, json!({"source": "test"}), None);
+        assert_eq!(routines.held_at_limit(&hub, &test, now), None, "a test run is the person at the keyboard");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_unchanged_routine_result_does_not_notify_twice() {
+        let dir = std::env::temp_dir().join(format!("codync-dedup-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let identity = crate::remote::identity::Identity::load_or_create(&dir).unwrap();
+        let hub = Hub::new(store, "h".into(), identity, "t".into(), 0);
+        let config = serde_json::from_value(json!({"id": "bot", "name": "B", "backend": "claude"})).unwrap();
+        hub.store.save_bot(&config).unwrap();
+
+        let mut routine = super::super::tests::routine();
+        routine.id = "dedupe".into();
+        routine.bot_id = "bot".into();
+        let finished = |id: &str| {
+            let mut run = new_run(&routine, Value::Null, None);
+            run.id = id.into();
+            run.status = Status::Succeeded;
+            run.result = Some("All clear".into());
+            run.report_pending = true;
+            run
+        };
+        let (first, second) = (finished("run-1"), finished("run-2"));
+        let routines = Routines::default();
+        routines
+            .change(&hub.store, |s| {
+                s.routines.push(routine);
+                s.runs.extend([first, second]);
+                Ok(())
+            })
+            .unwrap();
+
+        routines.publish(&hub).unwrap();
+        assert!(hub.store.entry(&super::super::result_notice_id("run-1")).is_some(), "first result notifies");
+        assert!(
+            hub.store.entry(&super::super::result_notice_id("run-2")).is_none(),
+            "the same result from the same routine is deduplicated"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_run_held_at_the_limit_waits_for_the_reset() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let routines = Routines::default();
+        let routine = super::super::tests::routine();
+        let run = new_run(&routine, Value::Null, None);
+        routines
+            .change(&store, |s| {
+                s.routines.push(routine);
+                s.runs.push(run.clone());
+                Ok(())
+            })
+            .unwrap();
+        routines.hold_at_limit(&store, &run, 1_000, true).unwrap();
+        assert!(routines.due(1_000).is_empty(), "a held run doesn't start before the reset");
+        let state = routines.state.locked();
+        assert_eq!(state.runs[0].status, Status::Pending);
+        assert_eq!(state.runs[0].not_before, Some(crate::budget::next_day(1_000)));
+    }
+
+    #[test]
+    fn a_skipped_run_says_the_budget_was_used_up() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let routines = Routines::default();
+        let routine = super::super::tests::routine();
+        let run = new_run(&routine, Value::Null, None);
+        routines
+            .change(&store, |s| {
+                s.routines.push(routine);
+                s.runs.push(run.clone());
+                Ok(())
+            })
+            .unwrap();
+        routines.hold_at_limit(&store, &run, 1_000, false).unwrap();
+        // Before taking the state lock: `due` takes it too.
+        assert!(routines.due(1_000).is_empty());
+        let state = routines.state.locked();
+        assert_eq!(state.runs[0].status, Status::Cancelled);
+        assert!(state.runs[0].detail.as_deref().is_some_and(|d| d.contains("budget")));
     }
 }

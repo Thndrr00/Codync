@@ -93,8 +93,6 @@ internal fun withUnreadLine(items: List<ChatItem>, unreadMark: Long?): List<Chat
     return buildList { for (item in items) { if (item === first) add(ChatItem.NewLine("new-${item.id}")); add(item) } }
 }
 
-/** Chat-visible entries plus time separators (gaps over an hour) and author grouping. */
-internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<ChatItem> {
 /** Chat-visible entries plus time separators (gaps over an hour) and author grouping. While the bot is [busy], queued
  *  messages wait above the composer instead ([queuedMessages]); the send each came from doesn't show again either. */
 internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: Boolean = false): List<ChatItem> {
@@ -494,6 +492,9 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             Text(text, style = Type.chatFootnote, color = Palette.secondary)
         }
         else -> Text(text, Modifier.fillMaxWidth(), style = Type.chatFootnote, color = Palette.secondary, textAlign = TextAlign.Center)
+    }
+}
+
 /** A line from the computer. `addFallback`, on a failure the bot's fallbacks could have carried, opens them. */
 @Composable private fun NoticeRow(entry: Entry, addFallback: (() -> Unit)?) {
     val text = tr(entry.text)

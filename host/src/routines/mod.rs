@@ -4,6 +4,7 @@ pub mod blueprints;
 mod check;
 mod delivery;
 pub use check::Checked;
+mod dedup;
 mod editor;
 pub mod events;
 mod failed;

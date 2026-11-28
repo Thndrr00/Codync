@@ -1,0 +1,1829 @@
+// The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
+// clients only render it.
+
+export interface InsightDiff {
+  headline: string
+  tone: string
+  icon: string
+  kinds: number
+  tools: number
+  path: string
+  added: number
+  removed: number
+  step: string
+  parsed: number
+  preview: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightPlan {
+  headline: string
+  tone: string
+  icon: string
+  titles: number
+  windows: number
+  claude: string
+  codex: string
+  color: string
+  age: string
+  reset: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightClosed {
+  headline: string
+  tone: string
+  icon: string
+  styles: number
+  height: number
+  minWidth: number
+  maxWidth: number
+  dot: string | null
+  claude: string
+  music: string
+  note: boolean
+  width: number
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAnim {
+  headline: string
+  tone: string
+  icon: string
+  eases: number
+  modes: number
+  closeMs: number
+  curve: string
+  spring: string
+  response: number
+  damping: number
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightSpotify {
+  headline: string
+  tone: string
+  icon: string
+  playing: boolean
+  position: string
+  remaining: string
+  progress: string
+  volume: string
+  track: string
+  dance: boolean
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMochiDesktop {
+  headline: string
+  tone: string
+  icon: string
+  phases: number
+  panel: number
+  sleep: number
+  distance: number
+  gaze: string
+  alert: boolean
+  pointerMs: number
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightWhatsNew {
+  headline: string
+  tone: string
+  icon: string
+  icons: number
+  stats: number
+  version: string
+  title: string
+  items: number
+  iconName: string
+  laterMs: number
+  page: string
+  hint: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightRecap {
+  headline: string
+  tone: string
+  icon: string
+  hour: number
+  monday: string
+  previous: string
+  name: string
+  seconds: number
+  duration: string
+  range: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightIslandLayout {
+  headline: string
+  tone: string
+  icon: string
+  modes: number
+  states: number
+  emotes: number
+  panel: string
+  notch: string
+  corner: number
+  glow: string
+  opacity: number
+  project: string
+  wash: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightCoucouShortcuts {
+  headline: string
+  tone: string
+  icon: string
+  modifiers: number
+  keys: string
+  normalized: string | null
+  recorded: string
+  clashes: number
+  next: number | null
+  pill: string | null
+  action: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightPills {
+  headline: string
+  tone: string
+  icon: string
+  catalog: number
+  available: number
+  main: string
+  declared: number
+  subtitle: string
+  soon: boolean
+  first: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightCoucouMail {
+  headline: string
+  tone: string
+  icon: string
+  id: string
+  filters: number
+  fields: number
+  name: string
+  messageId: string
+  rule: string
+  reason: string
+  line: string
+  plans: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightWhatsapp {
+  headline: string
+  tone: string
+  icon: string
+  green: string
+  states: number
+  errors: number
+  steps: number
+  initials: string
+  duration: string
+  preview: string
+  ago: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAurora {
+  headline: string
+  tone: string
+  icon: string
+  ground: string
+  palette: number
+  pitch: number
+  rows: number
+  brightness: string
+  fallsRight: boolean
+  bayer: number
+  sample: string
+  var: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightGithub {
+  headline: string
+  tone: string
+  icon: string
+  sections: number
+  prs: string
+  ci: { failing: boolean; color: string; value: string }
+  label: string
+  repo: string
+  url: string | null
+  day: string
+  alert: { kind: string; text: string; id: string } | null
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMail {
+  headline: string
+  tone: string
+  icon: string
+  choice: string
+  addresses: string[]
+  valid: string[]
+  level: string
+  cap: number
+  auto: boolean
+  errors: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMedia {
+  headline: string
+  tone: string
+  icon: string
+  moods: number
+  agentMoods: number
+  categories: string[]
+  tool: boolean
+  rating: string
+  stickers: string
+  after: boolean
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightReplyPolicy {
+  headline: string
+  tone: string
+  icon: string
+  verdict: string
+  silent: boolean
+  mustAnswer: boolean
+  sentinel: boolean
+  visible: string
+  reason: string
+  lead: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightNotices {
+  headline: string
+  tone: string
+  icon: string
+  kinds: number
+  quiet: number
+  agentOnly: number
+  text: string
+  publish: boolean
+  priority: number
+  handoff: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightToolLabels {
+  headline: string
+  tone: string
+  icon: string
+  key: string
+  app: string | null
+  label: string | null
+  labelPt: string | null
+  humanized: string
+  matched: boolean
+  technical: boolean
+  subject: string
+  phrases: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightContextBlocks {
+  headline: string
+  tone: string
+  icon: string
+  blocks: number
+  turns: number
+  found: number
+  noReply: boolean
+  reaction: boolean
+  folded: string[]
+  conversation: string
+  stable: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightWork {
+  headline: string
+  tone: string
+  icon: string
+  steps: number
+  calls: number
+  folded: number
+  duration: string
+  state: string
+  apps: number
+  quiet: boolean
+  header: { steps: string; connectors: string | null; duration: string | null }
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightChannelAccess {
+  headline: string
+  tone: string
+  icon: string
+  channels: number
+  summaryLine: string
+  hasAdmins: boolean
+  pairing: boolean
+  approved: number
+  provider: string
+  creator: string
+  api: string
+  complete: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightLayout {
+  headline: string
+  tone: string
+  icon: string
+  panes: number
+  groups: number
+  depth: number
+  orientation: string
+  drop: string
+  normalized: boolean
+  active: string
+  ids: string[]
+  weights: number[]
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightDraftStash {
+  headline: string
+  tone: string
+  icon: string
+  key: string
+  newKey: string
+  stamp: number
+  entries: number
+  drafts: number
+  cleared: string
+  merged: boolean
+  title: string
+  compacted: number
+  legacy: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightService {
+  headline: string
+  tone: string
+  icon: string
+  taskName: string
+  runKey: string
+  unit: string
+  modes: number
+  platforms: string
+  parsed: string[]
+  pathMac: string
+  pathLinux: string
+  drift: boolean
+  quote: string
+  running: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightPlugins {
+  headline: string
+  tone: string
+  icon: string
+  root: string
+  staging: string
+  settings: string
+  validId: boolean
+  reserved: boolean
+  toolName: boolean
+  relativePath: boolean
+  manifestVersion: number
+  apiVersion: string
+  compatible: boolean
+  problem: string | null
+  staleLock: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightCsiTerm {
+  headline: string
+  tone: string
+  icon: string
+  prefix: string
+  cursorHome: string
+  eraseLine: string
+  eraseScreen: string
+  cursorStyle: string
+  paramByte: boolean
+  intermediateByte: boolean
+  finalByte: boolean
+  move: string
+  eraseLines: string
+  scroll: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightPromptActions {
+  headline: string
+  tone: string
+  icon: string
+  idCandidate: boolean
+  busyRetryMs: number
+  retryIntervalMs: number
+  ttlMs: number
+  timeout: boolean
+  notOwned: boolean
+  surface: string | null
+  forwarded: boolean
+  inFlight: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightBotStore {
+  headline: string
+  tone: string
+  icon: string
+  id: string
+  name: string
+  folder: string
+  deliverable: string
+  valid: boolean
+  errors: string[]
+  schedules: number
+  fleet: boolean
+  dangerous: boolean
+  dangerousTools: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightModelPrefs {
+  headline: string
+  tone: string
+  icon: string
+  levels: string[]
+  openaiLevels: string[]
+  anthropicLevels: string[]
+  modelDefault: string
+  chat: string | null
+  adaptive: boolean
+  label: string
+  humanized: string
+  openrouter: boolean
+  prefs: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightRouter {
+  headline: string
+  tone: string
+  icon: string
+  thresholds: { name: string; value: number }[]
+  quietMs: number
+  addressee: boolean
+  selected: string[]
+  everyone: boolean
+  answered: boolean
+  scores: string[]
+  social: string | null
+  strategy: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightCmdPolicy {
+  headline: string
+  tone: string
+  icon: string
+  words: number
+  commands: number
+  verdict: string
+  denied: boolean
+  secretPath: boolean
+  readOnly: boolean
+  repo: string | null
+  pushes: number
+  inline: boolean
+  denyKinds: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMissions {
+  headline: string
+  tone: string
+  icon: string
+  cells: string[]
+  counts: { total: number; done: number; doing: number; waiting: number }
+  open: boolean
+  waiting: { key: string; count: number }[]
+  tick: number
+  command: { command: string; arg: string } | null
+  pr: { number: string; url: string | null } | null
+  span: string
+  commands: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightNoAi {
+  headline: string
+  tone: string
+  icon: string
+  card: {
+    agentId: string
+    forUserId: string | null
+    intent: string
+    provider?: string
+    autoOpen?: boolean
+    own?: string
+    signedOut?: boolean
+    planLine?: string
+    model?: string
+    why?: string
+    missing?: string
+    held?: boolean
+  }
+  line: string
+  state: string
+  passes: boolean
+  opens: boolean
+  brain: string
+  kind: string
+  choices: number
+  firstChoice: string
+  autoOpen: boolean | undefined
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightDevices {
+  headline: string
+  tone: string
+  icon: string
+  devices: number
+  phones: number
+  all: number
+  look: string
+  portrait: { kind: string; state: string }
+  line: string
+  rows: number
+  link: string
+  stage: { kind: string; phone: unknown }
+  steps: { states: { key: string; value: string }[]; now: string; open: string; byHand: string[] }
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightVault {
+  headline: string
+  tone: string
+  icon: string
+  authTypes: number
+  siteless: boolean
+  variable: string
+  problem: string | null
+  code: string | null
+  identifier: boolean
+  otp: boolean
+  card: { brand: string; last4: string; expMonth: number; expYear: number; name?: string }
+  title: string
+  expiry: { expMonth: number; expYear: number } | null
+  policy: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightToolReplay {
+  headline: string
+  tone: string
+  icon: string
+  calls: number
+  kept: number
+  budget: number
+  left: number
+  replay: boolean
+  followUp: boolean
+  credentialField: boolean
+  secretTool: boolean
+  outcome: string
+  sample: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightSecretCleanup {
+  headline: string
+  tone: string
+  icon: string
+  reference: string
+  kind: string
+  prefix: string | null
+  known: boolean
+  attemptMs: number
+  backupMs: number
+  storeMs: number
+  providerMs: number
+  retryDue: number
+  backupDue: number
+  expired: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAvatar {
+  headline: string
+  tone: string
+  color: string
+  hex: string
+  rgb: string
+  eye: string
+  ink: string
+  bucket: string
+  contrast: string
+  invites: number
+  initials: string
+  background: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightProviders {
+  headline: string
+  tone: string
+  icon: string
+  providers: number
+  keys: number
+  models: number
+  usable: number
+  guess: string
+  label: string
+  site: string
+  hasPlans: boolean
+  billing: boolean
+  privacy: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightPlans {
+  headline: string
+  tone: string
+  icon: string
+  plan: string
+  providerPlan: string | null
+  models: number
+  choice: string
+  freeHint: boolean
+  keyPlan: boolean
+  placeholder: string
+  geminiPersonal: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAccounts {
+  headline: string
+  tone: string
+  icon: string
+  accounts: number
+  plans: number
+  state: string
+  offersAgain: boolean
+  title: string
+  action: string
+  actionIcon: string
+  lendable: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightEngine {
+  headline: string
+  tone: string
+  icon: string
+  engine: string
+  state: string
+  off: boolean
+  executor: string
+  line: string
+  modelBrain: boolean
+  auto: boolean
+  computers: string[]
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightBrainPicker {
+  headline: string
+  tone: string
+  description: string
+  groups: string[]
+  free: number
+  keywords: string
+  auto: boolean
+  connect: boolean
+  label: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightApprovalRules {
+  headline: string
+  tone: string
+  icon: string
+  tool: string
+  sqlRead: boolean
+  target: string
+  command: boolean
+  maxActions: number
+  actions: number
+  rules: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightIteration {
+  headline: string
+  tone: string
+  used: number
+  max: number
+  warning: boolean
+  warningText: string
+  ghosts: number
+  tools: number
+  toolTail: boolean
+  steerAfter: number | null
+  restartLabel: string
+  restartIcon: string
+  refunded: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightRrule {
+  headline: string
+  tone: string
+  freq: string
+  interval: number
+  times: string[]
+  weekdays: string[]
+  cron: string | null
+  cronCompatible: boolean
+  workdays: boolean
+  error: string
+  timezone: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAutofill {
+  headline: string
+  tone: string
+  icon: string
+  controls: number
+  otp: number
+  checkout: number
+  best: string
+  tokens: number
+  paymentTokens: number
+  addressTokens: number
+  password: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightVerify {
+  headline: string
+  tone: string
+  icon: string
+  paths: number
+  dirs: number
+  proseOnly: boolean
+  enabled: boolean
+  evidence: string
+  nudge: boolean
+  nudgeLabel: string
+  maxPaths: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightContextPin {
+  headline: string
+  tone: string
+  icon: string
+  window: number
+  marker: string
+  suffix: string
+  pinned: boolean
+  fallback: boolean
+  pinnedSuffix: string
+  advertised: number | null
+  disagrees: boolean
+  known: boolean
+  ratio: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMdTables {
+  headline: string
+  tone: string
+  rows: number
+  cols: number
+  wide: number
+  narrow: boolean
+  layout: string
+  divider: string
+  aligned: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightContextSelect {
+  headline: string
+  tone: string
+  estimate: number
+  available: number
+  fixed: number
+  window: number
+  output: number
+  fits: boolean
+  tooSmall: boolean
+  strategy: string
+  cache: string
+  cacheIcon: string
+  kept: number
+  omitted: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightPicker {
+  headline: string
+  tone: string
+  bar: string
+  used: string
+  left: string
+  style: string
+  resets: string
+  featured: string[]
+  gauges: number
+  levels: number
+  width: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightPalette {
+  headline: string
+  tone: string
+  icon: string
+  command: string
+  needle: string
+  results: number
+  recentPages: number
+  commands: number
+  bots: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightShortcuts {
+  headline: string
+  tone: string
+  modifier: string
+  quote: string
+  commandMenu: string | null
+  primary: boolean
+  browserShift: boolean
+  resolved: { command: string; label: string; icon: string; tone: string }[]
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightEvalExtra {
+  headline: string
+  tone: string
+  lines: number
+  code: number
+  median: number
+  p90: number
+  over1k: number
+  over2k: number
+  skip: boolean
+  module: string
+  verdicts: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightConnExtra {
+  headline: string
+  tone: string
+  channels: string[]
+  providers: string[]
+  selected: number
+  rows: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightSearchExtra {
+  headline: string
+  tone: string
+  query: string
+  terms: string[]
+  total: number
+  returned: number
+  hasMore: boolean
+  empty: boolean
+  score: string
+  totalLabel: string
+  ops: number
+  sort: string
+  matched: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMemoryCtx {
+  headline: string
+  tone: string
+  icon: string
+  fenced: number
+  notes: number
+  hidden: number
+  preview: string
+  block: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightApiError {
+  headline: string
+  tone: string
+  icon: string
+  class: string
+  classLabel: string
+  status: string
+  retryable: boolean
+  streamParse: boolean
+  network: boolean
+  samples: number
+  preview: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightHistory {
+  headline: string
+  tone: string
+  messages: number
+  commentary: number
+  finals: number
+  withheld: number
+  preview: string
+  visible: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightReview {
+  headline: string
+  tone: string
+  mode: string
+  modeIcon: string
+  maxAge: number
+  settled: boolean
+  live: number
+  queued: number
+  dispatchable: string[]
+  pollMs: number
+  idle: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightBlueprint {
+  headline: string
+  tone: string
+  template: string
+  cron: string
+  missing: string[]
+  slots: number
+  schedule: string
+  slash: string
+  deeplink: string
+  time: string | null
+  valid: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightStream {
+  headline: string
+  tone: string
+  held: number
+  consumers: number
+  chunks: number
+  remaining: string
+  writer: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightI18n {
+  headline: string
+  tone: string
+  code: string
+  native: string
+  english: string
+  intl: string
+  week: number
+  weekLabel: string
+  script: string
+  direction: string
+  rtl: boolean
+  plural: string
+  pluralFrom: string
+  categories: string[]
+  locales: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightQuota {
+  headline: string
+  tone: string
+  icon: string
+  usedPct: number
+  remaining: number
+  reset: string
+  resetPhrase: string
+  depleted: boolean
+  low: boolean
+  scope: string
+  scopeIcon: string
+  status: string
+  windows: number
+  bpFull: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAppearance {
+  headline: string
+  tone: string
+  preference: string
+  appearance: string
+  icon: string
+  background: string
+  text: string
+  foreground: string
+  accent: string
+  radius: string
+  bodySize: number
+  bodyLine: number
+  fontScale: number
+  maxScale: number
+  botColor: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightConnState {
+  headline: string
+  tone: string
+  selected: string
+  state: string
+  connected: number
+  channels: number
+  stale: number
+  backoff: number
+  icon: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightEval {
+  headline: string
+  tone: string
+  score: number
+  verdict: string
+  threshold: number
+  samples: number
+  grade: string
+  icon: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightSearch {
+  headline: string
+  tone: string
+  query: string
+  hits: number
+  filtered: number
+  score: number
+  empty: boolean
+  icon: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMailText {
+  headline: string
+  tone: string
+  address: string
+  mailbox: string
+  domain: string
+  valid: boolean
+  keys: number
+  addresses: number
+  rows: number
+  columns: number
+  cut: boolean
+  maxBody: number
+  maxRows: number
+  maxValue: number
+  preview: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightNotify {
+  headline: string
+  tone: string
+  state: string
+  stateIcon: string
+  marker: string
+  diagnostic: number
+  freeform: number
+  delivered: number
+  failed: number
+  muted: boolean
+  maxOutput: number
+  maxAttempts: number
+  floodDefault: number
+  floodCap: number
+  retryDelay: number
+  obligation: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightMarkdown {
+  headline: string
+  tone: string
+  preview: string
+  blocks: number
+  links: number
+  mentions: number
+  wide: boolean
+  heading: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightLocalFmt {
+  headline: string
+  tone: string
+  locale: string
+  clock: string
+  day: string
+  weekday: string
+  shortDate: string
+  month: string
+  relative: string
+  timeAgo: string
+  count: string
+  tokens: string
+  spend: string
+  budget: string
+  ordinal: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightTextFmt {
+  headline: string
+  tone: string
+  slug: string
+  handle: string
+  excerpt: string
+  validEmails: number
+  invalidEmails: number
+  hidden: number
+  passwordLike: number
+  typoFix: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAgentesChat {
+  headline: string
+  window: string
+  windowIcon: string
+  windowTone: string
+  used: string
+  percent: number
+  auto: string
+  autoTone: string
+  autoEfforts: string[]
+  timeout: number
+  placeKept: number
+  groupWindow: number
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightOpenBot {
+  headline: string
+  tone: string
+  engine: string
+  model: string
+  effort: string
+  effortIcon: string
+  effortTone: string
+  route: string
+  routeIcon: string
+  plan: boolean
+  thread: string
+  responsesApi: boolean
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightOpenDots {
+  headline: string
+  container: string
+  valid: boolean
+  delivery: boolean
+  deliveryError: string
+  learningIcon: string
+  learningTone: string
+  internal: number
+  scheduledLabel: string
+  voiceLabel: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightContext {
+  headline: string
+  page: string
+  screenshots: string
+  pageKeep: number
+  screenshotKeep: number
+  staleMin: number
+  pageNote: string
+  screenshotNote: string
+  pruned: string
+  tone: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightLiveness {
+  headline: string
+  tone: string
+  state: string
+  icon: string
+  active: boolean
+  age: string
+  generation: number
+  heartbeat: number
+  due: boolean
+  outcome: string
+  outcomeIcon: string
+  outcomeTone: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightDictation {
+  headline: string
+  tone: string
+  engine: string
+  engineIcon: string
+  engineTone: string
+  model: string
+  language: string
+  supported: boolean
+  needsCommit: boolean
+  commitMs: number
+  count: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightAccess {
+  mode: string
+  modeIcon: string
+  modeTone: string
+  canWrite: boolean
+  form: boolean
+  count: string
+  collections: { name: string; valid: boolean }[]
+  invalid: string[]
+  routing: string
+  routingIcon: string
+  routingTone: string
+  liveName: string
+  summary: { key: string; value: string }[]
+}
+
+export interface InsightBlocks {
+  headline: string
+  count: string
+  said: number
+  work: number
+  workOnly: boolean
+  quiet: boolean
+  origin: string
+  originIcon: string
+  summary: { key: string; value: string }[]
+  blocks: { kind: string; text: string; icon: string; tone: string; says: boolean }[]
+}
+
+export interface InsightDirectory {
+  headline: string
+  tone: string
+  total: string
+  ready: number
+  unread: number
+  busy: number
+  percent: number
+  bar: string
+  directory: string
+  email: string
+  routable: boolean
+  routeIcon: string
+  routeTone: string
+  reason: string
+  summary: { key: string; value: string }[]
+  integrations: { id: string; name: string; endpoint: boolean; header: string }[]
+}
+
+export interface InsightPrompts {
+  model: string
+  context: string
+  price: string
+  valid: boolean
+  checkIn: string
+  zone: string
+  clock: string
+  watch: string
+  length: string
+  instruction: string
+  summary: { key: string; value: string }[]
+  lines: string[]
+}
+
+export interface InsightFresh {
+  agent: string
+  deployment: string
+  language: string
+  receipt: string
+  profile: string
+  summary: { key: string; value: string }[]
+  titles: { exec: string; write: string }
+  resources: { path: string; kind: string; script: boolean; reference: boolean; asset: boolean }[]
+}
+
+export interface InsightAgentProfile {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  account: string
+  accountIcon: string
+  accountTone: string
+  mode: string
+  modeIcon: string
+  modeTone: string
+  fast: boolean
+  fastIcon: string
+  fastTone: string
+  catalog: string
+  summary: { key: string; value: string }[]
+  lines: { id: string; label: string; detail: string; icon: string; tone: string; set: boolean; stateIcon: string; stateTone: string }[]
+}
+
+export interface InsightConversation {
+  headline: string
+  tone: string
+  line: string
+  total: string
+  entries: number
+  dominant: string
+  workHeavy: boolean
+  userLed: boolean
+  repliesPerMessage: number
+  stepsPerMessage: number
+  summary: { key: string; value: string }[]
+  kinds: { kind: string; label: string; count: number; icon: string; tone: string; percent: number; bar: string }[]
+}
+
+export interface InsightFailures {
+  headline: string
+  tone: string
+  total: string
+  refusals: number
+  rate: number
+  network: number
+  summary: { key: string; value: string }[]
+  categories: { kind: string; count: number; icon: string; tone: string; percent: number; bar: string }[]
+  items: { name: string; kind: string; reason: string; age: string; icon: string; tone: string }[]
+}
+
+export interface InsightApprovals {
+  headline: string
+  tone: string
+  total: string
+  waiting: number
+  urgent: number
+  oldest: string
+  bar: string
+  summary: { key: string; value: string }[]
+  items: { id: string; title: string; detail: string; age: string; icon: string; tone: string; urgent: boolean }[]
+}
+
+export interface InsightTimezone {
+  headline: string
+  tone: string
+  local: string
+  primary: string
+  zones: number
+  schedules: string
+  multi: boolean
+  remote: boolean
+  summary: { key: string; value: string }[]
+  all: { name: string; label: string; icon: string; tone: string; count: number; local: boolean; percent: number; bar: string }[]
+  remoteList: { label: string; count: number }[]
+}
+
+export interface InsightDigest {
+  headline: string
+  oneLine: string
+  label: string
+  tone: string
+  score: number
+  areas: string
+  onTrack: number
+  attention: number
+  summary: { key: string; value: string }[]
+  highlights: { id: string; label: string; value: string; icon: string; tone: string }[]
+  stats: { id: string; label: string; value: string; icon: string; tone: string }[]
+}
+
+export interface InsightAdvice {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  total: string
+  urgent: number
+  summary: { key: string; value: string }[]
+  items: {
+    id: string; title: string; detail: string; icon: string; tone: string;
+    priority: number; priorityLabel: string; priorityIcon: string; priorityTone: string
+  }[]
+}
+
+export interface InsightSession {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  session: string
+  sessionIcon: string
+  sessionTone: string
+  revision: string
+  unread: string
+  bar: string
+  deleted: boolean
+  summary: { key: string; value: string }[]
+  lines: { id: string; label: string; detail: string; icon: string; tone: string; ok: boolean; stateIcon: string; stateTone: string }[]
+}
+
+export interface InsightWorkspace {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  folder: string
+  folderIcon: string
+  folderTone: string
+  set: number
+  summary: { key: string; value: string }[]
+  lines: { id: string; label: string; detail: string; icon: string; tone: string; set: boolean; stateIcon: string; stateTone: string }[]
+}
+
+export interface InsightMemory {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  shared: string
+  sharedIcon: string
+  sharedTone: string
+  sharedDetail: string
+  harness: boolean
+  harnessIcon: string
+  harnessTone: string
+  skills: number
+  on: number
+  hasAny: boolean
+  summary: { key: string; value: string }[]
+  lines: { id: string; title: string; detail: string; icon: string; tone: string; on: boolean; stateIcon: string; stateTone: string }[]
+}
+
+export interface InsightTuning {
+  headline: string
+  tone: string
+  count: string
+  total: number
+  on: number
+  off: number
+  fast: boolean
+  effort: string
+  effortIcon: string
+  reasoning: boolean
+  summary: { key: string; value: string }[]
+  options: { key: string; title: string; value: string; icon: string; tone: string }[]
+  enabled: { title: string; value: string; icon: string }[]
+}
+
+export interface InsightConnectors {
+  headline: string
+  tone: string
+  total: number
+  distinct: number
+  duplicates: string[]
+  chat: boolean
+  mail: boolean
+  code: boolean
+  money: boolean
+  summary: { key: string; value: string }[]
+  categories: { kind: string; count: number; icon: string; tone: string; percent: number; bar: string }[]
+  connectors: { name: string; category: string; icon: string; tone: string; detail: string }[]
+}
+
+export interface InsightIdentity {
+  name: string
+  headline: string
+  tone: string
+  band: string
+  bandIcon: string
+  bandTone: string
+  section: string
+  mode: string
+  rank: number
+  color: string
+  colorIcon: string
+  shape: string
+  look: string
+  visible: boolean
+  score: number
+  count: string
+  summary: { key: string; value: string }[]
+  traits: { id: string; label: string; detail: string; icon: string; tone: string; on: boolean; stateIcon: string; stateTone: string }[]
+}
+
+export interface InsightResilience {
+  headline: string
+  label: string
+  tone: string
+  score: number
+  bar: string
+  chain: string
+  total: number
+  hasChain: boolean
+  hasOverride: boolean
+  customCommands: number
+  selfFallbacks: boolean
+  switches: { label: string; on: boolean }[]
+  summary: { key: string; value: string }[]
+  fallbacks: { backend: string; model: string; command: string; label: string; icon: string; tone: string }[]
+}
+
+export interface InsightTrust {
+  mode: string
+  modeLabel: string
+  modeIcon: string
+  modeTone: string
+  modeDetail: string
+  score: number
+  tone: string
+  label: string
+  headline: string
+  total: number
+  countLabel: string
+  broad: number
+  command: number
+  hasDeny: boolean
+  hasBroadAllow: boolean
+  asksForEverything: boolean
+  decisions: { decision: string; count: number }[]
+  summary: { key: string; value: string }[]
+  rules: { pattern: string; kind: string; decision: string; icon: string; tone: string; broad: boolean }[]
+}
+
+export interface InsightLibrary {
+  headline: string
+  tone: string
+  count: string
+  total: number
+  distinct: number
+  duplicates: string[]
+  hasScript: boolean
+  hasReference: boolean
+  hasAsset: boolean
+  summary: { key: string; value: string }[]
+  kinds: { kind: string; count: number; icon: string; tone: string; percent: number; bar: string }[]
+  skills: { name: string; kind: string; icon: string; tone: string; detail: string }[]
+}
+
+export interface InsightRoutineSummary {
+  count: string
+  active: number
+  paused: number
+  scheduled: number
+  activePercent: number
+  bar: string
+  next: string
+  mix: string
+  clock: boolean
+  event: boolean
+  allScheduled: boolean
+  headline: string
+  tone: string
+  summary: { key: string; value: string }[]
+  soonest: { id: string; name: string; enabled: boolean; trigger: string; triggerIcon: string; nextIn: string; stateIcon: string; stateTone: string }[]
+  pausedList: { id: string; name: string }[]
+}
+
+export interface InsightWeek {
+  headline: string
+  tone: string
+  verdict: string
+  total: number
+  totalLabel: string
+  average: number
+  peak: { label: string; count: number } | null
+  quietDays: number
+  activeStreak: number
+  quietStreak: number
+  aboveAverage: number
+  change: number
+  perfectAttendance: boolean
+  grew: boolean
+  trend: { kind: string; label: string; icon: string; tone: string }
+  top: { label: string; count: number; bar: string }[]
+  quiet: { label: string; count: number; bar: string }[]
+  days: { key: string; label: string; count: number }[]
+}
+
+export interface InsightProfile {
+  headline: string
+  enabled: number
+  total: number
+  missing: number
+  coverage: number
+  bar: string
+  nextUp: { title: string; icon: string }[]
+  caps: { id: string; title: string; detail: string; icon: string; tone: string; enabled: boolean; stateIcon: string; stateTone: string }[]
+}
+
+export interface InsightHealth {
+  score: number
+  label: string
+  tone: string
+  headline: string
+  blocking: boolean
+  errors: number
+  warnings: number
+  counts: { severity: string; count: number }[]
+  checks: { id: string; title: string; detail: string; severity: string; tone: string; icon: string }[]
+}
+
+export interface InsightActivity {
+  headline: string
+  steps: number
+  errors: number
+  dominant: string
+  span: string
+  total: number
+  counts: { kind: string; count: number; percent: number }[]
+  groups: { kind: string; label: string; icon: string; tone: string; count: number }[]
+  items: { text: string; detail: string; status: string; icon: string; tone: string }[]
+  days: { day: string; label: string; count: number; width: number }[]
+}
+
+export interface InsightRoutine {
+  id: string
+  name: string
+  enabled: boolean
+  schedules: string[]
+  nextIn: string | null
+  nextInMs: number | null
+}
+
+export interface BotInsights {
+  botId: string
+  description: string
+  model: string
+  provider: string | null
+  recentWork: string[]
+  activity: InsightActivity
+  health: InsightHealth
+  profile: InsightProfile
+  week: InsightWeek
+  routineSummary: InsightRoutineSummary
+  library: InsightLibrary
+  trust: InsightTrust
+  resilience: InsightResilience
+  identity: InsightIdentity
+  connectors: InsightConnectors
+  tuning: InsightTuning
+  memory: InsightMemory
+  workspace: InsightWorkspace
+  session: InsightSession
+  advice: InsightAdvice
+  digest: InsightDigest
+  timezone: InsightTimezone
+  approvals: InsightApprovals
+  failures: InsightFailures
+  conversation: InsightConversation
+  agent: InsightAgentProfile
+  fresh: InsightFresh
+  prompts: InsightPrompts
+  directory: InsightDirectory
+  blocks: InsightBlocks
+  access: InsightAccess
+  dictation: InsightDictation
+  liveness: InsightLiveness
+  context: InsightContext
+  opendots: InsightOpenDots
+  openbot: InsightOpenBot
+  agenteschat: InsightAgentesChat
+  textfmt: InsightTextFmt
+  localfmt: InsightLocalFmt
+  markdown: InsightMarkdown
+  notify: InsightNotify
+  mailtext: InsightMailText
+  connstate: InsightConnState
+  eval: InsightEval
+  search: InsightSearch
+  appearance: InsightAppearance
+  quota: InsightQuota
+  i18n: InsightI18n
+  stream: InsightStream
+  blueprint: InsightBlueprint
+  review: InsightReview
+  history: InsightHistory
+  apierror: InsightApiError
+  memoryctx: InsightMemoryCtx
+  searchextra: InsightSearchExtra
+  evalextra: InsightEvalExtra
+  connextra: InsightConnExtra
+  shortcuts: InsightShortcuts
+  palette: InsightPalette
+  picker: InsightPicker
+  contextselect: InsightContextSelect
+  mdtables: InsightMdTables
+  contextpin: InsightContextPin
+  verify: InsightVerify
+  autofill: InsightAutofill
+  rrule: InsightRrule
+  iteration: InsightIteration
+  approvalrules: InsightApprovalRules
+  brainpicker: InsightBrainPicker
+  engine: InsightEngine
+  accounts: InsightAccounts
+  plans: InsightPlans
+  providers: InsightProviders
+  avatar: InsightAvatar
+  secretcleanup: InsightSecretCleanup
+  toolreplay: InsightToolReplay
+  vault: InsightVault
+  devices: InsightDevices
+  noai: InsightNoAi
+  missions: InsightMissions
+  cmdpolicy: InsightCmdPolicy
+  router: InsightRouter
+  modelprefs: InsightModelPrefs
+  botstore: InsightBotStore
+  promptactions: InsightPromptActions
+  csiterm: InsightCsiTerm
+  plugins: InsightPlugins
+  service: InsightService
+  draftstash: InsightDraftStash
+  layout: InsightLayout
+  channelaccess: InsightChannelAccess
+  work: InsightWork
+  contextblocks: InsightContextBlocks
+  toollabels: InsightToolLabels
+  mail: InsightMail
+  media: InsightMedia
+  replypolicy: InsightReplyPolicy
+  notices: InsightNotices
+  github: InsightGithub
+  aurora: InsightAurora
+  whatsapp: InsightWhatsapp
+  coucoumail: InsightCoucouMail
+  pills: InsightPills
+  coucoushortcuts: InsightCoucouShortcuts
+  islandlayout: InsightIslandLayout
+  recap: InsightRecap
+  whatsnew: InsightWhatsNew
+  mochidesktop: InsightMochiDesktop
+  spotify: InsightSpotify
+  anim: InsightAnim
+  closed: InsightClosed
+  plan: InsightPlan
+  diff: InsightDiff
+  routines: InsightRoutine[]
+  usage: {
+    used: number
+    usedText: string
+    limit: number | null
+    resetsAt: number | null
+  }
+  skills: {
+    total: number
+    resources: Record<string, number>
+  }
+}

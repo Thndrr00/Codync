@@ -457,10 +457,6 @@ public extension HostClient {
         let _: Empty = try await call("registerActivity", ["botId": botId, "ticket": ticket])
     }
 
-    func usage(refresh: Bool = false) async throws -> Usage {
-        try await call("usage", ["refresh": refresh])
-    }
-
     func selectWorkspace(_ path: String) async throws -> String {
         struct Reply: Decodable { var path: String }
         let reply: Reply = try await call("selectWorkspace", ["path": path])
@@ -470,31 +466,6 @@ public extension HostClient {
     func listDirs(_ path: String?) async throws -> DirListing {
         struct Body: Encodable { var path: String? }
         return try await call("listDirs", Body(path: path))
-    }
-
-    // MARK: remote screen
-
-    func screenStatus() async throws -> ScreenState { try await call("screenStatus") }
-
-    func screenPrepare() async throws -> ScreenConnection {
-        let relay = if let channel = transport as? ChannelTransport { try await channel.screenRelayRequired() } else { false }
-        return try await call("screenPrepare", ["relay": relay, "trickle": true])
-    }
-
-    /// Sends the offer using the prepared session’s negotiated ICE mode.
-    /// Trickle negotiations use a fresh session for every connection attempt.
-    func screenOffer(sdp: String, session: String?, display: UInt32?) async throws -> ScreenAnswer {
-        struct Body: Encodable { var sdp: String; var session: String?; var display: UInt32? }
-        return try await call("screenOffer", Body(sdp: sdp, session: session, display: display), timeout: 30)
-    }
-
-    func screenClose(session: String) async throws {
-        let _: Empty = try await call("screenClose", ["session": session])
-    }
-
-    /// Takes control from bots (they can still look) or hands it back.
-    func screenTakeover(_ on: Bool) async throws -> ScreenState {
-        try await call("screenTakeover", ["on": on])
     }
 
 }
@@ -553,7 +524,3 @@ public extension HostClient {
     }
 }
 
-public struct ScreenAnswer: Codable, Sendable {
-    public var session: String
-    public var sdp: String
-}

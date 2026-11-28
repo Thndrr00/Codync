@@ -95,6 +95,12 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("on".into(), true.into());
             Event::SettingChanged
         }
+        "emailSetup" => {
+            p.insert("setting".into(), "incoming_email".into());
+            p.insert("on".into(), true.into());
+            Event::SettingChanged
+        }
+        "emailDeliver" => Event::EmailReceived,
         "updateBot" => Event::BotUpdated,
         "reorderBots" => Event::BotsReordered,
         "deleteBot" => Event::BotDeleted,
@@ -161,6 +167,33 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("change".into(), (if update { "update" } else { "new" }).into());
             Event::ArtifactPublished
         }
+        // Mini-app capability links and deletions: only the action and the public mode, never a slug, token or URL.
+        "createAppLink" => {
+            p.insert("action".into(), "create".into());
+            p.insert("mode".into(), b["mode"].as_str().unwrap_or("view").into());
+            Event::AppLinkChanged
+        }
+        "revokeAppLink" => {
+            p.insert("action".into(), "revoke".into());
+            Event::AppLinkChanged
+        }
+        "deleteBotApp" => {
+            p.insert("action".into(), "delete".into());
+            Event::AppLinkChanged
+        }
+        "appRequest" => {
+            p.insert("method".into(), b["method"].as_str().unwrap_or("GET").to_ascii_uppercase().into());
+            Event::MiniAppRequested
+        }
+        // A bot's `ask_user`: how many choices it offered, never the question or the labels.
+        "chatCall" if b["name"] == crate::chat::ask_user::ASK_USER => {
+            p.insert("options".into(), b["arguments"]["options"].as_array().map_or(0, Vec::len).into());
+            Event::UserQuestionAsked
+        }
+        "chatCall" if b["name"] == crate::chat::ask_user::REQUEST_APPROVAL => {
+            p.insert("options".into(), 2.into());
+            Event::UserQuestionAsked
+        }
         "agentSetup" | "agentAuthenticate" => {
             // An agent's catalog id; Node.js setup names none.
             if let Some(agent) = b["backend"].as_str().filter(|a| !a.is_empty()) {
@@ -186,7 +219,7 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
 /// not a new one, a message names its bot's agent, an edit the settings it changes, a
 /// permission answer the kind of option picked, and a phone its platform.
 pub fn observe_call(hub: &Hub, caller: &Caller, method: &str, b: &Value) -> Option<(Event, Map<String, Value>)> {
-    let (event, mut p) = observe(caller, method, b)?;
+    let (mut event, mut p) = observe(caller, method, b)?;
     match event {
         Event::MessageSent => {
             let bot = b["botId"].as_str().unwrap_or_default();
@@ -214,7 +247,13 @@ pub fn observe_call(hub: &Hub, caller: &Caller, method: &str, b: &Value) -> Opti
         }
         Event::PermissionAnswered => {
             let card = hub.store.entry(b["entryId"].as_str().unwrap_or_default());
-            p.insert("choice".into(), choice(card.as_ref().map(|e| &e.data), &b["optionId"]).into());
+            if card.as_ref().is_some_and(|e| e.data["askUserTool"] == true) {
+                // A question is not an approval: report its outcome, never the chosen label.
+                event = Event::UserQuestionAnswered;
+                p.insert("outcome".into(), (if b["optionId"].is_string() { "answered" } else { "skipped" }).into());
+            } else {
+                p.insert("choice".into(), choice(card.as_ref().map(|e| &e.data), &b["optionId"]).into());
+            }
         }
         _ => {}
     }

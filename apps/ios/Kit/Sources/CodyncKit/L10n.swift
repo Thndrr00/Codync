@@ -124,8 +124,7 @@ public enum L10n {
 
     private static let hans = load("zh-Hans")
     private static let hant = load("zh-Hant")
-    private static let catalogs = Dictionary(uniqueKeysWithValues: [AppLanguage.ja, .ko, .fr, .de, .es, .ptBR, .ru, .ar].map { ($0, load($0.catalogName)) })
-    private static let catalogs = Dictionary(uniqueKeysWithValues: [AppLanguage.ja, .ko, .fr, .de, .es, .ptBR, .ru, .it].map { ($0, load($0.catalogName)) })
+    private static let catalogs = Dictionary(uniqueKeysWithValues: [AppLanguage.ja, .ko, .fr, .de, .es, .ptBR, .ru, .ar, .it].map { ($0, load($0.catalogName)) })
 
     /// A missing or malformed table is logged and left empty, so the interface stays in English.
     private static func load(_ name: String) -> [String: String] {
@@ -170,8 +169,7 @@ public enum L10n {
         case .zh: return (hans, [:])
         case .zhHant: return (hant, hans)
         case .en: return nil
-        case .ja, .ko, .fr, .de, .es, .ptBR, .ru, .ar: return (catalogs[preference] ?? [:], [:])
-        case .ja, .ko, .fr, .de, .es, .ptBR, .ru, .it: return (catalogs[preference] ?? [:], [:])
+        case .ja, .ko, .fr, .de, .es, .ptBR, .ru, .ar, .it: return (catalogs[preference] ?? [:], [:])
         case .system:
             if !systemIsChinese {
                 let resolved = AppLanguage.resolved(preference: .system, languages: systemLanguages)

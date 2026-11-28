@@ -48,6 +48,14 @@ export function quoteText(text: string): string {
   return text.split('\n').map((l) => `> ${l}`).join('\n')
 }
 
+/**
+ * After the clear animation, only empty the draft if the person hasn't typed into it meanwhile
+ * (idea 28). The delayed clear must never swallow a newer message.
+ */
+export function draftAfterDissolve(current: string, outgoing: string): string {
+  return current === outgoing ? '' : current
+}
+
 function inlineCode(selected: string, start: number, end: number): ComposerEdit {
   const replacement = `\`${selected}\``
   return selected === ''

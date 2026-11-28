@@ -31,7 +31,12 @@ public struct TraceView: View {
                             .foregroundStyle(Palette.text)
                             .padding(.leading, 4)
                         CardSection {
-                            ForEach(entries) { TraceRow(entry: $0, unfolded: turn == running) }
+                            ForEach(Array(groupWorkSteps(entries).enumerated()), id: \.offset) { _, slot in
+                                switch slot {
+                                case .row(let entry): TraceRow(entry: entry, unfolded: turn == running)
+                                case .group(let steps): WorkStepsGroup(entries: steps)
+                                }
+                            }
                         }
                     }
                 }

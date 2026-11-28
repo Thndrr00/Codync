@@ -82,10 +82,10 @@ impl Actor {
     }
 
     /// Feeds a finished tool call to the stall gate; a tripped gate is stopped by `on_incoming`.
-    fn observe_tool_end(&mut self, status: &str, title: &str, output: &str) {
+    fn observe_tool_end(&mut self, status: &str, title: &str, output: &str, args: Option<&str>) {
         let outcome = match status {
             "completed" => ToolOutcome::Succeeded,
-            "failed" => ToolOutcome::Failed { title, output },
+            "failed" => ToolOutcome::Failed { title, output, args },
             _ => return,
         };
         if let Some(reason) = self.loop_guard.observe(&outcome) {
@@ -98,6 +98,9 @@ impl Actor {
         match u["sessionUpdate"].as_str().unwrap_or_default() {
             "agent_message_chunk" => {
                 let t = acp::content_text(&u["content"]);
+                if !t.trim().is_empty() {
+                    self.turn_budget.spoke(Instant::now());
+                }
                 self.append(SegKind::Text, &t);
                 self.set_activity("Writing a reply…");
             }
@@ -123,7 +126,8 @@ impl Actor {
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &data);
                 let title = data["title"].as_str().unwrap_or("Tool").to_owned();
                 let status = data["status"].as_str().unwrap_or_default().to_owned();
-                self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
+                let args = serde_json::to_string(&u["rawInput"]).ok();
+                self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default(), args.as_deref());
                 let working = activity(&data).to_owned();
                 if let Some(e) = self.add(EntryKind::Tool, turn, data) {
                     self.tools.insert(tool_id, e.id);
@@ -151,7 +155,13 @@ impl Actor {
                 let title = e.data["title"].as_str().unwrap_or("Tool").to_owned();
                 self.hub.set_entry(&entry_id, &e.data);
                 if status != before {
-                    self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default());
+                    let args = serde_json::to_string(&u["rawInput"]).ok();
+                    self.observe_tool_end(
+                        &status,
+                        &title,
+                        e.data["output"].as_str().unwrap_or_default(),
+                        args.as_deref(),
+                    );
                 }
                 if let Some(working) = working {
                     self.set_activity(&working);
@@ -237,6 +247,17 @@ impl Actor {
                 return;
             }
             _ => {}
+        }
+        // Idea 44: a check-in or routine can't tap an approval card. Refuse external-app
+        // tools that would ask when the bot has background apps turned off.
+        if let Some(reason) = crate::agent::approval_gate::background_apps_reason(
+            self.active_routine.is_some() || self.proactive_turn,
+            self.cfg.proactive.apps_in_background,
+            &evaluation,
+            &title,
+        ) {
+            self.refuse(rpc_id, &options, &reason).await;
+            return;
         }
         let rule_pattern = match &evaluation.outcome {
             Outcome::Rule { pattern, .. } => Some(pattern.clone()),

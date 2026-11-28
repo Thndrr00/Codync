@@ -44,6 +44,10 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
     /** The session was set up once: a drop after that is tried again instead of ending the call. */
     private var connected = false
     private var reconnects = 0
+    /** Push-to-talk: the microphone track opens only while the talk button is held. */
+    private var holding = false
+    private var hadAudio = false
+    private val micOpen: Boolean get() = !muted && (!pushToTalk || holding) && phase != VoicePhase.Interrupted
 
     init { hop { open() } }
 
@@ -56,7 +60,7 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
             val secret = session.credential ?: throw IOException("OpenAI sent no session credential.")
             this.session = session
             val offer = peer.offer(this)
-            peer.mic(!muted && phase != VoicePhase.Interrupted)
+            peer.mic(micOpen)
             val answer = exchange(secret, offer)
             if (ended) return
             peer.answer(answer)
@@ -90,16 +94,37 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
     override fun progress(text: String) = hop { pending.removeAll { it.startsWith(PROGRESS_TAG) }; pending += link.progress(text); flush() }
     override fun mute(value: Boolean) = hop {
         mutable.update { it.copy(muted = value, level = if (value) 0f else it.level) }
-        if (phase != VoicePhase.Interrupted) peer.mic(!value)
+        if (phase != VoicePhase.Interrupted) peer.mic(micOpen)
     }
     override fun interrupt() = hop { if (phase == VoicePhase.Speaking) { cancelResponse(); phase(VoicePhase.Listening) } }
+
+    /** Hold to open the microphone, release to commit the buffer (the model answers), other key clears it. */
+    override fun talk(action: TalkAction) = hop {
+        if (!pushToTalk) return@hop
+        when (action) {
+            TalkAction.Press -> { holding = true; hadAudio = false; peer.mic(micOpen) }
+            TalkAction.Cancel -> { holding = false; hadAudio = false; peer.mic(false); clearAudio() }
+            TalkAction.Release -> {
+                holding = false
+                peer.mic(false)
+                // The provider plays replies itself: a short press with nothing said stops one.
+                val wasSpeaking = phase == VoicePhase.Speaking
+                if (hadAudio) {
+                    if (wasSpeaking) interrupt()
+                    send(buildJsonObject { put("type", "input_audio_buffer.commit") })
+                } else if (wasSpeaking) interrupt()
+            }
+        }
+    }
+
+    private fun clearAudio() = send(buildJsonObject { put("type", "input_audio_buffer.clear") })
     override fun focus(active: Boolean) = hop {
         if (!active && this.active) {
             peer.mic(false)
             if (phase == VoicePhase.Speaking) cancelResponse()
             level(0f); phase(VoicePhase.Interrupted)
         } else if (active && phase == VoicePhase.Interrupted) {
-            peer.mic(!muted); phase(VoicePhase.Listening); flush()
+            peer.mic(micOpen); phase(VoicePhase.Listening); flush()
         }
     }
 
@@ -127,7 +152,7 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
                 dropTimer?.cancel(); connected = true; reconnects = 0
                 phase(VoicePhase.Listening); flush()
             }
-            "input_audio_buffer.speech_started" -> level(if (muted) 0f else .7f)
+            "input_audio_buffer.speech_started" -> { if (holding) hadAudio = true; level(if (muted) 0f else .7f) }
             "input_audio_buffer.speech_stopped" -> level(0f)
             "input_audio_buffer.committed" -> link.transcribing(true)
             "conversation.item.input_audio_transcription.failed" -> link.transcribing(false)

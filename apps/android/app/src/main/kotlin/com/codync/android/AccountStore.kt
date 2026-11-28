@@ -12,6 +12,26 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.JsonObject
 
+/** Everything the account screens render about the active account context. */
+data class AccountContext(
+    val contextId: String = "local",
+    val generation: Int = 0,
+    val account: AccountState = AccountState(),
+    val computers: List<Computer> = emptyList(),
+    val lastComputerId: String? = null,
+    val shortcutLeadComputer: String? = null,
+    val tasks: Boolean = true,
+    val setupComplete: Boolean = false,
+    val withoutAccount: Boolean = false,
+    val loading: Boolean = true,
+    val cloudLoaded: Boolean = false,
+    val removedChat: Boolean = false,
+    val busy: Set<String> = emptySet(),
+    val failedAction: String? = null,
+    val error: String? = null,
+    val appFloor: String? = null,
+)
+
 /**
  * The ViewModel the UI talks to (iOS `AccountStore`): the active account, its computers with one
  * [AppStore] each, and the one writer of [AccountContext]. This file holds the account context's
@@ -54,11 +74,6 @@ class AccountStore(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { PushPreferences.splitSwitch(getApplication()) }
             transitions.withLock { loadContext(null) }
-            launch {
-                try { NativeAccounts.signInForDevelopment(getApplication()) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (error: Exception) { mutableState.update { it.copy(error = "Couldn't sign in to the test account: ${error.message}") } }
-            }
             NativeAccounts.observe(viewModelScope) { account ->
                 mutableState.update { it.copy(account = account) }
                 if (account.ready) transitions.withLock {

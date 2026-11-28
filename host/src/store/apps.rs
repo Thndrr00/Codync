@@ -34,6 +34,8 @@ pub enum AppLinkMode {
     #[default]
     View,
     Edit,
+    /// A public form: submit to chosen collections, read only chosen ones or a receipt.
+    Submit,
 }
 
 impl AppLinkMode {
@@ -41,11 +43,18 @@ impl AppLinkMode {
         match self {
             Self::View => "view",
             Self::Edit => "edit",
+            Self::Submit => "submit",
         }
     }
 
     pub fn parse(raw: &str) -> Self {
-        if raw.eq_ignore_ascii_case("edit") { Self::Edit } else { Self::View }
+        if raw.eq_ignore_ascii_case("edit") {
+            Self::Edit
+        } else if raw.eq_ignore_ascii_case("submit") {
+            Self::Submit
+        } else {
+            Self::View
+        }
     }
 }
 

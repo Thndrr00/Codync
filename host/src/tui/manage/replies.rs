@@ -150,6 +150,7 @@ impl App {
             }
             Reply::Flow(bot) => self.flow_loaded(&bot, &v),
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
+            Reply::Insights(bot) => self.insights_loaded(&bot, &v),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
                     self.overlays.truncate(i);
@@ -398,6 +399,15 @@ impl App {
                     }
                 }
             }
+            Reply::Insights(bot) => {
+                for o in &mut self.overlays {
+                    if let Overlay::Insights(i) = o
+                        && i.bot == *bot
+                    {
+                        i.data.get_or_insert_with(|| Value::Null);
+                    }
+                }
+            }
             Reply::Library(bot) => {
                 for o in &mut self.overlays {
                     if let Overlay::Library(l) = o
@@ -516,6 +526,9 @@ impl App {
                 }
                 Overlay::Library(l) => {
                     calls.push(("library", json!({"botId": l.bot}), After::Sheet(Reply::Library(l.bot.clone()))));
+                }
+                Overlay::Insights(i) => {
+                    calls.push(("botInsights", json!({"botId": i.bot}), After::Sheet(Reply::Insights(i.bot.clone()))));
                 }
                 Overlay::Market(_) | Overlay::Form(_) => {
                     calls.push(("connectors", json!({}), After::Connectors));

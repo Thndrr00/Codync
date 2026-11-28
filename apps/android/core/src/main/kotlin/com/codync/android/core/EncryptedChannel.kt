@@ -329,7 +329,7 @@ class EncryptedChannel internal constructor(
         calls.keys.toList().forEach { calls.remove(it)?.completeExceptionally(error) }
         streams.keys.toList().forEach { streams.remove(it)?.close(error) }
         calls.drain { it.completeExceptionally(error) }
-        streams.drain { it.events.close(error) }
+        streams.drain { it.close(error) }
     }
 
     private fun fail(error: Throwable) {

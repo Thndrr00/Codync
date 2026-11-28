@@ -327,7 +327,10 @@ jobs:
             [ -e "$f" ] || continue
             to="codync-${{ matrix.name }}.${f#*.}"
             mv "$f" "$to"
-            sed -i "s|$f|$to|g" latest-linux*.yml
+            for y in latest-linux*.yml; do
+              [ -e "$y" ] || continue
+              sed -i "s|$f|$to|g" "$y"
+            done
           done
           for f in codync-${{ matrix.name }}.*; do shasum -a 256 "$f" > "$f.sha256"; done
       - uses: actions/upload-artifact@v4

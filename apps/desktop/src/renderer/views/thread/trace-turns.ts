@@ -41,6 +41,32 @@ function isPass(text = ''): boolean {
   return t === '' || t === '(pass)' || t === 'pass'
 }
 
+/** A trace row, or a run of tool steps folded into one "worked on N steps" group. */
+export type TraceSlot = { kind: 'row'; entry: Entry } | { kind: 'work'; entries: Entry[] }
+
+/**
+ * Folds a run of at least `min` consecutive tool steps into one slot. Other steps and a shorter
+ * run stay as rows, so a single tool call is never hidden behind a group.
+ */
+export function groupWorkSteps(entries: Entry[], min = 3): TraceSlot[] {
+  const out: TraceSlot[] = []
+  let run: Entry[] = []
+  const flush = () => {
+    if (run.length >= min) out.push({ kind: 'work', entries: run })
+    else out.push(...run.map((entry) => ({ kind: 'row' as const, entry })))
+    run = []
+  }
+  for (const entry of entries) {
+    if (entry.kind === 'tool') run.push(entry)
+    else {
+      flush()
+      out.push({ kind: 'row', entry })
+    }
+  }
+  flush()
+  return out
+}
+
 /** Scrolled to (within a few pixels of) the end: new steps keep it there. */
 export function scrolledToEnd(el: { scrollHeight: number; scrollTop: number; clientHeight: number }) {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 8

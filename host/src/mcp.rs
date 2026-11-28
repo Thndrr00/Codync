@@ -64,6 +64,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
     let mut requests = tokio::task::JoinSet::new();
     // Requests run side by side (an ask_bot can take minutes); their replies share stdout.
     let (replies, mut outbox) = mpsc::unbounded_channel::<Value>();
+    // One bridge serves one bot for its whole session: page/image pruning counts carry across turns.
+    let pruner = Arc::new(crate::agent::context_pruner::ContextPruner::new());
     let writer = tokio::spawn(async move {
         let mut out = tokio::io::stdout();
         while let Some(msg) = outbox.recv().await {
@@ -89,6 +91,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::chat::scratchpad::tools());
                 list.extend(crate::chat::teach::tools());
                 list.extend(crate::chat::apps::tools());
+                list.extend(crate::chat::ask_user::tools());
                 list.extend(crate::chat::open_items::tools());
                 list.extend(crate::documents::tools());
                 list.extend(crate::research::tools().as_array().into_iter().flatten().cloned());
@@ -126,8 +129,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         };
         running.retain(|_, request| !request.is_finished());
         let key = id.to_string();
-        let (replies, token, bot, available_tools) =
-            (replies.clone(), token.clone(), bot.clone(), available_tools.clone());
+        let (replies, token, bot, available_tools, pruner) =
+            (replies.clone(), token.clone(), bot.clone(), available_tools.clone(), pruner.clone());
         while requests.try_join_next().is_some() {}
         if requests.len() >= 100 {
             let _ = replies
@@ -155,7 +158,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                         Err(error) => json!({"content":[{"type":"text","text":format!("{error:#}")}],"isError":true}),
                     })
                 }
-                "tools/call" => Ok(call(port, &token, &bot, params, server).await),
+                "tools/call" => Ok(call_with_pruner(port, &token, &bot, params, server, &pruner).await),
                 method => Err(json!({"code": -32601, "message": format!("unknown method {method}")})),
             };
             let _ = replies.send(match reply {
@@ -192,7 +195,20 @@ async fn computer_tools(port: u16, token: &str) -> Value {
 }
 
 /// One tool call through the host. Failures are tool errors the agent can read, not protocol errors.
+/// A one-shot caller (the CLI) has no session context to prune, so it uses a fresh pruner.
 pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server) -> Value {
+    let pruner = crate::agent::context_pruner::ContextPruner::new();
+    call_with_pruner(port, token, bot, params, server, &pruner).await
+}
+
+async fn call_with_pruner(
+    port: u16,
+    token: &str,
+    bot: &str,
+    params: &Value,
+    server: Server,
+    pruner: &crate::agent::context_pruner::ContextPruner,
+) -> Value {
     let body = json!({
         "botId": bot,
         "name": params["name"],
@@ -229,7 +245,7 @@ pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, serv
             let ok = r.status().is_success();
             match r.json::<Value>().await {
                 Ok(v) if ok => {
-                    return match server {
+                    let mut result = match server {
                         Server::Computer if v["isError"] == true => json!({"content": v["content"], "isError": true}),
                         Server::Computer => json!({"content": v["content"]}),
                         Server::Chat
@@ -248,6 +264,8 @@ pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, serv
                             json!({"content": [{"type": "text", "text": text}]})
                         }
                     };
+                    pruner.shape(params["name"].as_str().unwrap_or_default(), &mut result);
+                    return result;
                 }
                 Ok(v) => v["error"].as_str().unwrap_or("the Codync host refused the call").to_owned(),
                 Err(e) => format!("bad response from the Codync host: {e}"),

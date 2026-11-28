@@ -37,7 +37,7 @@ import com.codync.android.design.*
             }
             CardSection("In your account") {
                 for (computer in computers) row {
-                    AccountComputerRow(computer, state.access[computer.computerId]?.code, asking = computer.computerId in state.asking, ask = { ask(computer) })
+                    AccountComputerRow(computer, state.accessCodes[computer.computerId]?.code, askingAnother = computer.computerId in state.asking, ask = { ask(computer) }, revoke = {})
                 }
             }
             CardSection {

@@ -125,30 +125,6 @@ public struct Spinner: View {
 
 // MARK: - Menus
 
-/// One row in a Codync menu: an action, or a choice when `selected` is set.
-public struct MenuItem: Identifiable {
-    public let id = UUID()
-    public var title: String
-    public var icon: String?
-    /// A picture in the icon's place (an agent's logo).
-    public var image: Image?
-    public var selected: Bool?
-    public var destructive: Bool
-    public var divider: Bool
-    public var action: () -> Void
-
-    public init(_ title: String, icon: String? = nil, image: Image? = nil, selected: Bool? = nil, destructive: Bool = false,
-                divider: Bool = false, action: @escaping () -> Void) {
-        self.title = title
-        self.icon = icon
-        self.image = image
-        self.selected = selected
-        self.destructive = destructive
-        self.divider = divider
-        self.action = action
-    }
-}
-
 /// A `MenuItem` inside a system `Menu` or `contextMenu`: choices as checkmarked toggles.
 @ViewBuilder func systemMenuRow(_ item: MenuItem) -> some View {
     let role: ButtonRole? = item.destructive ? .destructive : nil
@@ -169,29 +145,6 @@ public struct MenuItem: Identifiable {
         SwiftUI.Label(L10n.tr(item.title), systemImage: icon)
     } else {
         Text(L10n.tr(item.title))
-    }
-}
-
-/// A button that opens the system menu.
-public struct DropdownMenu<Label: View>: View {
-    let items: () -> [MenuItem]
-    let label: Label
-
-    public init(items: @escaping () -> [MenuItem], @ViewBuilder label: () -> Label) {
-        self.items = items
-        self.label = label()
-    }
-
-    public var body: some View {
-        // The system menu: it anchors correctly inside sheets and scroll views, where an overlay can't.
-        Menu {
-            ForEach(items()) { item in
-                if item.divider { Divider() }
-                systemMenuRow(item)
-            }
-        } label: { label }
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
     }
 }
 

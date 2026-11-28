@@ -13,6 +13,7 @@ import { useStore } from '../../store/context'
 import { useScreenViewed } from '../../store/analytics'
 import { BotSettingsPanel } from '../bots/BotEditorView'
 import { BotAppsCard } from '../bots/BotAppsView'
+import { BotInsightsCard } from '../bots/BotInsightsCard'
 import { SkillProposalsCard } from '../bots/SkillProposalsCard'
 import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
@@ -28,10 +29,11 @@ import '../bots/documents.css'
 import { useTr } from '../../lib/use-language'
 
 
-export type DetailsTab = 'details' | 'library' | 'apps' | 'memory' | 'documents' | 'threads' | 'computer' | 'settings'
+export type DetailsTab = 'details' | 'insights' | 'library' | 'apps' | 'memory' | 'documents' | 'threads' | 'computer' | 'settings'
 
 const TABS: { id: DetailsTab; label: string }[] = [
   { id: 'details', label: 'Details' },
+  { id: 'insights', label: 'Insights' },
   { id: 'apps', label: 'Apps' },
   { id: 'library', label: 'Library' },
   { id: 'memory', label: 'Memory' },
@@ -78,6 +80,8 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
                   {bot ? <ComputerUse bot={bot} /> : null}
                   <RoutinesView botId={botId} initialId={routineId} />
                 </>
+              ) : tab === 'insights' ? (
+                <BotInsightsCard botId={botId} />
               ) : tab === 'apps' ? (
                 <BotAppsCard botId={botId} />
               ) : tab === 'library' ? (
