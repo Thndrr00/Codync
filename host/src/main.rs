@@ -26,6 +26,7 @@ mod bdots_blocks;
 mod bdots_blueprint;
 mod bdots_bot_store;
 mod bdots_brain_picker;
+mod bdots_channel_access;
 mod bdots_cmd_policy;
 mod bdots_connectors;
 mod bdots_connstate;

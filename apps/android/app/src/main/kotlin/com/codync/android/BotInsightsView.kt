@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val channelaccess = insights.channelaccess
+            CardSection("Channel access") {
+                row { Text(channelaccess.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Summary", channelaccess.summaryLine) }
+                row { ValueRow("Approved", channelaccess.approved.toString()) }
+                row { ValueRow("Provider", channelaccess.provider) }
+            }
             val layout = insights.layout
             CardSection("Layout") {
                 row { Text(layout.headline, style = Type.subheadline.semibold, color = Palette.text) }

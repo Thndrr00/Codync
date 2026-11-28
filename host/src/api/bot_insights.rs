@@ -2812,6 +2812,38 @@ fn layout_view() -> Value {
     })
 }
 
+/// Channel access lists and pairing from mercury-agent.
+fn channelaccess_view() -> Value {
+    use crate::bdots_channel_access as c;
+
+    let config = serde_json::json!({
+        "channels": {"telegram": {
+            "admins": [{"userId": "1"}],
+            "members": [{"userId": "2"}, {"userId": "3"}],
+            "pending": [{"userId": "4", "pairingCode": "A1B2C3"}],
+        }},
+        "providers": {"openai": {"name": "openai", "enabled": true, "apiKey": "k"}},
+        "identity": {"owner": "Ana"},
+        "cloud": {"apiUrl": c::LEGACY_SEED_API_URL, "wsUrl": "", "accessKey": "k"},
+    });
+    let approved = c::approve_pending(&config, "telegram", "userId", "4", c::FIRST_USER_ROLE, "2026-11-27T00:00:00Z");
+    json!({
+        "headline": format!("{} · {} · {}", c::count_label(c::CHANNELS.len()), c::access_summary(&config, "telegram"), c::active_providers(&config).len()),
+        "tone": if c::has_admins(&config, "telegram") { "good" } else { "attention" },
+        "icon": "person.3.fill",
+        "channels": c::CHANNELS.len(),
+        "summaryLine": c::access_summary(&config, "telegram"),
+        "hasAdmins": c::has_admins(&config, "telegram"),
+        "pairing": !c::find_pending_by_code(&config, "telegram", "A1B2C3").is_null(),
+        "approved": c::admins(&approved, "telegram").len(),
+        "provider": c::active_providers(&config).first().cloned().unwrap_or_default(),
+        "creator": c::ensure_creator(&config)["identity"]["creator"],
+        "api": c::normalize_cloud_config(&config)["cloud"]["apiUrl"],
+        "complete": c::is_setup_complete(&config),
+        "summary": c::summary(c::CHANNELS.len(), 1, 1, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -2958,6 +2990,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "service": service_view(),
         "draftstash": draftstash_view(),
         "layout": layout_view(),
+        "channelaccess": channelaccess_view(),
         "description": description,
         "model": model,
         "provider": provider,

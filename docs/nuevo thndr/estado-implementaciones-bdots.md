@@ -124,6 +124,14 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Acceso a canales (30 adiciones + UI en 4 clientes)
+
+`bdots_channel_access.rs` añade 24 helpers puros y 6 constantes portados de `utils/config.ts` de
+**mercury-agent 2.7.0**: listas de acceso de Telegram/Signal/Discord/Slack, códigos de emparejamiento,
+aprobación, promoción, limpieza y configuración de proveedores y nube. Reutiliza `bdots_desk`. El
+endpoint `botInsights` añade el campo `channelaccess`; la sección «Channel access» se muestra en los
+cuatro clientes.
+
 ## Árbol de layout (29 adiciones + UI en 4 clientes)
 
 `bdots_layout_tree.rs` añade 23 helpers puros y 6 constantes portados de `pane-shell/tree/model.ts`

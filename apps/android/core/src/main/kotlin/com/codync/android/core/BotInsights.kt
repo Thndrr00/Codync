@@ -95,9 +95,20 @@ data class BotInsights(
     val service: InsightService = InsightService(),
     val draftstash: InsightDraftStash = InsightDraftStash(),
     val layout: InsightLayout = InsightLayout(),
+    val channelaccess: InsightChannelAccess = InsightChannelAccess(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed channel access summary. */
+@Serializable
+data class InsightChannelAccess(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val channels: Int = 0, val summaryLine: String = "", val hasAdmins: Boolean = false,
+    val pairing: Boolean = false, val approved: Int = 0, val provider: String = "",
+    val creator: String = "", val api: String = "", val complete: Boolean = false,
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed pane layout summary. */
