@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let pills = &data["pills"];
+    if pills.is_object() {
+        line(buf, &mut y, tr("Pills").into_owned(), t.bold.patch(t.panel));
+        let headline = pills["headline"].as_str().unwrap_or("");
+        let main = pills["main"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {main}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let coucoumail = &data["coucoumail"];
     if coucoumail.is_object() {
         line(buf, &mut y, tr("Mail").into_owned(), t.bold.patch(t.panel));

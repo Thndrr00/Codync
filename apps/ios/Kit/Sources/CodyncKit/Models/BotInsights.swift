@@ -104,6 +104,7 @@ public struct BotInsights: Decodable, Sendable {
     public let aurora: InsightAurora
     public let whatsapp: InsightWhatsapp
     public let coucoumail: InsightCoucouMail
+    public let pills: InsightPills
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -133,6 +134,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed pill catalog summary.
+public struct InsightPills: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let catalog: Int
+    public let available: Int
+    public let main: String
+    public let declared: Int
+    public let subtitle: String
+    public let soon: Bool
+    public let first: String
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 

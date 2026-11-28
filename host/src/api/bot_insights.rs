@@ -3098,6 +3098,29 @@ fn coucoumail_view() -> Value {
     })
 }
 
+/// Pill catalog and declared integrations from coucou.
+fn pills_view() -> Value {
+    use crate::bdots_pills as p;
+
+    let declared = json!({"mainPill":p::DEFAULT_MAIN_PILL,"activeIntegrations":["agent_codex","integration_github"]});
+    let clean = p::sanitize_declared(&declared, "windows");
+    let pills = vec![json!({"id":"agent_codex"}), json!({"id":p::DEFAULT_MAIN_PILL})];
+    json!({
+        "headline": format!("{} · {} · {}", p::count_label(p::PILL_CATALOG.len()), p::count_label(p::available_pills("windows").len()), p::DEFAULT_MAIN_PILL),
+        "tone": if clean["mainPill"].as_str() == Some(p::DEFAULT_MAIN_PILL) { "good" } else { "secondary" },
+        "icon": "circle.grid.3x3.fill",
+        "catalog": p::PILL_CATALOG.len(),
+        "available": p::available_pills("windows").len(),
+        "main": p::DEFAULT_MAIN_PILL,
+        "declared": clean["activeIntegrations"].as_array().map_or(0, Vec::len),
+        "subtitle": p::session_subtitle("agent_cursor"),
+        "soon": p::is_coming_soon("integration_notion"),
+        "first": p::order_pills(&pills, p::DEFAULT_MAIN_PILL)[0]["id"],
+        "line": p::pill_line("x", "yes", false),
+        "summary": p::summary(p::PILL_CATALOG.len(), p::available_pills("windows").len(), 2, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3256,6 +3279,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "aurora": aurora_view(),
         "whatsapp": whatsapp_view(),
         "coucoumail": coucoumail_view(),
+        "pills": pills_view(),
         "description": description,
         "model": model,
         "provider": provider,
