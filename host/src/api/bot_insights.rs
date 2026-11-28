@@ -3237,6 +3237,36 @@ fn mochidesktop_view() -> Value {
     })
 }
 
+/// Spotify player from coucou.
+fn spotify_view() -> Value {
+    use crate::bdots_spotify as s;
+
+    let state = json!({
+        "playing": true,
+        "position": 10.0,
+        "positionAt": 1_000,
+        "volume": 50,
+        "shuffle": false,
+        "repeat": false,
+        "track": {"id":"spotify:track:1","title":"Song","artist":"Band","duration":200.0,"artUrl":"cover"},
+    });
+    let active = vec![s::SPOTIFY_ID.to_owned()];
+    json!({
+        "headline": format!("{} · {} · {}", s::format_time(s::spotify_position(&state, 11_000)), s::track_kind(Some(&state["track"])), s::SPOTIFY_GREEN),
+        "tone": if s::music_playing(&state, &active) { "good" } else { "secondary" },
+        "icon": "music.note.fill",
+        "playing": s::music_playing(&state, &active),
+        "position": s::format_time(s::spotify_position(&state, 11_000)),
+        "remaining": s::format_time(s::remaining_seconds(&state, 11_000)),
+        "progress": format!("{:.2}", s::progress_fraction(&state, 11_000)),
+        "volume": s::volume_icon(50.0),
+        "track": s::track_line(Some(&state["track"])),
+        "dance": s::island_dances(true, "working", "compact", "chat", None),
+        "line": s::state_line(&state),
+        "summary": s::summary(1, s::DANCE_STATES.len(), s::volume_level(50.0), true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3401,6 +3431,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "recap": recap_view(),
         "whatsnew": whatsnew_view(),
         "mochidesktop": mochidesktop_view(),
+        "spotify": spotify_view(),
         "description": description,
         "model": model,
         "provider": provider,

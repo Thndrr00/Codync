@@ -110,6 +110,7 @@ public struct BotInsights: Decodable, Sendable {
     public let recap: InsightRecap
     public let whatsnew: InsightWhatsNew
     public let mochidesktop: InsightMochiDesktop
+    public let spotify: InsightSpotify
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -139,6 +140,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed Spotify summary.
+public struct InsightSpotify: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let playing: Bool
+    public let position: String
+    public let remaining: String
+    public let progress: String
+    public let volume: String
+    public let track: String
+    public let dance: Bool
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 

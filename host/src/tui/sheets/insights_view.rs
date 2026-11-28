@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let spotify = &data["spotify"];
+    if spotify.is_object() {
+        line(buf, &mut y, tr("Spotify").into_owned(), t.bold.patch(t.panel));
+        let headline = spotify["headline"].as_str().unwrap_or("");
+        let track = spotify["track"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {track}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let mochidesktop = &data["mochidesktop"];
     if mochidesktop.is_object() {
         line(buf, &mut y, tr("Mochi desktop").into_owned(), t.bold.patch(t.panel));

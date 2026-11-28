@@ -106,6 +106,7 @@ mod bdots_session;
 mod bdots_shortcuts;
 mod bdots_shortcuts_coucou;
 mod bdots_spend;
+mod bdots_spotify;
 mod bdots_stream;
 mod bdots_text;
 mod bdots_textfmt;

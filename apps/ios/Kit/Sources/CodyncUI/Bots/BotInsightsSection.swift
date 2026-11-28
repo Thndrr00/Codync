@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let spotify = insights.spotify
+                    Text(spotify.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Track")): \(spotify.track)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Position")): \(spotify.position)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let mochidesktop = insights.mochidesktop
                     Text(mochidesktop.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Gaze")): \(mochidesktop.gaze)").font(.footnote).foregroundStyle(Palette.secondary)

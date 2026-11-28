@@ -42,6 +42,13 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
+            val spotify = insights.spotify
+            CardSection("Spotify") {
+                row { Text(spotify.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Track", spotify.track) }
+                row { ValueRow("Position", spotify.position) }
+                row { ValueRow("Progress", spotify.progress) }
+            }
             val mochidesktop = insights.mochidesktop
             CardSection("Mochi desktop") {
                 row { Text(mochidesktop.headline, style = Type.subheadline.semibold, color = Palette.text) }

@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Spotify (26 adiciones + UI en 4 clientes)
+
+`bdots_spotify.rs` añade 20 helpers puros y 6 constantes portados de `core/spotify.ts` de **coucou**:
+posición extrapolada, tipos de pista, volumen, reproducción y condiciones de baile de Mochi. El
+endpoint `botInsights` añade el campo `spotify`; la sección «Spotify» se muestra en los cuatro
+clientes. Reutiliza `bdots_desk`.
+
 ## Mochi desktop (25 adiciones + UI en 4 clientes)
 
 `bdots_mochi_desktop.rs` añade 15 helpers puros y 10 constantes portados de `mochi/desktop-logic.ts` de
