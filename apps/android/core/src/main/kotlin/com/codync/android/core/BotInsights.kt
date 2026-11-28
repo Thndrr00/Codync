@@ -116,9 +116,20 @@ data class BotInsights(
     val spotify: InsightSpotify = InsightSpotify(),
     val anim: InsightAnim = InsightAnim(),
     val closed: InsightClosed = InsightClosed(),
+    val plan: InsightPlan = InsightPlan(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
+)
+
+/** A host-computed plan usage summary. */
+@Serializable
+data class InsightPlan(
+    val headline: String = "", val tone: String = "", val icon: String = "",
+    val titles: Int = 0, val windows: Int = 0, val claude: String = "",
+    val codex: String = "", val color: String = "", val age: String = "",
+    val reset: String = "", val line: String = "",
+    val summary: List<InsightSummaryRow> = emptyList(),
 )
 
 /** A host-computed closed-island summary. */

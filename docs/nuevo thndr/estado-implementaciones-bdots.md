@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Uso del plan (28 adiciones + UI en 4 clientes)
+
+`bdots_plan.rs` añade 22 helpers puros y 6 constantes portados de `core/plan.ts` de **coucou**:
+parseo de los límites de Claude y Codex, porcentajes, colores, etiquetas de píldora y de reinicio.
+El endpoint `botInsights` añade el campo `plan`; la sección «Plan usage» se muestra en los cuatro
+clientes. `bdots_closed` reutiliza `plan_color` de este módulo. Reutiliza `bdots_desk`.
+
 ## Isla cerrada (26 adiciones + UI en 4 clientes)
 
 `bdots_closed.rs` añade 20 helpers puros y 6 constantes portados de `core/closed.ts` de **coucou**:

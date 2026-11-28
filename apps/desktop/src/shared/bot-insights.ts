@@ -1,6 +1,21 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightPlan {
+  headline: string
+  tone: string
+  icon: string
+  titles: number
+  windows: number
+  claude: string
+  codex: string
+  color: string
+  age: string
+  reset: string
+  line: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightClosed {
   headline: string
   tone: string
@@ -1782,6 +1797,7 @@ export interface BotInsights {
   spotify: InsightSpotify
   anim: InsightAnim
   closed: InsightClosed
+  plan: InsightPlan
   routines: InsightRoutine[]
   usage: {
     used: number

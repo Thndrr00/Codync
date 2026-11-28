@@ -87,6 +87,7 @@ mod bdots_opendots;
 mod bdots_palette;
 mod bdots_picker;
 mod bdots_pills;
+mod bdots_plan;
 mod bdots_plans;
 mod bdots_plugins;
 mod bdots_profile;

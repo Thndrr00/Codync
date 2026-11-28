@@ -54,33 +54,10 @@ pub fn claude_content(percent: Option<f64>, time: &str) -> Value {
     match percent {
         Some(percent) => json!({
             "text": format!("Claude {}%", percent.round() as i64),
-            "dot": plan_color(percent),
+            "dot": crate::bdots_plan::plan_color(Some(percent)),
             "note": false,
         }),
         None => plain(time),
-    }
-}
-
-/// The gauge color of a plan percentage (planColor).
-pub fn plan_color(percent: f64) -> &'static str {
-    if percent < 25.0 {
-        "#F4505E"
-    } else if percent < 50.0 {
-        "#F5A524"
-    } else if percent < 75.0 {
-        "#7C5CFC"
-    } else {
-        "#10B981"
-    }
-}
-
-/// The biggest remaining limit of a plan (dominantPct).
-pub fn dominant_pct(session: Option<f64>, week: Option<f64>) -> Option<f64> {
-    match (session, week) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (Some(a), None) => Some(a),
-        (None, Some(b)) => Some(b),
-        (None, None) => None,
     }
 }
 
@@ -210,16 +187,13 @@ mod tests {
 
     #[test]
     fn plan_and_music() {
-        assert_eq!(dominant_pct(Some(40.0), Some(70.0)), Some(40.0));
-        assert_eq!(dominant_pct(None, Some(70.0)), Some(70.0));
-        assert_eq!(dominant_pct(None, None), None);
-        assert_eq!(plan_color(10.0), "#F4505E");
-        assert_eq!(plan_color(40.0), "#F5A524");
-        assert_eq!(plan_color(60.0), "#7C5CFC");
-        assert_eq!(plan_color(90.0), "#10B981");
+        assert_eq!(crate::bdots_plan::plan_color(None), "#6B7079");
+        assert_eq!(crate::bdots_plan::plan_color(Some(10.0)), "#22C55E");
+        assert_eq!(crate::bdots_plan::plan_color(Some(60.0)), "#F59E0B");
+        assert_eq!(crate::bdots_plan::plan_color(Some(90.0)), "#F4505E");
         let claude = claude_content(Some(43.4), "10:42");
         assert_eq!(content_text(&claude), "Claude 43%");
-        assert_eq!(content_dot(&claude), Some("#F5A524"));
+        assert_eq!(content_dot(&claude), Some("#F59E0B"));
         assert_eq!(content_text(&claude_content(None, "10:42")), "10:42");
         let music = music_content(Some("Song"), Some("Band"), "10:42");
         assert_eq!(content_text(&music), "Song — Band");

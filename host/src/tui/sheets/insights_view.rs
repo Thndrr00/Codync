@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let plan = &data["plan"];
+    if plan.is_object() {
+        line(buf, &mut y, tr("Plan usage").into_owned(), t.bold.patch(t.panel));
+        let headline = plan["headline"].as_str().unwrap_or("");
+        let codex = plan["codex"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {codex}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let closed = &data["closed"];
     if closed.is_object() {
         line(buf, &mut y, tr("Closed island").into_owned(), t.bold.patch(t.panel));

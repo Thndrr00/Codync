@@ -3319,6 +3319,39 @@ fn closed_view() -> Value {
     })
 }
 
+/// Plan usage from coucou.
+fn plan_view() -> Value {
+    use crate::bdots_plan as p;
+
+    let claude = p::parse_claude_plan(
+        Some(&json!({
+            "five_hour": {"usedPct": 73, "resetsAt": 9_000},
+        })),
+        1_000,
+    );
+    let now = 1_000;
+    let codex = p::parse_codex_plan(
+        Some(&json!({
+            "rateLimits": {"planType": "plus", "primary": {"usedPct": 42, "resetsAt": 9_000}},
+        })),
+        now,
+    );
+    json!({
+        "headline": format!("{} · {} · {}", p::pill_label("Claude", Some(&claude), now), p::pill_label("Codex", Some(&codex), now), p::PLAN_COLORS.len()),
+        "tone": if p::codex_is_stale(Some(&codex), now) { "secondary" } else { "good" },
+        "icon": "chart.bar.fill",
+        "titles": p::PLAN_TITLES.len(),
+        "windows": p::PLAN_WINDOWS.len(),
+        "claude": p::pill_label("Claude", Some(&claude), now),
+        "codex": p::pill_label("Codex", Some(&codex), now),
+        "color": p::plan_color(p::dominant_pct(Some(&claude), now)),
+        "age": p::age_label(1_000, 61_000),
+        "reset": p::reset_label(&json!({"usedPct":50,"resetsAt":3_600_000}), false, 0),
+        "line": p::plan_line("Claude", Some(&claude), now),
+        "summary": p::summary(p::PLAN_TITLES.len(), p::PLAN_WINDOWS.len(), p::PLAN_COLORS.len(), false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3486,6 +3519,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "spotify": spotify_view(),
         "anim": anim_view(),
         "closed": closed_view(),
+        "plan": plan_view(),
         "description": description,
         "model": model,
         "provider": provider,
