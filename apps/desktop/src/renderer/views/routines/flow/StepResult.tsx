@@ -6,6 +6,8 @@ import { HStack, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { answerResultRows, statusLabel, type FlowStep, type WorkflowStepSource } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
+import { isAudioName } from '../../thread/audio'
+import { FlowMediaPlayer } from './FlowMediaPlayer'
 
 /**
  * The newest file of a step's result, shown as soon as the run ends. Round thumbnails walk the
@@ -21,6 +23,8 @@ type StepResultProps = {
   branch?: 'yes' | 'no'
   waiting?: boolean
   sources?: readonly WorkflowStepSource[]
+  /** The bot whose shared files a media result reads from, for in-place playback. */
+  botId?: string
 }
 
 export function StepResult(props: StepResultProps) {
@@ -44,7 +48,7 @@ export function StepResult(props: StepResultProps) {
   )
 }
 
-function StepResultContent({ step, compact = false }: StepResultProps) {
+function StepResultContent({ step, compact = false, botId }: StepResultProps) {
   const tr = useTr()
   const files = step.files ?? []
   const [index, setIndex] = useState(files.length - 1)
@@ -118,6 +122,9 @@ function StepResultContent({ step, compact = false }: StepResultProps) {
         {step.status === 'running' ? <Spinner size={12} /> : null}
       </HStack>
       <Text size="callout" grow truncate title={file.name}>{file.name}</Text>
+      {botId && (isVideoName(file.name) || isAudioName(file.name)) ? (
+        <FlowMediaPlayer botId={botId} file={file} />
+      ) : null}
       {compact ? null : (
         <Text size="caption" tone="secondary">
           {tr('{index} of {total} files').replace('{index}', String(at + 1)).replace('{total}', String(files.length))}

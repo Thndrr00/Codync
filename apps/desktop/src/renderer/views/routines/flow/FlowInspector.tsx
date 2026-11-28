@@ -315,7 +315,7 @@ function Steps({ canvas, card, onShowSettings }: { canvas: FlowCanvas; card: Flo
             <StatusChip status={step.status} />
           </HStack>
           {step.error ? <Text size="caption" tone="danger" lines={3}>{step.error}</Text> : null}
-          <StepResult key={step.id} step={step} compact />
+          <StepResult key={step.id} step={step} compact botId={step.botId} />
           <HStack gap={6}>
             <Spacer />
             <Button kind="secondary" onClick={() => onShowSettings(card, step)}>{tr('Settings')}</Button>
@@ -366,7 +366,7 @@ function BotPanel({ botId, bot, canvas, busy, offline, readOnly, targets, onConn
         <Text>{options.length === 0 ? tr('No step to hand on to') : tr('Hand its reply on to…')}</Text>
       </DropdownMenu>
       {removable ? <Button kind="secondary" disabled={busy || offline || readOnly} onClick={() => onRemoveNode(botKey(botId))}>{tr('Remove from the canvas')}</Button> : null}
-      {step ? <StepResult key={step.id} step={step} /> : null}
+      {step ? <StepResult key={step.id} step={step} botId={step.botId} /> : null}
       {step?.error ? <Text size="caption" tone="danger" lines={4}>{step.error}</Text> : null}
     </VStack>
   )

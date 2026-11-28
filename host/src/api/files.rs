@@ -25,6 +25,23 @@ pub async fn read(hub: &Arc<Hub>, body: &Value) -> Result<Value> {
     Ok(json!({"data": base64::engine::general_purpose::STANDARD.encode(data), "size": size}))
 }
 
+/// Reads a shared file by its id within one bot, for surfaces whose result has no chat entry
+/// (a workflow media step, for example). The same authenticated read as `read`, but the caller must
+/// name the owning bot; another bot's file id is refused (OpenBot canvas media playback).
+pub async fn read_by_id(hub: &Arc<Hub>, body: &Value) -> Result<Value> {
+    let bot = str_arg(body, "botId")?;
+    ensure!(hub.store.bot(bot)?.is_some_and(|row| !row.deleted), "unknown bot");
+    let id = str_arg(body, "fileId")?;
+    ensure!(id.len() <= 128 && !id.contains(['/', '\\']), "invalid file id");
+    let offset = body["offset"].as_u64().ok_or_else(|| anyhow!("offset must be a nonnegative integer"))?;
+    let root = files::root(bot);
+    // The caller names the file's size, which `files::read` verifies against the stored bytes.
+    let size = body["size"].as_u64().ok_or_else(|| anyhow!("size must be a nonnegative integer"))?;
+    let meta = SharedFile { id: id.to_owned(), name: String::new(), size, sha256: String::new() };
+    let data = tokio::task::spawn_blocking(move || files::read(&root, &meta, offset)).await??;
+    Ok(json!({"data": base64::engine::general_purpose::STANDARD.encode(data), "size": size}))
+}
+
 /// The files in one folder of a bot's workspace, for its Files page. Paths stay inside that folder: a
 /// relative path that leaves it (or a symlink pointing out) is refused.
 pub async fn list(hub: &Arc<Hub>, body: &Value) -> Result<Value> {

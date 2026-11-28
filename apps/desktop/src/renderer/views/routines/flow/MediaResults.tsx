@@ -43,6 +43,7 @@ export function MediaResults({ steps, price, busy, onRetry }: {
         <StepResult
           key={newest.id}
           step={{ ...newest, status: 'succeeded', output: null, error: null, files, results: undefined }}
+          botId={newest.botId}
         />
       ) : null}
     </VStack>
