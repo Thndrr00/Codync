@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let coucoushortcuts = &data["coucoushortcuts"];
+    if coucoushortcuts.is_object() {
+        line(buf, &mut y, tr("Shortcuts").into_owned(), t.bold.patch(t.panel));
+        let headline = coucoushortcuts["headline"].as_str().unwrap_or("");
+        let keys = coucoushortcuts["keys"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {keys}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let pills = &data["pills"];
     if pills.is_object() {
         line(buf, &mut y, tr("Pills").into_owned(), t.bold.patch(t.panel));

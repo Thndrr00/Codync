@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let coucoushortcuts = insights.coucoushortcuts
+                    Text(coucoushortcuts.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Keys")): \(coucoushortcuts.keys)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Action")): \(coucoushortcuts.action)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let pills = insights.pills
                     Text(pills.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Main")): \(pills.main)").font(.footnote).foregroundStyle(Palette.secondary)

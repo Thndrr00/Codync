@@ -105,6 +105,7 @@ public struct BotInsights: Decodable, Sendable {
     public let whatsapp: InsightWhatsapp
     public let coucoumail: InsightCoucouMail
     public let pills: InsightPills
+    public let coucoushortcuts: InsightCoucouShortcuts
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -134,6 +135,22 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed shortcuts summary.
+public struct InsightCoucouShortcuts: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let modifiers: Int
+    public let keys: String
+    public let normalized: String?
+    public let recorded: String
+    public let clashes: Int
+    public let next: Int?
+    public let pill: String?
+    public let action: String
     public let summary: [InsightSummaryRow]
 }
 

@@ -1,6 +1,21 @@
 // The read-only bdots-inspired insights a host serves for one bot. The host computes every value;
 // clients only render it.
 
+export interface InsightCoucouShortcuts {
+  headline: string
+  tone: string
+  icon: string
+  modifiers: number
+  keys: string
+  normalized: string | null
+  recorded: string
+  clashes: number
+  next: number | null
+  pill: string | null
+  action: string
+  summary: { key: string; value: string }[]
+}
+
 export interface InsightPills {
   headline: string
   tone: string
@@ -1648,6 +1663,7 @@ export interface BotInsights {
   whatsapp: InsightWhatsapp
   coucoumail: InsightCoucouMail
   pills: InsightPills
+  coucoushortcuts: InsightCoucouShortcuts
   routines: InsightRoutine[]
   usage: {
     used: number

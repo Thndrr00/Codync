@@ -3121,6 +3121,27 @@ fn pills_view() -> Value {
     })
 }
 
+/// Keyboard shortcuts from coucou.
+fn coucoushortcuts_view() -> Value {
+    use crate::bdots_shortcuts_coucou as s;
+
+    let ids = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
+    json!({
+        "headline": format!("{} · {} · {}", s::count_label(s::MODIFIERS.len()), s::format_keys(&s::parse_keys("Ctrl+Shift+K")), s::ISLAND_SHORTCUT_COUNT),
+        "tone": if s::normalize_keys("Ctrl+K").is_some() { "good" } else { "attention" },
+        "icon": "keyboard.fill",
+        "modifiers": s::MODIFIERS.len(),
+        "keys": s::display_keys("Ctrl+Up"),
+        "normalized": s::normalize_keys("ctrl+alt+k"),
+        "recorded": s::record_press(&json!({"key":"k","ctrlKey":true}))["kind"],
+        "clashes": s::alt_gr_clashes("Ctrl+Alt+K").len(),
+        "next": s::navigate(None, 1, 5),
+        "pill": s::cycle_pill(&ids, Some("c"), 1),
+        "action": s::island_key_action("o", true, false, false, false, false)["kind"],
+        "summary": s::summary(6, 4, 1, true),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3280,6 +3301,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "whatsapp": whatsapp_view(),
         "coucoumail": coucoumail_view(),
         "pills": pills_view(),
+        "coucoushortcuts": coucoushortcuts_view(),
         "description": description,
         "model": model,
         "provider": provider,

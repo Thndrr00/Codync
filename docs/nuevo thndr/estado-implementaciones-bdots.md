@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## Atajos de coucou (19 adiciones + UI en 4 clientes)
+
+`bdots_shortcuts_coucou.rs` añade 14 helpers puros y 5 constantes portados de `core/shortcuts.ts` de
+**coucou**: aceleradores, pulsaciones grabadas, duplicados, choques de AltGr y navegación del island.
+El endpoint `botInsights` añade el campo `coucoushortcuts`; la sección «Shortcuts» se muestra en los
+cuatro clientes. Reutiliza `bdots_desk`.
+
 ## Pills de coucou (21 adiciones + UI en 4 clientes)
 
 `bdots_pills.rs` añade 15 helpers puros y 6 constantes portados de `core/pills.ts` de **coucou**:

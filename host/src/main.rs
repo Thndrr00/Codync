@@ -101,6 +101,7 @@ mod bdots_secret_cleanup;
 mod bdots_service;
 mod bdots_session;
 mod bdots_shortcuts;
+mod bdots_shortcuts_coucou;
 mod bdots_spend;
 mod bdots_stream;
 mod bdots_text;
