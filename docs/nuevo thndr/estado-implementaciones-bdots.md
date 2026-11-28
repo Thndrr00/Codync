@@ -124,6 +124,13 @@ aprobación, `values_at`/`check_scopes` para límites de herramientas de apps, `
 formularios públicos), `hide_receipts`, `parse_access`, formato de dinero y previsualización de
 ediciones. `plain_text` alimenta el campo «About» de la pantalla de Insights en los cuatro clientes.
 
+## WhatsApp (29 adiciones + UI en 4 clientes)
+
+`bdots_whatsapp.rs` añade 21 helpers puros y 8 constantes portados de `core/whatsapp.ts` de
+**coucou**: estados de enlace, previews de mensajes, errores de envío, pasos de instalación, webhook
+y palabras de Settings. El endpoint `botInsights` añade el campo `whatsapp`; la sección «WhatsApp»
+se muestra en los cuatro clientes. Reutiliza `bdots_desk`.
+
 ## GitHub y fondo aurora (54 adiciones + UI en 4 clientes)
 
 Del repo `coucou` (`windows/src/core/github.ts`) se portaron 30 helpers puros en `bdots_github.rs`:

@@ -30,6 +30,10 @@ struct BotInsightsSection: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(Palette.secondary)
+                    let whatsapp = insights.whatsapp
+                    Text(whatsapp.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text("\(L10n.tr("Preview")): \(whatsapp.preview)").font(.footnote).foregroundStyle(Palette.secondary)
+                    Text("\(L10n.tr("Ago")): \(whatsapp.ago)").font(.footnote).foregroundStyle(Palette.tertiary)
                     let aurora = insights.aurora
                     Text(aurora.headline).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
                     Text("\(L10n.tr("Ground")): \(aurora.ground)").font(.footnote).foregroundStyle(Palette.secondary)

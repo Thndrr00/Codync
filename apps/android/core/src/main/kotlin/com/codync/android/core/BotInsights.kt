@@ -105,18 +105,19 @@ data class BotInsights(
     val notices: InsightNotices = InsightNotices(),
     val github: InsightGithub = InsightGithub(),
     val aurora: InsightAurora = InsightAurora(),
+    val whatsapp: InsightWhatsapp = InsightWhatsapp(),
     val routines: List<InsightRoutine> = emptyList(),
     val usage: InsightUsage = InsightUsage(),
     val skills: InsightSkills = InsightSkills(),
 )
 
-/** A host-computed aurora background summary. */
+/** A host-computed WhatsApp summary. */
 @Serializable
-data class InsightAurora(
+data class InsightWhatsapp(
     val headline: String = "", val tone: String = "", val icon: String = "",
-    val ground: String = "", val palette: Int = 0, val pitch: Int = 0,
-    val rows: Int = 0, val brightness: String = "", val fallsRight: Boolean = false,
-    val bayer: Int = 0, val sample: String = "", val variable: String = "",
+    val green: String = "", val states: Int = 0, val errors: Int = 0, val steps: Int = 0,
+    val initials: String = "", val duration: String = "", val preview: String = "",
+    val ago: String = "", val line: String = "",
     val summary: List<InsightSummaryRow> = emptyList(),
 )
 

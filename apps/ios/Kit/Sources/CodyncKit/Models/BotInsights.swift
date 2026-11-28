@@ -102,6 +102,7 @@ public struct BotInsights: Decodable, Sendable {
     public let notices: InsightNotices
     public let github: InsightGithub
     public let aurora: InsightAurora
+    public let whatsapp: InsightWhatsapp
     public let routines: [InsightRoutine]
     public let usage: InsightUsage
     public let skills: InsightSkills
@@ -131,6 +132,23 @@ public struct InsightConnExtra: Decodable, Sendable {
     public let providers: [String]
     public let selected: Int
     public let rows: Int
+    public let summary: [InsightSummaryRow]
+}
+
+/// A host-computed WhatsApp summary.
+public struct InsightWhatsapp: Decodable, Sendable {
+    public let headline: String
+    public let tone: String
+    public let icon: String
+    public let green: String
+    public let states: Int
+    public let errors: Int
+    public let steps: Int
+    public let initials: String
+    public let duration: String
+    public let preview: String
+    public let ago: String
+    public let line: String
     public let summary: [InsightSummaryRow]
 }
 

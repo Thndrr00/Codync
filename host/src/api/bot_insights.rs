@@ -3052,6 +3052,28 @@ fn aurora_view() -> Value {
     })
 }
 
+/// WhatsApp link and message words from coucou.
+fn whatsapp_view() -> Value {
+    use crate::bdots_whatsapp as w;
+
+    let message = json!({"text":"hi","media":{"kind":"none"},"fromMe":false,"senderName":""});
+    json!({
+        "headline": format!("{} · {} · {}", w::WHATSAPP_GREEN, w::link_label("connected", None), w::count_label(w::LINK_STATES.len())),
+        "tone": if w::link_color("connected") == "#22C55E" { "good" } else { "attention" },
+        "icon": "message.fill",
+        "green": w::WHATSAPP_GREEN,
+        "states": w::LINK_STATES.len(),
+        "errors": w::SEND_ERRORS.len(),
+        "steps": w::INSTALL_STEPS.len(),
+        "initials": w::initials("Ada Lovelace"),
+        "duration": w::duration(75),
+        "preview": w::preview(&message, false),
+        "ago": w::time_ago(0, 300_000),
+        "line": w::whatsapp_line("Connected", 2, false),
+        "summary": w::summary(2, 3, true, false),
+    })
+}
+
 fn bot_key(id: &str) -> String {
     id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -3208,6 +3230,7 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
         "notices": notices_view(),
         "github": github_view(),
         "aurora": aurora_view(),
+        "whatsapp": whatsapp_view(),
         "description": description,
         "model": model,
         "provider": provider,

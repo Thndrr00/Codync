@@ -42,12 +42,12 @@ import com.codync.android.design.*
                 }
                 row { ValueRow("Skills", insights.skills.total.toString()) }
             }
-            val aurora = insights.aurora
-            CardSection("Aurora background") {
-                row { Text(aurora.headline, style = Type.subheadline.semibold, color = Palette.text) }
-                row { ValueRow("Ground", aurora.ground) }
-                row { ValueRow("Brightness", aurora.brightness) }
-                row { ValueRow("Variable", aurora.variable) }
+            val whatsapp = insights.whatsapp
+            CardSection("WhatsApp") {
+                row { Text(whatsapp.headline, style = Type.subheadline.semibold, color = Palette.text) }
+                row { ValueRow("Preview", whatsapp.preview) }
+                row { ValueRow("Ago", whatsapp.ago) }
+                row { ValueRow("Line", whatsapp.line) }
             }
             val aurora = insights.aurora
             CardSection("Aurora background") {

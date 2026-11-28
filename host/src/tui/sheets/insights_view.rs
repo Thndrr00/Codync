@@ -82,6 +82,15 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, i: &Insights) {
         }
     }
 
+    let whatsapp = &data["whatsapp"];
+    if whatsapp.is_object() {
+        line(buf, &mut y, tr("WhatsApp").into_owned(), t.bold.patch(t.panel));
+        let headline = whatsapp["headline"].as_str().unwrap_or("");
+        let preview = whatsapp["preview"].as_str().unwrap_or("");
+        line(buf, &mut y, format!("{headline} · {preview}"), t.text.patch(t.panel));
+        y += 1;
+    }
+
     let aurora = &data["aurora"];
     if aurora.is_object() {
         line(buf, &mut y, tr("Aurora background").into_owned(), t.bold.patch(t.panel));
